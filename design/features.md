@@ -8,20 +8,20 @@ A plain-language list of everything the app does, written so anyone on the team 
 
 ## Summary
 
-| # | Feature | Priority |
-|---|---|---|
-| F1 | Practice sessions (copy and paste entry) | 🟢 |
-| F2 | Library of saved sessions | 🟢 |
-| F3 | Personal collections | 🟢 |
-| F4 | Review and re-practice | 🟢 |
-| F5 | Progress and motivation | 🟢 |
-| F6 | Import from spreadsheets | 🟢 |
-| F7 | Export and backup | 🟢 |
-| F8 | Voice and pronunciation | ⚪ |
-| F9 | Reminders | ⚪ |
-| F10 | Sharing | ⚪ |
-| F11 | Smart sorting of pasted chats | ⚪ |
-| F12 | Learning goals and levels | ⚪ |
+| #   | Feature                                  | Priority |
+| --- | ---------------------------------------- | -------- |
+| F1  | Practice sessions (copy and paste entry) | 🟢       |
+| F2  | Library of saved sessions                | 🟢       |
+| F3  | Personal collections                     | 🟢       |
+| F4  | Review and re-practice                   | 🟢       |
+| F5  | Progress and motivation                  | 🟢       |
+| F6  | Import from spreadsheets                 | 🟢       |
+| F7  | Export and backup                        | 🟢       |
+| F8  | Voice and pronunciation                  | ⚪       |
+| F9  | Reminders                                | ⚪       |
+| F10 | Sharing                                  | ⚪       |
+| F11 | Smart sorting of pasted chats            | ⚪       |
+| F12 | Learning goals and levels                | ⚪       |
 
 ---
 
@@ -30,6 +30,7 @@ A plain-language list of everything the app does, written so anyone on the team 
 Lets the learner record a practice session by pasting the tutor's questions, the learner's answers, and the tutor's feedback into organized boxes.
 
 **What the learner can do**
+
 - Start a session by choosing or creating a **topic** (for example "Travel," "Job interview," "Daily routine").
 - Add each **question** from the tutor and paste in their own **answer**.
 - Paste the tutor's feedback into separate boxes: mistakes and corrections, new vocabulary, new phrases, grammar notes, and a more natural version.
@@ -39,6 +40,7 @@ Lets the learner record a practice session by pasting the tutor's questions, the
 - **Edit** anything later to fix typos or tidy messy pasted text.
 
 **User flow**
+
 1. The learner finishes a practice chat with the AI tutor, outside the app.
 2. They open the app and tap **"New session."**
 3. They pick an existing topic or type a new one, for example "Ordering at a restaurant."
@@ -50,6 +52,7 @@ Lets the learner record a practice session by pasting the tutor's questions, the
 9. When finished, they tap **"Finish session."** A confirmation shows how many new words, phrases, and mistakes were saved.
 
 **Optional shortcut: "Paste in order"**
+
 1. Instead of the full layout, the learner chooses the guided mode.
 2. The app shows one box at a time: question, then answer, then mistakes, then vocabulary, and so on.
 3. After each paste, the learner taps **"Next."** The app moves on to the following box.
@@ -57,7 +60,8 @@ Lets the learner record a practice session by pasting the tutor's questions, the
 
 **UI overview**
 
-*Screen: New Session*
+_Screen: New Session_
+
 - **Top bar:** topic name (tap to change), a small "Saved" indicator, and a **Finish session** button.
 - **Question cards:** one card per question, stacked down the page. Each card has a large box for the question, a box for the learner's answer, and the feedback boxes underneath.
 - **Feedback boxes:** each has a clear label and a small colored tag (for example red for mistakes, blue for vocabulary) so they are easy to tell apart. Empty boxes are collapsed to keep the page tidy.
@@ -85,6 +89,7 @@ Lets the learner record a practice session by pasting the tutor's questions, the
 A single place to browse, search, and reopen every saved practice session.
 
 **What the learner can do**
+
 - See all sessions in one place, newest first.
 - Filter by **topic**, **date**, or **type of content** (mistakes, vocabulary, and so on).
 - **Search** for any word, phrase, or mistake ever saved.
@@ -92,6 +97,7 @@ A single place to browse, search, and reopen every saved practice session.
 - Delete or archive sessions they no longer want.
 
 **User flow**
+
 1. The learner taps **"Library"** in the main menu.
 2. They see a list of all sessions, each showing its topic, date, and a short summary.
 3. To narrow the list, they pick a topic, a date range, or a content type.
@@ -101,7 +107,8 @@ A single place to browse, search, and reopen every saved practice session.
 
 **UI overview**
 
-*Screen: Library*
+_Screen: Library_
+
 - **Top:** a search box and a row of filter chips (Topic, Date, Content type).
 - **Main area:** a list of session cards, newest first. Each card shows the topic, the date, and small counts such as "6 questions · 12 words · 4 mistakes."
 - **Opening a session:** a clean reading page with the questions and feedback laid out in the same order as when they were entered, plus **Edit**, **Archive**, and **Delete** in a small menu.
@@ -127,6 +134,7 @@ A single place to browse, search, and reopen every saved practice session.
 Automatically gathers vocabulary, phrases, grammar notes, and common mistakes from all sessions into personal study lists.
 
 **What the learner can do**
+
 - Browse automatic collections: **Vocabulary**, **Phrases and expressions**, **Grammar notes**, and **My common mistakes**.
 - **Star** the items that matter most.
 - Add **personal notes** to any item.
@@ -134,6 +142,7 @@ Automatically gathers vocabulary, phrases, grammar notes, and common mistakes fr
 - Jump from any item back to the session it came from.
 
 **User flow**
+
 1. The learner taps **"Collections"** in the main menu.
 2. They choose a collection, for example "Vocabulary."
 3. They see every word saved so far, each with its meaning and an example sentence.
@@ -144,7 +153,8 @@ Automatically gathers vocabulary, phrases, grammar notes, and common mistakes fr
 
 **UI overview**
 
-*Screen: Collections*
+_Screen: Collections_
+
 - **Top:** four large tabs: Vocabulary, Phrases, Grammar, My mistakes.
 - **Main area:** a list of items. Each row shows the item, its meaning or correction, a **star**, and a small status label ("Learned" or "Still difficult").
 - **Item detail:** opens as a panel with the full explanation, an example, a notes box, status buttons, and a **See original session** link.
@@ -169,12 +179,14 @@ Automatically gathers vocabulary, phrases, grammar notes, and common mistakes fr
 Turns saved material into short exercises such as flashcards and mistake-fixing, and brings harder items back more often.
 
 **What the learner can do**
+
 - Practice with **flashcards**, **fix-the-mistake** exercises, **say-it-again** challenges, and **fill-in-the-blank** exercises.
 - Rate each item **Easy, Okay, or Hard**, so hard items return sooner and easy ones less often.
 - Get a **daily review** of around five minutes.
 - Choose what to review: a topic, a collection, or only starred items.
 
 **User flow: daily review**
+
 1. The learner opens the app and sees today's suggestion on the home screen: "5 minutes: 8 items to review."
 2. They tap **"Start review."**
 3. The app shows the first item, for example a flashcard with a word on the front.
@@ -184,29 +196,34 @@ Turns saved material into short exercises such as flashcards and mistake-fixing,
 7. After the last item, a short summary shows how many were easy and how many need more practice. Hard items are scheduled to come back soon.
 
 **User flow: fix-the-mistake**
+
 1. The app shows a sentence the learner got wrong in a past session.
 2. The learner types or says the corrected version.
 3. They tap **"Check."** The app reveals the original correction and the tutor's explanation.
 4. They rate how well they did and move on.
 
 **User flow: say-it-again**
+
 1. The app shows a question from a past session.
 2. The learner answers out loud, in their own words.
 3. They tap **"Show natural answer"** and compare it with what they said.
 4. They rate the attempt and move on.
 
 **User flow: choosing what to review**
+
 1. From the review screen, the learner taps **"Custom review."**
 2. They pick a topic, a collection, or "starred items only."
 3. They choose how many items they want, then tap **"Start."**
 
 **UI overview**
 
-*Screen: Review Home*
+_Screen: Review Home_
+
 - **Top card:** today's suggested review ("5 minutes · 8 items") with a large **Start review** button.
 - **Below:** a **Custom review** option and a short list of recent review results.
 
-*Screen: Exercise*
+_Screen: Exercise_
+
 - **Distraction-free:** only one item on screen at a time, with a thin progress bar at the top and an **Exit** button.
 - **Flashcard:** a big card in the center; tapping it or pressing **Show answer** flips it.
 - **Fix-the-mistake:** the wrong sentence is shown, with an input box underneath and a **Check** button.
@@ -234,6 +251,7 @@ Turns saved material into short exercises such as flashcards and mistake-fixing,
 Shows streaks, learning totals, and weekly summaries so the learner can see how they are improving.
 
 **What the learner can see**
+
 - Number of sessions and practice days.
 - A **streak** of consecutive practice days.
 - How many words, phrases, and grammar points have been learned.
@@ -241,6 +259,7 @@ Shows streaks, learning totals, and weekly summaries so the learner can see how 
 - A **weekly summary**.
 
 **User flow**
+
 1. The learner taps **"Progress"** in the main menu.
 2. The top of the screen shows the current streak and total practice days.
 3. Below, they see counts for sessions completed, words learned, phrases learned, and grammar points learned.
@@ -250,7 +269,8 @@ Shows streaks, learning totals, and weekly summaries so the learner can see how 
 
 **UI overview**
 
-*Screen: Progress*
+_Screen: Progress_
+
 - **Top row:** large friendly numbers for the current **streak** and total practice days.
 - **Stat tiles:** small cards for sessions, words, phrases, and grammar points learned.
 - **Mistakes chart:** one simple chart showing how often common mistakes appear week by week, going down over time.
@@ -276,11 +296,13 @@ Shows streaks, learning totals, and weekly summaries so the learner can see how 
 Brings the learner's existing spreadsheet records into the app so past work is not lost.
 
 **What the learner can do**
+
 - Bring in existing spreadsheet data.
 - See imported items appear in the library and collections just like any other session.
 - Preview the result before anything is saved.
 
 **User flow**
+
 1. The learner goes to **"Settings"** and taps **"Import."**
 2. They choose their spreadsheet file.
 3. The app shows a preview with the first rows laid out as sessions, words, phrases, and mistakes.
@@ -291,7 +313,8 @@ Brings the learner's existing spreadsheet records into the app so past work is n
 
 **UI overview**
 
-*Screen: Import (inside Settings)*
+_Screen: Import (inside Settings)_
+
 - **Step indicator** at the top: Choose file, Match columns, Preview, Done.
 - **Choose file:** a large drop area with a **Choose file** button and a short note about what kind of file works.
 - **Match columns:** a simple two-column layout. On the left, the spreadsheet's column names. On the right, a dropdown to say what each one is (topic, question, answer, mistakes, vocabulary, and so on).
@@ -317,10 +340,12 @@ Brings the learner's existing spreadsheet records into the app so past work is n
 Lets the learner download all of their data at any time as a personal backup.
 
 **What the learner can do**
+
 - Download all their data at any time in a common format that opens in a spreadsheet.
 - Use the download as a personal backup.
 
 **User flow**
+
 1. The learner goes to **"Settings"** and taps **"Export."**
 2. They choose what to export: everything, or only certain collections.
 3. They tap **"Download."**
@@ -328,7 +353,8 @@ Lets the learner download all of their data at any time as a personal backup.
 
 **UI overview**
 
-*Screen: Export (inside Settings)*
+_Screen: Export (inside Settings)_
+
 - **Simple panel** with a short explanation: "Your data is yours. Download it any time."
 - **Choices:** checkboxes for what to include (all sessions, vocabulary, phrases, grammar, mistakes).
 - **Action:** one large **Download** button.
@@ -351,6 +377,7 @@ Lets the learner download all of their data at any time as a personal backup.
 These are not part of the first version. They are listed so the design leaves room for them.
 
 ### F8. Voice and Pronunciation ⚪
+
 - Record answers and listen back to their own speaking.
 - Hear words and sentences read aloud with correct pronunciation.
 
@@ -359,6 +386,7 @@ These are not part of the first version. They are listed so the design leaves ro
 **Possible UI:** a round microphone button beside each answer, and a small play bar for the recording next to the natural answer.
 
 ### F9. Reminders ⚪
+
 - Gentle nudges to practice or review at a chosen time.
 
 **Possible flow:** The learner picks a time and days in Settings. At that time, a reminder invites them to start their daily review.
@@ -366,6 +394,7 @@ These are not part of the first version. They are listed so the design leaves ro
 **Possible UI:** a simple settings card with a time picker, day buttons (Mon to Sun), and an on/off switch.
 
 ### F10. Sharing ⚪
+
 - Share a session or collection with a teacher or friend.
 
 **Possible flow:** The learner opens a session, taps **"Share,"** and sends a link. The other person can read it, and the learner can stop sharing at any time.
@@ -373,6 +402,7 @@ These are not part of the first version. They are listed so the design leaves ro
 **Possible UI:** a **Share** button on the session page that opens a small panel with a link, a copy button, and a **Stop sharing** switch.
 
 ### F11. Smart Sorting of Pasted Chats ⚪
+
 - Paste a whole tutor chat once and have the app split it into answers, mistakes, vocabulary, and natural versions automatically.
 - Requires adding AI, which has a small running cost, so it is deliberately left out of the first version.
 
@@ -381,6 +411,7 @@ These are not part of the first version. They are listed so the design leaves ro
 **Possible UI:** one large paste box with a **Sort it for me** button, followed by the usual session screen pre-filled for checking.
 
 ### F12. Learning Goals and Levels ⚪
+
 - Set a goal such as preparing for an exam or a job interview.
 - Support multiple learners or additional languages.
 
@@ -394,13 +425,13 @@ These are not part of the first version. They are listed so the design leaves ro
 
 The app is built with a modern, single-codebase web stack:
 
-| Technology | Role in the app |
-|---|---|
-| **Laravel** | The backend. Handles saving sessions, collections, and progress, as well as importing and exporting data. |
-| **Inertia** | The bridge between backend and frontend. Lets the app feel like a fast, smooth single-page app without a separate API. |
-| **Vue** | The frontend. Builds the interactive screens, such as the session editor, review exercises, and progress views. |
-| **Tailwind CSS** | Styling. Gives the app a clean, consistent, responsive look on phone, tablet, and computer. |
-| **shadcn-vue** | Free, ready-made interface pieces such as buttons, cards, tabs, dialogs, and forms. Built on Tailwind, so they can be restyled freely to fit the app. |
+| Technology       | Role in the app                                                                                                                                       |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Laravel**      | The backend. Handles saving sessions, collections, and progress, as well as importing and exporting data.                                             |
+| **Inertia**      | The bridge between backend and frontend. Lets the app feel like a fast, smooth single-page app without a separate API.                                |
+| **Vue**          | The frontend. Builds the interactive screens, such as the session editor, review exercises, and progress views.                                       |
+| **Tailwind CSS** | Styling. Gives the app a clean, consistent, responsive look on phone, tablet, and computer.                                                           |
+| **shadcn-vue**   | Free, ready-made interface pieces such as buttons, cards, tabs, dialogs, and forms. Built on Tailwind, so they can be restyled freely to fit the app. |
 
 ---
 

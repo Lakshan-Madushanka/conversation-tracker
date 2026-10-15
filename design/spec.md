@@ -27,6 +27,7 @@ A learner who wants to improve spoken English and is comfortable practicing on t
 4. Help the learner **see progress** over time and stay motivated.
 
 **Not goals (for the first version):**
+
 - Replacing the AI tutor. The app is the learner's notebook and revision coach. The live conversation with the tutor happens elsewhere.
 - Any automatic AI features. Everything is entered by the learner through copy and paste.
 
@@ -36,26 +37,26 @@ A learner who wants to improve spoken English and is comfortable practicing on t
 2. The tutor asks a **question**.
 3. The learner **answers** it.
 4. The tutor gives **feedback**:
-   - the **mistakes** the learner made, with corrections
-   - **new words** and **phrases** worth learning
-   - **grammar points** to remember
-   - a **more natural version** of the learner's answer
+    - the **mistakes** the learner made, with corrections
+    - **new words** and **phrases** worth learning
+    - **grammar points** to remember
+    - a **more natural version** of the learner's answer
 5. The conversation continues with the next question.
 
 The app captures all of this, step by step, in a clean and structured way.
 
 ## 6. Key Screens
 
-| Screen | Purpose |
-|---|---|
+| Screen               | Purpose                                                                              |
+| -------------------- | ------------------------------------------------------------------------------------ |
 | **Home / Dashboard** | Today's review suggestion, streak, quick "Start new session" button, recent sessions |
-| **New Session** | Choose a topic and record questions, answers, and feedback |
-| **Session Detail** | Read back one full session in a clear, easy-to-scan layout |
-| **Library** | Browse and search all past sessions |
-| **Collections** | Vocabulary, phrases, grammar notes, and common mistakes |
-| **Review** | Flashcards and exercises for re-practice |
-| **Progress** | Charts and summaries of improvement |
-| **Settings** | Preferences, import, and export |
+| **New Session**      | Choose a topic and record questions, answers, and feedback                           |
+| **Session Detail**   | Read back one full session in a clear, easy-to-scan layout                           |
+| **Library**          | Browse and search all past sessions                                                  |
+| **Collections**      | Vocabulary, phrases, grammar notes, and common mistakes                              |
+| **Review**           | Flashcards and exercises for re-practice                                             |
+| **Progress**         | Charts and summaries of improvement                                                  |
+| **Settings**         | Preferences, import, and export                                                      |
 
 ## 7. Experience Principles
 
@@ -78,6 +79,7 @@ The app captures all of this, step by step, in a clean and structured way.
 ## 9. Success Measures
 
 The app is successful if the learner:
+
 - Records sessions regularly, without feeling it is a chore.
 - Practices review several times a week.
 - Repeats the same mistakes less often over time.

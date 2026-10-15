@@ -13,17 +13,23 @@
 - Dark mode support
 
 # Design
+
 - Refer /design folder for spec.md and features.md
 
+# TDD
+
+Create tests beforehand where ever possible
+
 # Commits
+
 - use conventional commits
 
 # Static Analysis & Tests
 
 - After every change to the codebase, you MUST run static analysis and the test suite before considering the task done:
-  - `composer test` — runs Pint (lint check), PHPStan (`composer types:check`), and the Pest test suite.
-  - For PHP-only changes, at minimum run `vendor/bin/pint --dirty --format agent`, `composer types:check`, and `php artisan test --compact` on the narrowest covering tests, then the full suite.
-  - For frontend/TypeScript changes, run `npm run check` and `npm run types:check`.
+    - `composer test` — runs Pint (lint check), PHPStan (`composer types:check`), and the Pest test suite.
+    - For PHP-only changes, at minimum run `vendor/bin/pint --dirty --format agent`, `composer types:check`, and `php artisan test --compact` on the narrowest covering tests, then the full suite.
+    - For frontend/TypeScript changes, run `npm run check` and `npm run types:check`.
 - Fix any failures and re-run until everything passes. Report the results.
 
 <laravel-boost-guidelines>
@@ -36,6 +42,7 @@
 This application is a Laravel application running on PHP 8.5. Always use the APIs that match the installed major version of each package — do not assume a version.
 
 Before relying on a package's API, confirm its installed version:
+
 - PHP packages: run `composer show --direct` to list direct dependencies with versions, or `composer show <vendor/package>` for a single package.
 - JS packages: check `package.json` for the installed versions.
 
@@ -106,7 +113,7 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 
 - Execute PHP in app context for debugging and testing code. Do not create models without user approval, prefer tests with factories instead. Prefer existing Artisan commands over custom tinker code.
 - Always use single quotes to prevent shell expansion: `php artisan tinker --execute 'Your::code();'`
-  - Double quotes for PHP strings inside: `php artisan tinker --execute 'User::where("active", true)->count();'`
+    - Double quotes for PHP strings inside: `php artisan tinker --execute 'User::where("active", true)->count();'`
 
 === php rules ===
 
@@ -209,6 +216,7 @@ Use Wayfinder to generate TypeScript functions for Laravel routes. Import from `
 # Inertia + Vue
 
 Vue components must have a single root element.
+
 - IMPORTANT: Activate `inertia-vue-development` when working with Inertia Vue client-side patterns.
 
 </laravel-boost-guidelines>

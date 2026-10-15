@@ -3,14 +3,12 @@
 declare(strict_types=1);
 
 use Rector\Config\RectorConfig;
-use Rector\TypeDeclaration\Rector\StmtsAwareInterface\DeclareStrictTypesRector;
 use Rector\ValueObject\PhpVersion;
 
 return RectorConfig::configure()
     ->withPaths([
         __DIR__.'/app',
         __DIR__.'/bootstrap/app.php',
-        __DIR__.'/bootstrap/providers.php',
         __DIR__.'/config',
         __DIR__.'/database',
         __DIR__.'/routes',
@@ -24,9 +22,6 @@ return RectorConfig::configure()
         typeDeclarations: true,
         privatization: true,
     )
-    ->withRules([
-        DeclareStrictTypesRector::class,
-    ])
     ->withComposerBased(laravel: true)
     ->withImportNames()
     ->withCache(cacheDirectory: __DIR__.'/.rector.cache');

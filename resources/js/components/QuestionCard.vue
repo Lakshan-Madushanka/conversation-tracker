@@ -91,7 +91,7 @@ const emit = defineEmits<{
                 </p>
             </div>
 
-            <div class="grid gap-3 md:grid-cols-2">
+            <div class="flex flex-col gap-3">
                 <FeedbackBox
                     v-for="box in feedbackBoxes"
                     :key="box.type"

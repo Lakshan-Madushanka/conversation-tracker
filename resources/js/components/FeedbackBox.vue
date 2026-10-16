@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import { ChevronDownIcon, ChevronUpIcon } from '@lucide/vue';
 import RichTextEditor from '@/components/RichTextEditor.vue';
 import SectionLabel from '@/components/SectionLabel.vue';
@@ -56,13 +56,27 @@ watch(
 
 const wrapper = ref<HTMLElement | null>(null);
 
+/**
+ * Set while the box is opening. The re-render removes the focused trigger,
+ * which the browser reports as a focusout with no new target; that must not
+ * collapse the box we just opened.
+ */
+let isOpening = false;
+
 const accessibleLabel = computed(
     () => `${box.label} for question ${props.questionNumber}`,
 );
 
 function open(): void {
+    isOpening = true;
     expanded.value = true;
     focusElementById(props.fieldId);
+
+    void nextTick(() => {
+        requestAnimationFrame(() => {
+            isOpening = false;
+        });
+    });
 }
 
 function collapse(): void {
@@ -72,6 +86,10 @@ function collapse(): void {
 }
 
 function handleFocusOut(event: FocusEvent): void {
+    if (isOpening) {
+        return;
+    }
+
     const next = event.relatedTarget as Node | null;
 
     if (next && wrapper.value?.contains(next)) {

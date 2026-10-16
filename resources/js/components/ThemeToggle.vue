@@ -17,7 +17,9 @@ const { appearance, toggleAppearance } = useAppearance();
         "
         @click="toggleAppearance"
     >
-        <div class="sr-only">{{ appearance === 'dark' ? 'Dark' : 'Light' }} mode</div>
+        <div class="sr-only">
+            {{ appearance === 'dark' ? 'Dark' : 'Light' }} mode
+        </div>
         <SunIcon v-if="appearance === 'dark'" aria-hidden="true" />
         <MoonIcon v-else aria-hidden="true" />
     </Button>

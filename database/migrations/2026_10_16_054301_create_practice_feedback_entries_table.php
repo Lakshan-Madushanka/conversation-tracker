@@ -10,7 +10,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('practice_feedback_entries', function (Blueprint $table) {
+        Schema::create('practice_feedback_entries', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('practice_question_id')->constrained()->cascadeOnDelete();
             // One of the five feedback boxes: mistake, vocabulary, phrase,

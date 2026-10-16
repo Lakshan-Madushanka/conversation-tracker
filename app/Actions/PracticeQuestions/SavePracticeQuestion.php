@@ -12,10 +12,10 @@ use App\Support\RichText;
  * Saves a single question for a session (identified by its position) and
  * persists its feedback boxes.
  */
-final class SavePracticeQuestion
+final readonly class SavePracticeQuestion
 {
     public function __construct(
-        private readonly SavePracticeFeedback $savePracticeFeedback,
+        private SavePracticeFeedback $savePracticeFeedback,
     ) {}
 
     /**

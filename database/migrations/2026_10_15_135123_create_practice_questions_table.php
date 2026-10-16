@@ -10,7 +10,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('practice_questions', function (Blueprint $table) {
+        Schema::create('practice_questions', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('practice_session_id')->constrained()->cascadeOnDelete();
             $table->unsignedInteger('position')->default(1);

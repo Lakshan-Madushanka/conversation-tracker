@@ -12,11 +12,11 @@ use Illuminate\Support\Facades\DB;
 /**
  * Starts a new practice session from the submitted questions.
  */
-final class CreatePracticeSession
+final readonly class CreatePracticeSession
 {
     public function __construct(
-        private readonly FindOrCreateTopic $findOrCreateTopic,
-        private readonly SavePracticeQuestions $savePracticeQuestions,
+        private FindOrCreateTopic $findOrCreateTopic,
+        private SavePracticeQuestions $savePracticeQuestions,
     ) {}
 
     /**

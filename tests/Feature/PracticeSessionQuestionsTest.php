@@ -22,7 +22,7 @@ function questionPayload(string $question, array $feedback = []): array
     ];
 }
 
-test('a session can contain ten ordered questions', function () {
+test('a session can contain ten ordered questions', function (): void {
     $user = User::factory()->create();
 
     $questions = [];
@@ -50,7 +50,7 @@ test('a session can contain ten ordered questions', function () {
     }
 });
 
-test('all five feedback boxes can be saved for one question', function () {
+test('all five feedback boxes can be saved for one question', function (): void {
     $user = User::factory()->create();
 
     $this->actingAs($user)->post(route('sessions.store'), [
@@ -79,7 +79,7 @@ test('all five feedback boxes can be saved for one question', function () {
         ->and($entries[PracticeFeedbackEntry::TYPE_NATURAL_VERSION]->content_html)->toBe('<p>Where did you <em>end up</em> going?</p>');
 });
 
-test('the editor payload provides every saved box keyed by type', function () {
+test('the editor payload provides every saved box keyed by type', function (): void {
     $user = User::factory()->create();
 
     $this->actingAs($user)->post(route('sessions.store'), [
@@ -101,7 +101,7 @@ test('the editor payload provides every saved box keyed by type', function () {
     ]);
 });
 
-test('empty feedback boxes do not create entries', function () {
+test('empty feedback boxes do not create entries', function (): void {
     $user = User::factory()->create();
 
     $this->actingAs($user)->post(route('sessions.store'), [
@@ -120,7 +120,7 @@ test('empty feedback boxes do not create entries', function () {
     expect(PracticeFeedbackEntry::count())->toBe(0);
 });
 
-test('a question whose boxes are all empty saves with no feedback entries', function () {
+test('a question whose boxes are all empty saves with no feedback entries', function (): void {
     $user = User::factory()->create();
 
     $this->actingAs($user)->post(route('sessions.store'), [
@@ -134,7 +134,7 @@ test('a question whose boxes are all empty saves with no feedback entries', func
         ->and(PracticeFeedbackEntry::count())->toBe(0);
 });
 
-test('blank markup and whitespace-only text count as empty', function () {
+test('blank markup and whitespace-only text count as empty', function (): void {
     $user = User::factory()->create();
 
     $this->actingAs($user)->post(route('sessions.store'), [
@@ -153,7 +153,7 @@ test('blank markup and whitespace-only text count as empty', function () {
     expect(PracticeFeedbackEntry::count())->toBe(0);
 });
 
-test('plain feedback keeps its text and does not store markup', function () {
+test('plain feedback keeps its text and does not store markup', function (): void {
     $user = User::factory()->create();
 
     $this->actingAs($user)->post(route('sessions.store'), [
@@ -175,7 +175,7 @@ test('plain feedback keeps its text and does not store markup', function () {
         ->and($entries[PracticeFeedbackEntry::TYPE_PHRASE]->content_text)->toBe("a long way\noff");
 });
 
-test('unsafe markup is stripped from rich feedback', function () {
+test('unsafe markup is stripped from rich feedback', function (): void {
     $user = User::factory()->create();
 
     $this->actingAs($user)->post(route('sessions.store'), [
@@ -195,7 +195,7 @@ test('unsafe markup is stripped from rich feedback', function () {
         ->and($entries[PracticeFeedbackEntry::TYPE_NATURAL_VERSION]->content_html)->toBe('<p>No <strong>handlers</strong></p>');
 });
 
-test('removing one of several questions removes only that question and its feedback', function () {
+test('removing one of several questions removes only that question and its feedback', function (): void {
     $user = User::factory()->create();
 
     $this->actingAs($user)->post(route('sessions.store'), [
@@ -231,7 +231,7 @@ test('removing one of several questions removes only that question and its feedb
     expect($mistakes)->toBe(['first mistake', 'third mistake']);
 });
 
-test('saving the same session twice does not duplicate questions or feedback', function () {
+test('saving the same session twice does not duplicate questions or feedback', function (): void {
     $user = User::factory()->create();
 
     $payload = [
@@ -255,7 +255,7 @@ test('saving the same session twice does not duplicate questions or feedback', f
         ->and(PracticeFeedbackEntry::count())->toBe(1);
 });
 
-test('a feedback box can be emptied again on a later save', function () {
+test('a feedback box can be emptied again on a later save', function (): void {
     $user = User::factory()->create();
 
     $this->actingAs($user)->post(route('sessions.store'), [
@@ -277,7 +277,7 @@ test('a feedback box can be emptied again on a later save', function () {
     expect(PracticeFeedbackEntry::count())->toBe(0);
 });
 
-test('twenty questions can be saved in one request', function () {
+test('twenty questions can be saved in one request', function (): void {
     $user = User::factory()->create();
 
     $questions = [];
@@ -295,7 +295,7 @@ test('twenty questions can be saved in one request', function () {
         ->and(PracticeFeedbackEntry::count())->toBe(20);
 });
 
-test('a session cannot hold more than fifty questions', function () {
+test('a session cannot hold more than fifty questions', function (): void {
     $user = User::factory()->create();
 
     $questions = [];
@@ -314,7 +314,7 @@ test('a session cannot hold more than fifty questions', function () {
     expect(PracticeSession::count())->toBe(0);
 });
 
-test('a session can hold exactly fifty questions', function () {
+test('a session can hold exactly fifty questions', function (): void {
     $user = User::factory()->create();
 
     $questions = [];
@@ -331,7 +331,7 @@ test('a session can hold exactly fifty questions', function () {
     expect(PracticeQuestion::count())->toBe(50);
 });
 
-test('feedback content must be a string when provided', function () {
+test('feedback content must be a string when provided', function (): void {
     $user = User::factory()->create();
 
     $response = $this->actingAs($user)->post(route('sessions.store'), [
@@ -344,7 +344,7 @@ test('feedback content must be a string when provided', function () {
     $response->assertSessionHasErrors('questions.0.feedback.mistake');
 });
 
-test('feedback must be an array when provided', function () {
+test('feedback must be an array when provided', function (): void {
     $user = User::factory()->create();
 
     $response = $this->actingAs($user)->post(route('sessions.store'), [

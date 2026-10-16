@@ -12,11 +12,11 @@ use Illuminate\Support\Facades\DB;
 /**
  * Saves edits to the topic and questions of an existing session.
  */
-final class UpdatePracticeSession
+final readonly class UpdatePracticeSession
 {
     public function __construct(
-        private readonly FindOrCreateTopic $findOrCreateTopic,
-        private readonly SavePracticeQuestions $savePracticeQuestions,
+        private FindOrCreateTopic $findOrCreateTopic,
+        private SavePracticeQuestions $savePracticeQuestions,
     ) {}
 
     /**

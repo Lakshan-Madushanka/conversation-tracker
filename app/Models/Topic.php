@@ -6,6 +6,7 @@ namespace App\Models;
 
 use Database\Factories\TopicFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
@@ -28,13 +29,16 @@ class Topic extends Model
     /**
      * Keep the display name tidy and derive the key that spots duplicates, so
      * "Travel", "travel" and " Travel " all point at the same topic.
+     *
+     * @return Attribute<string, string>
      */
-    public function setNameAttribute(string $value): void
+    protected function name(): Attribute
     {
-        $name = self::normalizeName($value);
+        return Attribute::make(set: function (string $value): array {
+            $name = self::normalizeName($value);
 
-        $this->attributes['name'] = $name;
-        $this->attributes['normalized_name'] = mb_strtolower($name);
+            return ['name' => $name, 'normalized_name' => mb_strtolower($name)];
+        });
     }
 
     /**

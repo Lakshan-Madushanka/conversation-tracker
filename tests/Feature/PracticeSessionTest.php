@@ -13,7 +13,7 @@ describe('starting a session', function (): void {
 
         $this->get(route('sessions.create'))
             ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
+            ->assertInertia(fn (Assert $page): Assert => $page
                 ->component('sessions/Create')
                 ->where('session', null)
                 ->has('topics', 1)
@@ -178,7 +178,7 @@ describe('opening a saved session', function (): void {
 
         $this->get(route('sessions.edit', $session))
             ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
+            ->assertInertia(fn (Assert $page): Assert => $page
                 ->component('sessions/Create')
                 ->where('session.topic.name', 'Travel')
                 ->where('session.questions.0.question_html', '<p><strong>Bold</strong> question</p>')

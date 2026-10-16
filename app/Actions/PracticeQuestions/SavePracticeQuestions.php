@@ -10,10 +10,10 @@ use App\Models\PracticeSession;
  * Saves all questions for a session in the order they were submitted, reusing
  * existing records by position and removing any that no longer exist.
  */
-final class SavePracticeQuestions
+final readonly class SavePracticeQuestions
 {
     public function __construct(
-        private readonly SavePracticeQuestion $savePracticeQuestion,
+        private SavePracticeQuestion $savePracticeQuestion,
     ) {}
 
     /**

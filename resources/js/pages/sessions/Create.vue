@@ -1,247 +1,158 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue';
-import { Link } from '@inertiajs/vue3';
-import { CheckIcon, ChevronDownIcon, PlusIcon } from '@lucide/vue';
-import { cn } from 'cn';
-import type { FeedbackTone } from '@/components/SectionLabel.vue';
+import { computed } from 'vue';
+import { useForm } from '@inertiajs/vue3';
+import { LoaderCircleIcon, SaveIcon } from '@lucide/vue';
+import { toast } from 'vue-sonner';
 import PageHeader from '@/components/PageHeader.vue';
-import SectionLabel from '@/components/SectionLabel.vue';
+import QuestionCard from '@/components/QuestionCard.vue';
+import TopicField from '@/components/TopicField.vue';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardFooter,
-    CardHeader,
-    CardTitle,
-} from '@/components/ui/card';
-import {
-    Collapsible,
-    CollapsibleContent,
-    CollapsibleTrigger,
-} from '@/components/ui/collapsible';
-import { Input } from '@/components/ui/input';
-import { Separator } from '@/components/ui/separator';
-import { Switch } from '@/components/ui/switch';
-import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { topics } from '@/lib/sample-data';
-import { index as sessionsIndex } from '@/routes/sessions';
+import {
+    store as sessionsStore,
+    update as sessionsUpdate,
+} from '@/routes/sessions';
+import type { PracticeSessionData, TopicSummary } from '@/types';
 
 defineOptions({ layout: AppLayout });
 
-const selectedTopic = ref(topics[0]);
-const guidedMode = ref(false);
-const question = ref('');
-const answer = ref('');
+const props = defineProps<{
+    topics: TopicSummary[];
+    session?: PracticeSessionData | null;
+}>();
 
-interface FeedbackBox {
-    label: string;
-    tone: FeedbackTone;
-    hint: string;
-    placeholder: string;
-}
+const firstQuestion = props.session?.questions[0] ?? null;
 
-const feedbackBoxes: FeedbackBox[] = [
-    {
-        label: 'Mistakes',
-        tone: 'mistakes',
-        hint: 'What went wrong, and the correction',
-        placeholder: 'Paste the mistakes and corrections…',
-    },
-    {
-        label: 'Vocabulary',
-        tone: 'vocabulary',
-        hint: 'One word per line',
-        placeholder: 'reluctant — unwilling; not eager',
-    },
-    {
-        label: 'Phrases',
-        tone: 'phrases',
-        hint: 'One phrase per line',
-        placeholder: 'catch up — talk after a long time',
-    },
-    {
-        label: 'Grammar',
-        tone: 'grammar',
-        hint: 'Points to remember',
-        placeholder: 'Use “I’d like …” instead of “I want …”',
-    },
-    {
-        label: 'Natural version',
-        tone: 'natural',
-        hint: 'A more natural way to say it',
-        placeholder: 'I’d like the soup, then a salad if that’s okay.',
-    },
-];
-
-const openBoxes = reactive<Record<string, boolean>>({
-    Mistakes: true,
-    Vocabulary: true,
+const form = useForm({
+    topic: props.session?.topic.name ?? '',
+    question_html: firstQuestion?.question_html ?? '',
+    answer_html: firstQuestion?.answer_html ?? '',
 });
 
-const boxValues = reactive<Record<string, string>>({});
+/** A saved session with no edits made since it loaded is up to date. */
+const isSaved = computed(() => Boolean(props.session) && !form.isDirty);
+
+const saveState = computed<'saved' | 'saving' | 'unsaved'>(() => {
+    if (form.processing) {
+        return 'saving';
+    }
+
+    return isSaved.value ? 'saved' : 'unsaved';
+});
+
+const statusText = computed(() => {
+    if (saveState.value === 'saving') {
+        return 'Saving…';
+    }
+
+    if (saveState.value === 'saved') {
+        return 'Saved';
+    }
+
+    return props.session ? 'Unsaved changes' : 'Not saved yet';
+});
+
+const statusDotClass = computed(() => {
+    if (saveState.value === 'saving') {
+        return 'animate-pulse bg-amber-500';
+    }
+
+    return saveState.value === 'saved' ? 'bg-emerald-500' : 'bg-amber-500';
+});
+
+function submit(): void {
+    const options = {
+        preserveScroll: true,
+        onSuccess: () => {
+            toast.success('Saved');
+        },
+        onError: (errors: Record<string, string>) => {
+            // Field-level problems appear next to the field itself.
+            if (Object.keys(errors).length === 0) {
+                toast.error('Could not save. Please try again.');
+            }
+        },
+    };
+
+    if (props.session) {
+        form.put(sessionsUpdate.url(props.session.id), options);
+
+        return;
+    }
+
+    form.post(sessionsStore.url(), options);
+}
 </script>
 
 <template>
     <div>
         <PageHeader
-            title="New session"
-            description="Paste the tutor’s questions, your answers and the feedback you want to keep."
+            :title="props.session ? 'Edit session' : 'New session'"
+            :description="
+                props.session
+                    ? 'Update the topic, question or answer. Your session stays unfinished until you finish it.'
+                    : 'Add a topic and one question so you can keep practising.'
+            "
         >
             <template #actions>
-                <div class="flex items-center gap-2">
+                <Badge v-if="props.session" variant="outline" class="gap-1.5">
                     <span
-                        class="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
-                    >
-                        <span
-                            class="size-1.5 rounded-full bg-emerald-500"
-                            aria-hidden="true"
-                        />
-                        Saved
-                    </span>
-                    <Button variant="outline" size="lg" as-child>
-                        <Link :href="sessionsIndex.url()">
-                            <CheckIcon aria-hidden="true" />
-                            Finish session
-                        </Link>
-                    </Button>
-                </div>
+                        class="size-1.5 rounded-full bg-amber-500"
+                        aria-hidden="true"
+                    />
+                    Unfinished
+                </Badge>
+
+                <span
+                    role="status"
+                    aria-live="polite"
+                    class="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
+                >
+                    <span
+                        class="size-1.5 rounded-full"
+                        :class="statusDotClass"
+                        aria-hidden="true"
+                    />
+                    {{ statusText }}
+                </span>
+
+                <Button
+                    type="submit"
+                    form="session-form"
+                    size="lg"
+                    :disabled="form.processing"
+                >
+                    <LoaderCircleIcon
+                        v-if="form.processing"
+                        class="animate-spin"
+                        aria-hidden="true"
+                    />
+                    <SaveIcon v-else aria-hidden="true" />
+                    {{ form.processing ? 'Saving…' : 'Save session' }}
+                </Button>
             </template>
         </PageHeader>
 
-        <!-- Topic + guided mode -->
-        <Card class="mb-6">
-            <CardContent class="space-y-4 pt-4">
-                <div class="space-y-1.5">
-                    <label for="topic" class="text-sm font-medium">Topic</label>
-                    <Input
-                        id="topic"
-                        v-model="selectedTopic"
-                        placeholder="Ordering at a restaurant"
-                    />
-                    <p class="text-xs text-muted-foreground">
-                        Pick a topic below, or type your own.
-                    </p>
-                </div>
+        <form
+            id="session-form"
+            class="grid gap-4"
+            novalidate
+            @submit.prevent="submit"
+        >
+            <TopicField
+                v-model="form.topic"
+                :suggestions="props.topics"
+                :error="form.errors.topic"
+            />
 
-                <div
-                    class="flex flex-wrap gap-2"
-                    role="group"
-                    aria-label="Recent topics"
-                >
-                    <button
-                        v-for="topic in topics"
-                        :key="topic"
-                        type="button"
-                        :class="
-                            cn(
-                                'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
-                                selectedTopic === topic
-                                    ? 'border-primary bg-primary/10 text-primary'
-                                    : 'text-muted-foreground hover:bg-accent',
-                            )
-                        "
-                        @click="selectedTopic = topic"
-                    >
-                        {{ topic }}
-                    </button>
-                </div>
-
-                <Separator />
-
-                <div class="flex items-center justify-between gap-4">
-                    <div>
-                        <p class="text-sm font-medium">Paste in order</p>
-                        <p class="text-xs text-muted-foreground">
-                            One box at a time, with Back and Next.
-                        </p>
-                    </div>
-                    <Switch v-model:model-value="guidedMode" />
-                </div>
-            </CardContent>
-        </Card>
-
-        <!-- Question card -->
-        <Card>
-            <CardHeader class="flex-row items-center justify-between space-y-0">
-                <CardTitle class="text-base">Question 1</CardTitle>
-                <CardDescription>Draft</CardDescription>
-            </CardHeader>
-
-            <CardContent class="space-y-4">
-                <div class="space-y-1.5">
-                    <label for="question-1" class="text-sm font-medium"
-                        >Tutor’s question</label
-                    >
-                    <Textarea
-                        id="question-1"
-                        v-model="question"
-                        placeholder="Paste the tutor’s question here…"
-                    />
-                </div>
-
-                <div class="space-y-1.5">
-                    <label for="answer-1" class="text-sm font-medium"
-                        >My answer</label
-                    >
-                    <Textarea
-                        id="answer-1"
-                        v-model="answer"
-                        placeholder="Paste your own answer…"
-                    />
-                </div>
-
-                <Separator />
-
-                <div class="space-y-2">
-                    <p
-                        class="text-xs font-medium tracking-wide text-muted-foreground uppercase"
-                    >
-                        Tutor’s feedback
-                    </p>
-
-                    <Collapsible
-                        v-for="box in feedbackBoxes"
-                        :key="box.label"
-                        v-model:open="openBoxes[box.label]"
-                        class="rounded-lg border"
-                    >
-                        <CollapsibleTrigger
-                            class="flex w-full items-center gap-3 px-3 py-2 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-                        >
-                            <SectionLabel :tone="box.tone">{{
-                                box.label
-                            }}</SectionLabel>
-                            <span
-                                class="flex-1 text-xs text-muted-foreground"
-                                >{{ box.hint }}</span
-                            >
-                            <ChevronDownIcon
-                                class="size-4 shrink-0 text-muted-foreground transition-transform"
-                                :class="openBoxes[box.label] && 'rotate-180'"
-                                aria-hidden="true"
-                            />
-                        </CollapsibleTrigger>
-                        <CollapsibleContent class="px-3 pb-3">
-                            <Textarea
-                                v-model="boxValues[box.label]"
-                                :placeholder="box.placeholder"
-                            />
-                        </CollapsibleContent>
-                    </Collapsible>
-                </div>
-            </CardContent>
-
-            <CardFooter class="justify-between gap-2">
-                <Button variant="outline" size="lg">
-                    <PlusIcon aria-hidden="true" />
-                    Add question
-                </Button>
-                <p class="text-xs text-muted-foreground">
-                    Empty boxes are simply skipped.
-                </p>
-            </CardFooter>
-        </Card>
+            <QuestionCard
+                :number="firstQuestion?.position ?? 1"
+                v-model:question-html="form.question_html"
+                v-model:answer-html="form.answer_html"
+                :question-error="form.errors.question_html"
+                :answer-error="form.errors.answer_html"
+            />
+        </form>
     </div>
 </template>

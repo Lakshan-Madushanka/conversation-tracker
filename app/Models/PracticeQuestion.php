@@ -1,0 +1,48 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Models;
+
+use Database\Factories\PracticeQuestionFactory;
+use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
+
+/**
+ * One tutor question with the learner's answer, kept as formatted text plus a
+ * plain-text version for search and review.
+ *
+ * @property int $id
+ * @property int $practice_session_id
+ * @property int $position
+ * @property string $question_html
+ * @property string $question_text
+ * @property string $answer_html
+ * @property string $answer_text
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
+ */
+#[Fillable([
+    'practice_session_id',
+    'position',
+    'question_html',
+    'question_text',
+    'answer_html',
+    'answer_text',
+])]
+class PracticeQuestion extends Model
+{
+    /** @use HasFactory<PracticeQuestionFactory> */
+    use HasFactory;
+
+    /**
+     * @return BelongsTo<PracticeSession, $this>
+     */
+    public function practiceSession(): BelongsTo
+    {
+        return $this->belongsTo(PracticeSession::class);
+    }
+}

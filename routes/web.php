@@ -1,11 +1,18 @@
 <?php
 
+use App\Http\Controllers\PracticeSessionController;
 use Illuminate\Support\Facades\Route;
 
 Route::inertia('/', 'Home')->name('home');
 
 Route::inertia('/sessions', 'sessions/Index')->name('sessions.index');
-Route::inertia('/sessions/create', 'sessions/Create')->name('sessions.create');
+
+Route::get('/sessions/create', [PracticeSessionController::class, 'create'])->name('sessions.create');
+Route::post('/sessions', [PracticeSessionController::class, 'store'])->name('sessions.store');
+
+Route::get('/sessions/{session}/edit', [PracticeSessionController::class, 'edit'])->name('sessions.edit');
+Route::put('/sessions/{session}', [PracticeSessionController::class, 'update'])->name('sessions.update');
+
 Route::inertia('/sessions/{session}', 'sessions/Show')->name('sessions.show');
 
 Route::inertia('/collections', 'collections/Index')->name('collections.index');

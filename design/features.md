@@ -33,6 +33,7 @@ Lets the learner record a practice session by pasting the tutor's questions, the
 
 - Start a session by choosing or creating a **topic** (for example "Travel," "Job interview," "Daily routine").
 - Add each **question** from the tutor and paste in their own **answer**.
+- Write and paste in a simple **rich text editor** (bold, italic, bulleted and numbered lists) for the question, answer, natural version, and grammar notes, so formatting from the tutor's reply is kept.
 - Paste the tutor's feedback into separate boxes: mistakes and corrections, new vocabulary, new phrases, grammar notes, and a more natural version.
 - Leave out any box they do not need.
 - Paste a whole list at once (for example, ten words, one per line) and have it turn into separate entries.
@@ -63,7 +64,7 @@ Lets the learner record a practice session by pasting the tutor's questions, the
 _Screen: New Session_
 
 - **Top bar:** topic name (tap to change), a small "Saved" indicator, and a **Finish session** button.
-- **Question cards:** one card per question, stacked down the page. Each card has a large box for the question, a box for the learner's answer, and the feedback boxes underneath.
+- **Question cards:** one card per question, stacked down the page. Each card has a large box for the question, a box for the learner's answer, and the feedback boxes underneath. The question, answer, natural version, and grammar notes boxes show a small formatting toolbar (bold, italic, lists).
 - **Feedback boxes:** each has a clear label and a small colored tag (for example red for mistakes, blue for vocabulary) so they are easy to tell apart. Empty boxes are collapsed to keep the page tidy.
 - **Bottom of the page:** a prominent **Add question** button.
 - **Guided mode:** a toggle at the top switches to "Paste in order," which shows one large box at a time with a progress dots row and **Back** and **Next** buttons.
@@ -137,7 +138,7 @@ Automatically gathers vocabulary, phrases, grammar notes, and common mistakes fr
 
 - Browse automatic collections: **Vocabulary**, **Phrases and expressions**, **Grammar notes**, and **My common mistakes**.
 - **Star** the items that matter most.
-- Add **personal notes** to any item.
+- Add **personal notes** to any item, with simple formatting.
 - Mark items as **"learned"** or **"still difficult."**
 - Jump from any item back to the session it came from.
 
@@ -425,13 +426,14 @@ These are not part of the first version. They are listed so the design leaves ro
 
 The app is built with a modern, single-codebase web stack:
 
-| Technology       | Role in the app                                                                                                                                       |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Laravel**      | The backend. Handles saving sessions, collections, and progress, as well as importing and exporting data.                                             |
-| **Inertia**      | The bridge between backend and frontend. Lets the app feel like a fast, smooth single-page app without a separate API.                                |
-| **Vue**          | The frontend. Builds the interactive screens, such as the session editor, review exercises, and progress views.                                       |
-| **Tailwind CSS** | Styling. Gives the app a clean, consistent, responsive look on phone, tablet, and computer.                                                           |
-| **shadcn-vue**   | Free, ready-made interface pieces such as buttons, cards, tabs, dialogs, and forms. Built on Tailwind, so they can be restyled freely to fit the app. |
+| Technology       | Role in the app                                                                                                                                                  |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Laravel**      | The backend. Handles saving sessions, collections, and progress, as well as importing and exporting data.                                                        |
+| **Inertia**      | The bridge between backend and frontend. Lets the app feel like a fast, smooth single-page app without a separate API.                                           |
+| **Vue**          | The frontend. Builds the interactive screens, such as the session editor, review exercises, and progress views.                                                  |
+| **Tailwind CSS** | Styling. Gives the app a clean, consistent, responsive look on phone, tablet, and computer.                                                                      |
+| **shadcn-vue**   | Free, ready-made interface pieces such as buttons, cards, tabs, dialogs, and forms. Built on Tailwind, so they can be restyled freely to fit the app.            |
+| **Tiptap**       | A free, open-source rich text editor for Vue. Gives the app simple formatting (bold, italic, lists) in longer text boxes, such as questions, answers, and notes. |
 
 ---
 

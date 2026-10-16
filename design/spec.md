@@ -91,6 +91,7 @@ The app is successful if the learner:
 
 - Feedback is entered by **manual copy and paste**; no AI is built into the app.
 - The app is for **one learner** (personal use) in the first version.
+- Longer text boxes use a **simple rich text editor**, so formatting from the tutor's replies (such as bold corrections and lists) is kept.
 
 ## 11. Open Questions
 
@@ -98,3 +99,4 @@ The app is successful if the learner:
 2. How important is recording and replaying the learner's own voice in the first version?
 3. Which matters more at launch: strong review exercises or detailed progress reports?
 4. Should the app work without an internet connection?
+5. If the learner pastes raw markdown symbols as plain text, should the app convert them into formatting?

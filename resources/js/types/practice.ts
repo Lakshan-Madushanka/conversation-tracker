@@ -5,11 +5,39 @@ export interface TopicSummary {
     name: string;
 }
 
+/** The five feedback boxes every question can have. */
+export type FeedbackType =
+    | 'mistake'
+    | 'vocabulary'
+    | 'phrase'
+    | 'grammar_note'
+    | 'natural_version';
+
+/** One value per feedback box, keyed by type. */
+export type FeedbackValues = Record<FeedbackType, string>;
+
+/**
+ * A question as it comes back from the backend. Saved boxes are present in
+ * `feedback`; boxes that were left empty are simply absent.
+ */
 export interface PracticeQuestionData {
     id: number;
     position: number;
     question_html: string;
     answer_html: string;
+    feedback: Partial<FeedbackValues>;
+}
+
+/**
+ * A question as it is edited on the page. `uid` is a client-only key that keeps
+ * component state stable while questions are added and removed; the backend
+ * ignores it.
+ */
+export interface PracticeQuestionForm {
+    uid: string;
+    question_html: string;
+    answer_html: string;
+    feedback: FeedbackValues;
 }
 
 export interface PracticeSessionData {
@@ -17,4 +45,10 @@ export interface PracticeSessionData {
     status: string;
     topic: TopicSummary;
     questions: PracticeQuestionData[];
+}
+
+/** The payload sent when saving a session. */
+export interface PracticeSessionForm {
+    topic: string;
+    questions: PracticeQuestionForm[];
 }

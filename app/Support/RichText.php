@@ -20,14 +20,14 @@ use DOMText;
 final class RichText
 {
     /** @var list<string> */
-    private const ALLOWED_TAGS = ['p', 'br', 'strong', 'em', 'ul', 'ol', 'li'];
+    private const array ALLOWED_TAGS = ['p', 'br', 'strong', 'em', 'ul', 'ol', 'li'];
 
     /** @var array<string, string> */
-    private const TAG_ALIASES = ['b' => 'strong', 'i' => 'em'];
+    private const array TAG_ALIASES = ['b' => 'strong', 'i' => 'em'];
 
     /** Elements removed together with everything inside them. */
     /** @var list<string> */
-    private const DROPPED_TAGS = [
+    private const array DROPPED_TAGS = [
         'script', 'style', 'iframe', 'frame', 'frameset', 'object', 'embed',
         'applet', 'noscript', 'svg', 'math', 'canvas', 'audio', 'video',
         'source', 'track', 'picture', 'img', 'input', 'button', 'textarea',
@@ -36,7 +36,7 @@ final class RichText
 
     /** Block-level elements that are turned into paragraphs. */
     /** @var list<string> */
-    private const BLOCK_TAGS = [
+    private const array BLOCK_TAGS = [
         'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'div', 'blockquote', 'pre',
         'section', 'article', 'aside', 'header', 'footer', 'main', 'nav',
         'figure', 'figcaption', 'address', 'details', 'summary', 'fieldset',
@@ -45,7 +45,7 @@ final class RichText
 
     /** Structural elements whose children carry the text on their own. */
     /** @var list<string> */
-    private const UNWRAPPED_TAGS = [
+    private const array UNWRAPPED_TAGS = [
         'table', 'thead', 'tbody', 'tfoot', 'tr', 'colgroup', 'col', 'hr',
     ];
 
@@ -177,6 +177,18 @@ final class RichText
     }
 
     private static function normalizeText(string $text): string
+    {
+        $text = str_replace("\r", '', $text);
+        $text = (string) preg_replace("/\n{3,}/", "\n\n", $text);
+
+        return trim($text);
+    }
+
+    /**
+     * Normalise a plain text string (stripping extra spaces and line endings,
+     * keeping a single leading/trailing trim and collapsing empty lines).
+     */
+    public static function normalizePlainText(string $text): string
     {
         $text = str_replace("\r", '', $text);
         $text = (string) preg_replace("/\n{3,}/", "\n\n", $text);

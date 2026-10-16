@@ -7,7 +7,7 @@ use Inertia\Testing\AssertableInertia as Assert;
 it('renders each static screen', function (string $routeName, string $component): void {
     $this->get(route($routeName))
         ->assertOk()
-        ->assertInertia(fn (Assert $page) => $page->component($component));
+        ->assertInertia(fn (Assert $page): Assert => $page->component($component));
 })->with([
     'home' => ['home', 'Home'],
     'library' => ['sessions.index', 'sessions/Index'],
@@ -24,5 +24,5 @@ it('renders each static screen', function (string $routeName, string $component)
 it('renders a session detail page', function (): void {
     $this->get(route('sessions.show', 1))
         ->assertOk()
-        ->assertInertia(fn (Assert $page) => $page->component('sessions/Show'));
+        ->assertInertia(fn (Assert $page): Assert => $page->component('sessions/Show'));
 });

@@ -36,11 +36,15 @@ Create tests beforehand where ever possible
 
 # Static Analysis & Tests
 
-- After every change to the codebase, you MUST run static analysis and the test suite before considering the task done:
+- After every change to the codebase, you MUST run Rector, Pint, static analysis, and the test suite before considering the task done:
+    - For PHP-only changes, at minimum run, in this order:
+        1. `composer rector` — applies Rector rules (use `composer rector:check` for a dry run).
+        2. `vendor/bin/pint --dirty --format agent` — formats the code Rector just touched.
+        3. `composer types:check` — PHPStan.
+        4. `php artisan test --compact` — on the narrowest covering tests, then the full suite.
     - `composer test` — runs Pint (lint check), PHPStan (`composer types:check`), and the Pest test suite.
-    - For PHP-only changes, at minimum run `vendor/bin/pint --dirty --format agent`, `composer types:check`, and `php artisan test --compact` on the narrowest covering tests, then the full suite.
     - For frontend/TypeScript changes, run `npm run check` and `npm run types:check`.
-- Fix any failures and re-run until everything passes. Report the results.
+- Fix any failures (including new PHPStan errors introduced by Rector's changes) and re-run until everything passes. Report the results.
 
 <laravel-boost-guidelines>
 === foundation rules ===

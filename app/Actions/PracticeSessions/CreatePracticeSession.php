@@ -4,19 +4,19 @@ declare(strict_types=1);
 
 namespace App\Actions\PracticeSessions;
 
-use App\Actions\PracticeQuestions\SavePracticeQuestion;
+use App\Actions\PracticeQuestions\SavePracticeQuestions;
 use App\Actions\Topics\FindOrCreateTopic;
 use App\Models\PracticeSession;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Starts a new practice session from the first question the learner pasted.
+ * Starts a new practice session from the submitted questions.
  */
-final class CreatePracticeSession
+final readonly class CreatePracticeSession
 {
     public function __construct(
-        private readonly FindOrCreateTopic $findOrCreateTopic,
-        private readonly SavePracticeQuestion $savePracticeQuestion,
+        private FindOrCreateTopic $findOrCreateTopic,
+        private SavePracticeQuestions $savePracticeQuestions,
     ) {}
 
     /**
@@ -29,7 +29,10 @@ final class CreatePracticeSession
                 'topic_id' => $this->findOrCreateTopic->handle((string) $data['topic'])->id,
             ]);
 
-            $this->savePracticeQuestion->handle($session, $data);
+            /** @var array<int, array<string, mixed>> $questions */
+            $questions = is_array($data['questions'] ?? null) ? array_values($data['questions']) : [];
+
+            $this->savePracticeQuestions->handle($session, $questions);
 
             return $session;
         });

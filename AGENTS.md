@@ -20,6 +20,16 @@
 
 Create tests beforehand where ever possible
 
+# Architecture
+
+- All the actions(write operations) should have action class (Laravel Actions Pattern)
+- All the read queries should be in models
+- keep the controller clean - thin controllers fat model
+- All the validations should use form requests
+- Prefer grouping
+- Use vue best practices - https://vuejs.org/style-guide/rules-strongly-recommended.html
+  - Prefer directive shorthands
+
 # Commits
 
 - use conventional commits

@@ -25,8 +25,12 @@ describe('saving a session', function (): void {
     it('creates a session with a new topic and opens it for editing', function (): void {
         $response = $this->post(route('sessions.store'), [
             'topic' => 'Ordering at a restaurant',
-            'question_html' => '<p>What would you like to start with?</p>',
-            'answer_html' => '<p>I would like the soup, please.</p>',
+            'questions' => [
+                [
+                    'question_html' => '<p>What would you like to start with?</p>',
+                    'answer_html' => '<p>I would like the soup, please.</p>',
+                ],
+            ],
         ]);
 
         $session = PracticeSession::sole();
@@ -48,8 +52,10 @@ describe('saving a session', function (): void {
     it('reuses a topic that differs only in capitalisation or spacing', function (string $spelling): void {
         Topic::factory()->create(['name' => 'Travel']);
 
-        $this->post(route('sessions.store'), ['topic' => $spelling])
-            ->assertRedirect();
+        $this->post(route('sessions.store'), [
+            'topic' => $spelling,
+            'questions' => [[]],
+        ])->assertRedirect();
 
         expect(Topic::count())->toBe(1)
             ->and(Topic::sole()->name)->toBe('Travel')
@@ -64,8 +70,10 @@ describe('saving a session', function (): void {
     it('reuses a topic when only inner spaces differ', function (): void {
         Topic::factory()->create(['name' => 'Travel plans']);
 
-        $this->post(route('sessions.store'), ['topic' => 'Travel  plans'])
-            ->assertRedirect();
+        $this->post(route('sessions.store'), [
+            'topic' => 'Travel  plans',
+            'questions' => [[]],
+        ])->assertRedirect();
 
         expect(Topic::count())->toBe(1)
             ->and(Topic::sole()->name)->toBe('Travel plans');
@@ -73,7 +81,10 @@ describe('saving a session', function (): void {
 
     it('rejects saving without a topic and explains why', function (): void {
         $this->from(route('sessions.create'))
-            ->post(route('sessions.store'), ['topic' => '   '])
+            ->post(route('sessions.store'), [
+                'topic' => '   ',
+                'questions' => [[]],
+            ])
             ->assertSessionHasErrors([
                 'topic' => 'A session needs a topic so you can find it later.',
             ]);
@@ -82,8 +93,10 @@ describe('saving a session', function (): void {
     });
 
     it('saves an empty question and answer when a topic is present', function (): void {
-        $this->post(route('sessions.store'), ['topic' => 'Travel'])
-            ->assertRedirect();
+        $this->post(route('sessions.store'), [
+            'topic' => 'Travel',
+            'questions' => [[]],
+        ])->assertRedirect();
 
         $question = PracticeQuestion::sole();
 
@@ -96,8 +109,12 @@ describe('saving a session', function (): void {
     it('treats a question that is only blank space as empty', function (): void {
         $this->post(route('sessions.store'), [
             'topic' => 'Travel',
-            'question_html' => '<p>   <br></p>',
-            'answer_html' => '<p></p>',
+            'questions' => [
+                [
+                    'question_html' => '<p>   <br></p>',
+                    'answer_html' => '<p></p>',
+                ],
+            ],
         ])->assertRedirect();
 
         $question = PracticeQuestion::sole();
@@ -116,8 +133,12 @@ describe('saving a session', function (): void {
 
         $this->post(route('sessions.store'), [
             'topic' => 'Travel',
-            'question_html' => $unsafe,
-            'answer_html' => '<p style="color: red">My <em>answer</em></p>',
+            'questions' => [
+                [
+                    'question_html' => $unsafe,
+                    'answer_html' => '<p style="color: red">My <em>answer</em></p>',
+                ],
+            ],
         ])->assertRedirect();
 
         expect(PracticeQuestion::sole()->question_html)
@@ -127,15 +148,19 @@ describe('saving a session', function (): void {
     });
 
     it('rejects a topic longer than the limit', function (): void {
-        $this->post(route('sessions.store'), ['topic' => str_repeat('a', 121)])
-            ->assertSessionHasErrors('topic');
+        $this->post(route('sessions.store'), [
+            'topic' => str_repeat('a', 121),
+            'questions' => [[]],
+        ])->assertSessionHasErrors('topic');
     });
 
     it('rejects a question longer than the limit', function (): void {
         $this->post(route('sessions.store'), [
             'topic' => 'Travel',
-            'question_html' => '<p>'.str_repeat('a', 100_000).'</p>',
-        ])->assertSessionHasErrors('question_html');
+            'questions' => [
+                ['question_html' => '<p>'.str_repeat('a', 100_000).'</p>'],
+            ],
+        ])->assertSessionHasErrors('questions.0.question_html');
     });
 });
 
@@ -174,8 +199,12 @@ describe('updating a session', function (): void {
 
         $this->put(route('sessions.update', $session), [
             'topic' => 'Job interview',
-            'question_html' => '<p>New <strong>one</strong></p>',
-            'answer_html' => '<p>My answer</p>',
+            'questions' => [
+                [
+                    'question_html' => '<p>New <strong>one</strong></p>',
+                    'answer_html' => '<p>My answer</p>',
+                ],
+            ],
         ])->assertRedirect(route('sessions.edit', $session));
 
         $question = PracticeQuestion::sole();
@@ -197,8 +226,10 @@ describe('updating a session', function (): void {
             'question_text' => 'Original',
         ]);
 
-        $this->put(route('sessions.update', $session), ['topic' => ''])
-            ->assertSessionHasErrors('topic');
+        $this->put(route('sessions.update', $session), [
+            'topic' => '',
+            'questions' => [[]],
+        ])->assertSessionHasErrors('topic');
 
         expect($session->fresh()?->topic->name)->toBe('Travel')
             ->and(PracticeQuestion::sole()->question_html)->toBe('<p>Original</p>');

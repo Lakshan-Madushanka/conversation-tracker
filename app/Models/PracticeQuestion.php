@@ -9,7 +9,9 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 
 /**
  * One tutor question with the learner's answer, kept as formatted text plus a
@@ -22,6 +24,7 @@ use Illuminate\Support\Carbon;
  * @property string $question_text
  * @property string $answer_html
  * @property string $answer_text
+ * @property Collection<int, PracticeFeedbackEntry> $feedbackEntries
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
@@ -44,5 +47,13 @@ class PracticeQuestion extends Model
     public function practiceSession(): BelongsTo
     {
         return $this->belongsTo(PracticeSession::class);
+    }
+
+    /**
+     * @return HasMany<PracticeFeedbackEntry, $this>
+     */
+    public function feedbackEntries(): HasMany
+    {
+        return $this->hasMany(PracticeFeedbackEntry::class)->orderBy('id');
     }
 }

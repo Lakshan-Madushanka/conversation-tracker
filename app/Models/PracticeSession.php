@@ -55,12 +55,18 @@ class PracticeSession extends Model
      *     id: int,
      *     status: string,
      *     topic: array{id: int, name: string},
-     *     questions: array<int, array{id: int, position: int, question_html: string, answer_html: string}>
+     *     questions: array<int, array{
+     *         id: int,
+     *         position: int,
+     *         question_html: string,
+     *         answer_html: string,
+     *         feedback: array<string, string>
+     *     }>
      * }
      */
     public function toEditorPayload(): array
     {
-        $this->loadMissing(['topic', 'questions']);
+        $this->loadMissing(['topic', 'questions.feedbackEntries']);
 
         return [
             'id' => $this->id,
@@ -75,6 +81,11 @@ class PracticeSession extends Model
                     'position' => $question->position,
                     'question_html' => $question->question_html,
                     'answer_html' => $question->answer_html,
+                    'feedback' => $question->feedbackEntries
+                        ->mapWithKeys(fn (PracticeFeedbackEntry $entry): array => [
+                            $entry->type => $entry->editableContent(),
+                        ])
+                        ->all(),
                 ])
                 ->all(),
         ];

@@ -183,4 +183,16 @@ final class RichText
 
         return trim($text);
     }
+
+    /**
+     * Normalise a plain text string (stripping extra spaces and line endings,
+     * keeping a single leading/trailing trim and collapsing empty lines).
+     */
+    public static function normalizePlainText(string $text): string
+    {
+        $text = str_replace("\r", '', $text);
+        $text = (string) preg_replace("/\n{3,}/", "\n\n", $text);
+
+        return trim($text);
+    }
 }

@@ -1,0 +1,92 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Models;
+
+use Database\Factories\PracticeFeedbackEntryFactory;
+use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
+
+/**
+ * One feedback box attached to a question, kept as formatted text (for grammar
+ * notes and the natural version) or plain text (for the list boxes) plus a
+ * plain-text version for search and review.
+ *
+ * @property int $id
+ * @property int $practice_question_id
+ * @property string $type
+ * @property string $content_html
+ * @property string $content_text
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
+ */
+#[Fillable([
+    'practice_question_id',
+    'type',
+    'content_html',
+    'content_text',
+])]
+class PracticeFeedbackEntry extends Model
+{
+    /** @use HasFactory<PracticeFeedbackEntryFactory> */
+    use HasFactory;
+
+    public const TYPE_MISTAKE = 'mistake';
+
+    public const TYPE_VOCABULARY = 'vocabulary';
+
+    public const TYPE_PHRASE = 'phrase';
+
+    public const TYPE_GRAMMAR_NOTE = 'grammar_note';
+
+    public const TYPE_NATURAL_VERSION = 'natural_version';
+
+    /**
+     * Every feedback box a question can have, in the order they are shown.
+     *
+     * @var list<string>
+     */
+    public const TYPES = [
+        self::TYPE_MISTAKE,
+        self::TYPE_VOCABULARY,
+        self::TYPE_PHRASE,
+        self::TYPE_GRAMMAR_NOTE,
+        self::TYPE_NATURAL_VERSION,
+    ];
+
+    /**
+     * Types edited as rich text; everything else is plain text.
+     *
+     * @var list<string>
+     */
+    public const RICH_TYPES = [
+        self::TYPE_GRAMMAR_NOTE,
+        self::TYPE_NATURAL_VERSION,
+    ];
+
+    public static function isRich(string $type): bool
+    {
+        return in_array($type, self::RICH_TYPES, true);
+    }
+
+    /**
+     * The content as it is edited: formatted markup for rich types, plain text
+     * for the rest.
+     */
+    public function editableContent(): string
+    {
+        return self::isRich($this->type) ? $this->content_html : $this->content_text;
+    }
+
+    /**
+     * @return BelongsTo<PracticeQuestion, $this>
+     */
+    public function practiceQuestion(): BelongsTo
+    {
+        return $this->belongsTo(PracticeQuestion::class);
+    }
+}

@@ -62,7 +62,6 @@ const accessibleLabel = computed(
 
 function open(): void {
     expanded.value = true;
-    console.log('lakshan', expanded.value);
     focusElementById(props.fieldId);
 }
 

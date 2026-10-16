@@ -8,7 +8,6 @@ use Database\Factories\TopicFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
 
 /**
@@ -47,22 +46,20 @@ class Topic extends Model
     }
 
     /**
-     * Find the topic with this name, or create it. The first spelling used is
-     * kept as the display name.
+     * The topics offered in the picker, ordered by name.
+     *
+     * @return array<int, array{id: int, name: string}>
      */
-    public static function findOrCreate(string $name): self
+    public static function pickerOptions(): array
     {
-        $name = self::normalizeName($name);
-        $normalized = mb_strtolower($name);
-
-        try {
-            return self::query()->firstOrCreate(
-                ['normalized_name' => $normalized],
-                ['name' => $name],
-            );
-        } catch (UniqueConstraintViolationException) {
-            // Another request created it a moment ago; use that one.
-            return self::query()->where('normalized_name', $normalized)->firstOrFail();
-        }
+        return self::query()
+            ->orderBy('name')
+            ->get(['id', 'name'])
+            ->map(fn (self $topic): array => [
+                'id' => $topic->id,
+                'name' => $topic->name,
+            ])
+            ->values()
+            ->all();
     }
 }

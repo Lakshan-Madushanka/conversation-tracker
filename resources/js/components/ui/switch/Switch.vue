@@ -25,7 +25,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
 
 <template>
   <SwitchRoot
-    v-slot="slotProps"
+    #default="slotProps"
     data-slot="switch"
     :data-size="size"
     v-bind="forwarded"

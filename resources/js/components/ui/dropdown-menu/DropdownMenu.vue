@@ -10,7 +10,7 @@ const forwarded = useForwardPropsEmits(props, emits)
 
 <template>
   <DropdownMenuRoot
-    v-slot="slotProps"
+    #default="slotProps"
     data-slot="dropdown-menu"
     v-bind="forwarded"
   >

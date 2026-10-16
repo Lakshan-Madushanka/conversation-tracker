@@ -28,7 +28,7 @@ Create tests beforehand where ever possible
 - All the validations should use form requests
 - Prefer grouping
 - Use vue best practices - https://vuejs.org/style-guide/rules-strongly-recommended.html
-  - Prefer directive shorthands
+    - Prefer directive shorthands
 
 # Commits
 

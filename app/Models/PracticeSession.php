@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Actions\PracticeSessions\SplitLegacyFeedbackEntries;
 use Database\Factories\PracticeSessionFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -74,6 +75,11 @@ class PracticeSession extends Model
     /**
      * The session shaped for the session editor page.
      *
+     * Every list box and the grammar notes arrive as a list of entries, each
+     * with the id the editor saved it under, so a later save can update the
+     * same entry instead of adding another. The natural version stays one
+     * piece of formatted text.
+     *
      * @return array{
      *     id: int,
      *     status: string,
@@ -84,13 +90,17 @@ class PracticeSession extends Model
      *         position: int,
      *         question_html: string,
      *         answer_html: string,
-     *         feedback: array<string, string>
+     *         feedback: array<string, list<array{id: string, text: string}>|list<array{id: string, html: string}>|string>
      *     }>
      * }
      */
     public function toEditorPayload(): array
     {
-        $this->loadMissing(['topic', 'questions.feedbackEntries']);
+        // Sessions saved before entries existed are split once, on open, so
+        // old content looks the same as new content in the editor.
+        app(SplitLegacyFeedbackEntries::class)->handle($this);
+
+        $this->load(['questions.feedbackEntries']);
 
         return [
             'id' => $this->id,
@@ -107,13 +117,42 @@ class PracticeSession extends Model
                     'question_html' => $question->question_html,
                     'answer_html' => $question->answer_html,
                     'feedback' => $question->feedbackEntries
-                        ->mapWithKeys(fn (PracticeFeedbackEntry $entry): array => [
-                            $entry->type => $entry->editableContent(),
-                        ])
+                        ->groupBy('type')
+                        ->map(fn (Collection $entries, string $type): mixed => $this->feedbackPayload($type, $entries))
                         ->all(),
                 ])
                 ->all(),
         ];
+    }
+
+    /**
+     * One box shaped for the editor: entries for the boxes that hold them, and
+     * the raw text for the natural version.
+     *
+     * @param  Collection<int, PracticeFeedbackEntry>  $entries
+     * @return list<array{id: string, text: string}>|list<array{id: string, html: string}>|string
+     */
+    private function feedbackPayload(string $type, Collection $entries): array|string
+    {
+        if ($type === PracticeFeedbackEntry::TYPE_NATURAL_VERSION) {
+            return $entries->first()?->editableContent() ?? '';
+        }
+
+        $payload = [];
+
+        foreach ($entries as $entry) {
+            $id = $entry->client_id ?? '';
+
+            if (PracticeFeedbackEntry::isList($type)) {
+                $payload[] = ['id' => $id, 'text' => $entry->content_text];
+
+                continue;
+            }
+
+            $payload[] = ['id' => $id, 'html' => $entry->content_html];
+        }
+
+        return $payload;
     }
 
     /**

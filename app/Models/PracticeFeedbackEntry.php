@@ -12,13 +12,16 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
 
 /**
- * One feedback box attached to a question, kept as formatted text (for grammar
- * notes and the natural version) or plain text (for the list boxes) plus a
- * plain-text version for search and review.
+ * One entry inside a feedback box, kept as formatted text (for grammar notes
+ * and the natural version) or plain text (for the list boxes) plus a
+ * plain-text version for search and review. A list box holds many entries, one
+ * row each, ordered by `position` and identified by `client_id`.
  *
  * @property int $id
  * @property int $practice_question_id
  * @property string $type
+ * @property int $position
+ * @property string|null $client_id
  * @property string $content_html
  * @property string $content_text
  * @property Carbon|null $created_at
@@ -27,6 +30,8 @@ use Illuminate\Support\Carbon;
 #[Fillable([
     'practice_question_id',
     'type',
+    'position',
+    'client_id',
     'content_html',
     'content_text',
 ])]
@@ -44,6 +49,28 @@ class PracticeFeedbackEntry extends Model
     public const TYPE_GRAMMAR_NOTE = 'grammar_note';
 
     public const TYPE_NATURAL_VERSION = 'natural_version';
+
+    /**
+     * Boxes shown as a list of plain text entries, split from pasted lines.
+     *
+     * @var list<string>
+     */
+    public const LIST_TYPES = [
+        self::TYPE_MISTAKE,
+        self::TYPE_VOCABULARY,
+        self::TYPE_PHRASE,
+    ];
+
+    /**
+     * Boxes that hold many entries under one question. Only the natural
+     * version stays a single piece of text.
+     *
+     * @var list<string>
+     */
+    public const ENTRY_TYPES = [
+        ...self::LIST_TYPES,
+        self::TYPE_GRAMMAR_NOTE,
+    ];
 
     /**
      * Every feedback box a question can have, in the order they are shown.
@@ -71,6 +98,12 @@ class PracticeFeedbackEntry extends Model
     public static function isRich(string $type): bool
     {
         return in_array($type, self::RICH_TYPES, true);
+    }
+
+    /** Whether a box holds plain text entries split from pasted lines. */
+    public static function isList(string $type): bool
+    {
+        return in_array($type, self::LIST_TYPES, true);
     }
 
     /**

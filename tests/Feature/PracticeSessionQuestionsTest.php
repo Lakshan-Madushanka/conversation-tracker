@@ -95,10 +95,14 @@ test('the editor payload provides every saved box keyed by type', function (): v
     $session = PracticeSession::firstOrFail();
     $payload = $session->toEditorPayload();
 
-    expect($payload['questions'][0]['feedback'])->toBe([
-        'mistake' => 'I go → I went',
-        'grammar_note' => '<p>Use the <strong>past tense</strong>.</p>',
-    ]);
+    $feedback = $payload['questions'][0]['feedback'];
+
+    expect($feedback)->toHaveKeys(['mistake', 'grammar_note'])
+        ->and($feedback['mistake'])->toHaveCount(1)
+        ->and($feedback['mistake'][0]['text'])->toBe('I go → I went')
+        ->and($feedback['mistake'][0]['id'])->toBeString()->not->toBe('')
+        ->and($feedback['grammar_note'][0]['html'])->toBe('<p>Use the <strong>past tense</strong>.</p>')
+        ->and($feedback['grammar_note'][0]['id'])->toBeString()->not->toBe('');
 });
 
 test('empty feedback boxes do not create entries', function (): void {

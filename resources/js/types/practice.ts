@@ -13,8 +13,35 @@ export type FeedbackType =
     | 'grammar_note'
     | 'natural_version';
 
-/** One value per feedback box, keyed by type. */
-export type FeedbackValues = Record<FeedbackType, string>;
+/** Boxes that hold a list of plain text entries, one per pasted line. */
+export type ListFeedbackType = 'mistake' | 'vocabulary' | 'phrase';
+
+/** One entry of a list box. `id` is stable across saves, so an edit updates it. */
+export interface FeedbackEntry {
+    id: string;
+    text: string;
+}
+
+/** One grammar note, kept as formatted text and never split by line. */
+export interface GrammarNote {
+    id: string;
+    html: string;
+}
+
+/**
+ * One value per feedback box. The list boxes and the grammar notes hold
+ * entries; the natural version stays one piece of formatted text.
+ */
+export interface FeedbackValues {
+    mistake: FeedbackEntry[];
+    vocabulary: FeedbackEntry[];
+    phrase: FeedbackEntry[];
+    grammar_note: GrammarNote[];
+    natural_version: string;
+}
+
+/** The value of any one box, as the feedback components pass it around. */
+export type FeedbackValue = FeedbackValues[FeedbackType];
 
 /**
  * A question as it comes back from the backend. Saved boxes are present in

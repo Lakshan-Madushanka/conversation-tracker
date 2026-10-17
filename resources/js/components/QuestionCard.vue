@@ -5,7 +5,7 @@ import RichTextEditor from '@/components/RichTextEditor.vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { feedbackBoxes } from '@/lib/feedback';
-import type { FeedbackType, FeedbackValues } from '@/types';
+import type { FeedbackType, FeedbackValue, FeedbackValues } from '@/types';
 
 const props = defineProps<{
     number: number;
@@ -22,7 +22,7 @@ const props = defineProps<{
 const emit = defineEmits<{
     (event: 'update:questionHtml', value: string): void;
     (event: 'update:answerHtml', value: string): void;
-    (event: 'update:feedback', type: FeedbackType, value: string): void;
+    (event: 'update:feedback', type: FeedbackType, value: FeedbackValue): void;
     (event: 'remove'): void;
 }>();
 </script>
@@ -91,7 +91,9 @@ const emit = defineEmits<{
                 </p>
             </div>
 
-            <div class="flex flex-col gap-3">
+            <!-- One box per row, so a box with entries never squeezes or
+                stretches the box above or below it. -->
+            <div class="space-y-3">
                 <FeedbackBox
                     v-for="box in feedbackBoxes"
                     :key="box.type"
@@ -100,9 +102,6 @@ const emit = defineEmits<{
                     :question-number="props.number"
                     :model-value="props.feedback[box.type]"
                     :error="props.feedbackErrors?.[box.type]"
-                    :class="
-                        box.type === 'natural_version' ? 'md:col-span-2' : ''
-                    "
                     @update:model-value="
                         emit('update:feedback', box.type, $event)
                     "

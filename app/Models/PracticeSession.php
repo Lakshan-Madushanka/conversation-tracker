@@ -19,18 +19,41 @@ use Illuminate\Support\Collection;
  * @property int $id
  * @property int $topic_id
  * @property string $status
+ * @property int $version
+ * @property string|null $client_key
+ * @property string|null $last_save_key
  * @property Topic $topic
  * @property Collection<int, PracticeQuestion> $questions
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['topic_id', 'status'])]
+#[Fillable(['topic_id', 'status', 'client_key'])]
 class PracticeSession extends Model
 {
     /** @use HasFactory<PracticeSessionFactory> */
     use HasFactory;
 
     public const STATUS_UNFINISHED = 'unfinished';
+
+    /**
+     * Mirror the database default so a newly created session already reports
+     * version 1 to the editor, without a reload.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'version' => 1,
+    ];
+
+    /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'version' => 'integer',
+        ];
+    }
 
     /**
      * @return BelongsTo<Topic, $this>
@@ -54,6 +77,7 @@ class PracticeSession extends Model
      * @return array{
      *     id: int,
      *     status: string,
+     *     version: int,
      *     topic: array{id: int, name: string},
      *     questions: array<int, array{
      *         id: int,
@@ -71,6 +95,7 @@ class PracticeSession extends Model
         return [
             'id' => $this->id,
             'status' => $this->status,
+            'version' => $this->version,
             'topic' => [
                 'id' => $this->topic->id,
                 'name' => $this->topic->name,
@@ -88,6 +113,37 @@ class PracticeSession extends Model
                         ->all(),
                 ])
                 ->all(),
+        ];
+    }
+
+    /**
+     * The most recently touched unfinished session, shaped for the Home page's
+     * "Continue where you left off" card. Returns null when nothing is waiting.
+     *
+     * @return array{id: int, topic: string, updated_at: string}|null
+     */
+    public static function continueCard(): ?array
+    {
+        $session = self::query()
+            ->where('status', self::STATUS_UNFINISHED)
+            ->orderByDesc('updated_at')
+            ->orderByDesc('id')
+            ->first();
+
+        return $session?->toContinueCardPayload();
+    }
+
+    /**
+     * @return array{id: int, topic: string, updated_at: string}
+     */
+    public function toContinueCardPayload(): array
+    {
+        $this->loadMissing('topic');
+
+        return [
+            'id' => $this->id,
+            'topic' => $this->topic->name,
+            'updated_at' => $this->updated_at?->toIso8601String() ?? '',
         ];
     }
 }

@@ -1,16 +1,20 @@
 <?php
 
+use App\Http\Controllers\HomeController;
 use App\Http\Controllers\PracticeSessionController;
 use Illuminate\Support\Facades\Route;
 
-Route::inertia('/', 'Home')->name('home');
+Route::get('/', HomeController::class)->name('home');
 
 Route::inertia('/sessions', 'sessions/Index')->name('sessions.index');
 
 Route::get('/sessions/create', [PracticeSessionController::class, 'create'])->name('sessions.create');
+
+Route::post('/sessions/autosave', [PracticeSessionController::class, 'autosaveStore'])->name('sessions.autosave.store');
 Route::post('/sessions', [PracticeSessionController::class, 'store'])->name('sessions.store');
 
 Route::get('/sessions/{session}/edit', [PracticeSessionController::class, 'edit'])->name('sessions.edit');
+Route::put('/sessions/{session}/autosave', [PracticeSessionController::class, 'autosaveUpdate'])->name('sessions.autosave.update');
 Route::put('/sessions/{session}', [PracticeSessionController::class, 'update'])->name('sessions.update');
 
 Route::inertia('/sessions/{session}', 'sessions/Show')->name('sessions.show');

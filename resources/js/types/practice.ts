@@ -43,6 +43,11 @@ export interface PracticeQuestionForm {
 export interface PracticeSessionData {
     id: number;
     status: string;
+    /**
+     * Bumped on every save. The editor sends the version it last read so the
+     * server can refuse a save that would overwrite newer work from another tab.
+     */
+    version: number;
     topic: TopicSummary;
     questions: PracticeQuestionData[];
 }
@@ -51,4 +56,12 @@ export interface PracticeSessionData {
 export interface PracticeSessionForm {
     topic: string;
     questions: PracticeQuestionForm[];
+}
+
+/** The most recent unfinished session, shown on the Home page. */
+export interface ContinueCardData {
+    id: number;
+    topic: string;
+    /** ISO 8601 timestamp of the last change. */
+    updated_at: string;
 }

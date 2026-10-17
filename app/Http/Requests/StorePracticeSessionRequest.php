@@ -76,6 +76,9 @@ class StorePracticeSessionRequest extends FormRequest
     {
         $rules = [
             'topic' => ['required', 'string', 'max:120'],
+            // Identifies a session the editor created; a repeated first save
+            // returns the same session instead of starting another one.
+            'client_key' => ['nullable', 'string', 'max:64'],
             'questions' => ['required', 'array', 'min:1', 'max:'.self::MAX_QUESTIONS],
             'questions.*' => ['array'],
             'questions.*.question_html' => ['nullable', 'string', 'max:'.self::MAX_CONTENT_LENGTH],

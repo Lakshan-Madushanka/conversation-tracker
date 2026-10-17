@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Requests;
 
 use App\Models\PracticeFeedbackEntry;
+use App\Rules\ValidFeedbackBox;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -84,10 +85,17 @@ class StorePracticeSessionRequest extends FormRequest
             'questions.*.question_html' => ['nullable', 'string', 'max:'.self::MAX_CONTENT_LENGTH],
             'questions.*.answer_html' => ['nullable', 'string', 'max:'.self::MAX_CONTENT_LENGTH],
             'questions.*.feedback' => ['nullable', 'array'],
+            // The natural version stays one piece of formatted text.
+            'questions.*.feedback.'.PracticeFeedbackEntry::TYPE_NATURAL_VERSION => ['nullable', 'string', 'max:'.self::MAX_CONTENT_LENGTH],
         ];
 
-        foreach (PracticeFeedbackEntry::TYPES as $type) {
-            $rules['questions.*.feedback.'.$type] = ['nullable', 'string', 'max:'.self::MAX_CONTENT_LENGTH];
+        // Every other box holds a list of entries, each with the identity it
+        // was created with and the text the learner sees on screen.
+        foreach (PracticeFeedbackEntry::ENTRY_TYPES as $type) {
+            $rules['questions.*.feedback.'.$type] = [
+                'nullable',
+                new ValidFeedbackBox($type, self::MAX_CONTENT_LENGTH),
+            ];
         }
 
         return $rules;

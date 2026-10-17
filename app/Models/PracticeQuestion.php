@@ -50,10 +50,16 @@ class PracticeQuestion extends Model
     }
 
     /**
+     * Every entry of the question, grouped by box in the order the boxes are
+     * shown, and inside each box in the order the learner pasted or added them.
+     *
      * @return HasMany<PracticeFeedbackEntry, $this>
      */
     public function feedbackEntries(): HasMany
     {
-        return $this->hasMany(PracticeFeedbackEntry::class)->orderBy('id');
+        return $this->hasMany(PracticeFeedbackEntry::class)
+            ->orderBy('type')
+            ->orderBy('position')
+            ->orderBy('id');
     }
 }

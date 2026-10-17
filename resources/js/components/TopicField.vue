@@ -8,6 +8,8 @@ const props = defineProps<{
     modelValue: string;
     suggestions: TopicSummary[];
     error?: string;
+    /** Draws attention to the field when a save is waiting for a topic. */
+    highlight?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -37,6 +39,11 @@ const current = computed(() => normalize(props.modelValue));
             autocomplete="off"
             :aria-invalid="Boolean(error)"
             :aria-describedby="error ? 'topic-error' : 'topic-hint'"
+            :class="
+                props.highlight && !error
+                    ? 'ring-2 ring-amber-500/60 ring-offset-1 ring-offset-background'
+                    : ''
+            "
             @update:model-value="emit('update:modelValue', String($event))"
         />
 
@@ -47,6 +54,13 @@ const current = computed(() => normalize(props.modelValue));
             class="text-xs font-medium text-destructive"
         >
             {{ error }}
+        </p>
+        <p
+            v-else-if="props.highlight"
+            id="topic-hint"
+            class="text-xs font-medium text-amber-600 dark:text-amber-400"
+        >
+            Add a topic so saving can start.
         </p>
         <p v-else id="topic-hint" class="text-xs text-muted-foreground">
             Pick a topic below, or type your own.

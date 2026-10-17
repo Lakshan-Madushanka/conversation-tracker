@@ -8,6 +8,7 @@ import {
     SquarePenIcon,
     TrophyIcon,
 } from '@lucide/vue';
+import ContinueSessionCard from '@/components/ContinueSessionCard.vue';
 import PageHeader from '@/components/PageHeader.vue';
 import SessionCard from '@/components/SessionCard.vue';
 import StatTile from '@/components/StatTile.vue';
@@ -26,8 +27,14 @@ import {
     create as sessionsCreate,
     index as sessionsIndex,
 } from '@/routes/sessions';
+import type { ContinueCardData } from '@/types';
 
 defineOptions({ layout: AppLayout });
+
+defineProps<{
+    /** The most recent unfinished session, if there is one. */
+    unfinishedSession?: ContinueCardData | null;
+}>();
 
 const recentSessions = sessions.slice(0, 3);
 
@@ -61,6 +68,12 @@ const greeting = computed(() => {
                 </Button>
             </template>
         </PageHeader>
+
+        <ContinueSessionCard
+            v-if="unfinishedSession"
+            class="mb-6"
+            :session="unfinishedSession"
+        />
 
         <!-- Today's review suggestion -->
         <Card class="border-primary/30 bg-primary/5">

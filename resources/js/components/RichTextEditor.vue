@@ -170,7 +170,10 @@ function toggleOrderedList(): void {
     <div
         class="rich-text-editor overflow-hidden rounded-lg border border-input bg-transparent transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 dark:bg-input/30"
     >
+        <!-- The inline variant has no toolbar: a correction is short and
+            formatting is available via keyboard shortcuts. -->
         <div
+            v-if="!isInline"
             role="toolbar"
             :aria-label="`${label} formatting`"
             class="flex flex-wrap items-center gap-0.5 border-b border-input/60 bg-muted/40 p-1"

@@ -1,7 +1,7 @@
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vite-plus/test';
 import FeedbackBox from '@/components/FeedbackBox.vue';
-import { newEntry, newNote } from '@/lib/feedback';
+import { newNote } from '@/lib/feedback';
 import type { FeedbackType } from '@/types';
 
 /**
@@ -32,8 +32,8 @@ function mountBox(
         props: {
             ...props,
             type,
-            // Each kind of box holds a different shape: plain text, entries,
-            // or notes. The text here stands in for their content.
+            // Each kind of box holds a different shape: plain text, table
+            // rows, or notes. The text here stands in for their content.
             modelValue: valueFor(type, props.modelValue ?? ''),
             fieldId: 'field-mistake',
             questionNumber: 1,
@@ -41,22 +41,20 @@ function mountBox(
     });
 }
 
-/** Turn plain text into the list entries a box holds. */
-function entriesOf(text: string) {
+/** Turn plain text into the rows a table box holds. */
+function rowsOf(text: string) {
     if (text === '') {
         return [];
     }
 
-    return text === 'I go → I went'
-        ? [
-              {
-                  id: 'test-id',
-                  text: 'I go → I went',
-                  correction_html: '',
-                  reason: '',
-              },
-          ]
-        : [newEntry(text)];
+    return [
+        {
+            id: 'test-id',
+            text,
+            correction_html: '',
+            reason: '',
+        },
+    ];
 }
 
 /** Turn plain text into the notes the grammar box holds. */
@@ -74,7 +72,7 @@ function valueFor(type: FeedbackType, text: string) {
         return notesOf(text);
     }
 
-    return entriesOf(text);
+    return rowsOf(text);
 }
 
 /** The field the learner types into, whatever kind of box it is. */

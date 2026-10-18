@@ -1,10 +1,11 @@
 /**
- * The rules shared by the table feedback boxes (mistakes and vocabulary): how a
- * pasted line splits into its columns, how a pasted table maps onto them, and
- * which rows need the learner's attention or repeat an earlier one.
+ * The rules shared by the table feedback boxes (mistakes, vocabulary and
+ * phrases): how a pasted line splits into its columns, how a pasted table maps
+ * onto them, and which rows need the learner's attention or repeat an earlier
+ * one.
  *
  * A box's own columns live in a `FeedbackTableConfig`, so the same code can
- * drive the mistakes table and the vocabulary table.
+ * drive every table box.
  *
  * This mirrors `App\Support\FeedbackTable`, so the browser and the server
  * always agree on what a paste becomes. The server applies the same rules on
@@ -50,8 +51,8 @@ export interface FeedbackTableConfig {
     columns: readonly TableColumn[];
     /** Cells that mark the first pasted row as a header row. */
     headerLabels: ReadonlySet<string>;
-    /** What the attention column says when it is empty. */
-    attentionMissing: string;
+    /** What the attention column says when it is empty. Omit it when an empty attention column is normal and needs no reason. */
+    attentionMissing?: string;
     /** What the attention column says when the line held more than one separator. */
     attentionMoreThanOne: string;
     /** Whether a duplicate is only a duplicate when the attention column is filled too. */
@@ -183,7 +184,7 @@ export function rowAttention(
         return config.attentionMoreThanOne;
     }
 
-    return config.attentionMissing;
+    return config.attentionMissing ?? null;
 }
 
 /** The key two rows are compared by, ignoring case, spaces and formatting. */

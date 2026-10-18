@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vite-plus/test';
 import FeedbackTable from '@/components/FeedbackTable.vue';
 import type { FeedbackTableConfig, TableRow } from '@/lib/feedback-table';
 import { MISTAKES_TABLE } from '@/lib/mistakes';
+import { PHRASE_TABLE } from '@/lib/phrases';
 import { VOCABULARY_TABLE } from '@/lib/vocabulary';
 import type { MistakeEntry } from '@/types';
 
@@ -49,6 +50,24 @@ function mountVocabulary(entries: TableRow[] = []) {
             label: 'New vocabulary for question 1',
             fieldId: 'field-vocabulary',
             placeholder: 'e.g. reservation - a booking',
+        },
+    });
+
+    wrapper = component;
+
+    return component;
+}
+
+/** Mount the same component as the phrases box rather than the mistakes box. */
+function mountPhrases(entries: TableRow[] = []) {
+    const component = mount(FeedbackTable, {
+        attachTo: document.body,
+        props: {
+            entries,
+            config: PHRASE_TABLE,
+            label: 'New phrases for question 1',
+            fieldId: 'field-phrase',
+            placeholder: 'e.g. a long way - far away',
         },
     });
 
@@ -344,6 +363,79 @@ describe('the vocabulary table', () => {
             {
                 id: 'v2',
                 text: 'Reservation',
+                meaning: 'something else',
+                example_html: '',
+            },
+        ]);
+
+        expect(component.text()).toContain('Duplicate');
+    });
+});
+
+describe('the phrases table', () => {
+    it('shows the phrase, meaning and example columns', () => {
+        const component = mountPhrases([
+            {
+                id: 'p1',
+                text: 'Could I have the bill, please?',
+                meaning: 'a polite way to ask',
+                example_html: '<p>Could I have <em>the bill</em>, please?</p>',
+            },
+        ]);
+
+        expect(component.findAll('th').map((header) => header.text())).toEqual([
+            'Phrase',
+            'Meaning or use',
+            'Example (optional)',
+            'Actions',
+        ]);
+
+        const cells = component.findAll('td');
+
+        expect(cells[0].text()).toContain('Could I have the bill, please?');
+        expect(cells[1].text()).toContain('a polite way to ask');
+        expect(cells[2].text()).toContain('Could I have the bill, please?');
+    });
+
+    it('never asks for a meaning when a row has none', () => {
+        const component = mountPhrases([
+            {
+                id: 'p1',
+                text: 'What do you recommend?',
+                meaning: '',
+                example_html: '',
+            },
+        ]);
+
+        expect(component.text()).not.toContain('attention');
+    });
+
+    it('asks to split a row that holds more than one separator', () => {
+        const component = mountPhrases([
+            {
+                id: 'p1',
+                text: 'a - b - c',
+                meaning: '',
+                example_html: '',
+            },
+        ]);
+
+        expect(component.text()).toContain(
+            'More than one separator found. Please split it yourself.',
+        );
+    });
+
+    it('tags a repeated phrase as a duplicate even with a different meaning', () => {
+        const component = mountPhrases([
+            {
+                id: 'p1',
+                text: 'a long way',
+                meaning: 'far away',
+                example_html: '',
+            },
+            {
+                id: 'p2',
+                text: 'A Long Way',
                 meaning: 'something else',
                 example_html: '',
             },

@@ -28,10 +28,10 @@ import type {
  * without any content. A box with content always stays open when focus moves
  * away, but the learner can still shrink it themselves.
  *
- * A table box holds rows of columns (mistakes and vocabulary), the list box
- * holds entries the learner can edit one by one, the grammar notes box holds
- * one formatted note per paste, and the natural version stays one piece of
- * formatted text.
+ * A table box holds rows of columns (mistakes, vocabulary and phrases), the
+ * list box holds entries the learner can edit one by one, the grammar notes
+ * box holds one formatted note per paste, and the natural version stays one
+ * piece of formatted text.
  */
 const props = defineProps<{
     type: FeedbackType;
@@ -173,6 +173,11 @@ function updateTableEntries(entries: TableRow[]): void {
     emit('update:modelValue', entries as unknown as FeedbackValue);
 }
 
+/** Entries from the list box are one of the box's value shapes; pass them on. */
+function updateListEntries(entries: FeedbackEntry[]): void {
+    emit('update:modelValue', entries as unknown as FeedbackValue);
+}
+
 function open(): void {
     isOpening = true;
     opened.value = true;
@@ -299,7 +304,7 @@ function handleFocusOut(event: FocusEvent): void {
                     :field-id="props.fieldId"
                     :placeholder="box.placeholder"
                     :error="props.error"
-                    @update:entries="emit('update:modelValue', $event)"
+                    @update:entries="updateListEntries"
                 />
 
                 <FeedbackTable

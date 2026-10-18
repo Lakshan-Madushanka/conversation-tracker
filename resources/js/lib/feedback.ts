@@ -2,6 +2,7 @@ import type { FeedbackTone } from '@/components/SectionLabel.vue';
 import type { FeedbackTableConfig } from '@/lib/feedback-table';
 import { newId } from '@/lib/id';
 import { MISTAKES_TABLE } from '@/lib/mistakes';
+import { PHRASE_TABLE } from '@/lib/phrases';
 import { isRichTextBlank } from '@/lib/rich-text';
 import { VOCABULARY_TABLE } from '@/lib/vocabulary';
 import type {
@@ -10,7 +11,6 @@ import type {
     FeedbackValue,
     FeedbackValues,
     GrammarNote,
-    ListFeedbackType,
     PracticeQuestionData,
     PracticeQuestionForm,
 } from '@/types';
@@ -18,8 +18,9 @@ import type {
 /**
  * How a box holds its content:
  *
- * - `table` — rows of fixed columns (mistakes, vocabulary).
- * - `list` — plain text entries, one per pasted line (phrases).
+ * - `table` — rows of fixed columns (mistakes, vocabulary, phrases).
+ * - `list` — plain text entries, one per pasted line. No box uses it now; the
+ *   list UI is kept for as long as `EntryList` still exists.
  * - `notes` — many formatted notes, one per paste, never split by line.
  * - `text` — one piece of formatted text (the natural version).
  */
@@ -40,9 +41,6 @@ export interface FeedbackBoxConfig {
     /** Placeholder inside the add field. */
     placeholder: string;
 }
-
-/** Types whose boxes hold a list of plain text entries split from pasted lines. */
-export const LIST_TYPES: readonly ListFeedbackType[] = ['phrase'];
 
 /** The five feedback boxes, in the order they are shown on a question card. */
 export const feedbackBoxes: readonly FeedbackBoxConfig[] = [
@@ -68,9 +66,10 @@ export const feedbackBoxes: readonly FeedbackBoxConfig[] = [
         type: 'phrase',
         label: 'New phrases and expressions',
         tone: 'phrases',
-        kind: 'list',
+        kind: 'table',
+        table: PHRASE_TABLE,
         hint: 'Add new phrases',
-        placeholder: 'e.g. Could I have the bill, please?',
+        placeholder: 'e.g. a long way - far away',
     },
     {
         type: 'grammar_note',
@@ -191,5 +190,3 @@ function normalizeFeedback(feedback: Partial<FeedbackValues>): FeedbackValues {
         natural_version: feedback.natural_version ?? '',
     };
 }
-
-export type { ListFeedbackType };

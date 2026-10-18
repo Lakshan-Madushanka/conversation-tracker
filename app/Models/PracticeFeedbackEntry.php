@@ -17,9 +17,11 @@ use Illuminate\Support\Carbon;
  * plain-text version for search and review. A list box holds many entries, one
  * row each, ordered by `position` and identified by `client_id`.
  *
- * A mistake carries three columns: what was said (`content_text`), the
- * correction (`correction_html` plus its plain-text copy) and an optional why
- * (`reason`).
+ * A table box (mistakes and vocabulary) holds three columns per row. Mistakes
+ * keep what was said (`content_text`), a correction (`correction_html` plus its
+ * plain-text copy) and an optional why (`reason`). Vocabulary keeps a word
+ * (`content_text`), its meaning (`correction_text`) and an optional example
+ * (`reason_html` plus its plain-text copy in `reason`).
  *
  * @property int $id
  * @property int $practice_question_id
@@ -31,6 +33,7 @@ use Illuminate\Support\Carbon;
  * @property string $correction_html
  * @property string $correction_text
  * @property string $reason
+ * @property string $reason_html
  * @property bool $is_split
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
@@ -45,6 +48,7 @@ use Illuminate\Support\Carbon;
     'correction_html',
     'correction_text',
     'reason',
+    'reason_html',
     'is_split',
 ])]
 class PracticeFeedbackEntry extends Model
@@ -73,12 +77,21 @@ class PracticeFeedbackEntry extends Model
     ];
 
     /**
+     * Boxes shown as a table: a fixed set of columns, one row per pasted line.
+     *
+     * @var list<string>
+     */
+    public const TABLE_TYPES = [
+        self::TYPE_MISTAKE,
+        self::TYPE_VOCABULARY,
+    ];
+
+    /**
      * Boxes shown as a list of plain text entries, split from pasted lines.
      *
      * @var list<string>
      */
     public const LIST_TYPES = [
-        self::TYPE_VOCABULARY,
         self::TYPE_PHRASE,
     ];
 
@@ -89,7 +102,7 @@ class PracticeFeedbackEntry extends Model
      * @var list<string>
      */
     public const ENTRY_TYPES = [
-        ...self::MISTAKE_TYPES,
+        ...self::TABLE_TYPES,
         ...self::LIST_TYPES,
         self::TYPE_GRAMMAR_NOTE,
     ];
@@ -126,6 +139,12 @@ class PracticeFeedbackEntry extends Model
     public static function isList(string $type): bool
     {
         return in_array($type, self::LIST_TYPES, true);
+    }
+
+    /** Whether a box holds a table of rows, one column set per box. */
+    public static function isTable(string $type): bool
+    {
+        return in_array($type, self::TABLE_TYPES, true);
     }
 
     /** Whether a box holds mistakes, each with a correction and a why. */

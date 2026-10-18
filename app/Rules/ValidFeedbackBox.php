@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Rules;
 
 use App\Models\PracticeFeedbackEntry;
+use App\Support\FeedbackTable;
 use App\Support\ListEntries;
 use App\Support\RichText;
 use Closure;
@@ -13,12 +14,12 @@ use Illuminate\Contracts\Validation\ValidationRule;
 /**
  * Validates one feedback box of a question.
  *
- * The mistakes box holds a list of rows, each with what was said, a correction
- * and an optional why; the vocabulary and phrases boxes and the grammar notes
- * box hold a list of entries; the learner's browser sends them as an array of
- * items, each with a stable `id` and its content. A box saved before entries
- * existed arrives as one piece of text and is still accepted, so content from
- * earlier steps is never refused.
+ * A table box (mistakes and vocabulary) holds a list of rows, each with a fixed
+ * set of columns; the phrases box and the grammar notes box hold a list of
+ * entries; the learner's browser sends them as an array of items, each with a
+ * stable `id` and its content. A box saved before entries existed arrives as
+ * one piece of text and is still accepted, so content from earlier steps is
+ * never refused.
  *
  * The limits are checked against what would actually be stored — cleaned
  * entries, one per line or one per cell — so the message always matches what
@@ -79,8 +80,8 @@ final readonly class ValidFeedbackBox implements ValidationRule
      */
     private function countAndCheck(array $value, Closure $fail): int
     {
-        if (PracticeFeedbackEntry::isMistake($this->type)) {
-            return $this->countMistakes($value, $fail);
+        if (PracticeFeedbackEntry::isTable($this->type)) {
+            return $this->countTable($value, $fail);
         }
 
         $isList = PracticeFeedbackEntry::isList($this->type);
@@ -114,9 +115,7 @@ final readonly class ValidFeedbackBox implements ValidationRule
             }
 
             foreach (ListEntries::split($content) as $line) {
-                if (mb_strlen($line) > self::MAX_LENGTH) {
-                    $fail('Each entry can be up to '.self::MAX_LENGTH.' characters. Split it into two entries.');
-
+                if (! $this->fits($line, $fail)) {
                     return 0;
                 }
 
@@ -128,13 +127,15 @@ final readonly class ValidFeedbackBox implements ValidationRule
     }
 
     /**
-     * Checks every mistake item and returns how many rows it would store. Each
-     * of the three cells has to fit the same limit as a list entry.
+     * Checks every table item and returns how many rows it would store. Every
+     * cell has to fit the same limit as a list entry.
      *
      * @param  array<mixed>  $value
      */
-    private function countMistakes(array $value, Closure $fail): int
+    private function countTable(array $value, Closure $fail): int
     {
+        $columns = FeedbackTable::columns($this->type);
+        $marker = FeedbackTable::attentionKey($this->type);
         $count = 0;
 
         foreach ($value as $item) {
@@ -144,12 +145,10 @@ final readonly class ValidFeedbackBox implements ValidationRule
                 return 0;
             }
 
-            $text = $item['text'];
-
-            // A mistake saved before the table existed arrives with only text
-            // and is split into rows, one per line, when it is stored.
-            if (! array_key_exists('correction_html', $item)) {
-                foreach (ListEntries::split($text) as $line) {
+            // A row saved before the columns existed arrives with only text and
+            // is split into rows, one per line, when it is stored.
+            if (! array_key_exists($marker, $item)) {
+                foreach (ListEntries::split($item['text']) as $line) {
                     if (! $this->fits($line, $fail)) {
                         return 0;
                     }
@@ -160,21 +159,16 @@ final readonly class ValidFeedbackBox implements ValidationRule
                 continue;
             }
 
-            $correction = $item['correction_html'];
-            $reason = $item['reason'] ?? '';
+            foreach ($columns as $column) {
+                $cell = is_string($item[$column['key']] ?? null) ? $item[$column['key']] : '';
 
-            if (! is_string($correction) || ! is_string($reason)) {
-                $fail('This entry could not be saved. Check the text and try again.');
+                $check = $column['formatted']
+                    ? RichText::cleanInlineWithText($cell)['text']
+                    : ListEntries::cleanLine($cell);
 
-                return 0;
-            }
-
-            $correctionText = RichText::cleanInlineWithText($correction)['text'];
-
-            if (! $this->fits(ListEntries::cleanLine($text), $fail)
-                || ! $this->fits($correctionText, $fail)
-                || ! $this->fits(ListEntries::cleanLine($reason), $fail)) {
-                return 0;
+                if (! $this->fits($check, $fail)) {
+                    return 0;
+                }
             }
 
             $count++;

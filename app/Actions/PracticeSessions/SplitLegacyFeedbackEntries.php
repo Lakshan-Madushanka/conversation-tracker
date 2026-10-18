@@ -7,8 +7,8 @@ namespace App\Actions\PracticeSessions;
 use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeQuestion;
 use App\Models\PracticeSession;
+use App\Support\FeedbackTable;
 use App\Support\ListEntries;
-use App\Support\MistakeEntries;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
@@ -17,12 +17,13 @@ use Illuminate\Support\Str;
  * editor now works with: every line of a pasted list becomes its own entry,
  * every entry gets the id later saves match on, and the order is written back.
  *
- * Mistakes saved as one line are split into their columns the same way the
- * editor splits a paste, and marked as split so the job runs only once.
+ * Table boxes (mistakes and vocabulary) saved as one line are split into their
+ * columns the same way the editor splits a paste, and marked as split so the
+ * job runs only once.
  *
- * Grammar notes and the natural version keep their content — only the list and
- * mistake boxes are split. Running it again finds one line per entry and
- * changes nothing, so it is safe to run on every open.
+ * Grammar notes and the natural version keep their content — only the table and
+ * list boxes are split. Running it again finds one line per entry and changes
+ * nothing, so it is safe to run on every open.
  */
 final class SplitLegacyFeedbackEntries
 {
@@ -82,8 +83,8 @@ final class SplitLegacyFeedbackEntries
      */
     private function convertBox(PracticeQuestion $question, string $type): bool
     {
-        if (PracticeFeedbackEntry::isMistake($type)) {
-            return $this->convertMistakeBox($question, $type);
+        if (PracticeFeedbackEntry::isTable($type)) {
+            return $this->convertTableBox($question, $type);
         }
 
         $rows = $question->feedbackEntries
@@ -135,12 +136,11 @@ final class SplitLegacyFeedbackEntries
     }
 
     /**
-     * Split one mistakes box into its columns. A row saved before the table
-     * existed holds one line; it is split by the separator rules into what was
-     * said, the correction and a why, and marked as split so it is never
-     * touched again.
+     * Split one table box into its columns. A row saved before the columns
+     * existed holds one line; it is split by the separator rules into the
+     * columns and marked as split so it is never touched again.
      */
-    private function convertMistakeBox(PracticeQuestion $question, string $type): bool
+    private function convertTableBox(PracticeQuestion $question, string $type): bool
     {
         $rows = $question->feedbackEntries
             ->filter(fn (PracticeFeedbackEntry $entry): bool => $entry->type === $type)
@@ -175,21 +175,17 @@ final class SplitLegacyFeedbackEntries
 
             $first = array_shift($lines);
 
-            $changed = $this->alignMistake($row, $first, $position) || $changed;
+            $changed = $this->alignTable($row, $type, $first, $position) || $changed;
             $position++;
 
             foreach ($lines as $line) {
-                $parsed = MistakeEntries::parseLine($line);
+                $stored = FeedbackTable::storedFromLine($type, $line);
 
                 $question->feedbackEntries()->create([
                     'type' => $type,
                     'position' => $position,
                     'client_id' => (string) Str::uuid(),
-                    'content_html' => '',
-                    'content_text' => $parsed['text'],
-                    'correction_html' => $parsed['correction_html'],
-                    'correction_text' => $parsed['correction_text'],
-                    'reason' => $parsed['reason'],
+                    ...$stored,
                     'is_split' => true,
                 ]);
 
@@ -202,19 +198,20 @@ final class SplitLegacyFeedbackEntries
     }
 
     /**
-     * Split one legacy mistake line onto a row's three columns. Returns whether
-     * the row changed.
+     * Split one legacy table line onto a row's columns. Returns whether the row
+     * changed.
      */
-    private function alignMistake(PracticeFeedbackEntry $row, string $line, int $position): bool
+    private function alignTable(PracticeFeedbackEntry $row, string $type, string $line, int $position): bool
     {
-        $parsed = MistakeEntries::parseLine($line);
+        $stored = FeedbackTable::storedFromLine($type, $line);
 
         $row->client_id ??= (string) Str::uuid();
-        $row->content_html = '';
-        $row->content_text = $parsed['text'];
-        $row->correction_html = $parsed['correction_html'];
-        $row->correction_text = $parsed['correction_text'];
-        $row->reason = $parsed['reason'];
+        $row->content_html = $stored['content_html'];
+        $row->content_text = $stored['content_text'];
+        $row->correction_html = $stored['correction_html'];
+        $row->correction_text = $stored['correction_text'];
+        $row->reason = $stored['reason'];
+        $row->reason_html = $stored['reason_html'];
         $row->is_split = true;
 
         if ($row->position !== $position) {

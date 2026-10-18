@@ -75,25 +75,25 @@ function boxEntries(PracticeSession $session, string $type): array
 describe('a pasted list becomes one entry per line', function (): void {
     it('stores every line of a pasted list as its own entry, in order', function (): void {
         $session = saveEntrySession([
-            'vocabulary' => textEntries(['reluctant', 'affordable', 'reservation']),
+            'phrase' => textEntries(['a long way', 'off the beaten track', 'a shortcut']),
         ]);
 
-        $entries = boxEntries($session, PracticeFeedbackEntry::TYPE_VOCABULARY);
+        $entries = boxEntries($session, PracticeFeedbackEntry::TYPE_PHRASE);
 
         expect($entries)->toHaveCount(3)
-            ->and(array_column($entries, 'content_text'))->toBe(['reluctant', 'affordable', 'reservation'])
+            ->and(array_column($entries, 'content_text'))->toBe(['a long way', 'off the beaten track', 'a shortcut'])
             ->and(array_column($entries, 'position'))->toBe([0, 1, 2]);
     });
 
     it('splits the lines inside one submitted entry and keeps the first in place', function (): void {
         $session = saveEntrySession([
-            'vocabulary' => textEntries(["reluctant\naffordable\nreservation"], 'paste'),
+            'phrase' => textEntries(["a long way\noff the beaten track\na shortcut"], 'paste'),
         ]);
 
-        $entries = boxEntries($session, PracticeFeedbackEntry::TYPE_VOCABULARY);
+        $entries = boxEntries($session, PracticeFeedbackEntry::TYPE_PHRASE);
 
         expect($entries)->toHaveCount(3)
-            ->and(array_column($entries, 'content_text'))->toBe(['reluctant', 'affordable', 'reservation'])
+            ->and(array_column($entries, 'content_text'))->toBe(['a long way', 'off the beaten track', 'a shortcut'])
             ->and($entries[0]->client_id)->toBe('paste-0')
             ->and($entries[1]->client_id)->not->toBe('')
             ->and($entries[1]->client_id)->not->toBe($entries[0]->client_id);
@@ -101,12 +101,12 @@ describe('a pasted list becomes one entry per line', function (): void {
 
     it('applies the cleaning rules when it stores pasted lines', function (): void {
         $session = saveEntrySession([
-            'vocabulary' => textEntries(["•\treluctant\n1. 3 days\n- reluctant — unwilling\n\n   "], 'paste'),
+            'phrase' => textEntries(["•\ta long way\n1. off the beaten track\n- a shortcut\n\n   "], 'paste'),
         ]);
 
-        $entries = boxEntries($session, PracticeFeedbackEntry::TYPE_VOCABULARY);
+        $entries = boxEntries($session, PracticeFeedbackEntry::TYPE_PHRASE);
 
-        expect(array_column($entries, 'content_text'))->toBe(['reluctant', '3 days', 'reluctant — unwilling']);
+        expect(array_column($entries, 'content_text'))->toBe(['a long way', 'off the beaten track', 'a shortcut']);
     });
 
     it('keeps a very long line as one entry instead of cutting it', function (): void {
@@ -119,14 +119,20 @@ describe('a pasted list becomes one entry per line', function (): void {
 });
 
 describe('entries keep their identity between saves', function (): void {
-    it('updates the same entry when it is edited and does not add another', function (): void {
-        $session = saveEntrySession(['vocabulary' => textEntries(['I go → I went', 'said → told'])]);
+    it('updates the same vocabulary row when it is edited and does not add another', function (): void {
+        $session = saveEntrySession(['vocabulary' => [
+            ['id' => 'v-0', 'text' => 'reluctant', 'meaning' => 'unwilling', 'example_html' => ''],
+            ['id' => 'v-1', 'text' => 'affordable', 'meaning' => 'cheap', 'example_html' => ''],
+        ]]);
 
         $this->actingAs(User::factory()->create())->put(route('sessions.update', $session), [
             'topic' => 'Travel',
             'questions' => [
                 entryQuestionPayload('<p>Where did you go?</p>', [
-                    'vocabulary' => textEntries(['I went', 'said → told']),
+                    'vocabulary' => [
+                        ['id' => 'v-0', 'text' => 'reluctant', 'meaning' => 'not wanting to', 'example_html' => ''],
+                        ['id' => 'v-1', 'text' => 'affordable', 'meaning' => 'cheap', 'example_html' => ''],
+                    ],
                 ]),
             ],
         ])->assertRedirect();
@@ -134,7 +140,7 @@ describe('entries keep their identity between saves', function (): void {
         $entries = boxEntries($session->fresh() ?? $session, PracticeFeedbackEntry::TYPE_VOCABULARY);
 
         expect($entries)->toHaveCount(2)
-            ->and(array_column($entries, 'content_text'))->toBe(['I went', 'said → told']);
+            ->and(array_column($entries, 'correction_text'))->toBe(['not wanting to', 'cheap']);
     });
 
     it('does not duplicate entries when the same save is retried', function (): void {
@@ -228,6 +234,59 @@ describe('entries keep their identity between saves', function (): void {
 
         expect($entry->content_html)->toBe('<p>Where did you <em>end up</em> going?</p>')
             ->and(PracticeFeedbackEntry::count())->toBe(1);
+    });
+});
+
+describe('the vocabulary table', function (): void {
+    it('stores a row across the word, meaning and example columns', function (): void {
+        $session = saveEntrySession(['vocabulary' => [
+            [
+                'id' => 'v-0',
+                'text' => 'reluctant',
+                'meaning' => 'unwilling',
+                'example_html' => '<p>He was <em>reluctant</em> to go.</p>',
+            ],
+        ]]);
+
+        $entry = boxEntries($session, PracticeFeedbackEntry::TYPE_VOCABULARY)[0];
+
+        expect($entry->content_text)->toBe('reluctant')
+            ->and($entry->correction_text)->toBe('unwilling')
+            ->and($entry->correction_html)->toBe('')
+            ->and($entry->reason)->toBe('He was reluctant to go.')
+            ->and($entry->reason_html)->toBe('He was <em>reluctant</em> to go.');
+    });
+
+    it('splits a pasted word and meaning by the same separator rules as the editor', function (): void {
+        $session = saveEntrySession(['vocabulary' => [
+            ['id' => 'v-0', 'text' => 'reluctant → unwilling'],
+        ]]);
+
+        $entry = boxEntries($session, PracticeFeedbackEntry::TYPE_VOCABULARY)[0];
+
+        expect($entry->content_text)->toBe('reluctant')
+            ->and($entry->correction_text)->toBe('unwilling');
+    });
+
+    it('returns rows with word, meaning and example when the session is opened', function (): void {
+        $session = PracticeSession::factory()->for(Topic::factory())->create();
+        $question = PracticeQuestion::factory()->for($session)->create(['position' => 1]);
+
+        PracticeFeedbackEntry::factory()->for($question)->create([
+            'type' => PracticeFeedbackEntry::TYPE_VOCABULARY,
+            'content_text' => 'reluctant',
+            'correction_text' => 'unwilling',
+            'reason' => 'He was reluctant.',
+            'reason_html' => '<p>He was reluctant.</p>',
+            'is_split' => true,
+        ]);
+
+        $rows = $session->toEditorPayload()['questions'][0]['feedback']['vocabulary'];
+
+        expect($rows)->toHaveCount(1)
+            ->and($rows[0]['text'])->toBe('reluctant')
+            ->and($rows[0]['meaning'])->toBe('unwilling')
+            ->and($rows[0]['example_html'])->toBe('<p>He was reluctant.</p>');
     });
 });
 

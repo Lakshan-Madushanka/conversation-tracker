@@ -158,7 +158,9 @@ function open(): void {
     isOpening = true;
     opened.value = true;
     expanded.value = true;
-    focusElementById(props.fieldId);
+    focusElementById(
+        box.kind === 'mistakes' ? `${props.fieldId}-add` : props.fieldId,
+    );
 
     void nextTick(() => {
         requestAnimationFrame(() => {

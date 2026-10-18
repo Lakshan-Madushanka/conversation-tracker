@@ -3,17 +3,20 @@ import { computed, nextTick, ref, watch } from 'vue';
 import { ChevronDownIcon, ChevronUpIcon } from '@lucide/vue';
 import EntryList from '@/components/EntryList.vue';
 import GrammarNotesList from '@/components/GrammarNotesList.vue';
+import MistakesTable from '@/components/MistakesTable.vue';
 import RichTextEditor from '@/components/RichTextEditor.vue';
 import SectionLabel from '@/components/SectionLabel.vue';
 import { Button } from '@/components/ui/button';
 import { focusElementById } from '@/lib/dom';
 import { feedbackBoxFor } from '@/lib/feedback';
+import { mistakeAttention } from '@/lib/mistakes';
 import { isRichTextBlank, richTextToText } from '@/lib/rich-text';
 import type {
     FeedbackEntry,
     FeedbackType,
     FeedbackValue,
     GrammarNote,
+    MistakeEntry,
 } from '@/types';
 
 /**
@@ -22,9 +25,9 @@ import type {
  * without any content. A box with content always stays open when focus moves
  * away, but the learner can still shrink it themselves.
  *
- * The list boxes hold entries the learner can edit one by one, the grammar
- * notes box holds one formatted note per paste, and the natural version stays
- * one piece of formatted text.
+ * The mistakes box holds a table of rows, the list boxes hold entries the
+ * learner can edit one by one, the grammar notes box holds one formatted note
+ * per paste, and the natural version stays one piece of formatted text.
  */
 const props = defineProps<{
     type: FeedbackType;
@@ -41,6 +44,17 @@ const emit = defineEmits<{
 }>();
 
 const box = feedbackBoxFor(props.type);
+
+const mistakes = computed(() =>
+    box.kind === 'mistakes' ? (props.modelValue as MistakeEntry[]) : [],
+);
+
+/** How many rows are still waiting for a correction. */
+const attentionCount = computed(
+    () =>
+        mistakes.value.filter((entry) => mistakeAttention(entry) !== null)
+            .length,
+);
 
 const listEntries = computed(() =>
     box.kind === 'list' ? (props.modelValue as FeedbackEntry[]) : [],
@@ -62,6 +76,10 @@ const isBlank = computed(() => {
 
     if (box.kind === 'notes') {
         return notes.value.every((note) => isRichTextBlank(note.html));
+    }
+
+    if (box.kind === 'mistakes') {
+        return mistakes.value.length === 0;
     }
 
     return listEntries.value.length === 0;
@@ -106,6 +124,17 @@ const accessibleLabel = computed(
  * filled box never hides what is inside — the count is always visible.
  */
 const summary = computed(() => {
+    if (box.kind === 'mistakes') {
+        const count = mistakes.value.length;
+        const rows = `${count} ${count === 1 ? 'row' : 'rows'}`;
+
+        if (attentionCount.value > 0) {
+            return `${rows} · ${attentionCount.value} need attention`;
+        }
+
+        return rows;
+    }
+
     if (box.kind === 'list') {
         const count = listEntries.value.length;
 
@@ -246,6 +275,16 @@ function handleFocusOut(event: FocusEvent): void {
                 <EntryList
                     v-if="box.kind === 'list'"
                     :entries="listEntries"
+                    :label="accessibleLabel"
+                    :field-id="props.fieldId"
+                    :placeholder="box.placeholder"
+                    :error="props.error"
+                    @update:entries="emit('update:modelValue', $event)"
+                />
+
+                <MistakesTable
+                    v-else-if="box.kind === 'mistakes'"
+                    :entries="mistakes"
                     :label="accessibleLabel"
                     :field-id="props.fieldId"
                     :placeholder="box.placeholder"

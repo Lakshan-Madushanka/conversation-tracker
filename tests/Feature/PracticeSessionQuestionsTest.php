@@ -72,7 +72,8 @@ test('all five feedback boxes can be saved for one question', function (): void 
 
     $entries = $question->feedbackEntries->keyBy('type');
 
-    expect($entries[PracticeFeedbackEntry::TYPE_MISTAKE]->content_text)->toBe('I go → I went')
+    expect($entries[PracticeFeedbackEntry::TYPE_MISTAKE]->content_text)->toBe('I go')
+        ->and($entries[PracticeFeedbackEntry::TYPE_MISTAKE]->correction_text)->toBe('I went')
         ->and($entries[PracticeFeedbackEntry::TYPE_VOCABULARY]->content_text)->toBe('journey')
         ->and($entries[PracticeFeedbackEntry::TYPE_PHRASE]->content_text)->toBe('a long way')
         ->and($entries[PracticeFeedbackEntry::TYPE_GRAMMAR_NOTE]->content_html)->toBe('<p>Use the <strong>past tense</strong>.</p>')
@@ -99,7 +100,8 @@ test('the editor payload provides every saved box keyed by type', function (): v
 
     expect($feedback)->toHaveKeys(['mistake', 'grammar_note'])
         ->and($feedback['mistake'])->toHaveCount(1)
-        ->and($feedback['mistake'][0]['text'])->toBe('I go → I went')
+        ->and($feedback['mistake'][0]['text'])->toBe('I go')
+        ->and($feedback['mistake'][0]['correction_html'])->toBe('I went')
         ->and($feedback['mistake'][0]['id'])->toBeString()->not->toBe('')
         ->and($feedback['grammar_note'][0]['html'])->toBe('<p>Use the <strong>past tense</strong>.</p>')
         ->and($feedback['grammar_note'][0]['id'])->toBeString()->not->toBe('');
@@ -174,7 +176,8 @@ test('plain feedback keeps its text and does not store markup', function (): voi
     $entries = PracticeFeedbackEntry::all()->keyBy('type');
 
     expect($entries[PracticeFeedbackEntry::TYPE_MISTAKE]->content_html)->toBe('')
-        ->and($entries[PracticeFeedbackEntry::TYPE_MISTAKE]->content_text)->toBe('<b>said</b> → told')
+        ->and($entries[PracticeFeedbackEntry::TYPE_MISTAKE]->content_text)->toBe('<b>said</b>')
+        ->and($entries[PracticeFeedbackEntry::TYPE_MISTAKE]->correction_text)->toBe('told')
         ->and($entries[PracticeFeedbackEntry::TYPE_VOCABULARY]->content_html)->toBe('')
         ->and($entries[PracticeFeedbackEntry::TYPE_PHRASE]->content_text)->toBe("a long way\noff");
 });

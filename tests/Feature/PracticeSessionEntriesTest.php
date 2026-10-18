@@ -75,25 +75,25 @@ function boxEntries(PracticeSession $session, string $type): array
 describe('a pasted list becomes one entry per line', function (): void {
     it('stores every line of a pasted list as its own entry, in order', function (): void {
         $session = saveEntrySession([
-            'mistake' => textEntries(['I go → I went', 'said → told', 'a lot → a lot of']),
+            'vocabulary' => textEntries(['reluctant', 'affordable', 'reservation']),
         ]);
 
-        $entries = boxEntries($session, PracticeFeedbackEntry::TYPE_MISTAKE);
+        $entries = boxEntries($session, PracticeFeedbackEntry::TYPE_VOCABULARY);
 
         expect($entries)->toHaveCount(3)
-            ->and(array_column($entries, 'content_text'))->toBe(['I go → I went', 'said → told', 'a lot → a lot of'])
+            ->and(array_column($entries, 'content_text'))->toBe(['reluctant', 'affordable', 'reservation'])
             ->and(array_column($entries, 'position'))->toBe([0, 1, 2]);
     });
 
     it('splits the lines inside one submitted entry and keeps the first in place', function (): void {
         $session = saveEntrySession([
-            'mistake' => textEntries(["I go → I went\nsaid → told\na lot → a lot of"], 'paste'),
+            'vocabulary' => textEntries(["reluctant\naffordable\nreservation"], 'paste'),
         ]);
 
-        $entries = boxEntries($session, PracticeFeedbackEntry::TYPE_MISTAKE);
+        $entries = boxEntries($session, PracticeFeedbackEntry::TYPE_VOCABULARY);
 
         expect($entries)->toHaveCount(3)
-            ->and(array_column($entries, 'content_text'))->toBe(['I go → I went', 'said → told', 'a lot → a lot of'])
+            ->and(array_column($entries, 'content_text'))->toBe(['reluctant', 'affordable', 'reservation'])
             ->and($entries[0]->client_id)->toBe('paste-0')
             ->and($entries[1]->client_id)->not->toBe('')
             ->and($entries[1]->client_id)->not->toBe($entries[0]->client_id);
@@ -120,31 +120,31 @@ describe('a pasted list becomes one entry per line', function (): void {
 
 describe('entries keep their identity between saves', function (): void {
     it('updates the same entry when it is edited and does not add another', function (): void {
-        $session = saveEntrySession(['mistake' => textEntries(['I go → I went', 'said → told'])]);
+        $session = saveEntrySession(['vocabulary' => textEntries(['I go → I went', 'said → told'])]);
 
         $this->actingAs(User::factory()->create())->put(route('sessions.update', $session), [
             'topic' => 'Travel',
             'questions' => [
                 entryQuestionPayload('<p>Where did you go?</p>', [
-                    'mistake' => textEntries(['I went', 'said → told']),
+                    'vocabulary' => textEntries(['I went', 'said → told']),
                 ]),
             ],
         ])->assertRedirect();
 
-        $entries = boxEntries($session->fresh() ?? $session, PracticeFeedbackEntry::TYPE_MISTAKE);
+        $entries = boxEntries($session->fresh() ?? $session, PracticeFeedbackEntry::TYPE_VOCABULARY);
 
         expect($entries)->toHaveCount(2)
             ->and(array_column($entries, 'content_text'))->toBe(['I went', 'said → told']);
     });
 
     it('does not duplicate entries when the same save is retried', function (): void {
-        $session = saveEntrySession(['mistake' => textEntries(['I go → I went', 'said → told'])]);
+        $session = saveEntrySession(['vocabulary' => textEntries(['reluctant', 'affordable'])]);
 
         $payload = [
             'topic' => 'Travel',
             'questions' => [
                 entryQuestionPayload('<p>Where did you go?</p>', [
-                    'mistake' => textEntries(['I go → I went', 'said → told']),
+                    'vocabulary' => textEntries(['reluctant', 'affordable']),
                 ]),
             ],
         ];
@@ -156,24 +156,24 @@ describe('entries keep their identity between saves', function (): void {
     });
 
     it('removes only the entry that was removed in the editor', function (): void {
-        $session = saveEntrySession(['mistake' => textEntries(['first', 'second', 'third'])]);
+        $session = saveEntrySession(['vocabulary' => textEntries(['first', 'second', 'third'])]);
 
         $this->actingAs(User::factory()->create())->put(route('sessions.update', $session), [
             'topic' => 'Travel',
             'questions' => [
                 entryQuestionPayload('<p>Where did you go?</p>', [
-                    'mistake' => textEntries(['first', 'third']),
+                    'vocabulary' => textEntries(['first', 'third']),
                 ]),
             ],
         ]);
 
-        expect(array_column(boxEntries($session, PracticeFeedbackEntry::TYPE_MISTAKE), 'content_text'))->toBe(['first', 'third']);
+        expect(array_column(boxEntries($session, PracticeFeedbackEntry::TYPE_VOCABULARY), 'content_text'))->toBe(['first', 'third']);
     });
 
     it('keeps the entries of one box apart from the entries of another', function (): void {
         $session = saveEntrySession([
-            'mistake' => textEntries(['same text'], 'a'),
             'vocabulary' => textEntries(['same text'], 'a'),
+            'phrase' => textEntries(['same text'], 'a'),
         ]);
 
         expect(PracticeFeedbackEntry::count())->toBe(2);
@@ -181,10 +181,10 @@ describe('entries keep their identity between saves', function (): void {
 
     it('stamps a server id on entries that arrive without one', function (): void {
         $session = saveEntrySession([
-            'mistake' => [['text' => 'I go → I went']],
+            'vocabulary' => [['text' => 'reluctant']],
         ]);
 
-        $entry = boxEntries($session, PracticeFeedbackEntry::TYPE_MISTAKE)[0];
+        $entry = boxEntries($session, PracticeFeedbackEntry::TYPE_VOCABULARY)[0];
 
         expect($entry->client_id)->toBeString()->not->toBe('');
     });
@@ -295,8 +295,10 @@ describe('sessions saved before entries existed', function (): void {
         $entries = $payload['questions'][0]['feedback']['mistake'];
 
         expect($entries)->toHaveCount(2)
-            ->and($entries[0]['text'])->toBe('I go → I went')
-            ->and($entries[1]['text'])->toBe('said → told')
+            ->and($entries[0]['text'])->toBe('I go')
+            ->and($entries[0]['correction_html'])->toBe('I went')
+            ->and($entries[1]['text'])->toBe('said')
+            ->and($entries[1]['correction_html'])->toBe('told')
             ->and($entries[0]['id'])->toBeString()->not->toBe('')
             ->and($entries[1]['id'])->toBeString()->not->toBe('')
             ->and($entries[1]['id'])->not->toBe($entries[0]['id']);

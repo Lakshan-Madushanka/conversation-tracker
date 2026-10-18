@@ -7,16 +7,17 @@ namespace App\Actions\PracticeQuestions;
 use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeQuestion;
 use App\Support\ListEntries;
+use App\Support\MistakeEntries;
 use App\Support\RichText;
 use Illuminate\Support\Str;
 
 /**
  * Replaces a question's feedback boxes with the submitted content.
  *
- * A list box holds one row per entry and a grammar note box one row per note,
- * so every entry keeps the id the editor gave it. A retry with the same
- * payload matches those ids and updates the same rows instead of storing them
- * again.
+ * A mistake holds three columns, a list box holds one row per entry, and a
+ * grammar note box one row per note, so every entry keeps the id the editor
+ * gave it. A retry with the same payload matches those ids and updates the
+ * same rows instead of storing them again.
  */
 final class SavePracticeFeedback
 {
@@ -57,6 +58,10 @@ final class SavePracticeFeedback
             $row->position = count($stored);
             $row->content_html = $entry['html'];
             $row->content_text = $entry['text'];
+            $row->correction_html = $entry['correction_html'] ?? '';
+            $row->correction_text = $entry['correction_text'] ?? '';
+            $row->reason = $entry['reason'] ?? '';
+            $row->is_split = $entry['is_split'] ?? false;
             $row->save();
 
             $claimed[spl_object_id($row)] = true;
@@ -74,7 +79,7 @@ final class SavePracticeFeedback
      * Turns the submitted box into the rows it should hold. An empty box
      * produces none, so removing the last entry removes the row.
      *
-     * @return list<array{html: string, text: string, client_id: string|null}>
+     * @return list<array{html: string, text: string, client_id: string|null, correction_html?: string, correction_text?: string, reason?: string, is_split?: bool}>
      */
     private function entriesToStore(string $type, mixed $submitted): array
     {
@@ -113,14 +118,19 @@ final class SavePracticeFeedback
     }
 
     /**
-     * One submitted item, split into the rows it holds. A pasted list arrives
-     * as several lines in one item and becomes one row per line.
+     * One submitted item, split into the rows it holds. A mistake item is one
+     * row; a pasted list arrives as several lines in one item and becomes one
+     * row per line.
      *
      * @param  array<mixed>  $item
-     * @return list<array{html: string, text: string}>
+     * @return list<array{html: string, text: string, correction_html?: string, correction_text?: string, reason?: string, is_split?: bool}>
      */
     private function itemEntries(string $type, array $item): array
     {
+        if (PracticeFeedbackEntry::isMistake($type)) {
+            return $this->mistakeEntries($item);
+        }
+
         $content = is_string($item[$this->contentKey($type)] ?? null)
             ? $item[$this->contentKey($type)]
             : '';
@@ -138,12 +148,91 @@ final class SavePracticeFeedback
     }
 
     /**
+     * One mistake item, as the editor sends it: the three columns, with the
+     * correction reduced to a single inline line.
+     *
+     * A mistake saved before the table existed arrives with only `text`, so its
+     * line is split by the separator rules instead.
+     *
+     * @param  array<mixed>  $item
+     * @return list<array{html: string, text: string, correction_html: string, correction_text: string, reason: string, is_split: bool}>
+     */
+    private function mistakeEntries(array $item): array
+    {
+        $text = is_string($item['text'] ?? null) ? $item['text'] : '';
+
+        if (! array_key_exists('correction_html', $item)) {
+            return $this->splitMistakeLines($text);
+        }
+
+        $correction = RichText::cleanInlineWithText(
+            is_string($item['correction_html']) ? $item['correction_html'] : '',
+        );
+
+        $reason = is_string($item['reason'] ?? null)
+            ? ListEntries::cleanLine($item['reason'])
+            : '';
+
+        $cleanText = ListEntries::cleanLine($text);
+
+        if ($cleanText === '' && $correction['text'] === '' && $reason === '') {
+            return [];
+        }
+
+        return [[
+            'html' => '',
+            'text' => $cleanText,
+            'correction_html' => $correction['html'],
+            'correction_text' => $correction['text'],
+            'reason' => $reason,
+            'is_split' => true,
+        ]];
+    }
+
+    /**
+     * Split a line saved before the table existed into mistake rows, applying
+     * the same separator rules as the editor.
+     *
+     * @return list<array{html: string, text: string, correction_html: string, correction_text: string, reason: string, is_split: bool}>
+     */
+    private function splitMistakeLines(string $content): array
+    {
+        $entries = [];
+
+        foreach (ListEntries::split($content) as $line) {
+            $parsed = MistakeEntries::parseLine($line);
+
+            if ($parsed['text'] === '' && $parsed['correction_text'] === '') {
+                continue;
+            }
+
+            $entries[] = [
+                'html' => '',
+                'text' => $parsed['text'],
+                'correction_html' => $parsed['correction_html'],
+                'correction_text' => $parsed['correction_text'],
+                'reason' => $parsed['reason'],
+                'is_split' => true,
+            ];
+        }
+
+        return $entries;
+    }
+
+    /**
      * A box saved as plain text keeps its content as one entry.
      *
-     * @return list<array{html: string, text: string, client_id: string|null}>
+     * @return list<array{html: string, text: string, client_id: string|null, correction_html?: string, correction_text?: string, reason?: string, is_split?: bool}>
      */
     private function singleEntry(string $type, string $content): array
     {
+        if (PracticeFeedbackEntry::isMistake($type)) {
+            return array_map(
+                fn (array $entry): array => [...$entry, 'client_id' => null],
+                $this->splitMistakeLines($content),
+            );
+        }
+
         if (PracticeFeedbackEntry::isList($type)) {
             $text = RichText::normalizePlainText($content);
 
@@ -191,6 +280,8 @@ final class SavePracticeFeedback
 
     private function contentKey(string $type): string
     {
-        return PracticeFeedbackEntry::isList($type) ? 'text' : 'html';
+        return PracticeFeedbackEntry::isList($type) || PracticeFeedbackEntry::isMistake($type)
+            ? 'text'
+            : 'html';
     }
 }

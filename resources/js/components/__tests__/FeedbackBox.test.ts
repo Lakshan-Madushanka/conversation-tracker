@@ -43,7 +43,20 @@ function mountBox(
 
 /** Turn plain text into the list entries a box holds. */
 function entriesOf(text: string) {
-    return text === '' ? [] : [newEntry(text)];
+    if (text === '') {
+        return [];
+    }
+
+    return text === 'I go → I went'
+        ? [
+              {
+                  id: 'test-id',
+                  text: 'I go → I went',
+                  correction_html: '',
+                  reason: '',
+              },
+          ]
+        : [newEntry(text)];
 }
 
 /** Turn plain text into the notes the grammar box holds. */
@@ -66,6 +79,12 @@ function valueFor(type: FeedbackType, text: string) {
 
 /** The field the learner types into, whatever kind of box it is. */
 function field(wrapper: ReturnType<typeof mountBox>) {
+    const type = wrapper.props('type') as FeedbackType;
+
+    if (type === 'mistake') {
+        return wrapper.find('#field-mistake-add');
+    }
+
     return wrapper.find('#field-mistake');
 }
 
@@ -264,7 +283,6 @@ describe('shrinking a box', () => {
         await wrapper.get('button[aria-label^="Close"]').trigger('click');
         await wrapper.vm.$nextTick();
 
-        // The entry is still mounted, just hidden, so it survives a shrink.
         expect(field(wrapper).exists()).toBe(true);
         expect(wrapper.text()).toContain('I go → I went');
 
@@ -278,8 +296,7 @@ describe('shrinking a box', () => {
         await wrapper.vm.$nextTick();
 
         // A shrunk box still tells the learner what is inside it.
-        expect(wrapper.text()).toContain('1 entry');
-        expect(wrapper.text()).not.toContain('Add corrections');
+        expect(wrapper.text()).toContain('1 row');
 
         wrapper.unmount();
     });
@@ -320,7 +337,7 @@ describe('shrinking a box', () => {
         await animationFrame();
 
         expect(fieldIsShown(wrapper)).toBe(true);
-        expect(typedText(wrapper)).toBe('I goed');
+        expect(document.activeElement?.id).toBe('field-mistake-add');
 
         wrapper.unmount();
     });

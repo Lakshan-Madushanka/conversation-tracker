@@ -1,6 +1,6 @@
 import type { FeedbackTone } from '@/components/SectionLabel.vue';
 import { newId } from '@/lib/id';
-import { isRichTextBlank } from '@/lib/rich-text';
+import { isRichTextBlank, richTextToText } from '@/lib/rich-text';
 import type {
     FeedbackEntry,
     FeedbackType,
@@ -8,6 +8,7 @@ import type {
     FeedbackValues,
     GrammarNote,
     ListFeedbackType,
+    MistakeEntry,
     PracticeQuestionData,
     PracticeQuestionForm,
 } from '@/types';
@@ -15,12 +16,12 @@ import type {
 /**
  * How a box holds its content:
  *
- * - `list` — plain text entries, one per pasted line (mistakes, vocabulary,
- *   phrases).
+ * - `mistakes` — rows of what was said, a correction and an optional why.
+ * - `list` — plain text entries, one per pasted line (vocabulary, phrases).
  * - `notes` — many formatted notes, one per paste, never split by line.
  * - `text` — one piece of formatted text (the natural version).
  */
-export type FeedbackBoxKind = 'list' | 'notes' | 'text';
+export type FeedbackBoxKind = 'mistakes' | 'list' | 'notes' | 'text';
 
 export interface FeedbackBoxConfig {
     /** Backend key for this box. */
@@ -37,11 +38,7 @@ export interface FeedbackBoxConfig {
 }
 
 /** Types whose boxes hold a list of entries split from pasted lines. */
-export const LIST_TYPES: readonly ListFeedbackType[] = [
-    'mistake',
-    'vocabulary',
-    'phrase',
-];
+export const LIST_TYPES: readonly ListFeedbackType[] = ['vocabulary', 'phrase'];
 
 /** The five feedback boxes, in the order they are shown on a question card. */
 export const feedbackBoxes: readonly FeedbackBoxConfig[] = [
@@ -49,7 +46,7 @@ export const feedbackBoxes: readonly FeedbackBoxConfig[] = [
         type: 'mistake',
         label: 'Mistakes and corrections',
         tone: 'mistakes',
-        kind: 'list',
+        kind: 'mistakes',
         hint: 'Add corrections from the tutor',
         placeholder: 'e.g. I go → I went',
     },
@@ -113,6 +110,18 @@ export function newEntry(text: string): FeedbackEntry {
     return { id: newId(), text };
 }
 
+/** A new mistake row, ready to be edited or saved. */
+export function newMistake(
+    mistake: Partial<Omit<MistakeEntry, 'id'>> = {},
+): MistakeEntry {
+    return {
+        id: newId(),
+        text: mistake.text ?? '',
+        correction_html: mistake.correction_html ?? '',
+        reason: mistake.reason ?? '',
+    };
+}
+
 /** A new grammar note, ready to be edited or saved. */
 export function newNote(html: string): GrammarNote {
     return { id: newId(), html };
@@ -121,8 +130,8 @@ export function newNote(html: string): GrammarNote {
 /**
  * Whether a single box holds content (formatting-only counts as empty).
  *
- * Notes carry HTML and entries carry plain text, so the shape of the items
- * says which check to run.
+ * Notes carry HTML, mistakes carry three cells and entries carry plain text, so
+ * the shape of the items says which check to run.
  */
 export function isFeedbackValueBlank(value: FeedbackValue): boolean {
     if (typeof value === 'string') {
@@ -133,14 +142,30 @@ export function isFeedbackValueBlank(value: FeedbackValue): boolean {
         return value.every((note) => isRichTextBlank(note.html));
     }
 
+    if (isMistakes(value)) {
+        return value.every(
+            (mistake) =>
+                mistake.text.trim() === '' &&
+                richTextToText(mistake.correction_html).trim() === '' &&
+                mistake.reason.trim() === '',
+        );
+    }
+
     return value.every((entry) => entry.text.trim().length === 0);
 }
 
 /** Grammar notes carry HTML; entries carry plain text. Never mixed in a box. */
 function isGrammarNotes(
-    items: FeedbackEntry[] | GrammarNote[],
+    items: FeedbackEntry[] | GrammarNote[] | MistakeEntry[],
 ): items is GrammarNote[] {
     return items.every((item) => 'html' in item);
+}
+
+/** Mistake rows carry a correction column. Never mixed with the other boxes. */
+function isMistakes(
+    items: FeedbackEntry[] | GrammarNote[] | MistakeEntry[],
+): items is MistakeEntry[] {
+    return items.every((item) => 'correction_html' in item);
 }
 
 /** Replace the value of one box, whatever kind of content it holds. */

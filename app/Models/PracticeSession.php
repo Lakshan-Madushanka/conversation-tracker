@@ -90,7 +90,7 @@ class PracticeSession extends Model
      *         position: int,
      *         question_html: string,
      *         answer_html: string,
-     *         feedback: array<string, list<array{id: string, text: string}>|list<array{id: string, html: string}>|string>
+     *         feedback: array<string, list<array{id: string, text: string, correction_html: string, reason: string}>|list<array{id: string, text: string}>|list<array{id: string, html: string}>|string>
      *     }>
      * }
      */
@@ -126,11 +126,11 @@ class PracticeSession extends Model
     }
 
     /**
-     * One box shaped for the editor: entries for the boxes that hold them, and
-     * the raw text for the natural version.
+     * One box shaped for the editor: mistakes with their three columns, plain
+     * entries for the list boxes, and the raw text for the natural version.
      *
      * @param  Collection<int, PracticeFeedbackEntry>  $entries
-     * @return list<array{id: string, text: string}>|list<array{id: string, html: string}>|string
+     * @return list<array{id: string, text: string, correction_html: string, reason: string}>|list<array{id: string, text: string}>|list<array{id: string, html: string}>|string
      */
     private function feedbackPayload(string $type, Collection $entries): array|string
     {
@@ -142,6 +142,17 @@ class PracticeSession extends Model
 
         foreach ($entries as $entry) {
             $id = $entry->client_id ?? '';
+
+            if (PracticeFeedbackEntry::isMistake($type)) {
+                $payload[] = [
+                    'id' => $id,
+                    'text' => $entry->content_text,
+                    'correction_html' => $entry->correction_html,
+                    'reason' => $entry->reason,
+                ];
+
+                continue;
+            }
 
             if (PracticeFeedbackEntry::isList($type)) {
                 $payload[] = ['id' => $id, 'text' => $entry->content_text];

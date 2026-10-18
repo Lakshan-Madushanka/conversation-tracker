@@ -191,7 +191,8 @@ final class SplitLegacyFeedbackEntries
         $row->correction_html = $stored['correction_html'];
         $row->correction_text = $stored['correction_text'];
         $row->reason = $stored['reason'];
-        $row->reason_html = $stored['reason_html'];
+        $row->example = $stored['example'];
+        $row->example_html = $stored['example_html'];
         $row->is_split = true;
 
         if ($row->position !== $position) {

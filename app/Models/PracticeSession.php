@@ -160,7 +160,7 @@ class PracticeSession extends Model
                     'id' => $id,
                     'text' => $entry->content_text,
                     'meaning' => $entry->correction_text,
-                    'example_html' => $entry->reason_html,
+                    'example_html' => $entry->example_html,
                 ];
 
                 continue;

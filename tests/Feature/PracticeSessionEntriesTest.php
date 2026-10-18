@@ -253,8 +253,9 @@ describe('the vocabulary table', function (): void {
         expect($entry->content_text)->toBe('reluctant')
             ->and($entry->correction_text)->toBe('unwilling')
             ->and($entry->correction_html)->toBe('')
-            ->and($entry->reason)->toBe('He was reluctant to go.')
-            ->and($entry->reason_html)->toBe('He was <em>reluctant</em> to go.');
+            ->and($entry->example)->toBe('He was reluctant to go.')
+            ->and($entry->example_html)->toBe('He was <em>reluctant</em> to go.')
+            ->and($entry->reason)->toBe('');
     });
 
     it('splits a pasted word and meaning by the same separator rules as the editor', function (): void {
@@ -276,8 +277,8 @@ describe('the vocabulary table', function (): void {
             'type' => PracticeFeedbackEntry::TYPE_VOCABULARY,
             'content_text' => 'reluctant',
             'correction_text' => 'unwilling',
-            'reason' => 'He was reluctant.',
-            'reason_html' => '<p>He was reluctant.</p>',
+            'example' => 'He was reluctant.',
+            'example_html' => '<p>He was reluctant.</p>',
             'is_split' => true,
         ]);
 
@@ -306,8 +307,9 @@ describe('the phrases table', function (): void {
         expect($entry->content_text)->toBe('Could I have the menu, please?')
             ->and($entry->correction_text)->toBe('a polite way to ask')
             ->and($entry->correction_html)->toBe('')
-            ->and($entry->reason)->toBe('Could I have the menu, please?')
-            ->and($entry->reason_html)->toBe('Could I have <em>the menu</em>, please?');
+            ->and($entry->example)->toBe('Could I have the menu, please?')
+            ->and($entry->example_html)->toBe('Could I have <em>the menu</em>, please?')
+            ->and($entry->reason)->toBe('');
     });
 
     it('splits a pasted phrase and meaning by the same separator rules as the editor', function (): void {
@@ -341,8 +343,8 @@ describe('the phrases table', function (): void {
             'type' => PracticeFeedbackEntry::TYPE_PHRASE,
             'content_text' => 'Could I have the bill, please?',
             'correction_text' => 'a polite way to ask for the bill',
-            'reason' => 'Could I have the bill, please?',
-            'reason_html' => '<em>Could I have the bill</em>, please?',
+            'example' => 'Could I have the bill, please?',
+            'example_html' => '<em>Could I have the bill</em>, please?',
             'is_split' => true,
         ]);
 

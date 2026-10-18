@@ -61,7 +61,8 @@ final class SavePracticeFeedback
             $row->correction_html = $entry['correction_html'];
             $row->correction_text = $entry['correction_text'];
             $row->reason = $entry['reason'];
-            $row->reason_html = $entry['reason_html'];
+            $row->example = $entry['example'];
+            $row->example_html = $entry['example_html'];
             $row->is_split = $entry['is_split'];
             $row->save();
 
@@ -80,7 +81,7 @@ final class SavePracticeFeedback
      * Turns the submitted box into the rows it should hold. An empty box
      * produces none, so removing the last entry removes the row.
      *
-     * @return list<array{content_html: string, content_text: string, correction_html: string, correction_text: string, reason: string, reason_html: string, client_id: string|null, is_split: bool}>
+     * @return list<array{content_html: string, content_text: string, correction_html: string, correction_text: string, reason: string, example: string, example_html: string, client_id: string|null, is_split: bool}>
      */
     private function entriesToStore(string $type, mixed $submitted): array
     {
@@ -124,7 +125,7 @@ final class SavePracticeFeedback
      * and becomes one row per line.
      *
      * @param  array<mixed>  $item
-     * @return list<array{content_html: string, content_text: string, correction_html: string, correction_text: string, reason: string, reason_html: string, is_split: bool}>
+     * @return list<array{content_html: string, content_text: string, correction_html: string, correction_text: string, reason: string, example: string, example_html: string, is_split: bool}>
      */
     private function itemEntries(string $type, array $item): array
     {
@@ -151,7 +152,7 @@ final class SavePracticeFeedback
      * line is split by the separator rules instead.
      *
      * @param  array<mixed>  $item
-     * @return list<array{content_html: string, content_text: string, correction_html: string, correction_text: string, reason: string, reason_html: string, is_split: bool}>
+     * @return list<array{content_html: string, content_text: string, correction_html: string, correction_text: string, reason: string, example: string, example_html: string, is_split: bool}>
      */
     private function tableEntries(string $type, array $item): array
     {
@@ -180,7 +181,7 @@ final class SavePracticeFeedback
      * Split a line saved before the columns existed into table rows, applying
      * the same separator rules as the editor.
      *
-     * @return list<array{content_html: string, content_text: string, correction_html: string, correction_text: string, reason: string, reason_html: string, is_split: bool}>
+     * @return list<array{content_html: string, content_text: string, correction_html: string, correction_text: string, reason: string, example: string, example_html: string, is_split: bool}>
      */
     private function tableLines(string $type, string $content): array
     {
@@ -204,7 +205,7 @@ final class SavePracticeFeedback
      * box splits it into rows by the separator rules; a grammar note stays one
      * entry.
      *
-     * @return list<array{content_html: string, content_text: string, correction_html: string, correction_text: string, reason: string, reason_html: string, client_id: string|null, is_split: bool}>
+     * @return list<array{content_html: string, content_text: string, correction_html: string, correction_text: string, reason: string, example: string, example_html: string, client_id: string|null, is_split: bool}>
      */
     private function singleEntry(string $type, string $content): array
     {
@@ -255,7 +256,7 @@ final class SavePracticeFeedback
     }
 
     /**
-     * @return array{content_html: string, content_text: string, correction_html: string, correction_text: string, reason: string, reason_html: string, is_split: bool}
+     * @return array{content_html: string, content_text: string, correction_html: string, correction_text: string, reason: string, example: string, example_html: string, is_split: bool}
      */
     private function blankRow(): array
     {
@@ -265,7 +266,8 @@ final class SavePracticeFeedback
             'correction_html' => '',
             'correction_text' => '',
             'reason' => '',
-            'reason_html' => '',
+            'example' => '',
+            'example_html' => '',
             'is_split' => false,
         ];
     }

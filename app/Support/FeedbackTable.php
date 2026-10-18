@@ -35,7 +35,8 @@ final class FeedbackTable
      * the second is the one whose emptiness asks for attention, and the last
      * absorbs any extra pasted cells. The columns map onto the stored columns
      * by position: subject to the content columns, the attention column to the
-     * correction columns and the last to the reason columns.
+     * correction columns, and the last to a mistake's why or a vocabulary or
+     * phrase row's example.
      *
      * @return list<array{key: string, formatted: bool}>
      */
@@ -107,7 +108,7 @@ final class FeedbackTable
      * column keeps its words escaped, since a plain text paste brings no
      * formatting.
      *
-     * @return array{content_html: string, content_text: string, correction_html: string, correction_text: string, reason: string, reason_html: string}
+     * @return array{content_html: string, content_text: string, correction_html: string, correction_text: string, reason: string, example: string, example_html: string}
      */
     public static function storedFromLine(string $type, string $line): array
     {
@@ -121,7 +122,7 @@ final class FeedbackTable
      * column is reduced to a single inline line keeping only bold and italic.
      *
      * @param  array<string, mixed>  $cells
-     * @return array{content_html: string, content_text: string, correction_html: string, correction_text: string, reason: string, reason_html: string}
+     * @return array{content_html: string, content_text: string, correction_html: string, correction_text: string, reason: string, example: string, example_html: string}
      */
     public static function storedFromCells(string $type, array $cells): array
     {
@@ -129,16 +130,17 @@ final class FeedbackTable
 
         $content = self::cleanColumn($first, $cells);
         $correction = self::cleanColumn($second, $cells);
-        $reason = self::cleanColumn($third, $cells);
+        $last = self::cleanColumn($third, $cells);
 
-        return [
+        return self::withLastColumn($type, [
             'content_html' => $content['html'],
             'content_text' => $content['text'],
             'correction_html' => $correction['html'],
             'correction_text' => $correction['text'],
-            'reason' => $reason['text'],
-            'reason_html' => $reason['html'],
-        ];
+            'reason' => '',
+            'example' => '',
+            'example_html' => '',
+        ], $last);
     }
 
     /**
@@ -166,7 +168,7 @@ final class FeedbackTable
     /**
      * Whether a row built from the stored columns holds nothing at all.
      *
-     * @param  array{content_html: string, content_text: string, correction_html: string, correction_text: string, reason: string, reason_html: string}  $stored
+     * @param  array{content_html: string, content_text: string, correction_html: string, correction_text: string, reason: string, example: string, example_html: string}  $stored
      */
     public static function isBlank(array $stored): bool
     {
@@ -183,7 +185,7 @@ final class FeedbackTable
      * Write one value per column into the stored shape, in order.
      *
      * @param  list<string>  $parts
-     * @return array{content_html: string, content_text: string, correction_html: string, correction_text: string, reason: string, reason_html: string}
+     * @return array{content_html: string, content_text: string, correction_html: string, correction_text: string, reason: string, example: string, example_html: string}
      */
     private static function mapStored(string $type, array $parts): array
     {
@@ -191,16 +193,40 @@ final class FeedbackTable
 
         $content = self::mapColumn($first, $parts[0] ?? '');
         $correction = self::mapColumn($second, $parts[1] ?? '');
-        $reason = self::mapColumn($third, $parts[2] ?? '');
+        $last = self::mapColumn($third, $parts[2] ?? '');
 
-        return [
+        return self::withLastColumn($type, [
             'content_html' => $content['html'],
             'content_text' => $content['text'],
             'correction_html' => $correction['html'],
             'correction_text' => $correction['text'],
-            'reason' => $reason['text'],
-            'reason_html' => $reason['html'],
-        ];
+            'reason' => '',
+            'example' => '',
+            'example_html' => '',
+        ], $last);
+    }
+
+    /**
+     * Store a box's last column: a mistake's optional why, or a vocabulary or
+     * phrase row's optional example. The other pair stays empty, so no type
+     * ever writes its content into another type's columns.
+     *
+     * @param  array{content_html: string, content_text: string, correction_html: string, correction_text: string, reason: string, example: string, example_html: string}  $stored
+     * @param  array{text: string, html: string}  $last
+     * @return array{content_html: string, content_text: string, correction_html: string, correction_text: string, reason: string, example: string, example_html: string}
+     */
+    private static function withLastColumn(string $type, array $stored, array $last): array
+    {
+        if ($type === PracticeFeedbackEntry::TYPE_MISTAKE) {
+            $stored['reason'] = $last['text'];
+
+            return $stored;
+        }
+
+        $stored['example'] = $last['text'];
+        $stored['example_html'] = $last['html'];
+
+        return $stored;
     }
 
     /**

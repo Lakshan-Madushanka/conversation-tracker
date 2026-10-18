@@ -301,9 +301,6 @@ function handleKeyDown(event: KeyboardEvent): void {
 function confirmCell(event: KeyboardEvent): void {
     (event.target as HTMLElement | null)?.blur();
 }
-
-const gridColumns =
-    'sm:grid-cols-[minmax(0,1.1fr)_minmax(0,1.1fr)_minmax(0,0.9fr)_auto]';
 </script>
 
 <template>
@@ -313,224 +310,288 @@ const gridColumns =
             {{ announcement }}
         </p>
 
-        <div
-            role="table"
-            :aria-label="props.label"
-            class="overflow-hidden rounded-lg border bg-card"
-        >
-            <div
-                role="row"
-                class="hidden bg-muted/40 text-xs font-medium text-muted-foreground sm:grid"
-                :class="gridColumns"
+        <div class="overflow-hidden rounded-lg border bg-card">
+            <!-- A real table shares column sizing across every row, so the
+                header lines up with its records. On small screens it stacks,
+                each row becoming a labelled card. -->
+            <table
+                :aria-label="props.label"
+                class="block w-full border-collapse text-sm sm:table"
             >
-                <span role="columnheader" class="border-r border-b px-3 py-2"
-                    >What I said</span
-                >
-                <span role="columnheader" class="border-r border-b px-3 py-2"
-                    >Correction</span
-                >
-                <span role="columnheader" class="border-r border-b px-3 py-2"
-                    >Why (optional)</span
-                >
-                <span role="columnheader" class="sr-only border-b px-3 py-2"
-                    >Actions</span
-                >
-            </div>
+                <colgroup class="hidden sm:table-column-group">
+                    <col class="w-[30%]" />
+                    <col class="w-[30%]" />
+                    <col class="w-[25%]" />
+                    <col class="w-[15%]" />
+                </colgroup>
 
-            <div
-                v-for="(entry, index) in props.entries"
-                :key="entry.id"
-                role="row"
-                class="grid grid-cols-1 border-b last:border-b-0"
-                :class="[
-                    gridColumns,
-                    duplicateIds.has(entry.id) ? 'bg-amber-500/5' : '',
-                ]"
-            >
-                <!-- Edit mode: every column of the row becomes an input. -->
-                <template v-if="editingId === entry.id">
-                    <div
-                        role="cell"
-                        class="min-w-0 space-y-1 border-b p-3 sm:border-r sm:border-b-0"
-                    >
-                        <label
-                            :for="rowFieldId(entry.id, 'text')"
-                            class="text-xs font-medium text-muted-foreground sm:hidden"
+                <thead
+                    class="hidden bg-muted/40 text-xs font-medium text-muted-foreground sm:table-header-group"
+                >
+                    <tr>
+                        <th
+                            scope="col"
+                            class="border-r border-b px-3 py-2 text-left font-semibold"
                         >
                             What I said
-                        </label>
-                        <Input
-                            :id="rowFieldId(entry.id, 'text')"
-                            :model-value="entry.text"
-                            :aria-label="`What I said, row ${index + 1} of ${props.label}`"
-                            class="h-11"
-                            @update:model-value="
-                                updateRow(entry.id, { text: String($event) })
-                            "
-                            @keydown.enter.prevent="confirmCell"
-                            @keydown.esc.prevent="stopEdit"
-                        />
-                    </div>
-
-                    <div
-                        role="cell"
-                        class="min-w-0 space-y-1 border-b p-3 sm:border-r sm:border-b-0"
-                    >
-                        <label
-                            :for="rowFieldId(entry.id, 'correction')"
-                            class="text-xs font-medium text-muted-foreground sm:hidden"
+                        </th>
+                        <th
+                            scope="col"
+                            class="border-r border-b px-3 py-2 text-left font-semibold"
                         >
                             Correction
-                        </label>
-                        <RichTextEditor
-                            :id="rowFieldId(entry.id, 'correction')"
-                            :model-value="entry.correction_html"
-                            variant="inline"
-                            :label="`Correction, row ${index + 1} of ${props.label}`"
-                            placeholder="e.g. I went"
-                            @update:model-value="
-                                updateRow(entry.id, {
-                                    correction_html: $event,
-                                })
-                            "
-                        />
-                    </div>
-
-                    <div
-                        role="cell"
-                        class="min-w-0 space-y-1 border-b p-3 sm:border-r sm:border-b-0"
-                    >
-                        <label
-                            :for="rowFieldId(entry.id, 'reason')"
-                            class="text-xs font-medium text-muted-foreground sm:hidden"
+                        </th>
+                        <th
+                            scope="col"
+                            class="border-r border-b px-3 py-2 text-left font-semibold"
                         >
                             Why (optional)
-                        </label>
-                        <Input
-                            :id="rowFieldId(entry.id, 'reason')"
-                            :model-value="entry.reason"
-                            :aria-label="`Why, row ${index + 1} of ${props.label}`"
-                            class="h-11"
-                            @update:model-value="
-                                updateRow(entry.id, { reason: String($event) })
+                        </th>
+                        <th
+                            scope="col"
+                            class="border-b px-3 py-2 text-right font-semibold"
+                        >
+                            <span class="sr-only">Actions</span>
+                        </th>
+                    </tr>
+                </thead>
+
+                <tbody class="block divide-y sm:table-row-group">
+                    <template
+                        v-for="(entry, index) in props.entries"
+                        :key="entry.id"
+                    >
+                        <tr
+                            class="block sm:table-row"
+                            :class="
+                                duplicateIds.has(entry.id)
+                                    ? 'bg-amber-500/5'
+                                    : ''
                             "
-                            @keydown.enter.prevent="confirmCell"
-                            @keydown.esc.prevent="stopEdit"
-                        />
-                    </div>
-                </template>
-
-                <!-- Read-only: the row's values, until the edit icon is used. -->
-                <template v-else>
-                    <div
-                        role="cell"
-                        class="min-w-0 space-y-1 border-b p-3 sm:border-r sm:border-b-0"
-                    >
-                        <span
-                            class="text-xs font-medium text-muted-foreground sm:hidden"
                         >
-                            What I said
-                        </span>
-                        <p class="text-sm break-words">
-                            {{ entry.text !== '' ? entry.text : '—' }}
-                        </p>
-                    </div>
+                            <!-- Edit mode: every column of the row becomes an
+                                input. -->
+                            <template v-if="editingId === entry.id">
+                                <td
+                                    class="block space-y-1 p-3 align-top sm:table-cell sm:border-r"
+                                >
+                                    <label
+                                        :for="rowFieldId(entry.id, 'text')"
+                                        class="text-xs font-medium text-muted-foreground sm:hidden"
+                                    >
+                                        What I said
+                                    </label>
+                                    <Input
+                                        :id="rowFieldId(entry.id, 'text')"
+                                        :model-value="entry.text"
+                                        :aria-label="`What I said, row ${index + 1} of ${props.label}`"
+                                        class="h-11"
+                                        @update:model-value="
+                                            updateRow(entry.id, {
+                                                text: String($event),
+                                            })
+                                        "
+                                        @keydown.enter.prevent="confirmCell"
+                                        @keydown.esc.prevent="stopEdit"
+                                    />
+                                </td>
 
-                    <div
-                        role="cell"
-                        class="min-w-0 space-y-1 border-b p-3 sm:border-r sm:border-b-0"
-                    >
-                        <span
-                            class="text-xs font-medium text-muted-foreground sm:hidden"
+                                <td
+                                    class="block space-y-1 p-3 align-top sm:table-cell sm:border-r"
+                                >
+                                    <label
+                                        :for="
+                                            rowFieldId(entry.id, 'correction')
+                                        "
+                                        class="text-xs font-medium text-muted-foreground sm:hidden"
+                                    >
+                                        Correction
+                                    </label>
+                                    <RichTextEditor
+                                        :id="rowFieldId(entry.id, 'correction')"
+                                        :model-value="entry.correction_html"
+                                        variant="inline"
+                                        :label="`Correction, row ${index + 1} of ${props.label}`"
+                                        placeholder="e.g. I went"
+                                        @update:model-value="
+                                            updateRow(entry.id, {
+                                                correction_html: $event,
+                                            })
+                                        "
+                                    />
+                                </td>
+
+                                <td
+                                    class="block space-y-1 p-3 align-top sm:table-cell sm:border-r"
+                                >
+                                    <label
+                                        :for="rowFieldId(entry.id, 'reason')"
+                                        class="text-xs font-medium text-muted-foreground sm:hidden"
+                                    >
+                                        Why (optional)
+                                    </label>
+                                    <Input
+                                        :id="rowFieldId(entry.id, 'reason')"
+                                        :model-value="entry.reason"
+                                        :aria-label="`Why, row ${index + 1} of ${props.label}`"
+                                        class="h-11"
+                                        @update:model-value="
+                                            updateRow(entry.id, {
+                                                reason: String($event),
+                                            })
+                                        "
+                                        @keydown.enter.prevent="confirmCell"
+                                        @keydown.esc.prevent="stopEdit"
+                                    />
+                                </td>
+                            </template>
+
+                            <!-- Read-only: the row's values, until the edit icon
+                                is used. -->
+                            <template v-else>
+                                <td
+                                    class="block space-y-1 p-3 align-top sm:table-cell sm:border-r"
+                                >
+                                    <span
+                                        class="text-xs font-medium text-muted-foreground sm:hidden"
+                                    >
+                                        What I said
+                                    </span>
+                                    <p class="text-sm break-words">
+                                        {{
+                                            entry.text !== '' ? entry.text : '—'
+                                        }}
+                                    </p>
+                                </td>
+
+                                <td
+                                    class="block space-y-1 p-3 align-top sm:table-cell sm:border-r"
+                                >
+                                    <span
+                                        class="text-xs font-medium text-muted-foreground sm:hidden"
+                                    >
+                                        Correction
+                                    </span>
+                                    <!-- The correction holds only bold and
+                                        italic around escaped text, so this
+                                        markup is safe to show. -->
+                                    <p
+                                        v-if="
+                                            richTextToText(
+                                                entry.correction_html,
+                                            ) !== ''
+                                        "
+                                        class="text-sm break-words"
+                                        v-html="entry.correction_html"
+                                    ></p>
+                                    <p
+                                        v-else
+                                        class="text-sm text-muted-foreground"
+                                    >
+                                        —
+                                    </p>
+                                </td>
+
+                                <td
+                                    class="block space-y-1 p-3 align-top sm:table-cell sm:border-r"
+                                >
+                                    <span
+                                        class="text-xs font-medium text-muted-foreground sm:hidden"
+                                    >
+                                        Why (optional)
+                                    </span>
+                                    <p class="text-sm break-words">
+                                        {{
+                                            entry.reason !== ''
+                                                ? entry.reason
+                                                : '—'
+                                        }}
+                                    </p>
+                                </td>
+                            </template>
+
+                            <td
+                                class="block p-2 align-top sm:table-cell sm:border-r"
+                            >
+                                <div class="flex items-start justify-end gap-1">
+                                    <Button
+                                        v-if="editingId === entry.id"
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon-sm"
+                                        class="min-h-11 min-w-11"
+                                        :aria-label="`Done editing row ${index + 1}`"
+                                        @click="stopEdit"
+                                    >
+                                        <CheckIcon aria-hidden="true" />
+                                    </Button>
+                                    <Button
+                                        v-else
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon-sm"
+                                        class="min-h-11 min-w-11"
+                                        :aria-label="`Edit row ${index + 1}: ${entry.text}`"
+                                        @click="startEdit(entry.id)"
+                                    >
+                                        <PencilIcon aria-hidden="true" />
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon-sm"
+                                        class="min-h-11 min-w-11 text-destructive"
+                                        :aria-label="`Remove row ${index + 1}: ${entry.text}`"
+                                        @click="removeRow(entry.id)"
+                                    >
+                                        <Trash2Icon aria-hidden="true" />
+                                    </Button>
+                                </div>
+                            </td>
+                        </tr>
+
+                        <tr
+                            v-if="
+                                attention.has(entry.id) ||
+                                duplicateIds.has(entry.id)
+                            "
+                            class="block sm:table-row"
+                            :class="
+                                duplicateIds.has(entry.id)
+                                    ? 'bg-amber-500/5'
+                                    : ''
+                            "
                         >
-                            Correction
-                        </span>
-                        <!-- The correction holds only bold and italic around
-                            escaped text, so this markup is safe to show. -->
-                        <p
-                            v-if="richTextToText(entry.correction_html) !== ''"
-                            class="text-sm break-words"
-                            v-html="entry.correction_html"
-                        ></p>
-                        <p v-else class="text-sm text-muted-foreground">—</p>
-                    </div>
+                            <td
+                                colspan="4"
+                                class="block px-3 py-2 align-top sm:table-cell"
+                            >
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <p
+                                        v-if="attention.has(entry.id)"
+                                        class="flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-300"
+                                    >
+                                        <TriangleAlertIcon
+                                            class="size-3.5 shrink-0"
+                                            aria-hidden="true"
+                                        />
+                                        {{ attention.get(entry.id) }}
+                                    </p>
 
-                    <div
-                        role="cell"
-                        class="min-w-0 space-y-1 border-b p-3 sm:border-r sm:border-b-0"
-                    >
-                        <span
-                            class="text-xs font-medium text-muted-foreground sm:hidden"
-                        >
-                            Why (optional)
-                        </span>
-                        <p class="text-sm break-words">
-                            {{ entry.reason !== '' ? entry.reason : '—' }}
-                        </p>
-                    </div>
-                </template>
-
-                <div role="cell" class="flex items-start justify-end gap-1 p-2">
-                    <Button
-                        v-if="editingId === entry.id"
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        class="min-h-11 min-w-11"
-                        :aria-label="`Done editing row ${index + 1}`"
-                        @click="stopEdit"
-                    >
-                        <CheckIcon aria-hidden="true" />
-                    </Button>
-                    <Button
-                        v-else
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        class="min-h-11 min-w-11"
-                        :aria-label="`Edit row ${index + 1}: ${entry.text}`"
-                        @click="startEdit(entry.id)"
-                    >
-                        <PencilIcon aria-hidden="true" />
-                    </Button>
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        class="min-h-11 min-w-11 text-destructive"
-                        :aria-label="`Remove row ${index + 1}: ${entry.text}`"
-                        @click="removeRow(entry.id)"
-                    >
-                        <Trash2Icon aria-hidden="true" />
-                    </Button>
-                </div>
-
-                <div
-                    v-if="attention.has(entry.id) || duplicateIds.has(entry.id)"
-                    role="cell"
-                    class="flex flex-wrap items-center gap-2 border-t px-3 py-2 sm:col-span-full"
-                >
-                    <p
-                        v-if="attention.has(entry.id)"
-                        class="flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-300"
-                    >
-                        <TriangleAlertIcon
-                            class="size-3.5 shrink-0"
-                            aria-hidden="true"
-                        />
-                        {{ attention.get(entry.id) }}
-                    </p>
-
-                    <Badge
-                        v-if="duplicateIds.has(entry.id)"
-                        variant="outline"
-                        class="gap-1 border-amber-500/60 text-amber-700 dark:text-amber-300"
-                    >
-                        <CopyIcon aria-hidden="true" />
-                        Duplicate
-                    </Badge>
-                </div>
-            </div>
+                                    <Badge
+                                        v-if="duplicateIds.has(entry.id)"
+                                        variant="outline"
+                                        class="gap-1 border-amber-500/60 text-amber-700 dark:text-amber-300"
+                                    >
+                                        <CopyIcon aria-hidden="true" />
+                                        Duplicate
+                                    </Badge>
+                                </div>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
         </div>
 
         <p v-if="attention.size > 0" class="text-xs text-muted-foreground">

@@ -68,7 +68,7 @@ describe('displaying entries', () => {
             }),
         ]);
 
-        const cells = component.findAll('[role="cell"]');
+        const cells = component.findAll('td');
 
         expect(cells[0].text()).toContain('I go');
         expect(cells[1].text()).toContain('I went');
@@ -85,7 +85,7 @@ describe('displaying entries', () => {
             row({ text: 'I go', correction_html: '', reason: '' }),
         ]);
 
-        const cells = component.findAll('[role="cell"]');
+        const cells = component.findAll('td');
 
         expect(cells[1].text()).toContain('—');
         expect(cells[2].text()).toContain('—');
@@ -94,14 +94,18 @@ describe('displaying entries', () => {
     it('is a bordered table with column headers', () => {
         const component = mountTable([row()]);
 
-        const table = component.get('[role="table"]');
+        const table = component.get('table');
 
-        expect(table.classes()).toContain('border');
-        expect(
-            table
-                .findAll('[role="columnheader"]')
-                .map((header) => header.text()),
-        ).toEqual(['What I said', 'Correction', 'Why (optional)', 'Actions']);
+        // The border sits on the wrapper, so header and records share it.
+        expect(table.element.parentElement?.classList.contains('border')).toBe(
+            true,
+        );
+        expect(table.findAll('th').map((header) => header.text())).toEqual([
+            'What I said',
+            'Correction',
+            'Why (optional)',
+            'Actions',
+        ]);
     });
 });
 

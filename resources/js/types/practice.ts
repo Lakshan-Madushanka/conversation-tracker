@@ -14,7 +14,7 @@ export type FeedbackType =
     | 'natural_version';
 
 /** Boxes that hold a list of plain text entries, one per pasted line. */
-export type ListFeedbackType = 'vocabulary' | 'phrase';
+export type ListFeedbackType = 'phrase';
 
 /** One entry of a list box. `id` is stable across saves, so an edit updates it. */
 export interface FeedbackEntry {
@@ -25,13 +25,27 @@ export interface FeedbackEntry {
 /**
  * One row of the mistakes box: what was said, the correction (a single line
  * that keeps only bold and italic) and an optional why.
+ *
+ * A type alias, not an interface, so a row can stand in for the generic shape
+ * the feedback table works with.
  */
-export interface MistakeEntry {
+export type MistakeEntry = {
     id: string;
     text: string;
     correction_html: string;
     reason: string;
-}
+};
+
+/**
+ * One row of the vocabulary box: the word, its meaning, and an optional example
+ * (a single line that keeps only bold and italic).
+ */
+export type VocabularyEntry = {
+    id: string;
+    text: string;
+    meaning: string;
+    example_html: string;
+};
 
 /** One grammar note, kept as formatted text and never split by line. */
 export interface GrammarNote {
@@ -40,13 +54,13 @@ export interface GrammarNote {
 }
 
 /**
- * One value per feedback box. The mistakes box holds rows, the other list
- * boxes and the grammar notes hold entries, and the natural version stays one
- * piece of formatted text.
+ * One value per feedback box. The mistakes and vocabulary boxes hold table
+ * rows, the phrases box and the grammar notes hold entries, and the natural
+ * version stays one piece of formatted text.
  */
 export interface FeedbackValues {
     mistake: MistakeEntry[];
-    vocabulary: FeedbackEntry[];
+    vocabulary: VocabularyEntry[];
     phrase: FeedbackEntry[];
     grammar_note: GrammarNote[];
     natural_version: string;

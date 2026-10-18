@@ -2,21 +2,24 @@
 import { computed, nextTick, ref, watch } from 'vue';
 import { ChevronDownIcon, ChevronUpIcon } from '@lucide/vue';
 import EntryList from '@/components/EntryList.vue';
+import FeedbackTable from '@/components/FeedbackTable.vue';
 import GrammarNotesList from '@/components/GrammarNotesList.vue';
-import MistakesTable from '@/components/MistakesTable.vue';
 import RichTextEditor from '@/components/RichTextEditor.vue';
 import SectionLabel from '@/components/SectionLabel.vue';
 import { Button } from '@/components/ui/button';
 import { focusElementById } from '@/lib/dom';
 import { feedbackBoxFor } from '@/lib/feedback';
-import { mistakeAttention } from '@/lib/mistakes';
+import {
+    rowAttention,
+    type FeedbackTableConfig,
+    type TableRow,
+} from '@/lib/feedback-table';
 import { isRichTextBlank, richTextToText } from '@/lib/rich-text';
 import type {
     FeedbackEntry,
     FeedbackType,
     FeedbackValue,
     GrammarNote,
-    MistakeEntry,
 } from '@/types';
 
 /**
@@ -25,9 +28,10 @@ import type {
  * without any content. A box with content always stays open when focus moves
  * away, but the learner can still shrink it themselves.
  *
- * The mistakes box holds a table of rows, the list boxes hold entries the
- * learner can edit one by one, the grammar notes box holds one formatted note
- * per paste, and the natural version stays one piece of formatted text.
+ * A table box holds rows of columns (mistakes and vocabulary), the list box
+ * holds entries the learner can edit one by one, the grammar notes box holds
+ * one formatted note per paste, and the natural version stays one piece of
+ * formatted text.
  */
 const props = defineProps<{
     type: FeedbackType;
@@ -45,15 +49,25 @@ const emit = defineEmits<{
 
 const box = feedbackBoxFor(props.type);
 
-const mistakes = computed(() =>
-    box.kind === 'mistakes' ? (props.modelValue as MistakeEntry[]) : [],
+/** The columns and rules of a table box; only read for the table kind. */
+const tableConfig = computed<FeedbackTableConfig>(() => {
+    if (box.table === undefined) {
+        throw new Error(`The ${box.type} box has no table configuration.`);
+    }
+
+    return box.table;
+});
+
+const tableEntries = computed(() =>
+    box.kind === 'table' ? (props.modelValue as TableRow[]) : [],
 );
 
-/** How many rows are still waiting for a correction. */
+/** How many rows are still waiting for their attention column. */
 const attentionCount = computed(
     () =>
-        mistakes.value.filter((entry) => mistakeAttention(entry) !== null)
-            .length,
+        tableEntries.value.filter(
+            (entry) => rowAttention(tableConfig.value, entry) !== null,
+        ).length,
 );
 
 const listEntries = computed(() =>
@@ -78,8 +92,8 @@ const isBlank = computed(() => {
         return notes.value.every((note) => isRichTextBlank(note.html));
     }
 
-    if (box.kind === 'mistakes') {
-        return mistakes.value.length === 0;
+    if (box.kind === 'table') {
+        return tableEntries.value.length === 0;
     }
 
     return listEntries.value.length === 0;
@@ -124,8 +138,8 @@ const accessibleLabel = computed(
  * filled box never hides what is inside — the count is always visible.
  */
 const summary = computed(() => {
-    if (box.kind === 'mistakes') {
-        const count = mistakes.value.length;
+    if (box.kind === 'table') {
+        const count = tableEntries.value.length;
         const rows = `${count} ${count === 1 ? 'row' : 'rows'}`;
 
         if (attentionCount.value > 0) {
@@ -154,12 +168,17 @@ const summary = computed(() => {
     return text.length > 60 ? `${text.slice(0, 60)}…` : text;
 });
 
+/** Rows from a table box are one of the box's value shapes; pass them on. */
+function updateTableEntries(entries: TableRow[]): void {
+    emit('update:modelValue', entries as unknown as FeedbackValue);
+}
+
 function open(): void {
     isOpening = true;
     opened.value = true;
     expanded.value = true;
     focusElementById(
-        box.kind === 'mistakes' ? `${props.fieldId}-add` : props.fieldId,
+        box.kind === 'table' ? `${props.fieldId}-add` : props.fieldId,
     );
 
     void nextTick(() => {
@@ -169,8 +188,7 @@ function open(): void {
     });
 }
 
-/** Shrink the box. Content is kept, only hidden, so nothing is lost. */
-function collapse(): void {
+/** Shrink the box. Content is kept, only hidden, so nothing is lost. */ function collapse(): void {
     expanded.value = false;
 }
 
@@ -284,14 +302,15 @@ function handleFocusOut(event: FocusEvent): void {
                     @update:entries="emit('update:modelValue', $event)"
                 />
 
-                <MistakesTable
-                    v-else-if="box.kind === 'mistakes'"
-                    :entries="mistakes"
+                <FeedbackTable
+                    v-else-if="box.kind === 'table'"
+                    :entries="tableEntries"
+                    :config="tableConfig"
                     :label="accessibleLabel"
                     :field-id="props.fieldId"
                     :placeholder="box.placeholder"
                     :error="props.error"
-                    @update:entries="emit('update:modelValue', $event)"
+                    @update:entries="updateTableEntries"
                 />
 
                 <GrammarNotesList

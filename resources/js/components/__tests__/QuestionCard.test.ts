@@ -2,7 +2,8 @@ import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vite-plus/test';
 import FeedbackBox from '@/components/FeedbackBox.vue';
 import QuestionCard from '@/components/QuestionCard.vue';
-import { emptyFeedbackValues, feedbackBoxes, newEntry } from '@/lib/feedback';
+import { emptyFeedbackValues, feedbackBoxes } from '@/lib/feedback';
+import { newVocabularyEntry } from '@/lib/vocabulary';
 
 /**
  * Each feedback box takes a whole row. That keeps the layout simple and means
@@ -45,7 +46,13 @@ describe('a question with entries', () => {
     it('passes the entries through to the box that holds them', () => {
         const wrapper = mountCard({
             ...emptyFeedbackValues(),
-            vocabulary: [newEntry('reservation'), newEntry('journey')],
+            vocabulary: [
+                newVocabularyEntry({
+                    text: 'reservation',
+                    meaning: 'a booking',
+                }),
+                newVocabularyEntry({ text: 'journey', meaning: 'a trip' }),
+            ],
         });
 
         expect(wrapper.text()).toContain('reservation');

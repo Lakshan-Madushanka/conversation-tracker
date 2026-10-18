@@ -7,9 +7,9 @@ namespace App\Support;
 use App\Models\PracticeFeedbackEntry;
 
 /**
- * The rules shared by the table feedback boxes (mistakes and vocabulary): how a
- * pasted line splits into its columns, how a row maps onto the stored columns,
- * and how the columns are configured per box.
+ * The rules shared by the table feedback boxes (mistakes, vocabulary and
+ * phrases): how a pasted line splits into its columns, how a row maps onto the
+ * stored columns, and how the columns are configured per box.
  *
  * This mirrors `resources/js/lib/feedback-table.ts`, so the browser and the
  * server always agree on what a paste becomes. The server applies the same
@@ -41,24 +41,26 @@ final class FeedbackTable
      */
     public static function columns(string $type): array
     {
-        if ($type === PracticeFeedbackEntry::TYPE_VOCABULARY) {
+        if ($type === PracticeFeedbackEntry::TYPE_MISTAKE) {
             return [
                 ['key' => 'text', 'formatted' => false],
-                ['key' => 'meaning', 'formatted' => false],
-                ['key' => 'example_html', 'formatted' => true],
+                ['key' => 'correction_html', 'formatted' => true],
+                ['key' => 'reason', 'formatted' => false],
             ];
         }
 
+        // Vocabulary and phrases share the subject, meaning and example shape.
         return [
             ['key' => 'text', 'formatted' => false],
-            ['key' => 'correction_html', 'formatted' => true],
-            ['key' => 'reason', 'formatted' => false],
+            ['key' => 'meaning', 'formatted' => false],
+            ['key' => 'example_html', 'formatted' => true],
         ];
     }
 
     /**
      * The payload key of the column whose emptiness asks for attention: the
-     * correction of a mistake, the meaning of a vocabulary row.
+     * correction of a mistake, the meaning of a vocabulary row. A phrase row's
+     * empty meaning is normal and never asks for attention.
      */
     public static function attentionKey(string $type): string
     {

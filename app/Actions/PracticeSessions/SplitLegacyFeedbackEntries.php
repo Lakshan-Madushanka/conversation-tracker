@@ -17,12 +17,12 @@ use Illuminate\Support\Str;
  * editor now works with: every line of a pasted list becomes its own entry,
  * every entry gets the id later saves match on, and the order is written back.
  *
- * Table boxes (mistakes and vocabulary) saved as one line are split into their
- * columns the same way the editor splits a paste, and marked as split so the
- * job runs only once.
+ * Table boxes (mistakes, vocabulary and phrases) saved as one line are split
+ * into their columns the same way the editor splits a paste, and marked as
+ * split so the job runs only once.
  *
- * Grammar notes and the natural version keep their content — only the table and
- * list boxes are split. Running it again finds one line per entry and changes
+ * Grammar notes and the natural version keep their content — only the table
+ * boxes are split. Running it again finds one line per entry and changes
  * nothing, so it is safe to run on every open.
  */
 final class SplitLegacyFeedbackEntries
@@ -96,40 +96,20 @@ final class SplitLegacyFeedbackEntries
             return false;
         }
 
-        $isList = PracticeFeedbackEntry::isList($type);
         $position = 0;
         $changed = false;
 
         foreach ($rows as $row) {
-            $lines = $isList
-                ? ListEntries::split($row->content_text)
-                : ($row->content_text === '' ? [] : [$row->content_text]);
-
             // A box saved as blank space holds nothing worth keeping.
-            if ($lines === []) {
+            if ($row->content_text === '') {
                 $row->delete();
                 $changed = true;
 
                 continue;
             }
 
-            $first = array_shift($lines);
-
-            $changed = $this->align($row, $type, $first, $position) || $changed;
+            $changed = $this->align($row, $type, $row->content_text, $position) || $changed;
             $position++;
-
-            foreach ($lines as $line) {
-                $question->feedbackEntries()->create([
-                    'type' => $type,
-                    'position' => $position,
-                    'client_id' => (string) Str::uuid(),
-                    'content_html' => '',
-                    'content_text' => $line,
-                ]);
-
-                $position++;
-                $changed = true;
-            }
         }
 
         return $changed;

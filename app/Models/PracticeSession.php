@@ -90,7 +90,7 @@ class PracticeSession extends Model
      *         position: int,
      *         question_html: string,
      *         answer_html: string,
-     *         feedback: array<string, list<array{id: string, text: string, correction_html: string, reason: string}|array{id: string, text: string, meaning: string, example_html: string}|array{id: string, text: string}|array{id: string, html: string}>|string>
+     *         feedback: array<string, list<array{id: string, text: string, correction_html: string, reason: string}|array{id: string, text: string, meaning: string, example_html: string}|array{id: string, html: string}>|string>
      *     }>
      * }
      */
@@ -126,11 +126,12 @@ class PracticeSession extends Model
     }
 
     /**
-     * One box shaped for the editor: table rows with their columns, plain
-     * entries for the list boxes, and the raw text for the natural version.
+     * One box shaped for the editor: table rows with their columns, one
+     * formatted entry per grammar note, and the raw text for the natural
+     * version.
      *
      * @param  Collection<int, PracticeFeedbackEntry>  $entries
-     * @return list<array{id: string, text: string, correction_html: string, reason: string}|array{id: string, text: string, meaning: string, example_html: string}|array{id: string, text: string}|array{id: string, html: string}>|string
+     * @return list<array{id: string, text: string, correction_html: string, reason: string}|array{id: string, text: string, meaning: string, example_html: string}|array{id: string, html: string}>|string
      */
     private function feedbackPayload(string $type, Collection $entries): array|string
     {
@@ -154,19 +155,13 @@ class PracticeSession extends Model
                 continue;
             }
 
-            if ($type === PracticeFeedbackEntry::TYPE_VOCABULARY) {
+            if (PracticeFeedbackEntry::isTable($type)) {
                 $payload[] = [
                     'id' => $id,
                     'text' => $entry->content_text,
                     'meaning' => $entry->correction_text,
                     'example_html' => $entry->reason_html,
                 ];
-
-                continue;
-            }
-
-            if (PracticeFeedbackEntry::isList($type)) {
-                $payload[] = ['id' => $id, 'text' => $entry->content_text];
 
                 continue;
             }

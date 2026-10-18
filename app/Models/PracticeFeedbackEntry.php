@@ -13,15 +13,16 @@ use Illuminate\Support\Carbon;
 
 /**
  * One entry inside a feedback box, kept as formatted text (for grammar notes
- * and the natural version) or plain text (for the list boxes) plus a
- * plain-text version for search and review. A list box holds many entries, one
- * row each, ordered by `position` and identified by `client_id`.
+ * and the natural version) or plain text (for the table boxes) plus a
+ * plain-text version for search and review. A table box holds many rows, one
+ * per pasted line, ordered by `position` and identified by `client_id`.
  *
- * A table box (mistakes and vocabulary) holds three columns per row. Mistakes
- * keep what was said (`content_text`), a correction (`correction_html` plus its
- * plain-text copy) and an optional why (`reason`). Vocabulary keeps a word
- * (`content_text`), its meaning (`correction_text`) and an optional example
- * (`reason_html` plus its plain-text copy in `reason`).
+ * A table box (mistakes, vocabulary and phrases) holds three columns per row.
+ * Mistakes keep what was said (`content_text`), a correction
+ * (`correction_html` plus its plain-text copy) and an optional why
+ * (`reason`). Vocabulary and phrases keep the subject (`content_text`), its
+ * meaning (`correction_text`) and an optional example (`reason_html` plus its
+ * plain-text copy in `reason`).
  *
  * @property int $id
  * @property int $practice_question_id
@@ -84,14 +85,6 @@ class PracticeFeedbackEntry extends Model
     public const TABLE_TYPES = [
         self::TYPE_MISTAKE,
         self::TYPE_VOCABULARY,
-    ];
-
-    /**
-     * Boxes shown as a list of plain text entries, split from pasted lines.
-     *
-     * @var list<string>
-     */
-    public const LIST_TYPES = [
         self::TYPE_PHRASE,
     ];
 
@@ -103,7 +96,6 @@ class PracticeFeedbackEntry extends Model
      */
     public const ENTRY_TYPES = [
         ...self::TABLE_TYPES,
-        ...self::LIST_TYPES,
         self::TYPE_GRAMMAR_NOTE,
     ];
 
@@ -133,12 +125,6 @@ class PracticeFeedbackEntry extends Model
     public static function isRich(string $type): bool
     {
         return in_array($type, self::RICH_TYPES, true);
-    }
-
-    /** Whether a box holds plain text entries split from pasted lines. */
-    public static function isList(string $type): bool
-    {
-        return in_array($type, self::LIST_TYPES, true);
     }
 
     /** Whether a box holds a table of rows, one column set per box. */

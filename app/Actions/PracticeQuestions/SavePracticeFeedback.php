@@ -14,10 +14,10 @@ use Illuminate\Support\Str;
 /**
  * Replaces a question's feedback boxes with the submitted content.
  *
- * A table box (mistakes and vocabulary) holds rows of columns, a list box holds
- * one row per entry, and a grammar note box one row per note, so every entry
- * keeps the id the editor gave it. A retry with the same payload matches those
- * ids and updates the same rows instead of storing them again.
+ * A table box (mistakes, vocabulary and phrases) holds rows of columns, and a
+ * grammar note box one row per note, so every entry keeps the id the editor
+ * gave it. A retry with the same payload matches those ids and updates the
+ * same rows instead of storing them again.
  */
 final class SavePracticeFeedback
 {
@@ -120,8 +120,8 @@ final class SavePracticeFeedback
 
     /**
      * One submitted item, split into the rows it holds. A table item is one
-     * row; a pasted list arrives as several lines in one item and becomes one
-     * row per line.
+     * row; an item saved before the columns existed arrives with only its text
+     * and becomes one row per line.
      *
      * @param  array<mixed>  $item
      * @return list<array{content_html: string, content_text: string, correction_html: string, correction_text: string, reason: string, reason_html: string, is_split: bool}>
@@ -136,18 +136,11 @@ final class SavePracticeFeedback
             ? $item[$this->contentKey($type)]
             : '';
 
-        if (! PracticeFeedbackEntry::isList($type)) {
-            $clean = RichText::cleanWithText($content);
+        $clean = RichText::cleanWithText($content);
 
-            return $clean['text'] === ''
-                ? []
-                : [[...$this->blankRow(), 'content_html' => $clean['html'], 'content_text' => $clean['text']]];
-        }
-
-        return array_map(
-            fn (string $line): array => [...$this->blankRow(), 'content_text' => $line],
-            ListEntries::split($content),
-        );
+        return $clean['text'] === ''
+            ? []
+            : [[...$this->blankRow(), 'content_html' => $clean['html'], 'content_text' => $clean['text']]];
     }
 
     /**
@@ -207,7 +200,9 @@ final class SavePracticeFeedback
     }
 
     /**
-     * A box saved as plain text keeps its content as one entry.
+     * A box saved before entries existed arrives as one piece of text. A table
+     * box splits it into rows by the separator rules; a grammar note stays one
+     * entry.
      *
      * @return list<array{content_html: string, content_text: string, correction_html: string, correction_text: string, reason: string, reason_html: string, client_id: string|null, is_split: bool}>
      */
@@ -218,14 +213,6 @@ final class SavePracticeFeedback
                 fn (array $entry): array => [...$entry, 'client_id' => null],
                 $this->tableLines($type, $content),
             );
-        }
-
-        if (PracticeFeedbackEntry::isList($type)) {
-            $text = RichText::normalizePlainText($content);
-
-            return $text === ''
-                ? []
-                : [[...$this->blankRow(), 'content_text' => $text, 'client_id' => null]];
         }
 
         $clean = RichText::cleanWithText($content);

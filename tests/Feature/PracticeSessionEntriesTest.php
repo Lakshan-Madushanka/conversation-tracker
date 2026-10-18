@@ -290,6 +290,91 @@ describe('the vocabulary table', function (): void {
     });
 });
 
+describe('the phrases table', function (): void {
+    it('stores a row across the phrase, meaning and example columns', function (): void {
+        $session = saveEntrySession(['phrase' => [
+            [
+                'id' => 'p-0',
+                'text' => 'Could I have the menu, please?',
+                'meaning' => 'a polite way to ask',
+                'example_html' => '<p>Could I have <em>the menu</em>, please?</p>',
+            ],
+        ]]);
+
+        $entry = boxEntries($session, PracticeFeedbackEntry::TYPE_PHRASE)[0];
+
+        expect($entry->content_text)->toBe('Could I have the menu, please?')
+            ->and($entry->correction_text)->toBe('a polite way to ask')
+            ->and($entry->correction_html)->toBe('')
+            ->and($entry->reason)->toBe('Could I have the menu, please?')
+            ->and($entry->reason_html)->toBe('Could I have <em>the menu</em>, please?');
+    });
+
+    it('splits a pasted phrase and meaning by the same separator rules as the editor', function (): void {
+        $session = saveEntrySession(['phrase' => [
+            ['id' => 'p-0', 'text' => 'off the beaten track → away from the usual places'],
+        ]]);
+
+        $entry = boxEntries($session, PracticeFeedbackEntry::TYPE_PHRASE)[0];
+
+        expect($entry->content_text)->toBe('off the beaten track')
+            ->and($entry->correction_text)->toBe('away from the usual places');
+    });
+
+    it('keeps a phrase with commas and a question mark in one column', function (): void {
+        $session = saveEntrySession(['phrase' => [
+            ['id' => 'p-0', 'text' => 'Excuse me, could I have the menu, please?'],
+        ]]);
+
+        $entry = boxEntries($session, PracticeFeedbackEntry::TYPE_PHRASE)[0];
+
+        expect($entry->content_text)->toBe('Excuse me, could I have the menu, please?')
+            ->and($entry->correction_text)->toBe('')
+            ->and($entry->is_split)->toBeTrue();
+    });
+
+    it('returns rows with phrase, meaning and example when the session is opened', function (): void {
+        $session = PracticeSession::factory()->for(Topic::factory())->create();
+        $question = PracticeQuestion::factory()->for($session)->create(['position' => 1]);
+
+        PracticeFeedbackEntry::factory()->for($question)->create([
+            'type' => PracticeFeedbackEntry::TYPE_PHRASE,
+            'content_text' => 'Could I have the bill, please?',
+            'correction_text' => 'a polite way to ask for the bill',
+            'reason' => 'Could I have the bill, please?',
+            'reason_html' => '<em>Could I have the bill</em>, please?',
+            'is_split' => true,
+        ]);
+
+        $rows = $session->toEditorPayload()['questions'][0]['feedback']['phrase'];
+
+        expect($rows)->toHaveCount(1)
+            ->and($rows[0]['text'])->toBe('Could I have the bill, please?')
+            ->and($rows[0]['meaning'])->toBe('a polite way to ask for the bill')
+            ->and($rows[0]['example_html'])->toBe('<em>Could I have the bill</em>, please?');
+    });
+
+    it('splits a phrase saved before the columns existed into its columns', function (): void {
+        $session = PracticeSession::factory()->for(Topic::factory())->create();
+        $question = PracticeQuestion::factory()->for($session)->create(['position' => 1]);
+
+        PracticeFeedbackEntry::factory()->for($question)->create([
+            'type' => PracticeFeedbackEntry::TYPE_PHRASE,
+            'content_html' => '',
+            'content_text' => "off the beaten track - away from the usual places\na long way",
+        ]);
+
+        $rows = $session->toEditorPayload()['questions'][0]['feedback']['phrase'];
+
+        expect($rows)->toHaveCount(2)
+            ->and($rows[0]['text'])->toBe('off the beaten track')
+            ->and($rows[0]['meaning'])->toBe('away from the usual places')
+            ->and($rows[1]['text'])->toBe('a long way')
+            ->and($rows[1]['meaning'])->toBe('')
+            ->and(PracticeFeedbackEntry::count())->toBe(2);
+    });
+});
+
 describe('the limits a box can hold', function (): void {
     it('refuses a pasted list that would store more than two hundred entries', function (): void {
         $texts = array_map(fn (int $index): string => "entry {$index}", range(1, 200));

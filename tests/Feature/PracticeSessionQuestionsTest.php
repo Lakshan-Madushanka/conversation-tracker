@@ -175,11 +175,17 @@ test('plain feedback keeps its text and does not store markup', function (): voi
 
     $entries = PracticeFeedbackEntry::all()->keyBy('type');
 
+    $phrases = PracticeFeedbackEntry::query()
+        ->where('type', PracticeFeedbackEntry::TYPE_PHRASE)
+        ->orderBy('position')
+        ->get();
+
     expect($entries[PracticeFeedbackEntry::TYPE_MISTAKE]->content_html)->toBe('')
         ->and($entries[PracticeFeedbackEntry::TYPE_MISTAKE]->content_text)->toBe('<b>said</b>')
         ->and($entries[PracticeFeedbackEntry::TYPE_MISTAKE]->correction_text)->toBe('told')
         ->and($entries[PracticeFeedbackEntry::TYPE_VOCABULARY]->content_html)->toBe('')
-        ->and($entries[PracticeFeedbackEntry::TYPE_PHRASE]->content_text)->toBe("a long way\noff");
+        ->and(array_column($phrases->all(), 'content_text'))->toBe(['a long way', 'off'])
+        ->and(array_column($phrases->all(), 'content_html'))->toBe(['', '']);
 });
 
 test('unsafe markup is stripped from rich feedback', function (): void {

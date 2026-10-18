@@ -14,9 +14,9 @@ use Illuminate\Contracts\Validation\ValidationRule;
 /**
  * Validates one feedback box of a question.
  *
- * A table box (mistakes and vocabulary) holds a list of rows, each with a fixed
- * set of columns; the phrases box and the grammar notes box hold a list of
- * entries; the learner's browser sends them as an array of items, each with a
+ * A table box (mistakes, vocabulary and phrases) holds a list of rows, each
+ * with a fixed set of columns; the grammar notes box holds one formatted note
+ * per item. The learner's browser sends them as an array of items, each with a
  * stable `id` and its content. A box saved before entries existed arrives as
  * one piece of text and is still accepted, so content from earlier steps is
  * never refused.
@@ -74,7 +74,8 @@ final readonly class ValidFeedbackBox implements ValidationRule
     }
 
     /**
-     * Checks every submitted item and returns how many entries it would store.
+     * Checks every item of a box that is not a table — a grammar note — and
+     * returns how many entries it would store.
      *
      * @param  array<mixed>  $value
      */
@@ -84,7 +85,6 @@ final readonly class ValidFeedbackBox implements ValidationRule
             return $this->countTable($value, $fail);
         }
 
-        $isList = PracticeFeedbackEntry::isList($this->type);
         $count = 0;
 
         foreach ($value as $item) {
@@ -94,7 +94,7 @@ final readonly class ValidFeedbackBox implements ValidationRule
                 return 0;
             }
 
-            $content = $item[$isList ? 'text' : 'html'] ?? null;
+            $content = $item['html'] ?? null;
 
             if (! is_string($content)) {
                 $fail('This entry could not be saved. Check the text and try again.');
@@ -102,25 +102,13 @@ final readonly class ValidFeedbackBox implements ValidationRule
                 return 0;
             }
 
-            if (! $isList) {
-                if (mb_strlen($content) > $this->maxTextLength) {
-                    $fail('This feedback is too long to save at once. Try splitting it into shorter parts.');
+            if (mb_strlen($content) > $this->maxTextLength) {
+                $fail('This feedback is too long to save at once. Try splitting it into shorter parts.');
 
-                    return 0;
-                }
-
-                $count++;
-
-                continue;
+                return 0;
             }
 
-            foreach (ListEntries::split($content) as $line) {
-                if (! $this->fits($line, $fail)) {
-                    return 0;
-                }
-
-                $count++;
-            }
+            $count++;
         }
 
         return $count;

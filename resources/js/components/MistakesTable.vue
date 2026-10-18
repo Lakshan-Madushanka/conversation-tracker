@@ -288,9 +288,15 @@ const columns =
                 role="row"
                 class="hidden gap-2 px-1 text-xs font-medium text-muted-foreground sm:grid sm:grid-cols-[minmax(0,1.1fr)_minmax(0,1.1fr)_minmax(0,0.9fr)_auto]"
             >
-                <span role="columnheader">What I said</span>
-                <span role="columnheader">Correction</span>
-                <span role="columnheader">Why (optional)</span>
+                <span role="columnheader" class="font-semibold"
+                    >What I said</span
+                >
+                <span role="columnheader" class="font-semibold"
+                    >Correction</span
+                >
+                <span role="columnheader" class="font-semibold"
+                    >Why (optional)</span
+                >
                 <span class="sr-only" role="columnheader">Actions</span>
             </div>
 

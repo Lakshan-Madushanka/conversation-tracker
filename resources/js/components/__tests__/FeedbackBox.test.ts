@@ -141,7 +141,7 @@ describe('collapsed trigger', () => {
         await animationFrame();
 
         expect(fieldIsShown(wrapper)).toBe(true);
-        expect(document.activeElement?.id).toBe('field-mistake');
+        expect(document.activeElement?.id).toBe('field-mistake-add');
 
         wrapper.unmount();
     });
@@ -313,7 +313,7 @@ describe('shrinking a box', () => {
         await animationFrame();
 
         expect(fieldIsShown(wrapper)).toBe(true);
-        expect(document.activeElement?.id).toBe('field-mistake');
+        expect(document.activeElement?.id).toBe('field-mistake-add');
 
         wrapper.unmount();
     });

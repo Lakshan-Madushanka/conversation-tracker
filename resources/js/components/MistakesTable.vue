@@ -1,6 +1,13 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue';
-import { CopyIcon, PlusIcon, Trash2Icon, TriangleAlertIcon } from '@lucide/vue';
+import {
+    CheckIcon,
+    CopyIcon,
+    PencilIcon,
+    PlusIcon,
+    Trash2Icon,
+    TriangleAlertIcon,
+} from '@lucide/vue';
 import RichTextEditor from '@/components/RichTextEditor.vue';
 import UndoNotice from '@/components/UndoNotice.vue';
 import { Badge } from '@/components/ui/badge';
@@ -18,11 +25,13 @@ import {
     type ParsedMistake,
 } from '@/lib/mistakes';
 import { plainTextFromPaste } from '@/lib/paste';
+import { richTextToText } from '@/lib/rich-text';
 import type { MistakeEntry } from '@/types';
 
 /**
- * The mistakes box: a table of what was said, the correction and an optional
- * why.
+ * The mistakes box: a bordered table of what was said, the correction and an
+ * optional why. Entries are shown read-only until their row is edited, and
+ * every row can be removed.
  *
  * Pasting several lines — or a table with the same columns — adds one row each
  * and splits them by the separator rules, then can be undone. A row whose
@@ -44,6 +53,8 @@ const emit = defineEmits<{
 }>();
 
 const draft = ref('');
+/** The row being edited, if any; the others stay read-only. */
+const editingId = ref<string | null>(null);
 
 /** Set after a paste or a removal, until it is undone or replaced. */
 const notice = ref<{ message: string; undoLabel: string } | null>(null);
@@ -94,7 +105,10 @@ const duplicateIds = computed(() => {
     return duplicates;
 });
 
-const hasDraft = computed(() => draft.value.trim() !== '');
+/** True while the add field holds text or a row is being edited. */
+const hasDraft = computed(
+    () => draft.value.trim() !== '' || editingId.value !== null,
+);
 
 defineExpose({ hasDraft });
 
@@ -118,7 +132,18 @@ function updateRow(id: string, patch: Partial<Omit<MistakeEntry, 'id'>>): void {
     );
 }
 
-/** Add one empty row and put the cursor in it, ready to type or paste. */
+/** Open a row for editing and put the cursor in its first field. */
+function startEdit(id: string): void {
+    editingId.value = id;
+    void nextTick(() => focusElementById(rowFieldId(id, 'text')));
+}
+
+/** Close the row being edited; its values are already saved as they changed. */
+function stopEdit(): void {
+    editingId.value = null;
+}
+
+/** Add one empty row, opened for typing or pasting into. */
 function addBlankRow(): void {
     if (props.entries.length >= MAX_ROWS) {
         limitMessage.value = `A box can hold up to ${MAX_ROWS} rows. Remove one to add another.`;
@@ -132,6 +157,7 @@ function addBlankRow(): void {
     replaceEntries([...props.entries, row]);
     limitMessage.value = '';
     say('Empty row added.');
+    editingId.value = row.id;
     void nextTick(() => focusElementById(rowFieldId(row.id, 'text')));
 }
 
@@ -238,6 +264,10 @@ function removeRow(id: string): void {
     const removed = props.entries.find((entry) => entry.id === id);
     replaceEntries(props.entries.filter((entry) => entry.id !== id));
 
+    if (editingId.value === id) {
+        editingId.value = null;
+    }
+
     notice.value = { message: 'Row removed.', undoLabel: 'Undo the removal' };
     say(`Row removed${removed ? `: ${removed.text}` : ''}. Undo is available.`);
 }
@@ -272,8 +302,8 @@ function confirmCell(event: KeyboardEvent): void {
     (event.target as HTMLElement | null)?.blur();
 }
 
-const columns =
-    'grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1.1fr)_minmax(0,1.1fr)_minmax(0,0.9fr)_auto]';
+const gridColumns =
+    'sm:grid-cols-[minmax(0,1.1fr)_minmax(0,1.1fr)_minmax(0,0.9fr)_auto]';
 </script>
 
 <template>
@@ -283,95 +313,186 @@ const columns =
             {{ announcement }}
         </p>
 
-        <div role="table" :aria-label="props.label" class="space-y-1.5">
+        <div
+            role="table"
+            :aria-label="props.label"
+            class="overflow-hidden rounded-lg border bg-card"
+        >
             <div
                 role="row"
-                class="hidden gap-2 px-1 text-xs font-medium text-muted-foreground sm:grid sm:grid-cols-[minmax(0,1.1fr)_minmax(0,1.1fr)_minmax(0,0.9fr)_auto]"
+                class="hidden bg-muted/40 text-xs font-medium text-muted-foreground sm:grid"
+                :class="gridColumns"
             >
-                <span role="columnheader" class="font-semibold"
+                <span role="columnheader" class="border-r border-b px-3 py-2"
                     >What I said</span
                 >
-                <span role="columnheader" class="font-semibold"
+                <span role="columnheader" class="border-r border-b px-3 py-2"
                     >Correction</span
                 >
-                <span role="columnheader" class="font-semibold"
+                <span role="columnheader" class="border-r border-b px-3 py-2"
                     >Why (optional)</span
                 >
-                <span class="sr-only" role="columnheader">Actions</span>
+                <span role="columnheader" class="sr-only border-b px-3 py-2"
+                    >Actions</span
+                >
             </div>
 
             <div
                 v-for="(entry, index) in props.entries"
                 :key="entry.id"
                 role="row"
-                class="gap-2 rounded-lg border bg-card p-2.5"
+                class="grid grid-cols-1 border-b last:border-b-0"
                 :class="[
-                    columns,
-                    duplicateIds.has(entry.id)
-                        ? 'border-amber-500/60 ring-1 ring-amber-500/40'
-                        : 'border-border',
+                    gridColumns,
+                    duplicateIds.has(entry.id) ? 'bg-amber-500/5' : '',
                 ]"
             >
-                <div role="cell" class="min-w-0 space-y-1">
-                    <label
-                        :for="rowFieldId(entry.id, 'text')"
-                        class="text-xs font-medium text-muted-foreground sm:hidden"
+                <!-- Edit mode: every column of the row becomes an input. -->
+                <template v-if="editingId === entry.id">
+                    <div
+                        role="cell"
+                        class="min-w-0 space-y-1 border-b p-3 sm:border-r sm:border-b-0"
                     >
-                        What I said
-                    </label>
-                    <Input
-                        :id="rowFieldId(entry.id, 'text')"
-                        :model-value="entry.text"
-                        :aria-label="`What I said, row ${index + 1} of ${props.label}`"
-                        class="h-11"
-                        @update:model-value="
-                            updateRow(entry.id, { text: String($event) })
-                        "
-                        @keydown.enter.prevent="confirmCell"
-                        @keydown.esc.prevent="confirmCell"
-                    />
-                </div>
+                        <label
+                            :for="rowFieldId(entry.id, 'text')"
+                            class="text-xs font-medium text-muted-foreground sm:hidden"
+                        >
+                            What I said
+                        </label>
+                        <Input
+                            :id="rowFieldId(entry.id, 'text')"
+                            :model-value="entry.text"
+                            :aria-label="`What I said, row ${index + 1} of ${props.label}`"
+                            class="h-11"
+                            @update:model-value="
+                                updateRow(entry.id, { text: String($event) })
+                            "
+                            @keydown.enter.prevent="confirmCell"
+                            @keydown.esc.prevent="stopEdit"
+                        />
+                    </div>
 
-                <div role="cell" class="min-w-0 space-y-1">
-                    <label
-                        :for="rowFieldId(entry.id, 'correction')"
-                        class="text-xs font-medium text-muted-foreground sm:hidden"
+                    <div
+                        role="cell"
+                        class="min-w-0 space-y-1 border-b p-3 sm:border-r sm:border-b-0"
                     >
-                        Correction
-                    </label>
-                    <RichTextEditor
-                        :id="rowFieldId(entry.id, 'correction')"
-                        :model-value="entry.correction_html"
-                        variant="inline"
-                        :label="`Correction, row ${index + 1} of ${props.label}`"
-                        placeholder="e.g. I went"
-                        @update:model-value="
-                            updateRow(entry.id, { correction_html: $event })
-                        "
-                    />
-                </div>
+                        <label
+                            :for="rowFieldId(entry.id, 'correction')"
+                            class="text-xs font-medium text-muted-foreground sm:hidden"
+                        >
+                            Correction
+                        </label>
+                        <RichTextEditor
+                            :id="rowFieldId(entry.id, 'correction')"
+                            :model-value="entry.correction_html"
+                            variant="inline"
+                            :label="`Correction, row ${index + 1} of ${props.label}`"
+                            placeholder="e.g. I went"
+                            @update:model-value="
+                                updateRow(entry.id, {
+                                    correction_html: $event,
+                                })
+                            "
+                        />
+                    </div>
 
-                <div role="cell" class="min-w-0 space-y-1">
-                    <label
-                        :for="rowFieldId(entry.id, 'reason')"
-                        class="text-xs font-medium text-muted-foreground sm:hidden"
+                    <div
+                        role="cell"
+                        class="min-w-0 space-y-1 border-b p-3 sm:border-r sm:border-b-0"
                     >
-                        Why (optional)
-                    </label>
-                    <Input
-                        :id="rowFieldId(entry.id, 'reason')"
-                        :model-value="entry.reason"
-                        :aria-label="`Why, row ${index + 1} of ${props.label}`"
-                        class="h-11"
-                        @update:model-value="
-                            updateRow(entry.id, { reason: String($event) })
-                        "
-                        @keydown.enter.prevent="confirmCell"
-                        @keydown.esc.prevent="confirmCell"
-                    />
-                </div>
+                        <label
+                            :for="rowFieldId(entry.id, 'reason')"
+                            class="text-xs font-medium text-muted-foreground sm:hidden"
+                        >
+                            Why (optional)
+                        </label>
+                        <Input
+                            :id="rowFieldId(entry.id, 'reason')"
+                            :model-value="entry.reason"
+                            :aria-label="`Why, row ${index + 1} of ${props.label}`"
+                            class="h-11"
+                            @update:model-value="
+                                updateRow(entry.id, { reason: String($event) })
+                            "
+                            @keydown.enter.prevent="confirmCell"
+                            @keydown.esc.prevent="stopEdit"
+                        />
+                    </div>
+                </template>
 
-                <div role="cell" class="flex items-start justify-end gap-1">
+                <!-- Read-only: the row's values, until the edit icon is used. -->
+                <template v-else>
+                    <div
+                        role="cell"
+                        class="min-w-0 space-y-1 border-b p-3 sm:border-r sm:border-b-0"
+                    >
+                        <span
+                            class="text-xs font-medium text-muted-foreground sm:hidden"
+                        >
+                            What I said
+                        </span>
+                        <p class="text-sm break-words">
+                            {{ entry.text !== '' ? entry.text : '—' }}
+                        </p>
+                    </div>
+
+                    <div
+                        role="cell"
+                        class="min-w-0 space-y-1 border-b p-3 sm:border-r sm:border-b-0"
+                    >
+                        <span
+                            class="text-xs font-medium text-muted-foreground sm:hidden"
+                        >
+                            Correction
+                        </span>
+                        <!-- The correction holds only bold and italic around
+                            escaped text, so this markup is safe to show. -->
+                        <p
+                            v-if="richTextToText(entry.correction_html) !== ''"
+                            class="text-sm break-words"
+                            v-html="entry.correction_html"
+                        ></p>
+                        <p v-else class="text-sm text-muted-foreground">—</p>
+                    </div>
+
+                    <div
+                        role="cell"
+                        class="min-w-0 space-y-1 border-b p-3 sm:border-r sm:border-b-0"
+                    >
+                        <span
+                            class="text-xs font-medium text-muted-foreground sm:hidden"
+                        >
+                            Why (optional)
+                        </span>
+                        <p class="text-sm break-words">
+                            {{ entry.reason !== '' ? entry.reason : '—' }}
+                        </p>
+                    </div>
+                </template>
+
+                <div role="cell" class="flex items-start justify-end gap-1 p-2">
+                    <Button
+                        v-if="editingId === entry.id"
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        class="min-h-11 min-w-11"
+                        :aria-label="`Done editing row ${index + 1}`"
+                        @click="stopEdit"
+                    >
+                        <CheckIcon aria-hidden="true" />
+                    </Button>
+                    <Button
+                        v-else
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        class="min-h-11 min-w-11"
+                        :aria-label="`Edit row ${index + 1}: ${entry.text}`"
+                        @click="startEdit(entry.id)"
+                    >
+                        <PencilIcon aria-hidden="true" />
+                    </Button>
                     <Button
                         type="button"
                         variant="ghost"
@@ -384,27 +505,31 @@ const columns =
                     </Button>
                 </div>
 
-                <p
-                    v-if="attention.has(entry.id)"
+                <div
+                    v-if="attention.has(entry.id) || duplicateIds.has(entry.id)"
                     role="cell"
-                    class="flex items-center gap-1.5 text-xs font-medium text-amber-700 sm:col-span-3 dark:text-amber-300"
+                    class="flex flex-wrap items-center gap-2 border-t px-3 py-2 sm:col-span-full"
                 >
-                    <TriangleAlertIcon
-                        class="size-3.5 shrink-0"
-                        aria-hidden="true"
-                    />
-                    {{ attention.get(entry.id) }}
-                </p>
+                    <p
+                        v-if="attention.has(entry.id)"
+                        class="flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-300"
+                    >
+                        <TriangleAlertIcon
+                            class="size-3.5 shrink-0"
+                            aria-hidden="true"
+                        />
+                        {{ attention.get(entry.id) }}
+                    </p>
 
-                <Badge
-                    v-if="duplicateIds.has(entry.id)"
-                    variant="outline"
-                    role="cell"
-                    class="w-fit gap-1 border-amber-500/60 text-amber-700 sm:col-span-3 dark:text-amber-300"
-                >
-                    <CopyIcon aria-hidden="true" />
-                    Duplicate
-                </Badge>
+                    <Badge
+                        v-if="duplicateIds.has(entry.id)"
+                        variant="outline"
+                        class="gap-1 border-amber-500/60 text-amber-700 dark:text-amber-300"
+                    >
+                        <CopyIcon aria-hidden="true" />
+                        Duplicate
+                    </Badge>
+                </div>
             </div>
         </div>
 

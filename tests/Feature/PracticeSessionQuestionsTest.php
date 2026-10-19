@@ -11,7 +11,7 @@ use App\Models\User;
 /**
  * Build one question payload for the session request.
  *
- * @param array<string, string> $feedback
+ * @param  array<string, string>  $feedback
  * @return array{question_html: string, answer_html: string, feedback: array<string, string>}
  */
 function questionPayload(string $question, array $feedback = []): array
@@ -238,7 +238,7 @@ test('removing one of several questions removes only that question and its feedb
         ->and($session->questions->pluck('position')->all())->toBe([1, 2]);
 
     $mistakes = $session->questions
-        ->flatMap(fn(PracticeQuestion $question) => $question->feedbackEntries)
+        ->flatMap(fn (PracticeQuestion $question) => $question->feedbackEntries)
         ->pluck('content_text')
         ->all();
 
@@ -385,16 +385,16 @@ test('feedback examples can be stored', function (): void {
     $feedback = [
         'vocabulary' => [
             [
-                "id" => $id,
-                "text" => "a b",
-                "meaning" => "v",
-                "example_html" => [
+                'id' => $id,
+                'text' => 'a b',
+                'meaning' => 'v',
+                'example_html' => [
                     [
-                        "id" => "0619d2f8-b17c-406b-8d0a-95749159f880", "text" => "c"
-                    ]
-                ]
-            ]
-        ]
+                        'id' => '0619d2f8-b17c-406b-8d0a-95749159f880', 'text' => 'c',
+                    ],
+                ],
+            ],
+        ],
     ];
 
     $action->handle($question, $feedback);
@@ -408,7 +408,7 @@ test('feedback examples can be stored', function (): void {
             [
                 'id' => '0619d2f8-b17c-406b-8d0a-95749159f880',
                 'text' => 'c',
-                'html' => 'c'
-            ]
+                'html' => 'c',
+            ],
         ]);
 });

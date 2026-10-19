@@ -161,7 +161,7 @@ final class FeedbackTable
             $data = [];
 
             foreach ($value as $item) {
-                if (!($item['id'] ?? null) || !($item['text'] ?? null) || !is_string($item['text'])) {
+                if (! ($item['id'] ?? null) || ! ($item['text'] ?? null) || ! is_string($item['text'])) {
                     continue;
                 }
 
@@ -172,10 +172,11 @@ final class FeedbackTable
                     $data[] = ['id' => $item['id'], 'text' => ListEntries::cleanLine($item['text']), 'html' => ''];
                 }
             }
-             return !blank($data) ? ['text' => '', 'html' => $data] : ['text' => '', 'html' => []];
+
+            return ! blank($data) ? ['text' => '', 'html' => $data] : ['text' => '', 'html' => []];
         }
 
-        if (!is_string($value)) {
+        if (! is_string($value)) {
             $value = '';
         }
 

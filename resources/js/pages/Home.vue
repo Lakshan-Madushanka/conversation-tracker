@@ -123,7 +123,7 @@ const greeting = computed(() => {
         </div>
 
         <!-- Recent sessions: only once there is something to show. -->
-        <div v-if="recentSessions.length > 0" class="mt-8">
+        <div v-if="recentSessions && recentSessions.length > 0" class="mt-8">
             <div class="mb-3 flex items-center justify-between">
                 <h2 class="text-sm font-semibold">Recent sessions</h2>
                 <Link

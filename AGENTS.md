@@ -33,6 +33,10 @@ Create tests beforehand where ever possible
 # Commits
 
 - use conventional commits
+- Prefer separate, logically grouped commits that are easy to review and understand
+- Each commit should be small enough to understand clearly but substantial enough to represent meaningful functionality or a significant improvement
+- Avoid oversized commits that bundle unrelated changes and overly small commits that provide little value
+- Aim for a clean, logical commit history that clearly reflects the development process
 
 # Static Analysis & Tests
 
@@ -234,3 +238,7 @@ Vue components must have a single root element.
 - IMPORTANT: Activate `inertia-vue-development` when working with Inertia Vue client-side patterns.
 
 </laravel-boost-guidelines>
+
+# UI Component Focus Behavior
+
+- When changing the internal structure of feedback components (e.g., adding sub-fields like fieldId-add in MistakesTable), always verify and update the focus logic in FeedbackBox.vue to pass the correct target id. Failure to do so causes the box to close immediately on open due to focusout/focus management.

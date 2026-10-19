@@ -24,6 +24,7 @@ import {
     emptyFeedbackValues,
     feedbackBoxes,
     questionHasContent,
+    setFeedbackValue,
     toQuestionForm,
 } from '@/lib/feedback';
 import { savePracticeSession } from '@/lib/session-autosave';
@@ -319,7 +320,8 @@ function confirmRemove(): void {
                     :answer-error="errorFor(`questions.${index}.answer_html`)"
                     :feedback-errors="feedbackErrors(index)"
                     @update:feedback="
-                        (type, value) => (question.feedback[type] = value)
+                        (type, value) =>
+                            setFeedbackValue(question.feedback, type, value)
                     "
                     @remove="requestRemove(index)"
                 />

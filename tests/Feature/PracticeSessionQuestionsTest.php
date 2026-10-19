@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Actions\PracticeQuestions\SavePracticeFeedback;
 use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeQuestion;
 use App\Models\PracticeSession;
@@ -72,7 +73,8 @@ test('all five feedback boxes can be saved for one question', function (): void 
 
     $entries = $question->feedbackEntries->keyBy('type');
 
-    expect($entries[PracticeFeedbackEntry::TYPE_MISTAKE]->content_text)->toBe('I go → I went')
+    expect($entries[PracticeFeedbackEntry::TYPE_MISTAKE]->content_text)->toBe('I go')
+        ->and($entries[PracticeFeedbackEntry::TYPE_MISTAKE]->correction_text)->toBe('I went')
         ->and($entries[PracticeFeedbackEntry::TYPE_VOCABULARY]->content_text)->toBe('journey')
         ->and($entries[PracticeFeedbackEntry::TYPE_PHRASE]->content_text)->toBe('a long way')
         ->and($entries[PracticeFeedbackEntry::TYPE_GRAMMAR_NOTE]->content_html)->toBe('<p>Use the <strong>past tense</strong>.</p>')
@@ -95,10 +97,15 @@ test('the editor payload provides every saved box keyed by type', function (): v
     $session = PracticeSession::firstOrFail();
     $payload = $session->toEditorPayload();
 
-    expect($payload['questions'][0]['feedback'])->toBe([
-        'mistake' => 'I go → I went',
-        'grammar_note' => '<p>Use the <strong>past tense</strong>.</p>',
-    ]);
+    $feedback = $payload['questions'][0]['feedback'];
+
+    expect($feedback)->toHaveKeys(['mistake', 'grammar_note'])
+        ->and($feedback['mistake'])->toHaveCount(1)
+        ->and($feedback['mistake'][0]['text'])->toBe('I go')
+        ->and($feedback['mistake'][0]['correction_html'])->toBe('I went')
+        ->and($feedback['mistake'][0]['id'])->toBeString()->not->toBe('')
+        ->and($feedback['grammar_note'][0]['html'])->toBe('<p>Use the <strong>past tense</strong>.</p>')
+        ->and($feedback['grammar_note'][0]['id'])->toBeString()->not->toBe('');
 });
 
 test('empty feedback boxes do not create entries', function (): void {
@@ -169,10 +176,17 @@ test('plain feedback keeps its text and does not store markup', function (): voi
 
     $entries = PracticeFeedbackEntry::all()->keyBy('type');
 
+    $phrases = PracticeFeedbackEntry::query()
+        ->where('type', PracticeFeedbackEntry::TYPE_PHRASE)
+        ->orderBy('position')
+        ->get();
+
     expect($entries[PracticeFeedbackEntry::TYPE_MISTAKE]->content_html)->toBe('')
-        ->and($entries[PracticeFeedbackEntry::TYPE_MISTAKE]->content_text)->toBe('<b>said</b> → told')
+        ->and($entries[PracticeFeedbackEntry::TYPE_MISTAKE]->content_text)->toBe('<b>said</b>')
+        ->and($entries[PracticeFeedbackEntry::TYPE_MISTAKE]->correction_text)->toBe('told')
         ->and($entries[PracticeFeedbackEntry::TYPE_VOCABULARY]->content_html)->toBe('')
-        ->and($entries[PracticeFeedbackEntry::TYPE_PHRASE]->content_text)->toBe("a long way\noff");
+        ->and(array_column($phrases->all(), 'content_text'))->toBe(['a long way', 'off'])
+        ->and(array_column($phrases->all(), 'content_html'))->toBe(['', '']);
 });
 
 test('unsafe markup is stripped from rich feedback', function (): void {
@@ -359,4 +373,42 @@ test('feedback must be an array when provided', function (): void {
     ]);
 
     $response->assertSessionHasErrors('questions.0.feedback');
+});
+
+test('feedback examples can be stored', function (): void {
+    $question = PracticeQuestion::factory()->create();
+
+    $action = app(SavePracticeFeedback::class);
+
+    $id = Str::Uuid()->toString();
+
+    $feedback = [
+        'vocabulary' => [
+            [
+                'id' => $id,
+                'text' => 'a b',
+                'meaning' => 'v',
+                'example_html' => [
+                    [
+                        'id' => '0619d2f8-b17c-406b-8d0a-95749159f880', 'text' => 'c',
+                    ],
+                ],
+            ],
+        ],
+    ];
+
+    $action->handle($question, $feedback);
+
+    $record = PracticeFeedbackEntry::query()->where(['client_id' => $id])->first();
+
+    expect($record)->not()->toBeNull()
+        ->and($record->example_html)->not()->toBeEmpty()
+        ->and($record->example_html)
+        ->toBe([
+            [
+                'id' => '0619d2f8-b17c-406b-8d0a-95749159f880',
+                'text' => 'c',
+                'html' => 'c',
+            ],
+        ]);
 });

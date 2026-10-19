@@ -25,6 +25,15 @@ final class RichText
     /** @var array<string, string> */
     private const array TAG_ALIASES = ['b' => 'strong', 'i' => 'em'];
 
+    /** The marks a correction keeps: bold and italic, under either spelling. */
+    /** @var array<string, string> */
+    private const array INLINE_MARKS = [
+        'b' => 'strong',
+        'strong' => 'strong',
+        'i' => 'em',
+        'em' => 'em',
+    ];
+
     /** Elements removed together with everything inside them. */
     /** @var list<string> */
     private const array DROPPED_TAGS = [
@@ -90,6 +99,119 @@ final class RichText
     public static function toPlainText(string $html): string
     {
         return self::cleanWithText($html)['text'];
+    }
+
+    /**
+     * Reduce markup to a single inline line holding only bold and italic. Used
+     * for the mistakes correction column, which is a short sentence rather
+     * than a document: line breaks and blocks become spaces, and any other
+     * markup is dropped while keeping its words.
+     *
+     * @return array{html: string, text: string}
+     */
+    public static function cleanInlineWithText(string $html): array
+    {
+        $document = new DOMDocument;
+
+        libxml_use_internal_errors(true);
+        $document->loadHTML(
+            '<?xml encoding="UTF-8"><body>'.$html.'</body>',
+            LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING,
+        );
+        libxml_clear_errors();
+
+        $body = $document->getElementsByTagName('body')->item(0);
+
+        if (! $body instanceof DOMElement) {
+            return ['html' => '', 'text' => ''];
+        }
+
+        $content = self::renderInlineChildren($body);
+
+        $html = self::collapseInline($content['html']);
+        $text = self::collapseInline($content['text']);
+
+        return [
+            'html' => $text === '' ? '' : $html,
+            'text' => $text,
+        ];
+    }
+
+    /**
+     * @return array{html: string, text: string}
+     */
+    private static function renderInlineChildren(DOMNode $node): array
+    {
+        $html = '';
+        $text = '';
+
+        foreach ($node->childNodes as $child) {
+            $rendered = self::renderInline($child);
+
+            $html .= $rendered['html'];
+            $text .= $rendered['text'];
+        }
+
+        return ['html' => $html, 'text' => $text];
+    }
+
+    /**
+     * @return array{html: string, text: string}
+     */
+    private static function renderInline(DOMNode $node): array
+    {
+        if ($node instanceof DOMText) {
+            return [
+                'html' => htmlspecialchars($node->data, ENT_NOQUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+                'text' => $node->data,
+            ];
+        }
+
+        if (! $node instanceof DOMElement) {
+            return ['html' => '', 'text' => ''];
+        }
+
+        $tag = strtolower($node->nodeName);
+
+        if (in_array($tag, self::DROPPED_TAGS, true)) {
+            return ['html' => '', 'text' => ''];
+        }
+
+        if ($tag === 'br') {
+            return ['html' => ' ', 'text' => ' '];
+        }
+
+        $mark = self::INLINE_MARKS[$tag] ?? null;
+
+        if ($mark !== null) {
+            $content = self::renderInlineChildren($node);
+
+            return [
+                'html' => trim($content['text']) === ''
+                    ? ''
+                    : "<{$mark}>{$content['html']}</{$mark}>",
+                'text' => $content['text'],
+            ];
+        }
+
+        $content = self::renderInlineChildren($node);
+
+        // Blocks and unknown inline markup both keep their words; blocks leave
+        // a space behind so flattened lines do not run together. Paragraphs and
+        // list items are blocks here too, since the whole value is one line.
+        if (in_array($tag, self::BLOCK_TAGS, true) || in_array($tag, ['p', 'li'], true)) {
+            return [
+                'html' => $content['html'].' ',
+                'text' => $content['text'].' ',
+            ];
+        }
+
+        return $content;
+    }
+
+    private static function collapseInline(string $value): string
+    {
+        return trim((string) preg_replace('/\s+/u', ' ', $value));
     }
 
     /**

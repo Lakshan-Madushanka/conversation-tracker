@@ -1,11 +1,30 @@
 import type { FeedbackTone } from '@/components/SectionLabel.vue';
+import type { FeedbackTableConfig } from '@/lib/feedback-table';
+import { newId } from '@/lib/id';
+import { MISTAKES_TABLE } from '@/lib/mistakes';
+import { PHRASE_TABLE } from '@/lib/phrases';
 import { isRichTextBlank } from '@/lib/rich-text';
+import { VOCABULARY_TABLE } from '@/lib/vocabulary';
 import type {
+    FeedbackEntry,
     FeedbackType,
+    FeedbackValue,
     FeedbackValues,
+    GrammarNote,
     PracticeQuestionData,
     PracticeQuestionForm,
 } from '@/types';
+
+/**
+ * How a box holds its content:
+ *
+ * - `table` — rows of fixed columns (mistakes, vocabulary, phrases).
+ * - `list` — plain text entries, one per pasted line. No box uses it now; the
+ *   list UI is kept for as long as `EntryList` still exists.
+ * - `notes` — many formatted notes, one per paste, never split by line.
+ * - `text` — one piece of formatted text (the natural version).
+ */
+export type FeedbackBoxKind = 'table' | 'list' | 'notes' | 'text';
 
 export interface FeedbackBoxConfig {
     /** Backend key for this box. */
@@ -14,11 +33,12 @@ export interface FeedbackBoxConfig {
     label: string;
     /** Colour tone reused from the session reading page. */
     tone: FeedbackTone;
-    /** Rich boxes use the shared editor; the rest are plain text. */
-    rich: boolean;
+    kind: FeedbackBoxKind;
+    /** The columns and rules of a `table` box. */
+    table?: FeedbackTableConfig;
     /** One-line hint shown while the box is collapsed and empty. */
     hint: string;
-    /** Placeholder inside the field. */
+    /** Placeholder inside the add field. */
     placeholder: string;
 }
 
@@ -28,7 +48,8 @@ export const feedbackBoxes: readonly FeedbackBoxConfig[] = [
         type: 'mistake',
         label: 'Mistakes and corrections',
         tone: 'mistakes',
-        rich: false,
+        kind: 'table',
+        table: MISTAKES_TABLE,
         hint: 'Add corrections from the tutor',
         placeholder: 'e.g. I go → I went',
     },
@@ -36,23 +57,25 @@ export const feedbackBoxes: readonly FeedbackBoxConfig[] = [
         type: 'vocabulary',
         label: 'New vocabulary',
         tone: 'vocabulary',
-        rich: false,
-        hint: 'Add new words',
-        placeholder: 'e.g. reservation',
+        kind: 'table',
+        table: VOCABULARY_TABLE,
+        hint: 'Add new words and their meaning',
+        placeholder: 'e.g. reservation - a booking',
     },
     {
         type: 'phrase',
         label: 'New phrases and expressions',
         tone: 'phrases',
-        rich: false,
+        kind: 'table',
+        table: PHRASE_TABLE,
         hint: 'Add new phrases',
-        placeholder: 'e.g. Could I have the bill, please?',
+        placeholder: 'e.g. a long way - far away',
     },
     {
         type: 'grammar_note',
         label: 'Grammar notes',
         tone: 'grammar',
-        rich: true,
+        kind: 'notes',
         hint: 'Add a grammar explanation',
         placeholder: 'Explain the grammar point, with formatting…',
     },
@@ -60,7 +83,7 @@ export const feedbackBoxes: readonly FeedbackBoxConfig[] = [
         type: 'natural_version',
         label: 'A more natural version',
         tone: 'natural',
-        rich: true,
+        kind: 'text',
         hint: 'Add a more natural way to say it',
         placeholder: 'Paste a more natural version…',
     },
@@ -79,22 +102,49 @@ export function feedbackBoxFor(type: FeedbackType): FeedbackBoxConfig {
 /** A full set of empty boxes, used for new questions. */
 export function emptyFeedbackValues(): FeedbackValues {
     return {
-        mistake: '',
-        vocabulary: '',
-        phrase: '',
-        grammar_note: '',
+        mistake: [],
+        vocabulary: [],
+        phrase: [],
+        grammar_note: [],
         natural_version: '',
     };
 }
 
-/** Whether a single box holds content (formatting-only counts as empty). */
-export function isFeedbackValueBlank(
-    type: FeedbackType,
-    value: string,
-): boolean {
-    return feedbackBoxFor(type).rich
-        ? isRichTextBlank(value)
-        : value.trim().length === 0;
+/** A new list entry, ready to be edited or saved. */
+export function newEntry(text: string): FeedbackEntry {
+    return { id: newId(), text };
+}
+
+/** A new grammar note, ready to be edited or saved. */
+export function newNote(html: string): GrammarNote {
+    return { id: newId(), html };
+}
+
+/**
+ * Whether a single box holds content (formatting-only counts as empty).
+ *
+ * A row is empty when every field but its id holds nothing, whether the field
+ * carries plain text or markup.
+ */
+export function isFeedbackValueBlank(value: FeedbackValue): boolean {
+    if (typeof value === 'string') {
+        return isRichTextBlank(value);
+    }
+
+    return value.every((item) =>
+        Object.entries(item).every(
+            ([key, field]) => key === 'id' || isRichTextBlank(String(field)),
+        ),
+    );
+}
+
+/** Replace the value of one box, whatever kind of content it holds. */
+export function setFeedbackValue<T extends FeedbackType>(
+    values: FeedbackValues,
+    type: T,
+    value: FeedbackValues[T],
+): void {
+    values[type] = value;
 }
 
 /** Whether a question has anything typed into it at all. */
@@ -107,8 +157,7 @@ export function questionHasContent(question: PracticeQuestionForm): boolean {
     }
 
     return Object.entries(question.feedback).some(
-        ([type, value]) =>
-            isFeedbackValueBlank(type as FeedbackType, value) === false,
+        ([, value]) => isFeedbackValueBlank(value) === false,
     );
 }
 
@@ -124,6 +173,20 @@ export function toQuestionForm(
         uid,
         question_html: question.question_html,
         answer_html: question.answer_html,
-        feedback: { ...emptyFeedbackValues(), ...question.feedback },
+        feedback: normalizeFeedback(question.feedback),
+    };
+}
+
+/**
+ * Give every box its own value, so a question the backend left partly empty
+ * still opens with the shapes the editor works with.
+ */
+function normalizeFeedback(feedback: Partial<FeedbackValues>): FeedbackValues {
+    return {
+        mistake: feedback.mistake ?? [],
+        vocabulary: feedback.vocabulary ?? [],
+        phrase: feedback.phrase ?? [],
+        grammar_note: feedback.grammar_note ?? [],
+        natural_version: feedback.natural_version ?? '',
     };
 }

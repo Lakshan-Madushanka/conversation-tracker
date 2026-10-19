@@ -13,8 +13,71 @@ export type FeedbackType =
     | 'grammar_note'
     | 'natural_version';
 
-/** One value per feedback box, keyed by type. */
-export type FeedbackValues = Record<FeedbackType, string>;
+/** One entry of a list box. `id` is stable across saves, so an edit updates it. */
+export interface FeedbackEntry {
+    id: string;
+    text: string;
+}
+
+/**
+ * One row of the mistakes box: what was said, the correction (a single line
+ * that keeps only bold and italic) and an optional why.
+ *
+ * A type alias, not an interface, so a row can stand in for the generic shape
+ * the feedback table works with.
+ */
+export type MistakeEntry = {
+    id: string;
+    text: string;
+    correction_html: string;
+    reason: string;
+};
+
+/**
+ * One row of the vocabulary box: the word, its meaning, and an optional example
+ * (a single line that keeps only bold and italic).
+ */
+export type VocabularyEntry = {
+    id: string;
+    text: string;
+    meaning: string;
+    example_html: string;
+};
+
+/**
+ * One row of the phrases box: the phrase, its meaning or use, and an optional
+ * example (a single line that keeps only bold and italic). A type alias, not
+ * an interface, so a row can stand in for the generic shape the feedback table
+ * works with.
+ */
+export type PhraseEntry = {
+    id: string;
+    text: string;
+    meaning: string;
+    example_html: string;
+};
+
+/** One grammar note, kept as formatted text and never split by line. */
+export interface GrammarNote {
+    id: string;
+    html: string;
+}
+
+/**
+ * One value per feedback box. The mistakes, vocabulary and phrases boxes hold
+ * table rows, the grammar notes hold entries, and the natural version stays
+ * one piece of formatted text.
+ */
+export interface FeedbackValues {
+    mistake: MistakeEntry[];
+    vocabulary: VocabularyEntry[];
+    phrase: PhraseEntry[];
+    grammar_note: GrammarNote[];
+    natural_version: string;
+}
+
+/** The value of any one box, as the feedback components pass it around. */
+export type FeedbackValue = FeedbackValues[FeedbackType];
 
 /**
  * A question as it comes back from the backend. Saved boxes are present in

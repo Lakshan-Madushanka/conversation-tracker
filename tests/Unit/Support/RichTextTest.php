@@ -83,3 +83,43 @@ it('handles a very long passage', function (): void {
     expect(RichText::clean($html))->toBe($html)
         ->and(RichText::toPlainText($html))->toBe(trim(str_repeat('word ', 20_000)));
 });
+
+it('keeps only bold and italic in a single inline line', function (): void {
+    $clean = RichText::cleanInlineWithText(
+        '<p>I want <strong>some</strong> <b>pasta</b> and <em>rice</em>, <i>please</i>.</p>',
+    );
+
+    expect($clean['html'])->toBe('I want <strong>some</strong> <strong>pasta</strong> and <em>rice</em>, <em>please</em>.')
+        ->and($clean['text'])->toBe('I want some pasta and rice, please.');
+});
+
+it('flattens blocks and line breaks into spaces when inline', function (): void {
+    $clean = RichText::cleanInlineWithText('<p>first</p><p>second<br>line</p><ul><li>bullet</li></ul>');
+
+    expect($clean['html'])->toBe('first second line bullet')
+        ->and($clean['text'])->toBe('first second line bullet');
+});
+
+it('drops other formatting but keeps the words when inline', function (): void {
+    $clean = RichText::cleanInlineWithText('<span style="color:red">wrong</span> <code>x</code> <a href="#">link</a>');
+
+    expect($clean['html'])->toBe('wrong x link');
+});
+
+it('removes unsafe elements with their content when inline', function (): void {
+    $clean = RichText::cleanInlineWithText('Hi <script>alert(1)</script><strong>there</strong>');
+
+    expect($clean['html'])->toBe('Hi <strong>there</strong>')
+        ->and($clean['text'])->toBe('Hi there');
+});
+
+it('treats empty inline formatting as empty content', function (string $html): void {
+    expect(RichText::cleanInlineWithText($html)['html'])->toBe('')
+        ->and(RichText::cleanInlineWithText($html)['text'])->toBe('');
+})->with([
+    'empty string' => [''],
+    'empty paragraph' => ['<p></p>'],
+    'only a line break' => ['<p><br></p>'],
+    'only spaces' => ['<p>   </p>'],
+    'empty bold' => ['<p><strong></strong></p>'],
+]);

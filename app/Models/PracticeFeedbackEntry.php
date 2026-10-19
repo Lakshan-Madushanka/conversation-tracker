@@ -12,23 +12,49 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
 
 /**
- * One feedback box attached to a question, kept as formatted text (for grammar
- * notes and the natural version) or plain text (for the list boxes) plus a
- * plain-text version for search and review.
+ * One entry inside a feedback box, kept as formatted text (for grammar notes
+ * and the natural version) or plain text (for the table boxes) plus a
+ * plain-text version for search and review. A table box holds many rows, one
+ * per pasted line, ordered by `position` and identified by `client_id`.
+ *
+ * A table box (mistakes, vocabulary and phrases) holds three columns per row.
+ * Mistakes keep what was said (`content_text`), a correction
+ * (`correction_html` plus its plain-text copy) and an optional why
+ * (`reason`). Vocabulary and phrases keep the subject (`content_text`), its
+ * meaning (`correction_text`) and an optional example (`example_html` plus
+ * its plain-text copy in `example`). An example saved before the list existed
+ * is one piece of markup; an example saved since is a list of entries, each
+ * with the id the editor gave it.
  *
  * @property int $id
  * @property int $practice_question_id
  * @property string $type
+ * @property int $position
+ * @property string|null $client_id
  * @property string $content_html
  * @property string $content_text
+ * @property string $correction_html
+ * @property string $correction_text
+ * @property string $reason
+ * @property string $example
+ * @property string|list<array{id: string, text: string, html: string}> $example_html
+ * @property bool $is_split
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
 #[Fillable([
     'practice_question_id',
     'type',
+    'position',
+    'client_id',
     'content_html',
     'content_text',
+    'correction_html',
+    'correction_text',
+    'reason',
+    'example',
+    'example_html',
+    'is_split',
 ])]
 class PracticeFeedbackEntry extends Model
 {
@@ -44,6 +70,38 @@ class PracticeFeedbackEntry extends Model
     public const TYPE_GRAMMAR_NOTE = 'grammar_note';
 
     public const TYPE_NATURAL_VERSION = 'natural_version';
+
+    /**
+     * Boxes shown as a table of mistakes, each with a correction and an
+     * optional why.
+     *
+     * @var list<string>
+     */
+    public const MISTAKE_TYPES = [
+        self::TYPE_MISTAKE,
+    ];
+
+    /**
+     * Boxes shown as a table: a fixed set of columns, one row per pasted line.
+     *
+     * @var list<string>
+     */
+    public const TABLE_TYPES = [
+        self::TYPE_MISTAKE,
+        self::TYPE_VOCABULARY,
+        self::TYPE_PHRASE,
+    ];
+
+    /**
+     * Boxes that hold many entries under one question. Only the natural
+     * version stays a single piece of text.
+     *
+     * @var list<string>
+     */
+    public const ENTRY_TYPES = [
+        ...self::TABLE_TYPES,
+        self::TYPE_GRAMMAR_NOTE,
+    ];
 
     /**
      * Every feedback box a question can have, in the order they are shown.
@@ -71,6 +129,29 @@ class PracticeFeedbackEntry extends Model
     public static function isRich(string $type): bool
     {
         return in_array($type, self::RICH_TYPES, true);
+    }
+
+    /** Whether a box holds a table of rows, one column set per box. */
+    public static function isTable(string $type): bool
+    {
+        return in_array($type, self::TABLE_TYPES, true);
+    }
+
+    /** Whether a box holds mistakes, each with a correction and a why. */
+    public static function isMistake(string $type): bool
+    {
+        return in_array($type, self::MISTAKE_TYPES, true);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'is_split' => 'boolean',
+            'example_html' => 'array',
+        ];
     }
 
     /**

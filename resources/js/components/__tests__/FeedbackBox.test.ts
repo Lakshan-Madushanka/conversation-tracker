@@ -1,6 +1,7 @@
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vite-plus/test';
 import FeedbackBox from '@/components/FeedbackBox.vue';
+import { newNote } from '@/lib/feedback';
 import type { FeedbackType } from '@/types';
 
 /**
@@ -24,16 +25,89 @@ function mountBox(
         error: string;
     }> = {},
 ) {
+    const type = props.type ?? 'mistake';
+
     return mount(FeedbackBox, {
         attachTo: document.body,
         props: {
-            type: 'mistake',
-            modelValue: '',
+            ...props,
+            type,
+            // Each kind of box holds a different shape: plain text, table
+            // rows, or notes. The text here stands in for their content.
+            modelValue: valueFor(type, props.modelValue ?? ''),
             fieldId: 'field-mistake',
             questionNumber: 1,
-            ...props,
         },
     });
+}
+
+/** Turn plain text into the rows a table box holds. */
+function rowsOf(text: string) {
+    if (text === '') {
+        return [];
+    }
+
+    return [
+        {
+            id: 'test-id',
+            text,
+            correction_html: '',
+            reason: '',
+        },
+    ];
+}
+
+/** Turn plain text into the notes the grammar box holds. */
+function notesOf(text: string) {
+    return text === '' ? [] : [newNote(text)];
+}
+
+/** The value a box of this kind holds, built from plain text. */
+function valueFor(type: FeedbackType, text: string) {
+    if (type === 'natural_version') {
+        return text;
+    }
+
+    if (type === 'grammar_note') {
+        return notesOf(text);
+    }
+
+    return rowsOf(text);
+}
+
+/** The field the learner types into, whatever kind of box it is. */
+function field(wrapper: ReturnType<typeof mountBox>) {
+    const type = wrapper.props('type') as FeedbackType;
+
+    if (type === 'mistake') {
+        return wrapper.find('#field-mistake-add');
+    }
+
+    return wrapper.find('#field-mistake');
+}
+
+/** What is sitting in the field, before it has been added as an entry. */
+function typedText(wrapper: ReturnType<typeof mountBox>): string {
+    return (field(wrapper).element as HTMLTextAreaElement).value;
+}
+
+/**
+ * Whether that field is showing. A shrunk box keeps its fields mounted, so
+ * "the box is closed" means hidden, not absent from the DOM.
+ */
+function fieldIsShown(wrapper: ReturnType<typeof mountBox>): boolean {
+    const found = field(wrapper);
+
+    return found.exists() && found.isVisible();
+}
+
+/**
+ * Whether the box is open, read from its border: an open box is solid, a
+ * shrunk one is dashed. Used where there is no single field to look for, since
+ * the notes box holds one editor per note rather than one field.
+ */
+function boxIsOpen(wrapper: ReturnType<typeof mountBox>): boolean {
+    return wrapper.classes().includes('bg-card');
 }
 
 describe('collapsed trigger', () => {
@@ -47,6 +121,16 @@ describe('collapsed trigger', () => {
         wrapper.unmount();
     });
 
+    it('holds off building the fields until the box is opened', () => {
+        const wrapper = mountBox();
+
+        // A question carries five boxes. Building all of their editors up
+        // front would cost a Tiptap instance each, opened or not.
+        expect(field(wrapper).exists()).toBe(false);
+
+        wrapper.unmount();
+    });
+
     it('opens the box and moves focus into it', async () => {
         const wrapper = mountBox();
 
@@ -54,8 +138,8 @@ describe('collapsed trigger', () => {
         await wrapper.vm.$nextTick();
         await animationFrame();
 
-        expect(wrapper.find('textarea').exists()).toBe(true);
-        expect(document.activeElement?.id).toBe('field-mistake');
+        expect(fieldIsShown(wrapper)).toBe(true);
+        expect(document.activeElement?.id).toBe('field-mistake-add');
 
         wrapper.unmount();
     });
@@ -81,7 +165,7 @@ describe('focus handling', () => {
         await wrapper.vm.$nextTick();
         await animationFrame();
 
-        expect(wrapper.find('textarea').exists()).toBe(true);
+        expect(fieldIsShown(wrapper)).toBe(true);
 
         wrapper.unmount();
     });
@@ -93,8 +177,7 @@ describe('focus handling', () => {
         await wrapper.vm.$nextTick();
         await animationFrame();
 
-        const textarea = wrapper.get('textarea');
-        textarea.element.dispatchEvent(
+        field(wrapper).element.dispatchEvent(
             new FocusEvent('focusout', {
                 bubbles: true,
                 relatedTarget: wrapper.element,
@@ -102,7 +185,7 @@ describe('focus handling', () => {
         );
         await wrapper.vm.$nextTick();
 
-        expect(wrapper.find('textarea').exists()).toBe(true);
+        expect(fieldIsShown(wrapper)).toBe(true);
 
         wrapper.unmount();
     });
@@ -114,7 +197,7 @@ describe('focus handling', () => {
         await wrapper.vm.$nextTick();
         await animationFrame();
 
-        wrapper.get('textarea').element.dispatchEvent(
+        field(wrapper).element.dispatchEvent(
             new FocusEvent('focusout', {
                 bubbles: true,
                 relatedTarget: document.body,
@@ -122,7 +205,7 @@ describe('focus handling', () => {
         );
         await wrapper.vm.$nextTick();
 
-        expect(wrapper.find('textarea').exists()).toBe(false);
+        expect(fieldIsShown(wrapper)).toBe(false);
 
         wrapper.unmount();
     });
@@ -134,14 +217,16 @@ describe('focus handling', () => {
         await wrapper.vm.$nextTick();
         await animationFrame();
 
-        wrapper
-            .get('textarea')
-            .element.dispatchEvent(
-                new FocusEvent('focusout', { bubbles: true }),
-            );
+        // Let opening settle, or the guard that protects the open from its own
+        // re-render swallows this event too.
+        await animationFrame();
+
+        field(wrapper).element.dispatchEvent(
+            new FocusEvent('focusout', { bubbles: true }),
+        );
         await wrapper.vm.$nextTick();
 
-        expect(wrapper.find('textarea').exists()).toBe(false);
+        expect(fieldIsShown(wrapper)).toBe(false);
 
         wrapper.unmount();
     });
@@ -149,9 +234,9 @@ describe('focus handling', () => {
     it('keeps a box with content open no matter where focus goes', async () => {
         const wrapper = mountBox({ modelValue: 'I go → I went' });
 
-        expect(wrapper.find('textarea').exists()).toBe(true);
+        expect(fieldIsShown(wrapper)).toBe(true);
 
-        wrapper.get('textarea').element.dispatchEvent(
+        field(wrapper).element.dispatchEvent(
             new FocusEvent('focusout', {
                 bubbles: true,
                 relatedTarget: document.body,
@@ -159,7 +244,7 @@ describe('focus handling', () => {
         );
         await wrapper.vm.$nextTick();
 
-        expect(wrapper.find('textarea').exists()).toBe(true);
+        expect(fieldIsShown(wrapper)).toBe(true);
 
         wrapper.unmount();
     });
@@ -167,11 +252,184 @@ describe('focus handling', () => {
     it('opens and keeps a box that carries an error', async () => {
         const wrapper = mountBox({ error: 'This box is required' });
 
-        expect(wrapper.find('textarea').exists()).toBe(true);
+        expect(fieldIsShown(wrapper)).toBe(true);
         expect(wrapper.find('[role="alert"]').text()).toBe(
             'This box is required',
         );
 
         wrapper.unmount();
+    });
+});
+
+describe('shrinking a box', () => {
+    it('offers the close button even while the box holds entries', async () => {
+        const wrapper = mountBox({ modelValue: 'I go → I went' });
+
+        const close = wrapper.get('button[aria-label^="Close"]');
+
+        await close.trigger('click');
+        await wrapper.vm.$nextTick();
+
+        expect(fieldIsShown(wrapper)).toBe(false);
+
+        wrapper.unmount();
+    });
+
+    it('keeps the entries it holds, so nothing is lost by shrinking', async () => {
+        const wrapper = mountBox({ modelValue: 'I go → I went' });
+
+        await wrapper.get('button[aria-label^="Close"]').trigger('click');
+        await wrapper.vm.$nextTick();
+
+        expect(field(wrapper).exists()).toBe(true);
+        expect(wrapper.text()).toContain('I go → I went');
+
+        wrapper.unmount();
+    });
+
+    it('says how much it holds once it is shrunk', async () => {
+        const wrapper = mountBox({ modelValue: 'I go → I went' });
+
+        await wrapper.get('button[aria-label^="Close"]').trigger('click');
+        await wrapper.vm.$nextTick();
+
+        // A shrunk box still tells the learner what is inside it.
+        expect(wrapper.text()).toContain('1 row');
+
+        wrapper.unmount();
+    });
+
+    it('reopens where it was, with its entries ready to edit', async () => {
+        const wrapper = mountBox({ modelValue: 'I go → I went' });
+
+        const close = wrapper.get('button[aria-label^="Close"]');
+        await close.trigger('click');
+        await wrapper.vm.$nextTick();
+
+        await wrapper.get('button').trigger('click');
+        await wrapper.vm.$nextTick();
+        await animationFrame();
+
+        expect(fieldIsShown(wrapper)).toBe(true);
+        expect(document.activeElement?.id).toBe('field-mistake-add');
+
+        wrapper.unmount();
+    });
+
+    it('keeps text typed into the add field when shrunk and reopened', async () => {
+        const wrapper = mountBox();
+
+        await wrapper.get('button').trigger('click');
+        await wrapper.vm.$nextTick();
+        await animationFrame();
+
+        // Typed but not yet added, so the box still counts as empty.
+        await field(wrapper).setValue('I goed');
+        expect(typedText(wrapper)).toBe('I goed');
+
+        // If shrinking unmounted the fields again, this text would be gone.
+        await wrapper.get('button[aria-label^="Close"]').trigger('click');
+        await wrapper.vm.$nextTick();
+        await wrapper.get('button').trigger('click');
+        await wrapper.vm.$nextTick();
+        await animationFrame();
+
+        expect(fieldIsShown(wrapper)).toBe(true);
+        expect(document.activeElement?.id).toBe('field-mistake-add');
+
+        wrapper.unmount();
+    });
+
+    it('keeps the hint for a box that is genuinely empty', () => {
+        const wrapper = mountBox();
+
+        expect(wrapper.text()).toContain('Add corrections');
+
+        wrapper.unmount();
+    });
+});
+
+describe('the grammar notes box', () => {
+    it('opens and takes focus inside, like the other kinds of box', async () => {
+        const wrapper = mountBox({ type: 'grammar_note' });
+
+        expect(boxIsOpen(wrapper)).toBe(false);
+
+        await wrapper.get('button').trigger('click');
+        await wrapper.vm.$nextTick();
+        await animationFrame();
+
+        // Focus has to land inside the box, or the next click anywhere reads as
+        // the learner leaving and the box shuts itself again.
+        expect(boxIsOpen(wrapper)).toBe(true);
+        expect(document.activeElement?.id).toBe('field-mistake');
+    });
+
+    it('stays open when focus moves within it', async () => {
+        const wrapper = mountBox({ type: 'grammar_note' });
+
+        await wrapper.get('button').trigger('click');
+        await wrapper.vm.$nextTick();
+        await animationFrame();
+
+        const addNote = wrapper
+            .findAll('button')
+            .find((candidate) => candidate.text().includes('Add note'));
+
+        expect(addNote).toBeDefined();
+
+        addNote!.element.dispatchEvent(
+            new FocusEvent('focusout', {
+                bubbles: true,
+                relatedTarget: wrapper.element,
+            }),
+        );
+        await wrapper.vm.$nextTick();
+
+        expect(boxIsOpen(wrapper)).toBe(true);
+    });
+
+    it('stays open when focus moves within it with no related target', async () => {
+        const wrapper = mountBox({ type: 'grammar_note' });
+
+        await wrapper.get('button').trigger('click');
+        await wrapper.vm.$nextTick();
+        await animationFrame();
+
+        const addNote = wrapper
+            .findAll('button')
+            .find((candidate) => candidate.text().includes('Add note'));
+
+        expect(addNote).toBeDefined();
+
+        // Firefox omits relatedTarget on focusout. The box must look at where
+        // focus actually is, or it reads every click inside as a way out.
+        addNote!.element.focus();
+        addNote!.element.dispatchEvent(
+            new FocusEvent('focusout', { bubbles: true }),
+        );
+        await wrapper.vm.$nextTick();
+
+        expect(boxIsOpen(wrapper)).toBe(true);
+    });
+
+    it('stays open after it holds a note', async () => {
+        const wrapper = mountBox({
+            type: 'grammar_note',
+            modelValue: 'Use the past tense here.',
+        });
+
+        expect(boxIsOpen(wrapper)).toBe(true);
+
+        await wrapper.get('button[aria-label^="Close"]').trigger('click');
+        await wrapper.vm.$nextTick();
+
+        expect(boxIsOpen(wrapper)).toBe(false);
+
+        await wrapper.get('button').trigger('click');
+        await wrapper.vm.$nextTick();
+        await animationFrame();
+
+        expect(boxIsOpen(wrapper)).toBe(true);
     });
 });

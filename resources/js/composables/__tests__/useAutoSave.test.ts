@@ -5,32 +5,22 @@ import {
     type AutoSaveOutcome,
     type AutoSaveRequest,
 } from '@/composables/useAutoSave';
-import { questionHasContent, toQuestionForm } from '@/lib/feedback';
-import type {
-    FeedbackValues,
-    PracticeQuestionForm,
-    PracticeSessionData,
-} from '@/types';
+import {
+    emptyFeedbackValues,
+    questionHasContent,
+    toQuestionForm,
+} from '@/lib/feedback';
+import type { PracticeQuestionForm, PracticeSessionData } from '@/types';
 
 const DEBOUNCE = 500;
 const RETRY = 1000;
-
-function emptyFeedback(): FeedbackValues {
-    return {
-        mistake: '',
-        vocabulary: '',
-        phrase: '',
-        grammar_note: '',
-        natural_version: '',
-    };
-}
 
 function formQuestion(html: string): PracticeQuestionForm {
     return {
         uid: `u-${html || 'empty'}`,
         question_html: html,
         answer_html: '',
-        feedback: emptyFeedback(),
+        feedback: emptyFeedbackValues(),
     };
 }
 

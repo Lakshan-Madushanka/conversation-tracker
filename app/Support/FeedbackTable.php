@@ -25,6 +25,12 @@ final class FeedbackTable
     public const int MAX_CELL_LENGTH = 1000;
 
     /**
+     * The only column that holds a list of entries: a vocabulary or phrase
+     * row's example. Every other column holds one line of text or markup.
+     */
+    public const string EXAMPLE_COLUMN = 'example_html';
+
+    /**
      * A separator inside a cleaned line. Arrows count wherever they appear; a
      * dash (single, double, en or em) counts only with a space on both sides,
      * so hyphenated words such as "3-day" stay whole.
@@ -55,7 +61,7 @@ final class FeedbackTable
         return [
             ['key' => 'text', 'formatted' => false],
             ['key' => 'meaning', 'formatted' => false],
-            ['key' => 'example_html', 'formatted' => true],
+            ['key' => self::EXAMPLE_COLUMN, 'formatted' => true],
         ];
     }
 
@@ -109,7 +115,7 @@ final class FeedbackTable
      * column keeps its words escaped, since a plain text paste brings no
      * formatting.
      *
-     * @return array{content_html: string, content_text: string, correction_html: string, correction_text: string, reason: string, example: string, example_html: string}
+     * @return array{content_html: string, content_text: string, correction_html: string, correction_text: string, reason: string, example: string, example_html: string|list<array{id: string, text: string, html: string}>}
      */
     public static function storedFromLine(string $type, string $line): array
     {
@@ -123,7 +129,7 @@ final class FeedbackTable
      * column is reduced to a single inline line keeping only bold and italic.
      *
      * @param  array<string, mixed>  $cells
-     * @return array{content_html: string, content_text: string, correction_html: string, correction_text: string, reason: string, example: string, example_html: string}
+     * @return array{content_html: string, content_text: string, correction_html: string, correction_text: string, reason: string, example: string, example_html: string|list<array{id: string, text: string, html: string}>}
      */
     public static function storedFromCells(string $type, array $cells): array
     {
@@ -131,7 +137,7 @@ final class FeedbackTable
 
         $content = self::cleanColumn($first, $cells);
         $correction = self::cleanColumn($second, $cells);
-        $last = self::cleanColumn($third, $cells);
+        $last = self::cleanLastColumn($third, $cells);
 
         return self::withLastColumn($type, [
             'content_html' => $content['html'],
@@ -147,7 +153,8 @@ final class FeedbackTable
     /**
      * Clean one column of the cells the editor sends. A formatted column keeps
      * its words and a single inline line of bold and italic; a plain column is
-     * cleaned to one line.
+     * cleaned to one line. A value that is not one piece of text holds nothing
+     * for this column, since only the example column holds anything else.
      *
      * @param  array{key: string, formatted: bool}  $column
      * @param  array<string, mixed>  $cells
@@ -156,25 +163,6 @@ final class FeedbackTable
     private static function cleanColumn(array $column, array $cells): array
     {
         $value = Arr::get($cells, $column['key'], '');
-
-        if (is_array($value)) {
-            $data = [];
-
-            foreach ($value as $item) {
-                if (! ($item['id'] ?? null) || ! ($item['text'] ?? null) || ! is_string($item['text'])) {
-                    continue;
-                }
-
-                if ($column['formatted']) {
-                    $clean = RichText::cleanInlineWithText($item['text']);
-                    $data[] = ['id' => $item['id'], 'text' => $clean['text'], 'html' => $clean['html']];
-                } else {
-                    $data[] = ['id' => $item['id'], 'text' => ListEntries::cleanLine($item['text']), 'html' => ''];
-                }
-            }
-
-            return ! blank($data) ? ['text' => '', 'html' => $data] : ['text' => '', 'html' => []];
-        }
 
         if (! is_string($value)) {
             $value = '';
@@ -190,14 +178,66 @@ final class FeedbackTable
     }
 
     /**
+     * Clean the last column of a row: a mistake's why, or a vocabulary or
+     * phrase row's example. An example arrives as a list of entries when the
+     * editor holds it as one, and as a single line of markup otherwise.
+     *
+     * @param  array{key: string, formatted: bool}  $column
+     * @param  array<string, mixed>  $cells
+     * @return array{text: string, html: string|list<array{id: string, text: string, html: string}>}
+     */
+    private static function cleanLastColumn(array $column, array $cells): array
+    {
+        $value = Arr::get($cells, $column['key'], '');
+
+        if (is_array($value)) {
+            // Only the example column holds a list of entries; every other
+            // column holds one line, so a list here leaves it empty.
+            return [
+                'text' => '',
+                'html' => $column['key'] === self::EXAMPLE_COLUMN ? self::cleanEntries($value) : '',
+            ];
+        }
+
+        return self::cleanColumn($column, $cells);
+    }
+
+    /**
+     * The entries the editor holds in the example column, cleaned one by one:
+     * each entry keeps bold and italic around its words. An entry with no id
+     * to save it under is dropped, since a later edit could never find it.
+     *
+     * @param  array<mixed>  $value
+     * @return list<array{id: string, text: string, html: string}>
+     */
+    private static function cleanEntries(array $value): array
+    {
+        $data = [];
+
+        foreach ($value as $item) {
+            $id = is_array($item) ? ($item['id'] ?? null) : null;
+            $text = is_array($item) ? ($item['text'] ?? null) : null;
+
+            if (! is_string($id) || ! $id || ! is_string($text) || ! $text) {
+                continue;
+            }
+
+            $clean = RichText::cleanInlineWithText($text);
+            $data[] = ['id' => $id, 'text' => $clean['text'], 'html' => $clean['html']];
+        }
+
+        return $data;
+    }
+
+    /**
      * Whether a row built from the stored columns holds nothing at all.
      *
-     * @param  array{content_html: string, content_text: string, correction_html: string, correction_text: string, reason: string, example: string, example_html: string}  $stored
+     * @param  array{content_html: string, content_text: string, correction_html: string, correction_text: string, reason: string, example: string, example_html: string|list<array{id: string, text: string, html: string}>}  $stored
      */
     public static function isBlank(array $stored): bool
     {
         foreach ($stored as $value) {
-            if ($value !== '') {
+            if (! blank($value)) {
                 return false;
             }
         }
@@ -209,7 +249,7 @@ final class FeedbackTable
      * Write one value per column into the stored shape, in order.
      *
      * @param  list<string>  $parts
-     * @return array{content_html: string, content_text: string, correction_html: string, correction_text: string, reason: string, example: string, example_html: string}
+     * @return array{content_html: string, content_text: string, correction_html: string, correction_text: string, reason: string, example: string, example_html: string|list<array{id: string, text: string, html: string}>}
      */
     private static function mapStored(string $type, array $parts): array
     {
@@ -235,9 +275,9 @@ final class FeedbackTable
      * phrase row's optional example. The other pair stays empty, so no type
      * ever writes its content into another type's columns.
      *
-     * @param  array{content_html: string, content_text: string, correction_html: string, correction_text: string, reason: string, example: string, example_html: string}  $stored
-     * @param  array{text: string, html: string}  $last
-     * @return array{content_html: string, content_text: string, correction_html: string, correction_text: string, reason: string, example: string, example_html: string}
+     * @param  array{content_html: string, content_text: string, correction_html: string, correction_text: string, reason: string, example: string, example_html: string|list<array{id: string, text: string, html: string}>}  $stored
+     * @param  array{text: string, html: string|list<array{id: string, text: string, html: string}>}  $last
+     * @return array{content_html: string, content_text: string, correction_html: string, correction_text: string, reason: string, example: string, example_html: string|list<array{id: string, text: string, html: string}>}
      */
     private static function withLastColumn(string $type, array $stored, array $last): array
     {

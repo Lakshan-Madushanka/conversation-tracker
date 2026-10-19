@@ -22,7 +22,9 @@ use Illuminate\Support\Carbon;
  * (`correction_html` plus its plain-text copy) and an optional why
  * (`reason`). Vocabulary and phrases keep the subject (`content_text`), its
  * meaning (`correction_text`) and an optional example (`example_html` plus
- * its plain-text copy in `example`).
+ * its plain-text copy in `example`). An example saved before the list existed
+ * is one piece of markup; an example saved since is a list of entries, each
+ * with the id the editor gave it.
  *
  * @property int $id
  * @property int $practice_question_id
@@ -35,7 +37,7 @@ use Illuminate\Support\Carbon;
  * @property string $correction_text
  * @property string $reason
  * @property string $example
- * @property array $example_html
+ * @property string|list<array{id: string, text: string, html: string}> $example_html
  * @property bool $is_split
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at

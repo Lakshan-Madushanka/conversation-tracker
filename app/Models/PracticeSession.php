@@ -90,7 +90,7 @@ class PracticeSession extends Model
      *         position: int,
      *         question_html: string,
      *         answer_html: string,
-     *         feedback: array<string, list<array{id: string, text: string, correction_html: string, reason: string}|array{id: string, text: string, meaning: string, example_html: string}|array{id: string, html: string}>|string>
+     *         feedback: array<string, list<array{id: string, text: string, correction_html: string, reason: string}|array{id: string, text: string, meaning: string, example_html: string|list<array{id: string, text: string, html: string}>}|array{id: string, html: string}>|string>
      *     }>
      * }
      */
@@ -131,7 +131,7 @@ class PracticeSession extends Model
      * version.
      *
      * @param  Collection<int, PracticeFeedbackEntry>  $entries
-     * @return list<array{id: string, text: string, correction_html: string, reason: string}|array{id: string, text: string, meaning: string, example_html: string}|array{id: string, html: string}>|string
+     * @return list<array{id: string, text: string, correction_html: string, reason: string}|array{id: string, text: string, meaning: string, example_html: string|list<array{id: string, text: string, html: string}>}|array{id: string, html: string}>|string
      */
     private function feedbackPayload(string $type, Collection $entries): array|string
     {

@@ -17,7 +17,7 @@ return new class extends Migration
             // `example`. Examples used to share the mistake's `reason` pair;
             // these columns give them a home of their own.
             $table->text('example')->default('')->after('reason_html');
-            $table->text('example_html')->default('')->after('example');
+            $table->json('example_html')->default('')->after('example');
         });
 
         // Move every example already stored under the reason columns.

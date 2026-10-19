@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Actions\PracticeQuestions\SavePracticeFeedback;
 use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeQuestion;
 use App\Models\PracticeSession;
@@ -10,7 +11,7 @@ use App\Models\User;
 /**
  * Build one question payload for the session request.
  *
- * @param  array<string, string>  $feedback
+ * @param array<string, string> $feedback
  * @return array{question_html: string, answer_html: string, feedback: array<string, string>}
  */
 function questionPayload(string $question, array $feedback = []): array
@@ -237,7 +238,7 @@ test('removing one of several questions removes only that question and its feedb
         ->and($session->questions->pluck('position')->all())->toBe([1, 2]);
 
     $mistakes = $session->questions
-        ->flatMap(fn (PracticeQuestion $question) => $question->feedbackEntries)
+        ->flatMap(fn(PracticeQuestion $question) => $question->feedbackEntries)
         ->pluck('content_text')
         ->all();
 
@@ -372,4 +373,42 @@ test('feedback must be an array when provided', function (): void {
     ]);
 
     $response->assertSessionHasErrors('questions.0.feedback');
+});
+
+test('feedback examples can be stored', function (): void {
+    $question = PracticeQuestion::factory()->create();
+
+    $action = app(SavePracticeFeedback::class);
+
+    $id = Str::Uuid()->toString();
+
+    $feedback = [
+        'vocabulary' => [
+            [
+                "id" => $id,
+                "text" => "a b",
+                "meaning" => "v",
+                "example_html" => [
+                    [
+                        "id" => "0619d2f8-b17c-406b-8d0a-95749159f880", "text" => "c"
+                    ]
+                ]
+            ]
+        ]
+    ];
+
+    $action->handle($question, $feedback);
+
+    $record = PracticeFeedbackEntry::query()->where(['client_id' => $id])->first();
+
+    expect($record)->not()->toBeNull()
+        ->and($record->example_html)->not()->toBeEmpty()
+        ->and($record->example_html)
+        ->toBe([
+            [
+                'id' => '0619d2f8-b17c-406b-8d0a-95749159f880',
+                'text' => 'c',
+                'html' => 'c'
+            ]
+        ]);
 });

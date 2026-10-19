@@ -35,7 +35,7 @@ use Illuminate\Support\Carbon;
  * @property string $correction_text
  * @property string $reason
  * @property string $example
- * @property string $example_html
+ * @property array $example_html
  * @property bool $is_split
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
@@ -148,6 +148,7 @@ class PracticeFeedbackEntry extends Model
     {
         return [
             'is_split' => 'boolean',
+            'example_html' => 'array',
         ];
     }
 

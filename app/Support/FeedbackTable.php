@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Support;
 
 use App\Models\PracticeFeedbackEntry;
+use Illuminate\Support\Arr;
 
 /**
  * The rules shared by the table feedback boxes (mistakes, vocabulary and
@@ -154,7 +155,29 @@ final class FeedbackTable
      */
     private static function cleanColumn(array $column, array $cells): array
     {
-        $value = is_string($cells[$column['key']] ?? null) ? $cells[$column['key']] : '';
+        $value = Arr::get($cells, $column['key'], '');
+
+        if (is_array($value)) {
+            $data = [];
+
+            foreach ($value as $item) {
+                if (!($item['id'] ?? null) || !($item['text'] ?? null) || !is_string($item['text'])) {
+                    continue;
+                }
+
+                if ($column['formatted']) {
+                    $clean = RichText::cleanInlineWithText($item['text']);
+                    $data[] = ['id' => $item['id'], 'text' => $clean['text'], 'html' => $clean['html']];
+                } else {
+                    $data[] = ['id' => $item['id'], 'text' => ListEntries::cleanLine($item['text']), 'html' => ''];
+                }
+            }
+             return !blank($data) ? ['text' => '', 'html' => $data] : ['text' => '', 'html' => []];
+        }
+
+        if (!is_string($value)) {
+            $value = '';
+        }
 
         if ($column['formatted']) {
             $clean = RichText::cleanInlineWithText($value);

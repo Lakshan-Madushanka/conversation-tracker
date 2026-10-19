@@ -19,6 +19,7 @@ import {
     normalizeInlineHtml,
     richTextToText,
 } from '@/lib/rich-text';
+import {FeedbackEntry} from "@/types";
 
 /** The most rows one table box can hold. */
 export const MAX_TABLE_ROWS = 200;
@@ -60,10 +61,13 @@ export interface FeedbackTableConfig {
 }
 
 /** A table row holding its columns plus a client id. */
-export type TableRow = Record<string, string> & { id: string };
+export type TableRow = {
+    id: string;
+    [key: string]: string | FeedbackEntry[];
+};
 
 /** A table row's columns, before it is given an id. */
-export type TableCells = Record<string, string>;
+export type TableCells = Record<string, string|FeedbackEntry[]>;
 
 /** The result of reading a paste: the rows, and whether a header was skipped. */
 export interface PastedRows {
@@ -92,13 +96,13 @@ export function newRow(
 }
 
 /** The stored value of one column: markup for a formatted column, text otherwise. */
-export function cellValue(column: TableColumn, row: TableCells): string {
+export function cellValue(column: TableColumn, row: TableCells): string|FeedbackEntry[] {
     return row[column.key] ?? '';
 }
 
 /** The words of one column, with its formatting ignored. */
 export function cellText(column: TableColumn, row: TableCells): string {
-    const value = cellValue(column, row);
+    const value = cellValue(column, row) as string;
 
     return column.formatted ? richTextToText(value) : value;
 }
@@ -178,7 +182,7 @@ export function rowAttention(
         return null;
     }
 
-    const first = cellValue(config.columns[0], row);
+    const first = cellValue(config.columns[0], row) as string;
 
     if (countSeparators(first) > 1) {
         return config.attentionMoreThanOne;

@@ -3,7 +3,13 @@ import {
     autosaveStore,
     autosaveUpdate,
 } from '@/actions/App/Http/Controllers/PracticeSessionController';
-import type { PracticeQuestionForm, PracticeSessionData } from '@/types';
+import { isRichTextBlank } from '@/lib/rich-text';
+import type {
+    FeedbackValues,
+    GrammarNote,
+    PracticeQuestionForm,
+    PracticeSessionData,
+} from '@/types';
 
 /**
  * Reads Laravel's CSRF cookie. The app talks to the autosave endpoints with
@@ -19,13 +25,28 @@ function csrfToken(): string | null {
     return match ? decodeURIComponent(match[1]) : null;
 }
 
-/** Drops the client-only `uid` from each question before sending. */
+/**
+ * Drops the client-only `uid` from each question and removes empty grammar
+ * notes before sending. A note the learner opened but left blank is a draft,
+ * not content: keeping it out of the payload stops the server from rejecting
+ * the save.
+ */
 function cleanQuestions(questions: PracticeQuestionForm[]) {
     return questions.map((question) => ({
         question_html: question.question_html,
         answer_html: question.answer_html,
-        feedback: question.feedback,
+        feedback: cleanFeedback(question.feedback),
     }));
+}
+
+/** Removes grammar notes that hold only blank space or empty formatting. */
+export function cleanFeedback(feedback: FeedbackValues): FeedbackValues {
+    return {
+        ...feedback,
+        grammar_note: feedback.grammar_note.filter(
+            (note: GrammarNote) => !isRichTextBlank(note.html),
+        ),
+    };
 }
 
 function requestBody(

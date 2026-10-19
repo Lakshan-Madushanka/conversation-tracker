@@ -228,6 +228,36 @@ class PracticeSession extends Model
     }
 
     /**
+     * The most recent finished sessions, shaped for the Home page's "Recent
+     * sessions" list. Only finished sessions appear, newest change first.
+     *
+     * @return list<array{id: int, topic: string, finished_at: string|null, counts: array{questions: int, words: int, phrases: int, mistakes: int, grammar_notes: int}}>
+     */
+    public static function recentFinished(int $limit = 5): array
+    {
+        $sessions = self::query()
+            ->finished()
+            ->with(['topic', 'questions.feedbackEntries'])
+            ->orderByDesc('updated_at')
+            ->orderByDesc('id')
+            ->limit($limit)
+            ->get();
+
+        $payload = [];
+
+        foreach ($sessions as $session) {
+            $payload[] = [
+                'id' => $session->id,
+                'topic' => $session->topic->name,
+                'finished_at' => $session->finished_at?->toIso8601String(),
+                'counts' => $session->counts(),
+            ];
+        }
+
+        return $payload;
+    }
+
+    /**
      * How much a session holds, counted from its entries each time so the
      * numbers stay correct after later edits. Only non-empty entries and
      * questions count; entries flagged as duplicates still count, because they

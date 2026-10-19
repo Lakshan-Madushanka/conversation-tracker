@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Actions\PracticeSessions\CreatePracticeSession;
+use App\Actions\PracticeSessions\DiscardPracticeSession;
+use App\Actions\PracticeSessions\FinishPracticeSession;
 use App\Actions\PracticeSessions\UpdatePracticeSession;
 use App\Exceptions\PracticeSessionConflictException;
 use App\Http\Requests\AutosavePracticeSessionRequest;
@@ -86,6 +88,57 @@ class PracticeSessionController extends Controller
         }
 
         return $this->savedResponse($session);
+    }
+
+    /**
+     * Finishes a session: removes empty question cards, marks it finished, and
+     * returns the counts of what was saved. An empty session is left untouched
+     * and reported back so the learner can be warned instead of finishing it
+     * silently. Safe to repeat.
+     */
+    public function finish(
+        PracticeSession $session,
+        FinishPracticeSession $finishPracticeSession,
+    ): JsonResponse {
+        $result = $finishPracticeSession->handle($session);
+
+        if ($result->empty) {
+            return response()->json(['empty' => true]);
+        }
+
+        $finished = $result->session;
+
+        // Count first: the payload runs the one-time legacy split, so counting
+        // before it keeps the numbers based purely on the stored entries.
+        $counts = $finished->counts();
+        $needsAttention = $finished->needsAttention();
+
+        return response()->json([
+            'empty' => false,
+            'session' => $finished->toEditorPayload(),
+            'counts' => $counts,
+            'needs_attention' => $needsAttention,
+            'empty_questions_removed' => $result->emptyQuestionsRemoved,
+        ]);
+    }
+
+    /**
+     * Discards a session that holds nothing. A session with any content is
+     * refused, because removing filled-in work belongs to the Library later.
+     */
+    public function destroy(
+        PracticeSession $session,
+        DiscardPracticeSession $discardPracticeSession,
+    ): JsonResponse {
+        if (! $discardPracticeSession->allows($session)) {
+            return response()->json([
+                'message' => 'This session has content, so it cannot be discarded here.',
+            ], 422);
+        }
+
+        $discardPracticeSession->handle($session);
+
+        return response()->json(['discarded' => true]);
     }
 
     private function savedResponse(PracticeSession $session, int $status = 200): JsonResponse

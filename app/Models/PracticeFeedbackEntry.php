@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Support\FeedbackTable;
 use Database\Factories\PracticeFeedbackEntryFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -161,6 +162,49 @@ class PracticeFeedbackEntry extends Model
     public function editableContent(): string
     {
         return self::isRich($this->type) ? $this->content_html : $this->content_text;
+    }
+
+    /**
+     * Whether the stored entry holds nothing at all. Only non-empty entries are
+     * counted towards a session's totals, so a stray blank row never inflates
+     * the summary.
+     */
+    public function isBlank(): bool
+    {
+        if (self::isTable($this->type)) {
+            return FeedbackTable::isBlank([
+                'content_html' => $this->content_html,
+                'content_text' => $this->content_text,
+                'correction_html' => $this->correction_html,
+                'correction_text' => $this->correction_text,
+                'reason' => $this->reason,
+                'example' => $this->example,
+                'example_html' => $this->example_html,
+            ]);
+        }
+
+        // Rich notes keep their words in the content columns only.
+        return trim($this->content_text) === ''
+            && trim(strip_tags($this->content_html)) === '';
+    }
+
+    /**
+     * Whether a table row still needs the learner's attention, mirroring the
+     * editor: a mistake is missing its correction, or a word is missing its
+     * meaning. Phrases and rich notes never ask for attention.
+     */
+    public function needsAttention(): bool
+    {
+        if ($this->type === self::TYPE_MISTAKE) {
+            return trim($this->correction_text) === ''
+                && trim(strip_tags($this->correction_html)) === '';
+        }
+
+        if ($this->type === self::TYPE_VOCABULARY) {
+            return trim($this->correction_text) === '';
+        }
+
+        return false;
     }
 
     /**

@@ -15,7 +15,9 @@ Route::post('/sessions', [PracticeSessionController::class, 'store'])->name('ses
 
 Route::get('/sessions/{session}/edit', [PracticeSessionController::class, 'edit'])->name('sessions.edit');
 Route::put('/sessions/{session}/autosave', [PracticeSessionController::class, 'autosaveUpdate'])->name('sessions.autosave.update');
+Route::post('/sessions/{session}/finish', [PracticeSessionController::class, 'finish'])->name('sessions.finish');
 Route::put('/sessions/{session}', [PracticeSessionController::class, 'update'])->name('sessions.update');
+Route::delete('/sessions/{session}', [PracticeSessionController::class, 'destroy'])->name('sessions.destroy');
 
 Route::inertia('/sessions/{session}', 'sessions/Show')->name('sessions.show');
 

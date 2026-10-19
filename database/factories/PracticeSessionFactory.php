@@ -22,4 +22,13 @@ class PracticeSessionFactory extends Factory
             'topic_id' => Topic::factory(),
         ];
     }
+
+    /** A session the learner has finished. */
+    public function finished(): static
+    {
+        return $this->state(fn (): array => [
+            'status' => PracticeSession::STATUS_FINISHED,
+            'finished_at' => now(),
+        ]);
+    }
 }

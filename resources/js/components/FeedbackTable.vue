@@ -452,9 +452,17 @@ function confirmCell(event: KeyboardEvent): void {
                                     </span>
                                     <!-- A formatted cell holds only bold and
                                         italic around escaped text, so this
-                                        markup is safe to show. -->
+                                        markup is safe to show. The example
+                                        column is either a list of entries or
+                                        one piece of markup, and each shape is
+                                        shown the way it is held. -->
                                     <ul
-                                        v-if="column.key === 'example_html'"
+                                        v-if="
+                                            column.key === 'example_html' &&
+                                            Array.isArray(
+                                                cellValue(column, entry),
+                                            )
+                                        "
                                         class="list-none"
                                     >
                                         <li

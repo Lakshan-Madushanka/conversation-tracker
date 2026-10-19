@@ -6,9 +6,10 @@ import {
     phraseDuplicateKey,
     phrasesFromPaste,
 } from '@/lib/phrases';
+import {FeedbackEntry} from "@/types";
 
 /** The meaning of a parsed line, so tests read naturally. */
-function meaningOf(line: string): string {
+function meaningOf(line: string): string|FeedbackEntry[] {
     return parsePhraseLine(line).meaning;
 }
 

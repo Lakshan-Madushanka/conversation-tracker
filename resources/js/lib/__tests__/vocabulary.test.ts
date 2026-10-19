@@ -7,9 +7,10 @@ import {
     vocabularyDuplicateKey,
     vocabularyFromPaste,
 } from '@/lib/vocabulary';
+import {FeedbackEntry} from "@/types";
 
 /** The meaning of a parsed line, so tests read naturally. */
-function meaningOf(line: string): string {
+function meaningOf(line: string): string|FeedbackEntry[] {
     return parseVocabularyLine(line).meaning;
 }
 

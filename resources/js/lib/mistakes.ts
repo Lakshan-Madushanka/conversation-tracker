@@ -91,7 +91,7 @@ export type PastedMistakes = PastedRows;
 
 /** The words of a correction, with its formatting ignored. */
 export function correctionText(entry: TableCells): string {
-    return richTextToText(entry.correction_html ?? '');
+    return richTextToText(entry.correction_html as string ?? '');
 }
 
 /** How many separators a cleaned line holds. */

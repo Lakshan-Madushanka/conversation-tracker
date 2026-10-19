@@ -2,23 +2,28 @@
 import { Link } from '@inertiajs/vue3';
 import { PlusIcon, SearchIcon } from '@lucide/vue';
 import EmptyState from '@/components/EmptyState.vue';
+import FinishedSessionCard from '@/components/FinishedSessionCard.vue';
 import PageHeader from '@/components/PageHeader.vue';
 import SectionLabel from '@/components/SectionLabel.vue';
-import SessionCard from '@/components/SessionCard.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { sessions, topics } from '@/lib/sample-data';
 import { create as sessionsCreate } from '@/routes/sessions';
+import type { FinishedSessionData } from '@/types';
 
 defineOptions({ layout: AppLayout });
+
+defineProps<{
+    /** Every finished session, newest first. */
+    sessions: FinishedSessionData[];
+}>();
 </script>
 
 <template>
     <div>
         <PageHeader
             title="Library"
-            description="Every practice session, newest first."
+            description="Every session you have finished, newest first."
         >
             <template #actions>
                 <Button size="lg" as-child>
@@ -58,7 +63,7 @@ defineOptions({ layout: AppLayout });
         </div>
 
         <div v-if="sessions.length > 0" class="grid gap-3">
-            <SessionCard
+            <FinishedSessionCard
                 v-for="session in sessions"
                 :key="session.id"
                 :session="session"
@@ -68,7 +73,7 @@ defineOptions({ layout: AppLayout });
         <EmptyState
             v-else
             title="No sessions yet"
-            description="Start your first practice session and it will show up here."
+            description="Finish your first practice session and it will show up here."
         >
             <template #actions>
                 <Button size="lg" as-child>
@@ -79,9 +84,5 @@ defineOptions({ layout: AppLayout });
                 </Button>
             </template>
         </EmptyState>
-
-        <p class="mt-4 text-xs text-muted-foreground">
-            Practice topics so far: {{ topics.join(', ') }}.
-        </p>
     </div>
 </template>

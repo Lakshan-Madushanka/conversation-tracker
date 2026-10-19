@@ -10,7 +10,7 @@ import {
 } from '@lucide/vue';
 import ContinueSessionCard from '@/components/ContinueSessionCard.vue';
 import PageHeader from '@/components/PageHeader.vue';
-import RecentSessionCard from '@/components/RecentSessionCard.vue';
+import FinishedSessionCard from '@/components/FinishedSessionCard.vue';
 import StatTile from '@/components/StatTile.vue';
 import { Button } from '@/components/ui/button';
 import {
@@ -27,7 +27,7 @@ import {
     create as sessionsCreate,
     index as sessionsIndex,
 } from '@/routes/sessions';
-import type { ContinueCardData, RecentSessionData } from '@/types';
+import type { ContinueCardData, FinishedSessionData } from '@/types';
 
 defineOptions({ layout: AppLayout });
 
@@ -36,7 +36,7 @@ withDefaults(
         /** The most recent unfinished session, if there is one. */
         unfinishedSession?: ContinueCardData | null;
         /** The most recent finished sessions, newest first. */
-        recentSessions?: RecentSessionData[];
+        recentSessions?: FinishedSessionData[];
     }>(),
     { recentSessions: () => [] },
 );
@@ -136,7 +136,7 @@ const greeting = computed(() => {
             </div>
 
             <div class="grid gap-3">
-                <RecentSessionCard
+                <FinishedSessionCard
                     v-for="session in recentSessions"
                     :key="session.id"
                     :session="session"

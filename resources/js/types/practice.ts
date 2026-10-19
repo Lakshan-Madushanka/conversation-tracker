@@ -160,8 +160,8 @@ export interface ContinueCardData {
     updated_at: string;
 }
 
-/** A finished session listed under "Recent sessions" on the Home page. */
-export interface RecentSessionData {
+/** A finished session as listed on Home and in the Library. */
+export interface FinishedSessionData {
     id: number;
     topic: string;
     /** ISO 8601 timestamp of when it was finished. */

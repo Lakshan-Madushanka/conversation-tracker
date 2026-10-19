@@ -4,15 +4,16 @@ import { Link } from '@inertiajs/vue3';
 import { ArrowRightIcon, CheckIcon } from '@lucide/vue';
 import { Card, CardContent } from '@/components/ui/card';
 import { shortDate } from '@/lib/format';
-import { edit as sessionsEdit } from '@/routes/sessions';
-import type { RecentSessionData } from '@/types';
+import { show as sessionsShow } from '@/routes/sessions';
+import type { FinishedSessionData } from '@/types';
 
-/** One finished session on the Home page, openable in the session editor. */
+/** One finished session, as listed on Home and in the Library. */
 const props = defineProps<{
-    session: RecentSessionData;
+    session: FinishedSessionData;
 }>();
 
-const href = computed(() => sessionsEdit.url(props.session.id));
+/** A finished session is read first; its editor is a step on from there. */
+const href = computed(() => sessionsShow.url(props.session.id));
 
 const finishedOn = computed(() =>
     props.session.finished_at === null

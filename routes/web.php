@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/', HomeController::class)->name('home');
 
-Route::inertia('/sessions', 'sessions/Index')->name('sessions.index');
+Route::get('/sessions', [PracticeSessionController::class, 'index'])->name('sessions.index');
 
 Route::get('/sessions/create', [PracticeSessionController::class, 'create'])->name('sessions.create');
 

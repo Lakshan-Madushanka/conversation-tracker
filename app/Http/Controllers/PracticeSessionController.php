@@ -21,6 +21,18 @@ use Inertia\Response;
 class PracticeSessionController extends Controller
 {
     /**
+     * The Library: every session the learner has finished, newest change
+     * first. Sessions still in progress stay on the Home page until they are
+     * finished.
+     */
+    public function index(): Response
+    {
+        return Inertia::render('sessions/Index', [
+            'sessions' => PracticeSession::finishedSessions(),
+        ]);
+    }
+
+    /**
      * A saved session to read from start to finish. It is served in the same
      * shape the editor uses, so both pages show exactly what is stored.
      */

@@ -228,20 +228,25 @@ class PracticeSession extends Model
     }
 
     /**
-     * The most recent finished sessions, shaped for the Home page's "Recent
-     * sessions" list. Only finished sessions appear, newest change first.
+     * Finished sessions for a list — the Home page's most recent ones and the
+     * whole Library — newest change first. The limit keeps Home to its five
+     * newest; the Library asks for all of them.
      *
      * @return list<array{id: int, topic: string, finished_at: string|null, counts: array{questions: int, words: int, phrases: int, mistakes: int, grammar_notes: int}}>
      */
-    public static function recentFinished(int $limit = 5): array
+    public static function finishedSessions(?int $limit = null): array
     {
-        $sessions = self::query()
+        $query = self::query()
             ->finished()
             ->with(['topic', 'questions.feedbackEntries'])
             ->orderByDesc('updated_at')
-            ->orderByDesc('id')
-            ->limit($limit)
-            ->get();
+            ->orderByDesc('id');
+
+        if ($limit !== null) {
+            $query->limit($limit);
+        }
+
+        $sessions = $query->get();
 
         $payload = [];
 

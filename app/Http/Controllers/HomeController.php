@@ -14,7 +14,7 @@ class HomeController extends Controller
     {
         return Inertia::render('Home', [
             'unfinishedSession' => PracticeSession::continueCard(),
-            'recentSessions' => PracticeSession::recentFinished(),
+            'recentSessions' => PracticeSession::finishedSessions(5),
         ]);
     }
 }

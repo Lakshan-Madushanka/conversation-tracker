@@ -1,6 +1,15 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from 'vue';
-import { PlusIcon, RefreshCwIcon, TriangleAlertIcon } from '@lucide/vue';
+import { router } from '@inertiajs/vue3';
+import {
+    CheckIcon,
+    PlusIcon,
+    RefreshCwIcon,
+    TriangleAlertIcon,
+} from '@lucide/vue';
+import { toast } from 'vue-sonner';
+import EmptySessionDialog from '@/components/EmptySessionDialog.vue';
+import FinishSessionSummary from '@/components/FinishSessionSummary.vue';
 import PageHeader from '@/components/PageHeader.vue';
 import QuestionCard from '@/components/QuestionCard.vue';
 import SaveIndicator from '@/components/SaveIndicator.vue';
@@ -19,6 +28,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useAutoSave } from '@/composables/useAutoSave';
 import AppLayout from '@/layouts/AppLayout.vue';
+import type { AttentionFocus } from '@/lib/attention';
+import { scanAttention } from '@/lib/attention';
 import { focusElementById } from '@/lib/dom';
 import {
     emptyFeedbackValues,
@@ -28,9 +39,12 @@ import {
     toQuestionForm,
 } from '@/lib/feedback';
 import { savePracticeSession } from '@/lib/session-autosave';
+import { discardSession, finishSession } from '@/lib/session-finish';
+import { home } from '@/routes';
 import { edit as sessionsEdit } from '@/routes/sessions';
 import type {
     FeedbackType,
+    FinishSummary,
     PracticeQuestionData,
     PracticeQuestionForm,
     PracticeSessionData,
@@ -93,6 +107,7 @@ const hasContent = (): boolean => questions.value.some(questionHasContent);
 
 const {
     sessionId,
+    version,
     status,
     errors,
     conflict,
@@ -101,6 +116,7 @@ const {
     loadLatest,
     keepMine,
     flush,
+    saveNow,
 } = useAutoSave({
     snapshot: () => ({ topic: topic.value, questions: questions.value }),
     save: savePracticeSession,
@@ -123,9 +139,17 @@ const {
     },
 });
 
+/** Set once a discard is on its way, so nothing is saved after it. */
+let discarding = false;
+
 // Leaving the editor (for example, tapping a link in the app) should not drop
-// unsaved work: send a last best-effort save on the way out.
+// unsaved work: send a last best-effort save on the way out. A session being
+// thrown away is the one thing that must not be saved again on the way out.
 onBeforeUnmount(() => {
+    if (discarding) {
+        return;
+    }
+
     flush();
 });
 
@@ -148,6 +172,23 @@ function feedbackErrors(index: number): Partial<Record<FeedbackType, string>> {
 }
 
 const hasSession = computed(() => sessionId.value !== null);
+
+/** When the session was finished, or null while it is still unfinished. */
+const finishedAt = ref<string | null>(props.session?.finished_at ?? null);
+const isFinished = computed(() => finishedAt.value !== null);
+
+const description = computed(() => {
+    if (isFinished.value) {
+        return 'Saved and finished. Reopen it any time to add more.';
+    }
+
+    if (hasSession.value) {
+        return 'Update the topic and questions. Your session stays unfinished until you finish it.';
+    }
+
+    return 'Add a topic, then paste the tutor’s questions and feedback.';
+});
+
 const questionCount = computed(() => questions.value.length);
 const atLimit = computed(() => questionCount.value >= MAX_QUESTIONS);
 const questionsError = computed(() => errorFor('questions'));
@@ -221,28 +262,168 @@ function confirmRemove(): void {
 
     removeQuestion(index);
 }
+
+/** Rows still missing a correction or a meaning, and where the first one is. */
+const attention = computed(() => scanAttention(questions.value));
+
+const summaryOpen = ref(false);
+const summaryResult = ref<FinishSummary | null>(null);
+const emptyOpen = ref(false);
+const finishing = ref(false);
+
+/** The row "Review them" should send focus to once the summary is closed. */
+const focusTarget = ref<AttentionFocus | null>(null);
+
+/**
+ * Brings the page in line with what the server kept: the new version, the
+ * moment it was finished, and the cards the server found empty and removed.
+ * Taking the version first means the change the pruning makes is not then
+ * read as an edit made somewhere else.
+ */
+function applyFinished(result: FinishSummary): void {
+    version.value = result.session.version;
+    finishedAt.value = result.session.finished_at;
+
+    // The server dropped the cards that held nothing; drop them here too, so
+    // the next save does not put them back. Nothing is touched when every card
+    // was worth keeping.
+    const kept = questions.value.filter(questionHasContent);
+
+    if (kept.length === questions.value.length) {
+        return;
+    }
+
+    questions.value = kept.length > 0 ? kept : [emptyQuestion()];
+}
+
+/**
+ * Finishes the session: everything on screen is saved first, so the summary
+ * describes what is actually stored, and then the server is asked to finish it.
+ * A session with nothing in it is never finished quietly — the learner is
+ * offered the choice instead.
+ */
+async function finishNow(): Promise<void> {
+    if (finishing.value) {
+        return;
+    }
+
+    focusTarget.value = null;
+
+    if (sessionId.value === null && !hasContent()) {
+        emptyOpen.value = true;
+
+        return;
+    }
+
+    if (!hasTopic()) {
+        toast.error('Add a topic before finishing the session.');
+
+        return;
+    }
+
+    // A change made elsewhere has to be settled first; the banner above says so.
+    if (conflict.value !== null) {
+        return;
+    }
+
+    finishing.value = true;
+
+    try {
+        if (!(await saveNow())) {
+            // The banner above already says what stood in the way.
+            return;
+        }
+
+        const id = sessionId.value;
+
+        if (id === null) {
+            return;
+        }
+
+        const result = await finishSession(id);
+
+        if (result === null) {
+            toast.error(
+                'We could not finish this session. Your text is still here.',
+            );
+
+            return;
+        }
+
+        if (result.empty) {
+            emptyOpen.value = true;
+
+            return;
+        }
+
+        applyFinished(result);
+        summaryResult.value = result;
+        summaryOpen.value = true;
+    } finally {
+        finishing.value = false;
+    }
+}
+
+/** Send focus to the row that still needs work, once the summary is gone. */
+function reviewAttention(): void {
+    focusTarget.value = attention.value.first;
+}
+
+/** Throw away a session that holds nothing, or go home if none was made. */
+async function discardEmptySession(): Promise<void> {
+    emptyOpen.value = false;
+
+    const id = sessionId.value;
+
+    if (id === null) {
+        discarding = true;
+        router.visit(home.url());
+
+        return;
+    }
+
+    const outcome = await discardSession(id);
+
+    if (outcome === 'has_content') {
+        toast.error('This session now holds something, so it was kept.');
+
+        return;
+    }
+
+    if (outcome === 'failed') {
+        toast.error('The session could not be discarded. Nothing was removed.');
+
+        return;
+    }
+
+    discarding = true;
+    toast.success('Session discarded.');
+    router.visit(home.url());
+}
 </script>
 
 <template>
     <div>
         <PageHeader
             :title="hasSession ? 'Edit session' : 'New session'"
-            :description="
-                hasSession
-                    ? 'Update the topic and questions. Your session stays unfinished until you finish it.'
-                    : 'Add a topic, then paste the tutor’s questions and feedback.'
-            "
+            :description="description"
         >
             <template #actions>
                 <Badge v-if="hasSession" variant="outline" class="gap-1.5">
                     <span
-                        class="size-1.5 rounded-full bg-amber-500"
+                        class="size-1.5 rounded-full"
+                        :class="isFinished ? 'bg-emerald-500' : 'bg-amber-500'"
                         aria-hidden="true"
                     />
-                    Unfinished
+                    {{ isFinished ? 'Finished' : 'Unfinished' }}
                 </Badge>
 
                 <SaveIndicator :status="status" :last-saved-at="lastSavedAt" />
+
+                <Button type="button" :disabled="finishing" @click="finishNow">
+                    <CheckIcon aria-hidden="true" />
+                    Finish session
+                </Button>
             </template>
         </PageHeader>
 
@@ -319,6 +500,7 @@ function confirmRemove(): void {
                     "
                     :answer-error="errorFor(`questions.${index}.answer_html`)"
                     :feedback-errors="feedbackErrors(index)"
+                    :focus-target="focusTarget"
                     @update:feedback="
                         (type, value) =>
                             setFeedbackValue(question.feedback, type, value)
@@ -376,5 +558,22 @@ function confirmRemove(): void {
                 </AlertDialogFooter>
             </AlertDialogContent>
         </AlertDialog>
+
+        <!-- What the session gave back, and a way straight to any row that
+            still needs a correction or a meaning. -->
+        <FinishSessionSummary
+            v-if="summaryResult !== null"
+            :open="summaryOpen"
+            :result="summaryResult"
+            :attention="attention"
+            @update:open="summaryOpen = $event"
+            @review="reviewAttention"
+        />
+
+        <!-- Nothing worth finishing: keep going, or throw the session away. -->
+        <EmptySessionDialog
+            v-model:open="emptyOpen"
+            @discard="discardEmptySession"
+        />
     </div>
 </template>

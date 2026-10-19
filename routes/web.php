@@ -19,7 +19,7 @@ Route::post('/sessions/{session}/finish', [PracticeSessionController::class, 'fi
 Route::put('/sessions/{session}', [PracticeSessionController::class, 'update'])->name('sessions.update');
 Route::delete('/sessions/{session}', [PracticeSessionController::class, 'destroy'])->name('sessions.destroy');
 
-Route::inertia('/sessions/{session}', 'sessions/Show')->name('sessions.show');
+Route::get('/sessions/{session}', [PracticeSessionController::class, 'show'])->name('sessions.show');
 
 Route::inertia('/collections', 'collections/Index')->name('collections.index');
 

@@ -20,6 +20,17 @@ use Inertia\Response;
 
 class PracticeSessionController extends Controller
 {
+    /**
+     * A saved session to read from start to finish. It is served in the same
+     * shape the editor uses, so both pages show exactly what is stored.
+     */
+    public function show(PracticeSession $session): Response
+    {
+        return Inertia::render('sessions/Show', [
+            'session' => $session->toEditorPayload(),
+        ]);
+    }
+
     public function create(): Response
     {
         return Inertia::render('sessions/Create', [

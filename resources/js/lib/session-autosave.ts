@@ -3,6 +3,7 @@ import {
     autosaveStore,
     autosaveUpdate,
 } from '@/actions/App/Http/Controllers/PracticeSessionController';
+import { jsonRequest } from '@/lib/http';
 import { isRichTextBlank } from '@/lib/rich-text';
 import type {
     FeedbackValues,
@@ -10,20 +11,6 @@ import type {
     PracticeQuestionForm,
     PracticeSessionData,
 } from '@/types';
-
-/**
- * Reads Laravel's CSRF cookie. The app talks to the autosave endpoints with
- * `fetch`, which (unlike Inertia's own client) has to add the header by hand.
- */
-function csrfToken(): string | null {
-    if (typeof document === 'undefined') {
-        return null;
-    }
-
-    const match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/u);
-
-    return match ? decodeURIComponent(match[1]) : null;
-}
 
 /**
  * Drops the client-only `uid` from each question and removes empty grammar
@@ -84,17 +71,9 @@ export const savePracticeSession: AutoSaveFunction = async (
     const url = creating
         ? autosaveStore.url()
         : autosaveUpdate.url(request.sessionId as number);
-    const token = csrfToken();
 
-    const response = await fetch(url, {
+    const response = await jsonRequest(url, {
         method: creating ? 'POST' : 'PUT',
-        headers: {
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-            'X-Requested-With': 'XMLHttpRequest',
-            ...(token === null ? {} : { 'X-XSRF-TOKEN': token }),
-        },
-        credentials: 'same-origin',
         body: JSON.stringify(requestBody(request)),
         keepalive: options?.keepalive ?? false,
     });

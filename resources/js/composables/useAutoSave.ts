@@ -132,6 +132,8 @@ export function useAutoSave(options: UseAutoSaveOptions) {
     let inFlight = false;
     let disposed = false;
     let applyingRemote = false;
+    /** The save running right now, if any, so a caller can wait it out. */
+    let currentSave: Promise<void> | null = null;
 
     function clearTimer(): void {
         if (timer !== null) {
@@ -180,7 +182,30 @@ export function useAutoSave(options: UseAutoSaveOptions) {
         }, delay);
     }
 
-    async function attemptSave(): Promise<void> {
+    /**
+     * Runs one attempt and tracks it, so `saveNow` can wait out a save that is
+     * already on its way instead of racing it.
+     *
+     * The returned promise never rejects: the outcome is already recorded in
+     * `status`, `conflict` and `errors`, and callers only need to know when the
+     * attempt has finished.
+     */
+    function attemptSave(): Promise<void> {
+        const attempt = performSave();
+        const settled = attempt.catch(() => undefined);
+
+        currentSave = settled;
+
+        void settled.then(() => {
+            if (currentSave === settled) {
+                currentSave = null;
+            }
+        });
+
+        return settled;
+    }
+
+    async function performSave(): Promise<void> {
         if (disposed || inFlight || conflict.value) {
             return;
         }
@@ -346,6 +371,40 @@ export function useAutoSave(options: UseAutoSaveOptions) {
         void options.save(request, { keepalive: true }).catch(() => undefined);
     }
 
+    /**
+     * Saves right now instead of waiting out the pause: it drops the pending
+     * timer, waits out a save already on its way, and sends whatever is still
+     * unsaved. It repeats while the screen keeps moving ahead of the server, so
+     * what gets confirmed is always the newest content.
+     *
+     * Returns false when the content could not be confirmed saved — no topic
+     * yet, a conflict, or a failed save — so a caller can stop rather than act
+     * on work the server has not seen.
+     */
+    async function saveNow(): Promise<boolean> {
+        if (disposed || !options.hasTopic()) {
+            return false;
+        }
+
+        clearTimer();
+
+        while (!disposed && !conflict.value && dirty.value) {
+            while (currentSave !== null && !disposed && !conflict.value) {
+                await currentSave;
+            }
+
+            if (disposed || conflict.value) {
+                return false;
+            }
+
+            if (dirty.value) {
+                await attemptSave();
+            }
+        }
+
+        return !disposed && !conflict.value;
+    }
+
     watch(
         () => options.snapshot(),
         () => {
@@ -422,6 +481,7 @@ export function useAutoSave(options: UseAutoSaveOptions) {
         loadLatest,
         keepMine,
         flush,
+        saveNow,
         dispose,
     };
 }

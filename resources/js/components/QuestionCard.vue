@@ -4,6 +4,7 @@ import FeedbackBox from '@/components/FeedbackBox.vue';
 import RichTextEditor from '@/components/RichTextEditor.vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import type { AttentionFocus } from '@/lib/attention';
 import { feedbackBoxes } from '@/lib/feedback';
 import type { FeedbackType, FeedbackValue, FeedbackValues } from '@/types';
 
@@ -17,6 +18,8 @@ const props = defineProps<{
     questionError?: string;
     answerError?: string;
     feedbackErrors?: Partial<Record<FeedbackType, string>>;
+    /** The one row in this question that focus should be moved to. */
+    focusTarget?: AttentionFocus | null;
 }>();
 
 const emit = defineEmits<{
@@ -25,6 +28,13 @@ const emit = defineEmits<{
     (event: 'update:feedback', type: FeedbackType, value: FeedbackValue): void;
     (event: 'remove'): void;
 }>();
+
+/** The row of this box to focus, when the focus target points at this box. */
+function focusEntryId(boxType: FeedbackType): string | null {
+    const target = props.focusTarget;
+
+    return target != null && target.boxType === boxType ? target.entryId : null;
+}
 </script>
 
 <template>
@@ -102,6 +112,7 @@ const emit = defineEmits<{
                     :question-number="props.number"
                     :model-value="props.feedback[box.type]"
                     :error="props.feedbackErrors?.[box.type]"
+                    :focus-entry-id="focusEntryId(box.type)"
                     @update:model-value="
                         emit('update:feedback', box.type, $event)
                     "

@@ -29,8 +29,8 @@ import {
     type TableRow,
 } from '@/lib/feedback-table';
 import { plainTextFromPaste } from '@/lib/paste';
-import EntryList from "@/components/EntryList.vue";
-import {FeedbackEntry} from "@/types";
+import EntryList from '@/components/EntryList.vue';
+import { FeedbackEntry } from '@/types';
 
 /**
  * A table feedback box: a bordered table of rows, one column set per box, as
@@ -385,7 +385,9 @@ function confirmCell(event: KeyboardEvent): void {
                                 v-for="column in columns"
                                 :key="column.key"
                                 class="block space-y-1 p-3 align-top sm:table-cell sm:border-r"
-                                :class="{'w-[40%]': column.key === 'example_html'}"
+                                :class="{
+                                    'w-[40%]': column.key === 'example_html',
+                                }"
                             >
                                 <label
                                     :for="rowFieldId(entry.id, column.key)"
@@ -397,18 +399,24 @@ function confirmCell(event: KeyboardEvent): void {
                                 <template v-if="editingId === entry.id">
                                     <EntryList
                                         v-if="column.key === 'example_html'"
-                                        :entries="entry.example_html as FeedbackEntry[]"
+                                        :entries="
+                                            entry.example_html as FeedbackEntry[]
+                                        "
                                         label=""
                                         field-id=""
-                                        @update:entries="updateRow(entry.id, {
+                                        @update:entries="
+                                            updateRow(entry.id, {
                                                 [column.key]: $event,
-                                            })"
+                                            })
+                                        "
                                     />
 
                                     <RichTextEditor
                                         v-else-if="column.formatted"
                                         :id="rowFieldId(entry.id, column.key)"
-                                        :model-value="cellValue(column, entry) as string"
+                                        :model-value="
+                                            cellValue(column, entry) as string
+                                        "
                                         variant="inline"
                                         :label="`${column.header}, row ${index + 1} of ${props.label}`"
                                         :placeholder="column.placeholder"
@@ -421,7 +429,9 @@ function confirmCell(event: KeyboardEvent): void {
                                     <Input
                                         v-else
                                         :id="rowFieldId(entry.id, column.key)"
-                                        :model-value="cellValue(column, entry) as string"
+                                        :model-value="
+                                            cellValue(column, entry) as string
+                                        "
                                         :aria-label="`${column.header}, row ${index + 1} of ${props.label}`"
                                         class="h-11"
                                         @update:model-value="
@@ -447,8 +457,11 @@ function confirmCell(event: KeyboardEvent): void {
                                         v-if="column.key === 'example_html'"
                                         class="list-none"
                                     >
-                                        <li v-for="record in entry.example_html as FeedbackEntry[]" :key="record.id">
-                                            {{record['text']}}
+                                        <li
+                                            v-for="record in entry.example_html as FeedbackEntry[]"
+                                            :key="record.id"
+                                        >
+                                            {{ record['text'] }}
                                         </li>
                                     </ul>
 

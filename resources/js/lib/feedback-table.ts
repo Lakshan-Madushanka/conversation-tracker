@@ -19,7 +19,7 @@ import {
     normalizeInlineHtml,
     richTextToText,
 } from '@/lib/rich-text';
-import {FeedbackEntry} from "@/types";
+import { FeedbackEntry } from '@/types';
 
 /** The most rows one table box can hold. */
 export const MAX_TABLE_ROWS = 200;
@@ -67,7 +67,7 @@ export type TableRow = {
 };
 
 /** A table row's columns, before it is given an id. */
-export type TableCells = Record<string, string|FeedbackEntry[]>;
+export type TableCells = Record<string, string | FeedbackEntry[]>;
 
 /** The result of reading a paste: the rows, and whether a header was skipped. */
 export interface PastedRows {
@@ -96,7 +96,10 @@ export function newRow(
 }
 
 /** The stored value of one column: markup for a formatted column, text otherwise. */
-export function cellValue(column: TableColumn, row: TableCells): string|FeedbackEntry[] {
+export function cellValue(
+    column: TableColumn,
+    row: TableCells,
+): string | FeedbackEntry[] {
     return row[column.key] ?? '';
 }
 

@@ -166,11 +166,12 @@ class PracticeFeedbackEntry extends Model
      * nothing at all is left out too, so a stray blank row can never render
      * an empty card or inflate a tab's total.
      *
-     * The term is matched literally: LIKE wildcards the learner typed (`%` and
-     * `_`) are escaped, so searching for `100%` finds `100% sure` and nothing
-     * else. An escape character of `!` keeps the query portable — sqlite has
-     * no default escape character, and MySQL's backslash would have to be
-     * escaped differently in each dialect.
+     * The term is matched literally against the word or phrase, what it means
+     * and its example: LIKE wildcards the learner typed (`%` and `_`) are
+     * escaped, so searching for `100%` finds `100% sure` and nothing else. An
+     * escape character of `!` keeps the query portable — sqlite has no default
+     * escape character, and MySQL's backslash would have to be escaped
+     * differently in each dialect.
      *
      * @return LengthAwarePaginator<int, PracticeFeedbackEntry>
      */
@@ -188,7 +189,10 @@ class PracticeFeedbackEntry extends Model
                 $query->where(function (Builder $query) use ($like): void {
                     $query
                         ->whereRaw("content_text LIKE ? ESCAPE '!'", [$like])
-                        ->orWhereRaw("content_html LIKE ? ESCAPE '!'", [$like]);
+                        ->orWhereRaw("content_html LIKE ? ESCAPE '!'", [$like])
+                        ->orWhereRaw("correction_text LIKE ? ESCAPE '!'", [$like])
+                        ->orWhereRaw("correction_html LIKE ? ESCAPE '!'", [$like])
+                        ->orWhereRaw("example LIKE ? ESCAPE '!'", [$like]);
                 });
             })
             ->whereHas('practiceQuestion.practiceSession', fn (Builder $query): Builder => $query->finished())

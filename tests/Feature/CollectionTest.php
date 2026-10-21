@@ -110,6 +110,28 @@ it('treats an underscore in the search term as a plain character', function (): 
             ->where('vocabulary.data.0.content_text', 'c_t'));
 });
 
+it('finds a word by what it means', function (): void {
+    collectionEntry(PracticeFeedbackEntry::TYPE_VOCABULARY, 'soup', ['correction_text' => 'a liquid food']);
+
+    $this->get(route('collections.index', ['search' => 'liquid', 'forPage' => 'vocabulary']))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->component('collections/Index')
+            ->where('vocabulary.total', 1)
+            ->where('vocabulary.data.0.content_text', 'soup'));
+});
+
+it('finds a phrase by its example', function (): void {
+    collectionEntry(PracticeFeedbackEntry::TYPE_PHRASE, 'of course', ['example' => 'Of course, right away.']);
+
+    $this->get(route('collections.index', ['search' => 'right away', 'forPage' => 'phrases']))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->component('collections/Index')
+            ->where('phrases.total', 1)
+            ->where('phrases.data.0.content_text', 'of course'));
+});
+
 it('never lists an entry that holds nothing', function (): void {
     collectionEntry(PracticeFeedbackEntry::TYPE_VOCABULARY, 'soup');
 

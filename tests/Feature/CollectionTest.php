@@ -110,6 +110,29 @@ it('treats an underscore in the search term as a plain character', function (): 
             ->where('vocabulary.data.0.content_text', 'c_t'));
 });
 
+it('leaves the entries of an unfinished session out', function (): void {
+    $topic = Topic::factory()->create();
+    $draft = PracticeSession::factory()->for($topic)->create([
+        'status' => PracticeSession::STATUS_UNFINISHED,
+    ]);
+    $question = PracticeQuestion::factory()->for($draft)->create();
+
+    PracticeFeedbackEntry::factory()->for($question)->create([
+        'type' => PracticeFeedbackEntry::TYPE_VOCABULARY,
+        'content_text' => 'draft word',
+        'is_split' => true,
+    ]);
+
+    collectionEntry(PracticeFeedbackEntry::TYPE_VOCABULARY, 'finished word');
+
+    $this->get(route('collections.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->component('collections/Index')
+            ->where('vocabulary.total', 1)
+            ->where('vocabulary.data.0.content_text', 'finished word'));
+});
+
 it('includes the session and topic every entry came from', function (): void {
     $topic = Topic::factory()->create(['name' => 'Ordering at a restaurant']);
     $session = PracticeSession::factory()->finished()->for($topic)->create();

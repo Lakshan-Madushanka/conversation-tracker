@@ -161,6 +161,9 @@ class PracticeFeedbackEntry extends Model
      * One page of entries of a single type, newest first, optionally narrowed
      * to a search term.
      *
+     * Only finished sessions feed a collection, so a draft the learner is
+     * still working on never shows up half-written.
+     *
      * The term is matched literally: LIKE wildcards the learner typed (`%` and
      * `_`) are escaped, so searching for `100%` finds `100% sure` and nothing
      * else. An escape character of `!` keeps the query portable — sqlite has
@@ -186,6 +189,7 @@ class PracticeFeedbackEntry extends Model
                         ->orWhereRaw("content_html LIKE ? ESCAPE '!'", [$like]);
                 });
             })
+            ->whereHas('practiceQuestion.practiceSession', fn (Builder $query): Builder => $query->finished())
             ->where('type', $type)
             ->latest()
             ->paginate(perPage: 4, pageName: $type);

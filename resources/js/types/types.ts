@@ -1,15 +1,13 @@
-export type PracticeFeedbackEntryType =
-    | 'mistake'
-    | 'vocabulary'
-    | 'phrase'
-    | 'grammar_note'
-    | 'natural_version';
+import type { FeedbackType, TopicSummary } from '@/types/practice';
+
+/** Re-exported so the collection views share the practice page's names. */
+export type { FeedbackType, TopicSummary };
 
 export interface PracticeFeedbackEntry {
     id: number;
     topic?: string;
     practice_question_id: number;
-    type: PracticeFeedbackEntryType;
+    type: FeedbackType;
     position: number;
     client_id: string | null;
     content_html: string;
@@ -38,12 +36,7 @@ export interface PracticeQuestion {
 
 export interface PracticeSession {
     id: number;
-    topic?: Topic;
-}
-
-export interface Topic {
-    id: number;
-    name: string;
+    topic?: TopicSummary;
 }
 
 export interface LaravelPaginatorLink {

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { reactive, ref, watch } from 'vue';
-import { router } from '@inertiajs/vue3';
+import { router, usePage } from '@inertiajs/vue3';
 import { InfiniteScroll, Link } from '@inertiajs/vue3';
 import { StarIcon, AlertCircleIcon } from '@lucide/vue';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -15,6 +15,7 @@ import { index as collectionIndex } from '@/routes/collections';
 import { create as sessionsCreate } from '@/routes/sessions';
 import type { CollectionKey } from '@/lib/sample-data';
 import { debounce } from '@/lib/debounce';
+import { readCollectionQuery } from '@/lib/collection-query';
 import { LaravelPaginator, PracticeFeedbackEntry } from '@/types/types';
 
 defineOptions({ layout: AppLayout });
@@ -26,7 +27,12 @@ const props = defineProps<{
     mistakes: LaravelPaginator<PracticeFeedbackEntry>;
 }>();
 
-const currentTabKey = ref<CollectionKey>('vocabulary');
+// A refresh, the back button or a shared link should open the same view the
+// learner left behind, so the tab and its term are read from the url before
+// the watcher is registered — seeding must never trigger a visit of its own.
+const initial = readCollectionQuery(usePage().url ?? '');
+
+const currentTabKey = ref<CollectionKey>(initial.tab);
 
 const filters = reactive<Record<CollectionKey, { search: string }>>({
     vocabulary: { search: '' },
@@ -34,6 +40,8 @@ const filters = reactive<Record<CollectionKey, { search: string }>>({
     grammar: { search: '' },
     mistakes: { search: '' },
 });
+
+filters[initial.tab].search = initial.search;
 
 const tabs: { key: CollectionKey; label: string }[] = [
     { key: 'vocabulary', label: 'Vocabulary' },
@@ -58,7 +66,6 @@ const search = debounce(function search() {
         only: [currentTabKey.value],
         reset: [currentTabKey.value],
         preserveState: true,
-        preserveUrl: true,
     });
 }, 300);
 </script>

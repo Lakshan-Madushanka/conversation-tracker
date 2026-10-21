@@ -1,8 +1,20 @@
 import { mount } from '@vue/test-utils';
-import { describe, expect, it, vi } from 'vite-plus/test';
+import { beforeEach, describe, expect, it, vi } from 'vite-plus/test';
+import { router } from '@inertiajs/vue3';
 import CollectionsIndex from '@/pages/collections/Index.vue';
 import { show as sessionsShow } from '@/routes/sessions';
 import type { LaravelPaginator, PracticeFeedbackEntry } from '@/types/types';
+
+const page = vi.hoisted(() => ({ url: '/collections' }));
+
+vi.mock('@inertiajs/vue3', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@inertiajs/vue3')>()),
+    usePage: () => ({ url: page.url }),
+}));
+
+beforeEach(() => {
+    page.url = '/collections';
+});
 
 function entry(
     overrides: Partial<PracticeFeedbackEntry> = {},
@@ -249,6 +261,32 @@ describe('a collection of saved entries', () => {
                 data: { search: '', forPage: 'phrases' },
             });
         } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('opens on the tab and term the address bar asks for', () => {
+        page.url = '/collections?search=soup&forPage=phrases';
+
+        const wrapper = mountPage();
+
+        expect(wrapper.find('input').element.value).toBe('soup');
+        expect(tabTriggers(wrapper)[1].attributes('data-state')).toBe('active');
+    });
+
+    it('does not search again when the page opens from a shared link', () => {
+        vi.useFakeTimers();
+        const visit = vi.spyOn(router, 'visit');
+
+        try {
+            page.url = '/collections?search=soup&forPage=phrases';
+
+            mountPage();
+            vi.advanceTimersByTime(400);
+
+            expect(visit).not.toHaveBeenCalled();
+        } finally {
+            visit.mockRestore();
             vi.useRealTimers();
         }
     });

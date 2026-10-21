@@ -1,22 +1,21 @@
 <script setup lang="ts">
-import {reactive, ref, watch} from "vue";
-import { router } from "@inertiajs/vue3";
-import {InfiniteScroll, Link} from '@inertiajs/vue3';
-import type { InfiniteScrollRef } from '@inertiajs/core';
-import { StarIcon, AlertCircleIcon  } from '@lucide/vue';
+import { reactive, ref, watch } from 'vue';
+import { router } from '@inertiajs/vue3';
+import { InfiniteScroll, Link } from '@inertiajs/vue3';
+import { StarIcon, AlertCircleIcon } from '@lucide/vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import PageHeader from '@/components/PageHeader.vue';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input'
-import { Spinner } from '@/components/ui/spinner'
-import {Alert, AlertDescription, AlertTitle} from "@/components/ui/alert";
+import { Input } from '@/components/ui/input';
+import { Spinner } from '@/components/ui/spinner';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { show as sessionsShow } from '@/routes/sessions';
 import { index as collectionIndex } from '@/routes/collections';
 import { create as sessionsCreate } from '@/routes/sessions';
-import type { CollectionItem, CollectionKey } from '@/lib/sample-data';
-import {debounce} from "@/lib/debounce";
-import {LaravelPaginator, PracticeFeedbackEntry} from "@/types/types";
+import type { CollectionKey } from '@/lib/sample-data';
+import { debounce } from '@/lib/debounce';
+import { LaravelPaginator, PracticeFeedbackEntry } from '@/types/types';
 
 defineOptions({ layout: AppLayout });
 
@@ -25,23 +24,16 @@ const props = defineProps<{
     phrases: LaravelPaginator<PracticeFeedbackEntry>;
     grammar: LaravelPaginator<PracticeFeedbackEntry>;
     mistakes: LaravelPaginator<PracticeFeedbackEntry>;
-}>()
+}>();
 
-const currentTabKey = ref<CollectionKey>('vocabulary')
+const currentTabKey = ref<CollectionKey>('vocabulary');
 
-const filters = reactive<Record<CollectionKey, { search: string|number|undefined }>>({
-    vocabulary: {search: '',},
-    phrases: {search: '', },
-    grammar: {search: '', },
-    mistakes: {search: '', },
-})
-
-const infiniteScrollRefs = reactive<Record<CollectionKey, InfiniteScrollRef | null>>({
-    vocabulary: null,
-    phrases: null,
-    grammar: null,
-    mistakes: null,
-})
+const filters = reactive<Record<CollectionKey, { search: string }>>({
+    vocabulary: { search: '' },
+    phrases: { search: '' },
+    grammar: { search: '' },
+    mistakes: { search: '' },
+});
 
 const tabs: { key: CollectionKey; label: string }[] = [
     { key: 'vocabulary', label: 'Vocabulary' },
@@ -50,40 +42,16 @@ const tabs: { key: CollectionKey; label: string }[] = [
     { key: 'mistakes', label: 'My mistakes' },
 ];
 
-const statusLabel: Record<CollectionItem['status'], string> = {
-    new: 'New',
-    learned: 'Learned',
-    difficult: 'Still difficult',
-};
-
-const statusVariant: Record<
-    CollectionItem['status'],
-    'secondary' | 'outline' | 'destructive'
-> = {
-    new: 'secondary',
-    learned: 'outline',
-    difficult: 'destructive',
-};
-
 watch(filters, () => {
-    search()
-})
-
-function onTabChange(tab: CollectionKey) {
-    currentTabKey.value = tab;
-    infiniteScrollRefs[tab]?.fetchNext();
-}
-
-function setInfiniteScrollRef(key: CollectionKey, el: unknown): void {
-    infiniteScrollRefs[key] = el as InfiniteScrollRef | null;
-}
+    search();
+});
 
 function getCurrentTabLabel() {
     return tabs.find((tab) => currentTabKey.value === tab.key)?.label;
 }
 
 const search = debounce(function search() {
-    let term = filters[currentTabKey.value].search
+    let term = filters[currentTabKey.value].search;
 
     router.visit(collectionIndex.url(), {
         data: { search: term, forPage: currentTabKey.value },
@@ -92,7 +60,7 @@ const search = debounce(function search() {
         preserveState: true,
         preserveUrl: true,
     });
-}, 300)
+}, 300);
 </script>
 
 <template>
@@ -102,14 +70,13 @@ const search = debounce(function search() {
             description="Vocabulary, phrases, grammar notes and your common mistakes, gathered from every session."
         />
 
-        <Tabs  default-value="vocabulary">
+        <Tabs v-model="currentTabKey">
             <TabsList class="grid w-full grid-cols-4">
                 <TabsTrigger
                     class="cursor-pointer"
                     v-for="tab in tabs"
                     :key="tab.key"
                     :value="tab.key"
-                    @click="onTabChange(tab.key)"
                 >
                     {{ tab.label }}
                 </TabsTrigger>
@@ -128,16 +95,20 @@ const search = debounce(function search() {
                 :value="tab.key"
                 class="mt-4"
             >
-                <InfiniteScroll  :ref="(el) => setInfiniteScrollRef(tab.key, el)" :data="tab.key">
+                <InfiniteScroll :data="tab.key">
                     <div v-if="props[tab.key].total === 0">
                         <Alert>
-                            <AlertCircleIcon color="var(--warn)"/>
-                            <AlertTitle class="text-warn">No {{tab.key}} found!</AlertTitle>
+                            <AlertCircleIcon color="var(--warn)" />
+                            <AlertTitle class="text-warn"
+                                >No {{ tab.key }} found!</AlertTitle
+                            >
                             <AlertDescription>
-                                <span>You can add {{tab.key}} through a new </span>
+                                <span
+                                    >You can add {{ tab.key }} through a new
+                                </span>
                                 <Link
                                     :href="sessionsCreate.url()"
-                                    class="no-underline! font-medium text-primary hover:underline! hover:text-primary!"
+                                    class="font-medium text-primary no-underline! hover:text-primary! hover:underline!"
                                 >
                                     session
                                 </Link>
@@ -161,45 +132,58 @@ const search = debounce(function search() {
                                     <StarIcon
                                         class="size-4"
                                         :class="
-                                        1===1
-                                            ? 'fill-amber-400 text-amber-400'
-                                            : 'text-muted-foreground'
-                                    "
+                                            1 === 1
+                                                ? 'fill-amber-400 text-amber-400'
+                                                : 'text-muted-foreground'
+                                        "
                                     />
                                 </button>
 
                                 <div class="min-w-0 flex-1">
-                                    <div class="flex flex-wrap items-center gap-2">
+                                    <div
+                                        class="flex flex-wrap items-center gap-2"
+                                    >
                                         <p class="font-medium">
-                                            {{item.content_text }}
+                                            {{ item.content_text }}
                                         </p>
-                                        <Badge
-                                            variant="secondary"
-                                        >
+                                        <Badge variant="secondary">
                                             difficult
                                         </Badge>
-                                        <Badge  variant="secondary">
-                                            5
-                                        </Badge>
+                                        <Badge variant="secondary"> 5 </Badge>
                                     </div>
 
-                                    <p class="mt-1 text-sm text-muted-foreground">
-                                        {{  item.correction_text }}
+                                    <p
+                                        class="mt-1 text-sm text-muted-foreground"
+                                    >
+                                        {{ item.correction_text }}
                                     </p>
 
                                     <p
+                                        v-if="item.example"
                                         class="mt-1 text-sm text-muted-foreground italic"
                                     >
-                                        “{{ item.example ?? item.example_html }}”
+                                        “{{ item.example }}”
                                     </p>
 
                                     <div
                                         class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground"
                                     >
-                                        <span>{{ item?.practice_question?.practice_session?.topic?.name ?? '' }}</span>
+                                        <span>{{
+                                            item?.practice_question
+                                                ?.practice_session?.topic
+                                                ?.name ?? ''
+                                        }}</span>
                                         <Link
-                                            v-if="item?.practice_question?.practice_session?.topic?.id"
-                                            :href="sessionsShow.url( item?.practice_question?.practice_session?.topic?.id  )"
+                                            v-if="
+                                                item?.practice_question
+                                                    ?.practice_session?.id
+                                            "
+                                            :href="
+                                                sessionsShow.url(
+                                                    item.practice_question
+                                                        .practice_session.id,
+                                                )
+                                            "
                                             class="font-medium text-primary hover:underline"
                                         >
                                             See original session
@@ -211,11 +195,13 @@ const search = debounce(function search() {
                     </div>
 
                     <template #loading>
-                        <div class="mt-2 w-full flex justify-center items-center"><Spinner class="text-primary size-8"/></div>
+                        <div
+                            class="mt-2 flex w-full items-center justify-center"
+                        >
+                            <Spinner class="size-8 text-primary" />
+                        </div>
                     </template>
-
                 </InfiniteScroll>
-
             </TabsContent>
         </Tabs>
     </div>

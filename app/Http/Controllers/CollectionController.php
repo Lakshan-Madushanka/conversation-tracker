@@ -1,9 +1,12 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers;
 
 use App\Models\PracticeFeedbackEntry;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -13,40 +16,42 @@ class CollectionController extends Controller
     {
         return Inertia::render('collections/Index', [
             'vocabulary' => Inertia::scroll(
-                fn() => PracticeFeedbackEntry::collection(
+                fn (): LengthAwarePaginator => PracticeFeedbackEntry::collection(
                     PracticeFeedbackEntry::TYPE_VOCABULARY,
                     $this->getSearchTerm($request, 'vocabulary')
                 )
             ),
             'phrases' => Inertia::scroll(
-                fn() => PracticeFeedbackEntry::collection(
+                fn (): LengthAwarePaginator => PracticeFeedbackEntry::collection(
                     PracticeFeedbackEntry::TYPE_PHRASE,
                     $this->getSearchTerm($request, 'phrases')
                 )
             ),
             'grammar' => Inertia::scroll(
-                fn() => PracticeFeedbackEntry::collection(
+                fn (): LengthAwarePaginator => PracticeFeedbackEntry::collection(
                     PracticeFeedbackEntry::TYPE_GRAMMAR_NOTE,
                     $this->getSearchTerm($request, 'grammar')
-
                 )
             ),
             'mistakes' => Inertia::scroll(
-                fn() => PracticeFeedbackEntry::collection(
+                fn (): LengthAwarePaginator => PracticeFeedbackEntry::collection(
                     PracticeFeedbackEntry::TYPE_MISTAKE,
                     $this->getSearchTerm($request, 'mistakes')
-
                 )
             ),
         ]);
     }
 
-    protected function getSearchTerm(Request $request, string $type)
+    /**
+     * The search term for one tab: only the tab the learner is searching is
+     * filtered, the rest keep their full list.
+     */
+    protected function getSearchTerm(Request $request, string $tab): ?string
     {
-         if($type === $request->string('forPage')->toString()) {
-             return $request->string('search');
-         }
+        if ($tab !== $request->string('forPage')->toString()) {
+            return null;
+        }
 
-         return null;
+        return $request->string('search')->toString() ?: null;
     }
 }

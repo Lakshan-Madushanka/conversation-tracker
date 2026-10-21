@@ -158,8 +158,16 @@ class PracticeFeedbackEntry extends Model
     }
 
     /**
-     * @param string $type
-     * @return LengthAwarePaginator
+     * One page of entries of a single type, newest first, optionally narrowed
+     * to a search term.
+     *
+     * The term is matched literally: LIKE wildcards the learner typed (`%` and
+     * `_`) are escaped, so searching for `100%` finds `100% sure` and nothing
+     * else. An escape character of `!` keeps the query portable — sqlite has
+     * no default escape character, and MySQL's backslash would have to be
+     * escaped differently in each dialect.
+     *
+     * @return LengthAwarePaginator<int, PracticeFeedbackEntry>
      */
     public static function collection(string $type, ?string $search): LengthAwarePaginator
     {
@@ -169,16 +177,18 @@ class PracticeFeedbackEntry extends Model
                 'practiceQuestion.practiceSession:id,topic_id',
                 'practiceQuestion.practiceSession.topic:id,name',
             ])
-            ->when($search, function (Builder $query) use ($search) {
-                $query->where(function (Builder $query) use ($search) {
+            ->when($search, function (Builder $query) use ($search): void {
+                $like = '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $search).'%';
+
+                $query->where(function (Builder $query) use ($like): void {
                     $query
-                        ->where('content_text', 'LIKE', "%$search%")
-                        ->orWhere('content_html', 'LIKE', "%$search%");
+                        ->whereRaw("content_text LIKE ? ESCAPE '!'", [$like])
+                        ->orWhereRaw("content_html LIKE ? ESCAPE '!'", [$like]);
                 });
             })
             ->where('type', $type)
             ->latest()
-            ->paginate(pageName: $type, perPage: 4);
+            ->paginate(perPage: 4, pageName: $type);
     }
 
     /**

@@ -162,7 +162,9 @@ class PracticeFeedbackEntry extends Model
      * to a search term.
      *
      * Only finished sessions feed a collection, so a draft the learner is
-     * still working on never shows up half-written.
+     * still working on never shows up half-written. An entry that holds
+     * nothing at all is left out too, so a stray blank row can never render
+     * an empty card or inflate a tab's total.
      *
      * The term is matched literally: LIKE wildcards the learner typed (`%` and
      * `_`) are escaped, so searching for `100%` finds `100% sure` and nothing
@@ -190,6 +192,9 @@ class PracticeFeedbackEntry extends Model
                 });
             })
             ->whereHas('practiceQuestion.practiceSession', fn (Builder $query): Builder => $query->finished())
+            ->where(fn (Builder $query): Builder => $query
+                ->where('content_text', '!=', '')
+                ->orWhere('content_html', '!=', ''))
             ->where('type', $type)
             ->latest()
             ->paginate(perPage: 4, pageName: $type);

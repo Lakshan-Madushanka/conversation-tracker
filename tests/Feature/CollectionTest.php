@@ -110,6 +110,28 @@ it('treats an underscore in the search term as a plain character', function (): 
             ->where('vocabulary.data.0.content_text', 'c_t'));
 });
 
+it('never lists an entry that holds nothing', function (): void {
+    collectionEntry(PracticeFeedbackEntry::TYPE_VOCABULARY, 'soup');
+
+    $question = PracticeQuestion::factory()
+        ->for(PracticeSession::factory()->finished())
+        ->create();
+
+    PracticeFeedbackEntry::factory()->for($question)->create([
+        'type' => PracticeFeedbackEntry::TYPE_VOCABULARY,
+        'content_text' => '',
+        'content_html' => '',
+        'is_split' => true,
+    ]);
+
+    $this->get(route('collections.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->component('collections/Index')
+            ->where('vocabulary.total', 1)
+            ->where('vocabulary.data.0.content_text', 'soup'));
+});
+
 it('leaves the entries of an unfinished session out', function (): void {
     $topic = Topic::factory()->create();
     $draft = PracticeSession::factory()->for($topic)->create([

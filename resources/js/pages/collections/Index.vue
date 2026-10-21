@@ -151,7 +151,15 @@ const search = debounce(function search() {
                                     <div
                                         class="flex flex-wrap items-center gap-2"
                                     >
-                                        <p class="font-medium">
+                                        <p
+                                            v-if="
+                                                item.type === 'grammar_note' &&
+                                                item.content_html
+                                            "
+                                            class="font-medium"
+                                            v-html="item.content_html"
+                                        ></p>
+                                        <p v-else class="font-medium">
                                             {{ item.content_text }}
                                         </p>
                                         <Badge variant="secondary">
@@ -161,9 +169,17 @@ const search = debounce(function search() {
                                     </div>
 
                                     <p
+                                        v-if="item.correction_text"
                                         class="mt-1 text-sm text-muted-foreground"
                                     >
                                         {{ item.correction_text }}
+                                    </p>
+
+                                    <p
+                                        v-if="item.reason"
+                                        class="mt-1 text-sm text-muted-foreground"
+                                    >
+                                        {{ item.reason }}
                                     </p>
 
                                     <p

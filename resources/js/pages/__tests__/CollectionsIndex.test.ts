@@ -57,18 +57,25 @@ function paginator(
 function mountPage(
     options: {
         entries?: PracticeFeedbackEntry[];
+        grammar?: PracticeFeedbackEntry[];
+        mistakes?: PracticeFeedbackEntry[];
         fetchNext?: ReturnType<typeof vi.fn>;
     } = {},
 ) {
-    const { entries = [entry()], fetchNext = vi.fn() } = options;
+    const {
+        entries = [entry()],
+        grammar = [],
+        mistakes = [],
+        fetchNext = vi.fn(),
+    } = options;
     const vocabulary = paginator(entries);
 
     return mount(CollectionsIndex, {
         props: {
             vocabulary,
             phrases: paginator([]),
-            grammar: paginator([]),
-            mistakes: paginator([]),
+            grammar: paginator(grammar),
+            mistakes: paginator(mistakes),
         },
         global: {
             stubs: {
@@ -85,6 +92,17 @@ function mountPage(
 
 function tabTriggers(wrapper: ReturnType<typeof mountPage>) {
     return wrapper.findAll('[role="tab"]');
+}
+
+async function switchToTab(
+    wrapper: ReturnType<typeof mountPage>,
+    label: string,
+) {
+    const trigger = tabTriggers(wrapper).find((tab) =>
+        tab.text().includes(label),
+    );
+
+    await trigger?.trigger('focus');
 }
 
 function sessionLink(wrapper: ReturnType<typeof mountPage>) {
@@ -120,6 +138,68 @@ describe('a collection of saved entries', () => {
         });
 
         expect(wrapper.text()).toContain('I relish a quiet evening.');
+    });
+
+    it('shows the why behind a mistake', async () => {
+        const wrapper = mountPage({
+            mistakes: [
+                entry({
+                    type: 'mistake',
+                    content_text: 'I want a soup',
+                    correction_text: "I'd like the soup, please",
+                    reason: 'Sounds more polite when ordering.',
+                }),
+            ],
+        });
+
+        await switchToTab(wrapper, 'My mistakes');
+
+        expect(wrapper.text()).toContain('I want a soup');
+        expect(wrapper.text()).toContain("I'd like the soup, please");
+        expect(wrapper.text()).toContain('Sounds more polite when ordering.');
+    });
+
+    it('shows a grammar note with its formatting', async () => {
+        const wrapper = mountPage({
+            grammar: [
+                entry({
+                    type: 'grammar_note',
+                    content_html: 'Use the <strong>past tense</strong> here.',
+                    content_text: 'Use the past tense here.',
+                    correction_text: '',
+                }),
+            ],
+        });
+
+        await switchToTab(wrapper, 'Grammar');
+
+        const note = wrapper
+            .findAll('p')
+            .find((paragraph) => paragraph.text().includes('past tense'));
+
+        expect(note?.html()).toContain('<strong>past tense</strong>');
+    });
+
+    it('gives a grammar note no correction or example line', async () => {
+        const wrapper = mountPage({
+            entries: [],
+            grammar: [
+                entry({
+                    type: 'grammar_note',
+                    content_html: '<p>Use the past tense here.</p>',
+                    content_text: 'Use the past tense here.',
+                    correction_text: '',
+                    example: '',
+                }),
+            ],
+        });
+
+        await switchToTab(wrapper, 'Grammar');
+
+        const card = wrapper.find('.rounded-xl.border.bg-card');
+
+        expect(card.text()).not.toContain('“');
+        expect(card.findAll('p.text-sm.text-muted-foreground')).toHaveLength(0);
     });
 
     it('searches the tab the learner is looking at, even with the keyboard', async () => {

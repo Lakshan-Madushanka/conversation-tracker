@@ -95,7 +95,15 @@ const search = debounce(function search() {
                 :value="tab.key"
                 class="mt-4"
             >
-                <InfiniteScroll :data="tab.key">
+                <InfiniteScroll
+                    :data="tab.key"
+                    :params="{
+                        data: {
+                            search: filters[tab.key].search,
+                            forPage: tab.key,
+                        },
+                    }"
+                >
                     <div v-if="props[tab.key].total === 0">
                         <Alert>
                             <AlertCircleIcon color="var(--warn)" />

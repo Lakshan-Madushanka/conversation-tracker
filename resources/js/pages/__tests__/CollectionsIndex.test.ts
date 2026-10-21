@@ -73,6 +73,8 @@ function mountPage(
         global: {
             stubs: {
                 InfiniteScroll: {
+                    name: 'InfiniteScroll',
+                    props: ['data', 'params'],
                     template: '<div><slot /></div>',
                     methods: { fetchNext },
                 },
@@ -139,5 +141,35 @@ describe('a collection of saved entries', () => {
         await vocabulary.trigger('click');
 
         expect(fetchNext).not.toHaveBeenCalled();
+    });
+
+    it('sends each tab its own search term when the next page is loaded', async () => {
+        vi.useFakeTimers();
+
+        try {
+            const wrapper = mountPage();
+
+            await wrapper.find('input').setValue('soup');
+
+            const [vocabulary] = wrapper.findAllComponents({
+                name: 'InfiniteScroll',
+            });
+
+            expect(vocabulary.props('params')).toEqual({
+                data: { search: 'soup', forPage: 'vocabulary' },
+            });
+
+            await tabTriggers(wrapper)[1].trigger('focus');
+
+            const [phrases] = wrapper.findAllComponents({
+                name: 'InfiniteScroll',
+            });
+
+            expect(phrases.props('params')).toEqual({
+                data: { search: '', forPage: 'phrases' },
+            });
+        } finally {
+            vi.useRealTimers();
+        }
     });
 });

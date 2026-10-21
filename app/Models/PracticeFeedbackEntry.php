@@ -7,9 +7,11 @@ namespace App\Models;
 use App\Support\FeedbackTable;
 use Database\Factories\PracticeFeedbackEntryFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
 
 /**
@@ -153,6 +155,30 @@ class PracticeFeedbackEntry extends Model
             'is_split' => 'boolean',
             'example_html' => 'array',
         ];
+    }
+
+    /**
+     * @param string $type
+     * @return LengthAwarePaginator
+     */
+    public static function collection(string $type, ?string $search): LengthAwarePaginator
+    {
+        return self::query()
+            ->with([
+                'practiceQuestion:id,practice_session_id',
+                'practiceQuestion.practiceSession:id,topic_id',
+                'practiceQuestion.practiceSession.topic:id,name',
+            ])
+            ->when($search, function (Builder $query) use ($search) {
+                $query->where(function (Builder $query) use ($search) {
+                    $query
+                        ->where('content_text', 'LIKE', "%$search%")
+                        ->orWhere('content_html', 'LIKE', "%$search%");
+                });
+            })
+            ->where('type', $type)
+            ->latest()
+            ->paginate(pageName: $type, perPage: 4);
     }
 
     /**

@@ -14,7 +14,7 @@
     "dependencies": {
         "@inertiajs/vite": "^3.0.0",
         "@inertiajs/vue3": "^3.0.0",
-        "@lucide/vue": "^1.57.0",
+        "@lucide/vue": "^1.60.0",
         "@tailwindcss/vite": "^4.1.11",
         "@tiptap/extensions": "^3.32.0",
         "@tiptap/pm": "^3.32.0",

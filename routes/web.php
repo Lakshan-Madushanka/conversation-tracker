@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\CollectionController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\PracticeSessionController;
 use Illuminate\Support\Facades\Route;
@@ -21,7 +22,7 @@ Route::delete('/sessions/{session}', [PracticeSessionController::class, 'destroy
 
 Route::get('/sessions/{session}', [PracticeSessionController::class, 'show'])->name('sessions.show');
 
-Route::inertia('/collections', 'collections/Index')->name('collections.index');
+Route::get('/collections', [CollectionController::class, 'index'])->name('collections.index');
 
 Route::inertia('/review', 'review/Index')->name('review.index');
 Route::inertia('/review/session', 'review/Session')->name('review.session');

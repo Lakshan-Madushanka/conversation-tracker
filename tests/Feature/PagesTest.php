@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Models\PracticeSession;
 use Inertia\Testing\AssertableInertia as Assert;
 
 it('renders each static screen', function (string $routeName, string $component): void {
@@ -22,7 +23,9 @@ it('renders each static screen', function (string $routeName, string $component)
 ]);
 
 it('renders a session detail page', function (): void {
-    $this->get(route('sessions.show', 1))
+    $session = PracticeSession::factory()->create();
+
+    $this->get(route('sessions.show', $session))
         ->assertOk()
         ->assertInertia(fn (Assert $page): Assert => $page->component('sessions/Show'));
 });

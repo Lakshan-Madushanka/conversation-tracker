@@ -10,7 +10,7 @@ import {
 } from '@lucide/vue';
 import ContinueSessionCard from '@/components/ContinueSessionCard.vue';
 import PageHeader from '@/components/PageHeader.vue';
-import SessionCard from '@/components/SessionCard.vue';
+import FinishedSessionCard from '@/components/FinishedSessionCard.vue';
 import StatTile from '@/components/StatTile.vue';
 import { Button } from '@/components/ui/button';
 import {
@@ -21,22 +21,25 @@ import {
     CardTitle,
 } from '@/components/ui/card';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { progressStats, sessions, todayReview } from '@/lib/sample-data';
+import { progressStats, todayReview } from '@/lib/sample-data';
 import { index as reviewSession } from '@/routes/review';
 import {
     create as sessionsCreate,
     index as sessionsIndex,
 } from '@/routes/sessions';
-import type { ContinueCardData } from '@/types';
+import type { ContinueCardData, FinishedSessionData } from '@/types';
 
 defineOptions({ layout: AppLayout });
 
-defineProps<{
-    /** The most recent unfinished session, if there is one. */
-    unfinishedSession?: ContinueCardData | null;
-}>();
-
-const recentSessions = sessions.slice(0, 3);
+withDefaults(
+    defineProps<{
+        /** The most recent unfinished session, if there is one. */
+        unfinishedSession?: ContinueCardData | null;
+        /** The most recent finished sessions, newest first. */
+        recentSessions?: FinishedSessionData[];
+    }>(),
+    { recentSessions: () => [] },
+);
 
 const greeting = computed(() => {
     const hour = new Date().getHours();
@@ -119,13 +122,13 @@ const greeting = computed(() => {
             />
         </div>
 
-        <!-- Recent sessions -->
-        <div class="mt-8">
+        <!-- Recent sessions: only once there is something to show. -->
+        <div v-if="recentSessions && recentSessions.length > 0" class="mt-8">
             <div class="mb-3 flex items-center justify-between">
                 <h2 class="text-sm font-semibold">Recent sessions</h2>
                 <Link
                     :href="sessionsIndex.url()"
-                    class="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+                    class="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
                 >
                     View all
                     <ArrowRightIcon class="size-3.5" aria-hidden="true" />
@@ -133,7 +136,7 @@ const greeting = computed(() => {
             </div>
 
             <div class="grid gap-3">
-                <SessionCard
+                <FinishedSessionCard
                     v-for="session in recentSessions"
                     :key="session.id"
                     :session="session"

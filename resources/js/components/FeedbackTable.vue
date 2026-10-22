@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { attentionNoteId } from '@/lib/attention';
 import { focusElementById } from '@/lib/dom';
 import {
     cellText,
@@ -452,9 +453,17 @@ function confirmCell(event: KeyboardEvent): void {
                                     </span>
                                     <!-- A formatted cell holds only bold and
                                         italic around escaped text, so this
-                                        markup is safe to show. -->
+                                        markup is safe to show. The example
+                                        column is either a list of entries or
+                                        one piece of markup, and each shape is
+                                        shown the way it is held. -->
                                     <ul
-                                        v-if="column.key === 'example_html'"
+                                        v-if="
+                                            column.key === 'example_html' &&
+                                            Array.isArray(
+                                                cellValue(column, entry),
+                                            )
+                                        "
                                         class="list-none"
                                     >
                                         <li
@@ -547,9 +556,19 @@ function confirmCell(event: KeyboardEvent): void {
                                 class="block px-3 py-2 align-top sm:table-cell"
                             >
                                 <div class="flex flex-wrap items-center gap-2">
+                                    <!-- Focus can be sent here after finishing,
+                                        so the note is addressable by id and
+                                        focusable even though it is prose. -->
                                     <p
                                         v-if="attention.has(entry.id)"
-                                        class="flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-300"
+                                        :id="
+                                            attentionNoteId(
+                                                props.fieldId,
+                                                entry.id,
+                                            )
+                                        "
+                                        tabindex="-1"
+                                        class="flex items-center gap-1.5 text-xs font-medium text-amber-700 outline-none dark:text-amber-300"
                                     >
                                         <TriangleAlertIcon
                                             class="size-3.5 shrink-0"

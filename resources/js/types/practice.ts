@@ -107,6 +107,11 @@ export interface PracticeSessionData {
     id: number;
     status: string;
     /**
+     * When the session was finished, or null while it is still unfinished.
+     * It is set once and never moved, so re-finishing keeps the same moment.
+     */
+    finished_at: string | null;
+    /**
      * Bumped on every save. The editor sends the version it last read so the
      * server can refuse a save that would overwrite newer work from another tab.
      */
@@ -121,10 +126,45 @@ export interface PracticeSessionForm {
     questions: PracticeQuestionForm[];
 }
 
+/**
+ * How much a session holds, counted from what was saved. Blank entries and
+ * empty questions are left out; entries flagged as duplicates still count.
+ */
+export interface SessionCounts {
+    questions: number;
+    words: number;
+    phrases: number;
+    mistakes: number;
+    grammar_notes: number;
+}
+
+/** The result of finishing a session: either a summary, or an empty warning. */
+export type FinishSessionResult =
+    | {
+          empty: false;
+          session: PracticeSessionData;
+          counts: SessionCounts;
+          needs_attention: number;
+          empty_questions_removed: number;
+      }
+    | { empty: true };
+
+/** A finished session's counts, as opposed to the empty-session warning. */
+export type FinishSummary = Extract<FinishSessionResult, { empty: false }>;
+
 /** The most recent unfinished session, shown on the Home page. */
 export interface ContinueCardData {
     id: number;
     topic: string;
     /** ISO 8601 timestamp of the last change. */
     updated_at: string;
+}
+
+/** A finished session as listed on Home and in the Library. */
+export interface FinishedSessionData {
+    id: number;
+    topic: string;
+    /** ISO 8601 timestamp of when it was finished. */
+    finished_at: string | null;
+    counts: SessionCounts;
 }

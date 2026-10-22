@@ -31,3 +31,25 @@ export function relativeTime(iso: string, now: number = Date.now()): string {
 
     return formatter.format(Math.round(delta / 1000), 'second');
 }
+
+/**
+ * Turns an ISO timestamp into a short date such as "12 Oct", keeping the year
+ * only when it is not the current one. Returns an empty string when the
+ * timestamp cannot be read.
+ */
+export function shortDate(iso: string): string {
+    const time = Date.parse(iso);
+
+    if (Number.isNaN(time)) {
+        return '';
+    }
+
+    const date = new Date(time);
+    const sameYear = date.getFullYear() === new Date().getFullYear();
+
+    return new Intl.DateTimeFormat(undefined, {
+        day: 'numeric',
+        month: 'short',
+        ...(sameYear ? {} : { year: 'numeric' }),
+    }).format(date);
+}

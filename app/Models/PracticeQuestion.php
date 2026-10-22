@@ -62,4 +62,21 @@ class PracticeQuestion extends Model
             ->orderBy('position')
             ->orderBy('id');
     }
+
+    /**
+     * Whether the question holds anything at all: a tutor's question, an
+     * answer, or any non-empty feedback entry. Mirrors the editor's
+     * `questionHasContent`, so a card the learner never filled in is treated
+     * as empty on both sides.
+     */
+    public function hasContent(): bool
+    {
+        if (trim($this->question_text) !== '' || trim($this->answer_text) !== '') {
+            return true;
+        }
+
+        return $this->feedbackEntries->contains(
+            fn (PracticeFeedbackEntry $entry): bool => ! $entry->isBlank(),
+        );
+    }
 }

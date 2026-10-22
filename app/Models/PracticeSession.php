@@ -7,6 +7,8 @@ namespace App\Models;
 use App\Actions\PracticeSessions\SplitLegacyFeedbackEntries;
 use Database\Factories\PracticeSessionFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\Scope;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -20,6 +22,7 @@ use Illuminate\Support\Collection;
  * @property int $id
  * @property int $topic_id
  * @property string $status
+ * @property Carbon|null $finished_at
  * @property int $version
  * @property string|null $client_key
  * @property string|null $last_save_key
@@ -35,6 +38,8 @@ class PracticeSession extends Model
     use HasFactory;
 
     public const STATUS_UNFINISHED = 'unfinished';
+
+    public const STATUS_FINISHED = 'finished';
 
     /**
      * Mirror the database default so a newly created session already reports
@@ -53,7 +58,38 @@ class PracticeSession extends Model
     {
         return [
             'version' => 'integer',
+            'finished_at' => 'datetime',
         ];
+    }
+
+    /**
+     * Sessions the learner has finished. Only these feed collections, review
+     * and progress.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    #[Scope]
+    protected function finished(Builder $query): Builder
+    {
+        return $query->where('status', self::STATUS_FINISHED);
+    }
+
+    /**
+     * Sessions still being worked on, shown on the Home "Continue" card.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    #[Scope]
+    protected function unfinished(Builder $query): Builder
+    {
+        return $query->where('status', self::STATUS_UNFINISHED);
+    }
+
+    public function isFinished(): bool
+    {
+        return $this->status === self::STATUS_FINISHED;
     }
 
     /**
@@ -83,6 +119,7 @@ class PracticeSession extends Model
      * @return array{
      *     id: int,
      *     status: string,
+     *     finished_at: string|null,
      *     version: int,
      *     topic: array{id: int, name: string},
      *     questions: array<int, array{
@@ -105,6 +142,7 @@ class PracticeSession extends Model
         return [
             'id' => $this->id,
             'status' => $this->status,
+            'finished_at' => $this->finished_at?->toIso8601String(),
             'version' => $this->version,
             'topic' => [
                 'id' => $this->topic->id,
@@ -181,12 +219,124 @@ class PracticeSession extends Model
     public static function continueCard(): ?array
     {
         $session = self::query()
-            ->where('status', self::STATUS_UNFINISHED)
+            ->unfinished()
             ->orderByDesc('updated_at')
             ->orderByDesc('id')
             ->first();
 
         return $session?->toContinueCardPayload();
+    }
+
+    /**
+     * Finished sessions for a list — the Home page's most recent ones and the
+     * whole Library — newest change first. The limit keeps Home to its five
+     * newest; the Library asks for all of them.
+     *
+     * @return list<array{id: int, topic: string, finished_at: string|null, counts: array{questions: int, words: int, phrases: int, mistakes: int, grammar_notes: int}}>
+     */
+    public static function finishedSessions(?int $limit = null): array
+    {
+        $query = self::query()
+            ->finished()
+            ->with(['topic', 'questions.feedbackEntries'])
+            ->orderByDesc('updated_at')
+            ->orderByDesc('id');
+
+        if ($limit !== null) {
+            $query->limit($limit);
+        }
+
+        $sessions = $query->get();
+
+        $payload = [];
+
+        foreach ($sessions as $session) {
+            $payload[] = [
+                'id' => $session->id,
+                'topic' => $session->topic->name,
+                'finished_at' => $session->finished_at?->toIso8601String(),
+                'counts' => $session->counts(),
+            ];
+        }
+
+        return $payload;
+    }
+
+    /**
+     * How much a session holds, counted from its entries each time so the
+     * numbers stay correct after later edits. Only non-empty entries and
+     * questions count; entries flagged as duplicates still count, because they
+     * are real entries.
+     *
+     * @return array{questions: int, words: int, phrases: int, mistakes: int, grammar_notes: int}
+     */
+    public function counts(): array
+    {
+        $this->loadMissing('questions.feedbackEntries');
+
+        $counts = [
+            'questions' => 0,
+            'words' => 0,
+            'phrases' => 0,
+            'mistakes' => 0,
+            'grammar_notes' => 0,
+        ];
+
+        foreach ($this->questions as $question) {
+            if ($question->hasContent()) {
+                $counts['questions'] += 1;
+            }
+
+            foreach ($question->feedbackEntries as $entry) {
+                if ($entry->isBlank()) {
+                    continue;
+                }
+
+                match ($entry->type) {
+                    PracticeFeedbackEntry::TYPE_VOCABULARY => $counts['words'] += 1,
+                    PracticeFeedbackEntry::TYPE_PHRASE => $counts['phrases'] += 1,
+                    PracticeFeedbackEntry::TYPE_MISTAKE => $counts['mistakes'] += 1,
+                    PracticeFeedbackEntry::TYPE_GRAMMAR_NOTE => $counts['grammar_notes'] += 1,
+                    default => null,
+                };
+            }
+        }
+
+        return $counts;
+    }
+
+    /**
+     * How many table rows still need a correction or a meaning, matching the
+     * "Needs attention" hint in the editor.
+     */
+    public function needsAttention(): int
+    {
+        $this->loadMissing('questions.feedbackEntries');
+
+        $count = 0;
+
+        foreach ($this->questions as $question) {
+            foreach ($question->feedbackEntries as $entry) {
+                if (! $entry->isBlank() && $entry->needsAttention()) {
+                    $count += 1;
+                }
+            }
+        }
+
+        return $count;
+    }
+
+    /**
+     * Whether the session holds no questions, or only questions that are
+     * completely empty. Such a session cannot be finished without a warning.
+     */
+    public function isEmpty(): bool
+    {
+        $this->loadMissing('questions.feedbackEntries');
+
+        return ! $this->questions->contains(
+            fn (PracticeQuestion $question): bool => $question->hasContent(),
+        );
     }
 
     /**

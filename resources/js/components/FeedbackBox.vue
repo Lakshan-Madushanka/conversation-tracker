@@ -7,6 +7,7 @@ import GrammarNotesList from '@/components/GrammarNotesList.vue';
 import RichTextEditor from '@/components/RichTextEditor.vue';
 import SectionLabel from '@/components/SectionLabel.vue';
 import { Button } from '@/components/ui/button';
+import { attentionNoteId } from '@/lib/attention';
 import { focusElementById } from '@/lib/dom';
 import { feedbackBoxFor } from '@/lib/feedback';
 import {
@@ -41,6 +42,8 @@ const props = defineProps<{
     /** Question this box belongs to, for its accessible name. */
     questionNumber: number;
     error?: string;
+    /** A row that still needs work, sent here so focus can land on it. */
+    focusEntryId?: string | null;
 }>();
 
 const emit = defineEmits<{
@@ -118,6 +121,24 @@ watch(
             expanded.value = true;
             opened.value = true;
         }
+    },
+);
+
+/**
+ * The row to move focus to, sent after the session is finished. The box opens
+ * first — it may be shrunk — and then focus is moved to the note beside that
+ * row, which is where the last unfinished work is.
+ */
+watch(
+    () => props.focusEntryId,
+    (entryId) => {
+        if (entryId === null || entryId === undefined) {
+            return;
+        }
+
+        opened.value = true;
+        expanded.value = true;
+        focusElementById(attentionNoteId(props.fieldId, entryId));
     },
 );
 

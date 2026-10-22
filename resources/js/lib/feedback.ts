@@ -162,6 +162,29 @@ export function questionHasContent(question: PracticeQuestionForm): boolean {
 }
 
 /**
+ * Whether a saved question holds anything. Works for both the editable form
+ * and the payload the backend sends, since a box the backend left out is
+ * simply absent and counts as empty.
+ */
+export function questionDataHasContent(
+    question: Pick<
+        PracticeQuestionData,
+        'question_html' | 'answer_html' | 'feedback'
+    >,
+): boolean {
+    if (
+        !isRichTextBlank(question.question_html) ||
+        !isRichTextBlank(question.answer_html)
+    ) {
+        return true;
+    }
+
+    return Object.values(question.feedback).some(
+        (value) => isFeedbackValueBlank(value) === false,
+    );
+}
+
+/**
  * Turns a saved question from the backend into an editable one, filling in any
  * boxes the backend did not send.
  */

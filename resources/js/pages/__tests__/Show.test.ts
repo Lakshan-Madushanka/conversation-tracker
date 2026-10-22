@@ -83,6 +83,30 @@ describe('a session opened to be read', () => {
         expect(correction).toContain("I'd like a soup");
     });
 
+    it('shows the count tiles matching the entries shown', () => {
+        const wrapper = mountShow();
+
+        expect(wrapper.text()).toContain('Questions');
+        expect(wrapper.text()).toContain('Words');
+        expect(wrapper.text()).toContain('Phrases');
+        expect(wrapper.text()).toContain('Mistakes');
+        expect(wrapper.text()).toContain('Grammar notes');
+    });
+
+    it('shows a Finished badge for a finished session', () => {
+        const wrapper = mountShow();
+
+        expect(wrapper.text()).toContain('Finished');
+    });
+
+    it('shows an Unfinished badge for an unfinished session', () => {
+        const wrapper = mountShow(
+            session({ status: 'unfinished', finished_at: null }),
+        );
+
+        expect(wrapper.text()).toContain('Unfinished');
+    });
+
     it('offers a way to the editor', () => {
         const wrapper = mountShow();
         const edit = wrapper

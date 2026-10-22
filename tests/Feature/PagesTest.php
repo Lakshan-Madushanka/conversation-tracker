@@ -23,7 +23,7 @@ it('renders each static screen', function (string $routeName, string $component)
 ]);
 
 it('renders a session detail page', function (): void {
-    $session = PracticeSession::factory()->create();
+    $session = PracticeSession::factory()->finished()->create();
 
     $this->get(route('sessions.show', $session))
         ->assertOk()

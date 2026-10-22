@@ -33,11 +33,15 @@ class PracticeSessionController extends Controller
     }
 
     /**
-     * A saved session to read from start to finish. It is served in the same
-     * shape the editor uses, so both pages show exactly what is stored.
+     * A saved session to read from start to finish. An unfinished session is
+     * sent straight to the editor, because the learner is still working on it.
      */
-    public function show(PracticeSession $session): Response
+    public function show(PracticeSession $session): Response|RedirectResponse
     {
+        if (! $session->isFinished()) {
+            return redirect()->route('sessions.edit', $session);
+        }
+
         return Inertia::render('sessions/Show', [
             'session' => $session->toEditorPayload(),
         ]);

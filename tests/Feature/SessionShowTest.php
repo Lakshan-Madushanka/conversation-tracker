@@ -55,17 +55,13 @@ it('shows a finished session so it can be read back', function (): void {
             ->where('session.questions.0.feedback.grammar_note.0.html', '<p>Use the <strong>past tense</strong> here.</p>'));
 });
 
-it('shows a session that is still unfinished', function (): void {
+it('redirects an unfinished session to the editor, since the learner is still working on it', function (): void {
     $session = PracticeSession::factory()->create([
         'status' => PracticeSession::STATUS_UNFINISHED,
     ]);
 
     $this->get(route('sessions.show', $session))
-        ->assertOk()
-        ->assertInertia(fn (Assert $page): Assert => $page
-            ->component('sessions/Show')
-            ->where('session.id', $session->id)
-            ->whereNull('session.finished_at'));
+        ->assertRedirect(route('sessions.edit', $session));
 });
 
 it('cannot show a session that does not exist', function (): void {

@@ -1,8 +1,11 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue';
-import { router } from '@inertiajs/vue3';
+import { computed, onBeforeUnmount, ref, type Ref } from 'vue';
+import { Link, router } from '@inertiajs/vue3';
 import {
     CheckIcon,
+    ChevronDownIcon,
+    ChevronUpIcon,
+    EyeIcon,
     PlusIcon,
     RefreshCwIcon,
     TriangleAlertIcon,
@@ -41,7 +44,7 @@ import {
 import { savePracticeSession } from '@/lib/session-autosave';
 import { discardSession, finishSession } from '@/lib/session-finish';
 import { home } from '@/routes';
-import { edit as sessionsEdit } from '@/routes/sessions';
+import { edit as sessionsEdit, show as sessionsShow } from '@/routes/sessions';
 import type {
     FeedbackType,
     FinishSummary,
@@ -60,6 +63,9 @@ const props = defineProps<{
 
 /** Matches the server's limit so the button and message agree. */
 const MAX_QUESTIONS = 50;
+
+/** Past this many questions, cards collapse into one-line summaries. */
+const COLLAPSE_THRESHOLD = 5;
 
 let uidCounter = 0;
 
@@ -101,6 +107,90 @@ function questionsFromPayload(
 
 const topic = ref(props.session?.topic.name ?? '');
 const questions = ref<PracticeQuestionForm[]>(initialQuestions());
+
+/**
+ * Collapsed question cards, for long sessions. A card the learner has opened
+ * at least once stays mounted so collapsing never loses typed text.
+ */
+const collapsible = computed(() => questions.value.length > COLLAPSE_THRESHOLD);
+
+const collapsed = ref<Set<string>>(
+    new Set(
+        collapsible.value ? questions.value.slice(1).map((q) => q.uid) : [],
+    ),
+);
+
+/** Cards that have been expanded at least once, so they stay mounted. */
+const opened = ref<Set<string>>(new Set());
+
+/** Whether a card is showing its full editor. */
+function isExpanded(uid: string): boolean {
+    return !collapsed.value.has(uid);
+}
+
+/** Whether a card's QuestionCard should be mounted in the DOM. */
+function isMounted(uid: string): boolean {
+    return isExpanded(uid) || opened.value.has(uid);
+}
+
+function collapseCard(uid: string): void {
+    opened.value.add(uid);
+    collapsed.value.add(uid);
+}
+
+function expandCard(uid: string): void {
+    opened.value.add(uid);
+    collapsed.value.delete(uid);
+}
+
+function toggleCard(uid: string): void {
+    if (isExpanded(uid)) {
+        collapseCard(uid);
+    } else {
+        expandCard(uid);
+    }
+}
+
+function expandAll(): void {
+    for (const q of questions.value) {
+        expandCard(q.uid);
+    }
+}
+
+function collapseAll(): void {
+    for (const q of questions.value) {
+        collapseCard(q.uid);
+    }
+}
+
+/** How many feedback entries a question's collapsed card summarizes. */
+function feedbackCount(question: PracticeQuestionForm): number {
+    const feedback = question.feedback;
+    let count = 0;
+
+    if (Array.isArray(feedback.mistake)) count += feedback.mistake.length;
+    if (Array.isArray(feedback.vocabulary)) count += feedback.vocabulary.length;
+    if (Array.isArray(feedback.phrase)) count += feedback.phrase.length;
+    if (Array.isArray(feedback.grammar_note))
+        count += feedback.grammar_note.length;
+    if (
+        typeof feedback.natural_version === 'string' &&
+        feedback.natural_version.trim() !== ''
+    )
+        count += 1;
+
+    return count;
+}
+
+/** The first few words of the tutor's question, for the collapsed card. */
+function questionPreview(question: PracticeQuestionForm): string {
+    const text = question.question_html
+        .replace(/<[^>]*>/gu, ' ')
+        .replace(/\s+/gu, ' ')
+        .trim();
+
+    return text.length > 80 ? `${text.slice(0, 80)}…` : text;
+}
 
 const hasTopic = (): boolean => topic.value.trim().length > 0;
 const hasContent = (): boolean => questions.value.some(questionHasContent);
@@ -223,6 +313,11 @@ function addQuestion(): void {
     const question = emptyQuestion();
 
     questions.value.push(question);
+
+    // A newly added card is always shown in full, ready to fill in.
+    opened.value.add(question.uid);
+    collapsed.value.delete(question.uid);
+
     focusElementById(`question-${question.uid}`);
 }
 
@@ -418,6 +513,17 @@ async function discardEmptySession(): Promise<void> {
                     {{ isFinished ? 'Finished' : 'Unfinished' }}
                 </Badge>
 
+                <!-- A finished session can always be read back in its own
+                    calm page, without leaving the editor's address behind. -->
+                <Link
+                    v-if="isFinished && sessionId !== null"
+                    :href="sessionsShow.url(sessionId)"
+                    class="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+                >
+                    <EyeIcon class="size-4" aria-hidden="true" />
+                    View session
+                </Link>
+
                 <SaveIndicator :status="status" :last-saved-at="lastSavedAt" />
 
                 <Button type="button" :disabled="finishing" @click="finishNow">
@@ -487,38 +593,152 @@ async function discardEmptySession(): Promise<void> {
             />
 
             <div class="grid gap-4">
-                <QuestionCard
-                    v-for="(question, index) in questions"
-                    :key="question.uid"
-                    :number="index + 1"
-                    :uid="question.uid"
-                    v-model:question-html="question.question_html"
-                    v-model:answer-html="question.answer_html"
-                    :feedback="question.feedback"
-                    :question-error="
-                        errorFor(`questions.${index}.question_html`)
-                    "
-                    :answer-error="errorFor(`questions.${index}.answer_html`)"
-                    :feedback-errors="feedbackErrors(index)"
-                    :focus-target="focusTarget"
-                    @update:feedback="
-                        (type, value) =>
-                            setFeedbackValue(question.feedback, type, value)
-                    "
-                    @remove="requestRemove(index)"
-                />
+                <div v-for="(question, index) in questions" :key="question.uid">
+                    <!-- Long sessions open with the first card expanded and
+                        the rest collapsed into one-line summaries. -->
+                    <template v-if="collapsible">
+                        <button
+                            v-if="!isExpanded(question.uid)"
+                            type="button"
+                            class="flex w-full items-center gap-2 rounded-lg border border-dashed bg-muted/20 px-3 py-2 text-left hover:bg-muted/40 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+                            :aria-expanded="false"
+                            :aria-label="`Expand question ${index + 1}`"
+                            @click="expandCard(question.uid)"
+                        >
+                            <ChevronDownIcon
+                                class="size-4 shrink-0 text-muted-foreground"
+                                aria-hidden="true"
+                            />
+                            <span class="text-sm font-medium">
+                                Question {{ index + 1 }}
+                            </span>
+                            <span
+                                class="min-w-0 flex-1 truncate text-xs text-muted-foreground"
+                            >
+                                {{
+                                    questionPreview(question) ||
+                                    'Empty question'
+                                }}
+                            </span>
+                            <span
+                                v-if="feedbackCount(question) > 0"
+                                class="shrink-0 text-xs text-muted-foreground"
+                            >
+                                {{ feedbackCount(question) }}
+                                {{
+                                    feedbackCount(question) === 1
+                                        ? 'entry'
+                                        : 'entries'
+                                }}
+                            </span>
+                        </button>
+
+                        <div
+                            v-if="isMounted(question.uid)"
+                            :class="{ hidden: !isExpanded(question.uid) }"
+                        >
+                            <QuestionCard
+                                :number="index + 1"
+                                :uid="question.uid"
+                                v-model:question-html="question.question_html"
+                                v-model:answer-html="question.answer_html"
+                                :feedback="question.feedback"
+                                :question-error="
+                                    errorFor(`questions.${index}.question_html`)
+                                "
+                                :answer-error="
+                                    errorFor(`questions.${index}.answer_html`)
+                                "
+                                :feedback-errors="feedbackErrors(index)"
+                                :focus-target="focusTarget"
+                                @update:feedback="
+                                    (type, value) =>
+                                        setFeedbackValue(
+                                            question.feedback,
+                                            type,
+                                            value,
+                                        )
+                                "
+                                @remove="requestRemove(index)"
+                            />
+
+                            <!-- Collapse control sits under the expanded card
+                                so the learner can shrink it without losing
+                                anything. -->
+                            <button
+                                type="button"
+                                class="mt-1 flex w-full items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+                                :aria-label="`Collapse question ${index + 1}`"
+                                @click="collapseCard(question.uid)"
+                            >
+                                <ChevronUpIcon
+                                    class="size-3.5"
+                                    aria-hidden="true"
+                                />
+                                Collapse
+                            </button>
+                        </div>
+                    </template>
+
+                    <QuestionCard
+                        v-else
+                        :number="index + 1"
+                        :uid="question.uid"
+                        v-model:question-html="question.question_html"
+                        v-model:answer-html="question.answer_html"
+                        :feedback="question.feedback"
+                        :question-error="
+                            errorFor(`questions.${index}.question_html`)
+                        "
+                        :answer-error="
+                            errorFor(`questions.${index}.answer_html`)
+                        "
+                        :feedback-errors="feedbackErrors(index)"
+                        :focus-target="focusTarget"
+                        @update:feedback="
+                            (type, value) =>
+                                setFeedbackValue(question.feedback, type, value)
+                        "
+                        @remove="requestRemove(index)"
+                    />
+                </div>
             </div>
 
-            <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <Button
-                    type="button"
-                    variant="outline"
-                    :disabled="atLimit"
-                    @click="addQuestion"
-                >
-                    <PlusIcon aria-hidden="true" />
-                    Add question
-                </Button>
+            <div
+                class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+            >
+                <div class="flex flex-wrap items-center gap-2">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        :disabled="atLimit"
+                        @click="addQuestion"
+                    >
+                        <PlusIcon aria-hidden="true" />
+                        Add question
+                    </Button>
+
+                    <!-- On long sessions, one control opens or shrinks every
+                        card at once. -->
+                    <template v-if="collapsible">
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            @click="expandAll"
+                        >
+                            Expand all
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            @click="collapseAll"
+                        >
+                            Collapse all
+                        </Button>
+                    </template>
+                </div>
 
                 <p class="text-xs text-muted-foreground">
                     {{

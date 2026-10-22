@@ -8,6 +8,7 @@ use App\Actions\PracticeQuestions\SavePracticeQuestions;
 use App\Actions\Topics\FindOrCreateTopic;
 use App\Exceptions\PracticeSessionConflictException;
 use App\Models\PracticeSession;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -77,6 +78,7 @@ final readonly class UpdatePracticeSession
         $session->topic_id = $this->findOrCreateTopic->handle((string) $data['topic'])->id;
         $session->version += 1;
         $session->last_save_key = $saveKey;
+        $session->last_changed_at = Carbon::now();
         $session->save();
 
         return true;

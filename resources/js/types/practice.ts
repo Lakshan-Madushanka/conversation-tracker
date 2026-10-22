@@ -112,6 +112,11 @@ export interface PracticeSessionData {
      */
     finished_at: string | null;
     /**
+     * When the content was last edited. Opening a session does not change it;
+     * only the learner's edits do. Used for ordering on Home and the Library.
+     */
+    last_changed_at: string | null;
+    /**
      * Bumped on every save. The editor sends the version it last read so the
      * server can refuse a save that would overwrite newer work from another tab.
      */

@@ -4,6 +4,8 @@ import { Link } from '@inertiajs/vue3';
 import { ArrowLeftIcon, PencilIcon } from '@lucide/vue';
 import PageHeader from '@/components/PageHeader.vue';
 import SectionLabel from '@/components/SectionLabel.vue';
+import StatTile from '@/components/StatTile.vue';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
@@ -16,11 +18,16 @@ import {
     type ReadingSection,
 } from '@/lib/reading';
 import { isRichTextBlank } from '@/lib/rich-text';
+import { questionDataHasContent } from '@/lib/feedback';
 import {
     edit as sessionsEdit,
     index as sessionsIndex,
 } from '@/routes/sessions';
-import type { PracticeQuestionData, PracticeSessionData } from '@/types';
+import type {
+    PracticeQuestionData,
+    PracticeSessionData,
+    SessionCounts,
+} from '@/types';
 
 defineOptions({ layout: AppLayout });
 
@@ -53,14 +60,66 @@ const cards = computed<QuestionCard[]>(() =>
         ),
 );
 
+/**
+ * How much the session holds, counted from the entries on this page so the
+ * tiles match what is shown. Only non-empty entries and questions count.
+ */
+const counts = computed<SessionCounts>(() => {
+    const result: SessionCounts = {
+        questions: 0,
+        words: 0,
+        phrases: 0,
+        mistakes: 0,
+        grammar_notes: 0,
+    };
+
+    for (const { question } of cards.value) {
+        if (questionDataHasContent(question)) {
+            result.questions += 1;
+        }
+
+        const feedback = question.feedback;
+
+        result.mistakes += nonBlank(feedback.mistake).length;
+        result.words += nonBlank(feedback.vocabulary).length;
+        result.phrases += nonBlank(feedback.phrase).length;
+        result.grammar_notes += nonBlank(feedback.grammar_note).length;
+    }
+
+    return result;
+});
+
+/** The entries of one box that hold something. */
+function nonBlank(entries: unknown): unknown[] {
+    if (!Array.isArray(entries)) {
+        return [];
+    }
+
+    return entries.filter((entry) => {
+        if (typeof entry !== 'object' || entry === null) {
+            return false;
+        }
+
+        return Object.entries(entry).some(
+            ([key, value]) => key !== 'id' && String(value ?? '').trim() !== '',
+        );
+    });
+}
+
+const isFinished = computed(() => props.session.finished_at !== null);
+
+const statusLabel = computed(() =>
+    isFinished.value ? 'Finished' : 'Unfinished',
+);
+
 const description = computed(() => {
     const count = `${cards.value.length} ${
         cards.value.length === 1 ? 'question' : 'questions'
     }`;
 
-    return props.session.finished_at === null
-        ? `Unfinished · ${count}`
-        : `Finished ${shortDate(props.session.finished_at)} · ${count}`;
+    return isFinished.value
+        ? `Finished ${shortDate(props.session.finished_at ?? '')} · ${count}`
+        : `Unfinished · ${count}`;
 });
 
 /** What an entry shows, in order: what it is, then what explains it. */
@@ -84,6 +143,12 @@ function partsOf(entry: ReadingEntry): ReadingPart[] {
             :description="description"
         >
             <template #actions>
+                <Badge
+                    :variant="isFinished ? 'default' : 'secondary'"
+                    class="hidden sm:inline-flex"
+                >
+                    {{ statusLabel }}
+                </Badge>
                 <Button size="lg" as-child>
                     <Link :href="sessionsEdit.url(props.session.id)">
                         <PencilIcon aria-hidden="true" />
@@ -92,6 +157,36 @@ function partsOf(entry: ReadingEntry): ReadingPart[] {
                 </Button>
             </template>
         </PageHeader>
+
+        <!-- Small tiles for what the session holds, matching the counts the
+            editor shows when finishing. -->
+        <div class="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            <StatTile
+                label="Questions"
+                :value="counts.questions"
+                :hint="counts.questions === 1 ? '1 question' : 'All questions'"
+            />
+            <StatTile
+                label="Words"
+                :value="counts.words"
+                hint="New vocabulary"
+            />
+            <StatTile
+                label="Phrases"
+                :value="counts.phrases"
+                hint="New expressions"
+            />
+            <StatTile
+                label="Mistakes"
+                :value="counts.mistakes"
+                hint="Learning opportunities"
+            />
+            <StatTile
+                label="Grammar notes"
+                :value="counts.grammar_notes"
+                hint="To remember"
+            />
+        </div>
 
         <div v-if="cards.length > 0" class="grid gap-4">
             <Card v-for="(card, index) in cards" :key="card.question.id">
@@ -187,5 +282,16 @@ function partsOf(entry: ReadingEntry): ReadingPart[] {
         <p v-else class="text-sm text-muted-foreground">
             Nothing has been written into this session yet.
         </p>
+
+        <!-- On a phone, the Edit button is repeated at the bottom so it is
+            always within reach after reading a long session. -->
+        <div class="mt-8 flex justify-center sm:hidden">
+            <Button size="lg" as-child>
+                <Link :href="sessionsEdit.url(props.session.id)">
+                    <PencilIcon aria-hidden="true" />
+                    Edit session
+                </Link>
+            </Button>
+        </div>
     </div>
 </template>

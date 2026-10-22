@@ -23,6 +23,7 @@ use Illuminate\Support\Collection;
  * @property int $topic_id
  * @property string $status
  * @property Carbon|null $finished_at
+ * @property Carbon|null $last_changed_at
  * @property int $version
  * @property string|null $client_key
  * @property string|null $last_save_key
@@ -59,6 +60,7 @@ class PracticeSession extends Model
         return [
             'version' => 'integer',
             'finished_at' => 'datetime',
+            'last_changed_at' => 'datetime',
         ];
     }
 
@@ -143,6 +145,7 @@ class PracticeSession extends Model
             'id' => $this->id,
             'status' => $this->status,
             'finished_at' => $this->finished_at?->toIso8601String(),
+            'last_changed_at' => $this->last_changed_at?->toIso8601String(),
             'version' => $this->version,
             'topic' => [
                 'id' => $this->topic->id,

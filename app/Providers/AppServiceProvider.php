@@ -7,6 +7,8 @@ use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
+use Inertia\Inertia;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -24,6 +26,25 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureDefaults();
+        $this->configureInertiaExceptions();
+    }
+
+    /**
+     * A missing page renders a friendly Inertia error page instead of the
+     * framework's default, keeping the 404 status and the app's layout.
+     */
+    protected function configureInertiaExceptions(): void
+    {
+        Inertia::handleExceptionsUsing(function ($exceptionResponse) {
+            if (
+                $exceptionResponse->exception instanceof NotFoundHttpException
+                && ! $exceptionResponse->request->expectsJson()
+            ) {
+                return $exceptionResponse->render('errors/404');
+            }
+
+            return null;
+        });
     }
 
     /**

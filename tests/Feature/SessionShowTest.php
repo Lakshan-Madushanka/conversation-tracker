@@ -64,6 +64,11 @@ it('redirects an unfinished session to the editor, since the learner is still wo
         ->assertRedirect(route('sessions.edit', $session));
 });
 
-it('cannot show a session that does not exist', function (): void {
-    $this->get(route('sessions.show', 999))->assertNotFound();
+it('shows a friendly page when the session does not exist', function (): void {
+    $this->withoutVite();
+
+    $this->get(route('sessions.show', 999))
+        ->assertNotFound()
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->component('errors/404'));
 });

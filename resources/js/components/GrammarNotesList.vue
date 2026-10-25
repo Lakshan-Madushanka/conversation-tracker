@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref } from 'vue';
+import { computed, nextTick, onMounted, ref } from 'vue';
 import { PlusIcon, Trash2Icon } from '@lucide/vue';
 import RichTextEditor from '@/components/RichTextEditor.vue';
 import UndoNotice from '@/components/UndoNotice.vue';
@@ -21,6 +21,11 @@ const props = defineProps<{
     fieldId: string;
     placeholder?: string;
     error?: string;
+    /**
+     * Guided mode: opens the box with an empty note ready for the paste, so
+     * there is always one blank editor to write into and never more.
+     */
+    guided?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -64,6 +69,28 @@ function addNote(): void {
 
     void nextTick(() => focusElementById(noteFieldId(note)));
 }
+
+/**
+ * Hand the learner an editor the moment guided mode shows this box: focus the
+ * empty note already waiting, or add one when every note holds something.
+ */
+function prepareGuidedNote(): void {
+    const last = props.notes[props.notes.length - 1];
+
+    if (last !== undefined && isRichTextBlank(last.html)) {
+        void nextTick(() => focusElementById(noteFieldId(last)));
+
+        return;
+    }
+
+    addNote();
+}
+
+onMounted(() => {
+    if (props.guided) {
+        prepareGuidedNote();
+    }
+});
 
 /**
  * Keep the notes the learner actually wrote. An empty note is dropped once it

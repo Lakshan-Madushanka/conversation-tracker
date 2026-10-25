@@ -5,7 +5,21 @@ import type { GrammarNote } from '@/types';
 
 let wrapper: ReturnType<typeof mountNotes> | null = null;
 
-function mountNotes(notes: GrammarNote[] = []) {
+/**
+ * Wait a real animation frame, so deferred work (focus retries) has run.
+ */
+function animationFrame(): Promise<void> {
+    return new Promise((resolve) => {
+        requestAnimationFrame(() => {
+            resolve();
+        });
+    });
+}
+
+function mountNotes(
+    notes: GrammarNote[] = [],
+    extra: Record<string, unknown> = {},
+) {
     const component = mount(GrammarNotesList, {
         attachTo: document.body,
         props: {
@@ -13,6 +27,7 @@ function mountNotes(notes: GrammarNote[] = []) {
             label: 'Grammar notes for question 1',
             fieldId: 'field-grammar',
             placeholder: 'Explain the grammar point…',
+            ...extra,
         },
     });
 
@@ -152,5 +167,52 @@ describe('notes', () => {
         await component.vm.$nextTick();
 
         expect(component.emitted('update:notes')).toBeUndefined();
+    });
+});
+
+describe('guided mode', () => {
+    it('opens with one empty note, cursor in it, ready for the paste', async () => {
+        const component = mountNotes([], { guided: true });
+
+        const added = component
+            .emitted('update:notes')
+            ?.at(0)?.[0] as GrammarNote[];
+
+        expect(added).toHaveLength(1);
+        expect(added[0]?.html).toBe('');
+
+        await component.setProps({ notes: added });
+        await component.vm.$nextTick();
+        await animationFrame();
+
+        expect(document.activeElement?.id).toBe(
+            `field-grammar-${added[0]?.id}`,
+        );
+    });
+
+    it('offers the blank note that is already waiting instead of another', async () => {
+        const component = mountNotes([{ id: 'n1', html: '' }], {
+            guided: true,
+        });
+
+        expect(component.emitted('update:notes')).toBeUndefined();
+
+        await animationFrame();
+
+        expect(document.activeElement?.id).toBe('field-grammar-n1');
+    });
+
+    it('adds a fresh note when every note already holds something', async () => {
+        const component = mountNotes(
+            [{ id: 'n1', html: '<p>Use the past tense.</p>' }],
+            { guided: true },
+        );
+
+        const added = component
+            .emitted('update:notes')
+            ?.at(0)?.[0] as GrammarNote[];
+
+        expect(added).toHaveLength(2);
+        expect(added[1]?.html).toBe('');
     });
 });

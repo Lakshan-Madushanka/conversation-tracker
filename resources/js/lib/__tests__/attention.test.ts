@@ -4,6 +4,7 @@ import {
     attentionFieldId,
     attentionNoteId,
     scanAttention,
+    scanBoxAttention,
 } from '@/lib/attention';
 import { emptyFeedbackValues } from '@/lib/feedback';
 import type { PracticeQuestionForm } from '@/types';
@@ -140,6 +141,57 @@ describe('scanAttention', () => {
 
         expect(scan.count).toBe(0);
         expect(scan.first).toBeNull();
+    });
+});
+
+describe('scanBoxAttention', () => {
+    it('counts only the box it is asked about', () => {
+        const scan = scanBoxAttention(
+            question('q1', {
+                mistake: [mistake('m1', 'I am agree')],
+                vocabulary: [word('v1', 'booking')],
+            }),
+            'vocabulary',
+        );
+
+        expect(scan.count).toBe(1);
+        expect(scan.firstEntryId).toBe('v1');
+    });
+
+    it('says what the first row is waiting for', () => {
+        const scan = scanBoxAttention(
+            question('q1', { mistake: [mistake('m1', 'I am agree')] }),
+            'mistake',
+        );
+
+        expect(scan.reason).toBe('Add the correction.');
+    });
+
+    it('reports an untouched box as holding nothing', () => {
+        const scan = scanBoxAttention(
+            question('q1', {
+                mistake: [mistake('m1', 'I am agree', 'I agree')],
+            }),
+            'mistake',
+        );
+
+        expect(scan).toEqual({
+            count: 0,
+            firstEntryId: null,
+            reason: null,
+        });
+    });
+
+    it('points at the first row that holds something', () => {
+        const scan = scanBoxAttention(
+            question('q1', {
+                vocabulary: [word('v1', ''), word('v2', 'booking')],
+            }),
+            'vocabulary',
+        );
+
+        expect(scan.firstEntryId).toBe('v2');
+        expect(scan.reason).toBe('Add the meaning.');
     });
 });
 

@@ -2,12 +2,13 @@
 
 use App\Http\Controllers\CollectionController;
 use App\Http\Controllers\HomeController;
+use App\Http\Controllers\LibraryController;
 use App\Http\Controllers\PracticeSessionController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', HomeController::class)->name('home');
 
-Route::get('/sessions', [PracticeSessionController::class, 'index'])->name('sessions.index');
+Route::get('/sessions', LibraryController::class)->name('sessions.index');
 
 Route::get('/sessions/create', [PracticeSessionController::class, 'create'])->name('sessions.create');
 

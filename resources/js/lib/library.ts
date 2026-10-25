@@ -1,23 +1,37 @@
-import type { SessionCardData } from '@/types';
+import type { SessionCardData, TopicSummary } from '@/types';
+import {
+    browserTimezone,
+    normalizeLibraryFilters,
+    type LibraryFilters,
+} from '@/lib/library-filters';
 
 /** One page of the Library, as the server sends it. */
 export interface LibraryPage {
     sessions: SessionCardData[];
     next_cursor: string | null;
     has_more: boolean;
+    /** How many sessions match the chosen filters. */
     total: number;
+    /** How many sessions the Library holds in total. */
+    all_total: number;
+    filters: LibraryFilters;
+    topics: TopicSummary[];
+    timezone: string;
 }
 
 /**
  * What the Library remembers while the learner opens a session: every card
- * already loaded, where the next page starts, and how far down the page they
- * had scrolled.
+ * already loaded, where the next page starts, the filters and sort in force,
+ * and how far down the page they had scrolled.
  */
 export interface LibrarySnapshot {
     sessions: SessionCardData[];
     nextCursor: string | null;
     hasMore: boolean;
     total: number;
+    allTotal: number;
+    filters: LibraryFilters;
+    timezone: string;
     scrollY: number;
     savedAt: number;
 }
@@ -74,7 +88,30 @@ export function isLibraryPage(value: unknown): value is LibraryPage {
         Array.isArray(page.sessions) &&
         (typeof page.next_cursor === 'string' || page.next_cursor === null) &&
         typeof page.has_more === 'boolean' &&
-        typeof page.total === 'number'
+        typeof page.total === 'number' &&
+        typeof page.all_total === 'number' &&
+        typeof page.timezone === 'string' &&
+        isLibraryFilters(page.filters) &&
+        Array.isArray(page.topics)
+    );
+}
+
+/** Whether a value looks like a filter state this app can use. */
+export function isLibraryFilters(value: unknown): value is LibraryFilters {
+    if (typeof value !== 'object' || value === null) {
+        return false;
+    }
+
+    const filters = value as Record<string, unknown>;
+
+    return (
+        Array.isArray(filters.topics) &&
+        Array.isArray(filters.types) &&
+        typeof filters.date === 'string' &&
+        (typeof filters.from === 'string' || filters.from === null) &&
+        (typeof filters.to === 'string' || filters.to === null) &&
+        typeof filters.status === 'string' &&
+        typeof filters.sort === 'string'
     );
 }
 
@@ -102,21 +139,33 @@ export function readLibrarySnapshot(): LibrarySnapshot | null {
             return null;
         }
 
-        const snapshot: unknown = JSON.parse(raw);
+        const stored: unknown = JSON.parse(raw);
 
-        if (!isSnapshot(snapshot)) {
+        if (!isStoredSnapshot(stored)) {
             store.removeItem(SNAPSHOT_KEY);
 
             return null;
         }
 
-        if (Date.now() - snapshot.savedAt > MAX_AGE_MS) {
+        if (Date.now() - stored.savedAt > MAX_AGE_MS) {
             store.removeItem(SNAPSHOT_KEY);
 
             return null;
         }
 
-        return snapshot;
+        // Lists saved before filters existed keep working: the missing pieces
+        // simply start from their defaults.
+        return {
+            sessions: stored.sessions,
+            nextCursor: stored.nextCursor,
+            hasMore: stored.hasMore,
+            total: stored.total,
+            allTotal: stored.allTotal ?? stored.total,
+            filters: normalizeLibraryFilters(stored.filters),
+            timezone: stored.timezone ?? browserTimezone(),
+            scrollY: stored.scrollY,
+            savedAt: stored.savedAt,
+        };
     } catch {
         store.removeItem(SNAPSHOT_KEY);
 
@@ -152,7 +201,20 @@ export function consumeLibraryRestore(): boolean {
     return wanted;
 }
 
-function isSnapshot(value: unknown): value is LibrarySnapshot {
+/** The stored shape, with the pieces older snapshots did not keep yet. */
+interface StoredLibrarySnapshot {
+    sessions: SessionCardData[];
+    nextCursor: string | null;
+    hasMore: boolean;
+    total: number;
+    scrollY: number;
+    savedAt: number;
+    allTotal?: number;
+    filters?: LibraryFilters;
+    timezone?: string;
+}
+
+function isStoredSnapshot(value: unknown): value is StoredLibrarySnapshot {
     if (typeof value !== 'object' || value === null) {
         return false;
     }
@@ -166,6 +228,12 @@ function isSnapshot(value: unknown): value is LibrarySnapshot {
         typeof snapshot.hasMore === 'boolean' &&
         typeof snapshot.total === 'number' &&
         typeof snapshot.scrollY === 'number' &&
-        typeof snapshot.savedAt === 'number'
+        typeof snapshot.savedAt === 'number' &&
+        (snapshot.allTotal === undefined ||
+            typeof snapshot.allTotal === 'number') &&
+        (snapshot.filters === undefined ||
+            isLibraryFilters(snapshot.filters)) &&
+        (snapshot.timezone === undefined ||
+            typeof snapshot.timezone === 'string')
     );
 }

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vite-plus/test';
+import { defaultLibraryFilters } from '@/lib/library-filters';
 import {
     clearLibrarySnapshot,
     consumeLibraryRestore,
@@ -38,6 +39,9 @@ function snapshot(overrides: Partial<LibrarySnapshot> = {}): LibrarySnapshot {
         nextCursor: 'next',
         hasMore: true,
         total: 4,
+        allTotal: 4,
+        filters: defaultLibraryFilters(),
+        timezone: 'UTC',
         scrollY: 320,
         savedAt: Date.now(),
         ...overrides,
@@ -66,6 +70,10 @@ describe('keeping the Library list together', () => {
                 next_cursor: null,
                 has_more: false,
                 total: 0,
+                all_total: 0,
+                filters: defaultLibraryFilters(),
+                topics: [],
+                timezone: 'UTC',
             }),
         ).toBe(true);
 

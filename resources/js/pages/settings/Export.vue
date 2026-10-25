@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { reactive } from 'vue';
+import { Head } from '@inertiajs/vue3';
 import { DownloadIcon } from '@lucide/vue';
 import { toast } from 'vue-sonner';
 import { Button } from '@/components/ui/button';
@@ -48,42 +49,46 @@ function download(): void {
 </script>
 
 <template>
-    <Card>
-        <CardHeader>
-            <CardTitle class="text-base">Export your data</CardTitle>
-            <CardDescription>
-                Your data is yours. Download it any time as a spreadsheet.
-            </CardDescription>
-        </CardHeader>
+    <div>
+        <Head title="Export" />
 
-        <CardContent class="space-y-4">
-            <ul class="grid gap-3">
-                <li
-                    v-for="option in options"
-                    :key="option.key"
-                    class="flex items-center gap-3"
+        <Card>
+            <CardHeader>
+                <CardTitle class="text-base">Export your data</CardTitle>
+                <CardDescription>
+                    Your data is yours. Download it any time as a spreadsheet.
+                </CardDescription>
+            </CardHeader>
+
+            <CardContent class="space-y-4">
+                <ul class="grid gap-3">
+                    <li
+                        v-for="option in options"
+                        :key="option.key"
+                        class="flex items-center gap-3"
+                    >
+                        <Checkbox
+                            :id="`export-${option.key}`"
+                            v-model="include[option.key]"
+                        />
+                        <label :for="`export-${option.key}`" class="text-sm">
+                            {{ option.label }}
+                        </label>
+                    </li>
+                </ul>
+
+                <div
+                    class="flex flex-wrap items-center justify-between gap-3 border-t pt-4"
                 >
-                    <Checkbox
-                        :id="`export-${option.key}`"
-                        v-model="include[option.key]"
-                    />
-                    <label :for="`export-${option.key}`" class="text-sm">
-                        {{ option.label }}
-                    </label>
-                </li>
-            </ul>
-
-            <div
-                class="flex flex-wrap items-center justify-between gap-3 border-t pt-4"
-            >
-                <p class="text-xs text-muted-foreground">
-                    Last backup: {{ lastBackup }}
-                </p>
-                <Button size="lg" @click="download">
-                    <DownloadIcon aria-hidden="true" />
-                    Download
-                </Button>
-            </div>
-        </CardContent>
-    </Card>
+                    <p class="text-xs text-muted-foreground">
+                        Last backup: {{ lastBackup }}
+                    </p>
+                    <Button size="lg" @click="download">
+                        <DownloadIcon aria-hidden="true" />
+                        Download
+                    </Button>
+                </div>
+            </CardContent>
+        </Card>
+    </div>
 </template>

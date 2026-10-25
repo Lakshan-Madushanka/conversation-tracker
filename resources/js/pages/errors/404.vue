@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Link } from '@inertiajs/vue3';
+import { Head, Link } from '@inertiajs/vue3';
 import { SearchXIcon } from '@lucide/vue';
 import PageHeader from '@/components/PageHeader.vue';
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,8 @@ defineOptions({ layout: AppLayout });
 
 <template>
     <div class="flex flex-col items-center py-16 text-center">
+        <Head title="Page not found" />
+
         <SearchXIcon
             class="mb-4 size-12 text-muted-foreground"
             aria-hidden="true"

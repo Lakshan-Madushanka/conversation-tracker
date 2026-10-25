@@ -9,6 +9,7 @@ import {
     TypeIcon,
     BookOpenIcon,
 } from '@lucide/vue';
+import { Head } from '@inertiajs/vue3';
 import PageHeader from '@/components/PageHeader.vue';
 import StatTile from '@/components/StatTile.vue';
 import {
@@ -32,6 +33,8 @@ function barHeight(count: number): string {
 
 <template>
     <div>
+        <Head title="Progress" />
+
         <PageHeader
             title="Progress"
             description="A gentle look at how your practice is adding up."

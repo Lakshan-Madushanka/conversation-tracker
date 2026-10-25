@@ -3,6 +3,10 @@
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta
+            name="description"
+            content="A calm, personal practice companion for tracking English conversations, corrections, and vocabulary."
+        >
 
         {{-- Apply the saved colour scheme before paint to avoid a flash of the
              wrong theme. Kept tiny and inline so it runs as early as possible. --}}

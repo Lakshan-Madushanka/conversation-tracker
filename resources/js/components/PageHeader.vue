@@ -20,7 +20,10 @@ defineProps<{
                 </p>
             </div>
 
-            <div v-if="$slots.actions" class="flex shrink-0 items-center gap-2">
+            <div
+                v-if="$slots.actions"
+                class="flex max-w-full flex-wrap items-center gap-2"
+            >
                 <slot name="actions" />
             </div>
         </div>

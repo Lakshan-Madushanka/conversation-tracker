@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { reactive, ref, watch } from 'vue';
-import { router, usePage } from '@inertiajs/vue3';
+import { Head, router, usePage } from '@inertiajs/vue3';
 import { InfiniteScroll, Link } from '@inertiajs/vue3';
 import { StarIcon, AlertCircleIcon } from '@lucide/vue';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -16,6 +16,7 @@ import { create as sessionsCreate } from '@/routes/sessions';
 import type { CollectionKey } from '@/lib/sample-data';
 import { debounce } from '@/lib/debounce';
 import { readCollectionQuery } from '@/lib/collection-query';
+import { exampleParts, type ExamplePart } from '@/lib/example';
 import { LaravelPaginator, PracticeFeedbackEntry } from '@/types/types';
 
 defineOptions({ layout: AppLayout });
@@ -68,10 +69,22 @@ const search = debounce(function search() {
         preserveState: true,
     });
 }, 300);
+
+/**
+ * The examples of one entry, showing the formatting saved with them. An entry
+ * saved before examples were a list keeps its single example in `example`.
+ */
+function entryExamples(item: PracticeFeedbackEntry): ExamplePart[] {
+    const parts = exampleParts(item.example_html);
+
+    return parts.length > 0 ? parts : exampleParts(item.example);
+}
 </script>
 
 <template>
     <div>
+        <Head title="Collections" />
+
         <PageHeader
             title="Collections"
             description="Vocabulary, phrases, grammar notes and your common mistakes, gathered from every session."
@@ -94,6 +107,7 @@ const search = debounce(function search() {
                 class="mt-4"
                 type="search"
                 :placeholder="`Search ${getCurrentTabLabel()}`"
+                :aria-label="`Search ${getCurrentTabLabel()}`"
             />
 
             <TabsContent
@@ -140,7 +154,7 @@ const search = debounce(function search() {
                             <div class="flex items-start gap-3">
                                 <button
                                     type="button"
-                                    class="mt-0.5 shrink-0 rounded focus-visible:ring-3 focus-visible:ring-ring/50"
+                                    class="relative mt-0.5 shrink-0 rounded after:absolute after:-inset-1 focus-visible:ring-3 focus-visible:ring-ring/50"
                                     :aria-label="`Star ${item.content_text}`"
                                     :aria-pressed="true"
                                 >
@@ -175,8 +189,20 @@ const search = debounce(function search() {
                                         <Badge variant="secondary"> 5 </Badge>
                                     </div>
 
+                                    <!-- A mistake's correction keeps the
+                                        formatting it was saved with; older
+                                        plain-text entries fall back to their
+                                        words. -->
                                     <p
-                                        v-if="item.correction_text"
+                                        v-if="
+                                            item.type === 'mistake' &&
+                                            item.correction_html
+                                        "
+                                        class="mt-1 text-sm text-muted-foreground"
+                                        v-html="item.correction_html"
+                                    ></p>
+                                    <p
+                                        v-else-if="item.correction_text"
                                         class="mt-1 text-sm text-muted-foreground"
                                     >
                                         {{ item.correction_text }}
@@ -190,10 +216,13 @@ const search = debounce(function search() {
                                     </p>
 
                                     <p
-                                        v-if="item.example"
+                                        v-for="(
+                                            part, partIndex
+                                        ) in entryExamples(item)"
+                                        :key="partIndex"
                                         class="mt-1 text-sm text-muted-foreground italic"
                                     >
-                                        “{{ item.example }}”
+                                        “<span v-html="part.html"></span>”
                                     </p>
 
                                     <div

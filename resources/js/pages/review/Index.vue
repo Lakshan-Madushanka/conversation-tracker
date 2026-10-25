@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Link } from '@inertiajs/vue3';
+import { Head, Link } from '@inertiajs/vue3';
 import { ClockIcon, PlayIcon, SlidersHorizontalIcon } from '@lucide/vue';
 import PageHeader from '@/components/PageHeader.vue';
 import { Badge } from '@/components/ui/badge';
@@ -21,9 +21,11 @@ defineOptions({ layout: AppLayout });
 
 <template>
     <div>
+        <Head title="Review" />
+
         <PageHeader
             title="Review"
-            description="Re-practise the words, phrases and mistakes you want to keep."
+            description="Re-practice the words, phrases and mistakes you want to keep."
         />
 
         <!-- Today's suggestion -->

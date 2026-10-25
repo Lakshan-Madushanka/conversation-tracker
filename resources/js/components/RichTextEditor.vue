@@ -205,7 +205,6 @@ function toggleOrderedList(): void {
             </Button>
 
             <Button
-                v-if="!isInline"
                 type="button"
                 :variant="active.bulletList ? 'secondary' : 'ghost'"
                 size="icon"
@@ -219,7 +218,6 @@ function toggleOrderedList(): void {
             </Button>
 
             <Button
-                v-if="!isInline"
                 type="button"
                 :variant="active.orderedList ? 'secondary' : 'ghost'"
                 size="icon"

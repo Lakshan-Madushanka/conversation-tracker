@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { Link } from '@inertiajs/vue3';
+import { Head, Link } from '@inertiajs/vue3';
 import {
     ArrowRightIcon,
     FlameIcon,
@@ -58,6 +58,8 @@ const greeting = computed(() => {
 
 <template>
     <div>
+        <Head title="Home" />
+
         <PageHeader
             title="Ready for today’s practice?"
             description="A few minutes a day is enough to keep your streak going."

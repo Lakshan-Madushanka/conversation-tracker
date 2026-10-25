@@ -402,6 +402,7 @@ test('feedback examples can be stored', function (): void {
     $record = PracticeFeedbackEntry::query()->where(['client_id' => $id])->first();
 
     expect($record)->not()->toBeNull()
+        ->and($record->example)->toBe('c')
         ->and($record->example_html)->not()->toBeEmpty()
         ->and($record->example_html)
         ->toBe([

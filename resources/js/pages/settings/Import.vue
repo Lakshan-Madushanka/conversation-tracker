@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue';
-import { Link } from '@inertiajs/vue3';
+import { Head, Link } from '@inertiajs/vue3';
 import {
     AlertTriangleIcon,
     ChevronRightIcon,
@@ -84,6 +84,8 @@ const previewRows = [
 
 <template>
     <div>
+        <Head title="Import" />
+
         <!-- Step indicator -->
         <ol
             class="mb-6 flex flex-wrap items-center gap-2 text-sm"
@@ -167,7 +169,10 @@ const previewRows = [
                 >
                     <span class="text-sm">{{ mapping.column }}</span>
                     <Select v-model="mapping.value">
-                        <SelectTrigger class="w-56">
+                        <SelectTrigger
+                            class="w-56"
+                            :aria-label="`Field for ${mapping.column}`"
+                        >
                             <SelectValue placeholder="What is this?" />
                         </SelectTrigger>
                         <SelectContent>

@@ -9,6 +9,7 @@ const page = vi.hoisted(() => ({ url: '/collections' }));
 
 vi.mock('@inertiajs/vue3', async (importOriginal) => ({
     ...(await importOriginal<typeof import('@inertiajs/vue3')>()),
+    Head: { name: 'Head', render: () => null },
     usePage: () => ({ url: page.url }),
 }));
 
@@ -91,6 +92,7 @@ function mountPage(
         },
         global: {
             stubs: {
+                Head: true,
                 InfiniteScroll: {
                     name: 'InfiniteScroll',
                     props: ['data', 'params'],
@@ -152,6 +154,32 @@ describe('a collection of saved entries', () => {
         expect(wrapper.text()).toContain('I relish a quiet evening.');
     });
 
+    it('shows every example and keeps their formatting', () => {
+        const wrapper = mountPage({
+            entries: [
+                entry({
+                    example_html: [
+                        {
+                            id: 'e-1',
+                            text: 'I relish a quiet evening.',
+                            html: 'I relish a <strong>quiet</strong> evening.',
+                        },
+                        {
+                            id: 'e-2',
+                            text: 'She relishes the soup.',
+                            html: 'She <em>relishes</em> the soup.',
+                        },
+                    ],
+                }),
+            ],
+        });
+
+        expect(wrapper.text()).toContain('I relish a quiet evening.');
+        expect(wrapper.text()).toContain('She relishes the soup.');
+        expect(wrapper.html()).toContain('<strong>quiet</strong>');
+        expect(wrapper.html()).toContain('<em>relishes</em>');
+    });
+
     it('shows the why behind a mistake', async () => {
         const wrapper = mountPage({
             mistakes: [
@@ -169,6 +197,28 @@ describe('a collection of saved entries', () => {
         expect(wrapper.text()).toContain('I want a soup');
         expect(wrapper.text()).toContain("I'd like the soup, please");
         expect(wrapper.text()).toContain('Sounds more polite when ordering.');
+    });
+
+    it('shows a mistake correction with its formatting', async () => {
+        const wrapper = mountPage({
+            mistakes: [
+                entry({
+                    type: 'mistake',
+                    content_text: 'I want a soup',
+                    correction_html:
+                        "I'd like the <strong>soup</strong>, please",
+                    correction_text: "I'd like the soup, please",
+                }),
+            ],
+        });
+
+        await switchToTab(wrapper, 'My mistakes');
+
+        const correction = wrapper
+            .findAll('p')
+            .find((paragraph) => paragraph.text().includes("I'd like"));
+
+        expect(correction?.html()).toContain('<strong>soup</strong>');
     });
 
     it('shows a grammar note with its formatting', async () => {

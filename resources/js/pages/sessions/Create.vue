@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { Link, router } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import {
     ArrowLeftIcon,
     CheckIcon,
@@ -941,6 +941,8 @@ onBeforeUnmount(() => {
 
 <template>
     <div>
+        <Head :title="hasSession ? 'Edit session' : 'New session'" />
+
         <!-- Guided mode: one step of one question at a time, with nothing
             on screen but the field being filled in. -->
         <FocusLayout
@@ -1133,7 +1135,7 @@ onBeforeUnmount(() => {
                 @retry="retry"
             />
 
-            <form class="grid gap-4" novalidate @submit.prevent>
+            <form class="grid grid-cols-1 gap-4" novalidate @submit.prevent>
                 <TopicField
                     v-model="topic"
                     :suggestions="props.topics"
@@ -1141,7 +1143,7 @@ onBeforeUnmount(() => {
                     :highlight="needsTopicHighlight"
                 />
 
-                <div class="grid gap-4">
+                <div class="grid grid-cols-1 gap-4">
                     <div
                         v-for="(question, index) in questions"
                         :key="question.uid"

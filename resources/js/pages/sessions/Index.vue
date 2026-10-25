@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Link } from '@inertiajs/vue3';
+import { Head, Link } from '@inertiajs/vue3';
 import { PlusIcon, SearchIcon } from '@lucide/vue';
 import EmptyState from '@/components/EmptyState.vue';
 import FinishedSessionCard from '@/components/FinishedSessionCard.vue';
@@ -21,6 +21,8 @@ defineProps<{
 
 <template>
     <div>
+        <Head title="Library" />
+
         <PageHeader
             title="Library"
             description="Every session you have finished, newest first."

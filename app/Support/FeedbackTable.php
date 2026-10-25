@@ -193,9 +193,17 @@ final class FeedbackTable
         if (is_array($value)) {
             // Only the example column holds a list of entries; every other
             // column holds one line, so a list here leaves it empty.
+            if ($column['key'] !== self::EXAMPLE_COLUMN) {
+                return ['text' => '', 'html' => ''];
+            }
+
+            $entries = self::cleanEntries($value);
+
+            // Keep the words in the plain column too, so search and the
+            // collection views can find an example saved as a list.
             return [
-                'text' => '',
-                'html' => $column['key'] === self::EXAMPLE_COLUMN ? self::cleanEntries($value) : '',
+                'text' => implode(' ', array_column($entries, 'text')),
+                'html' => $entries,
             ];
         }
 

@@ -23,6 +23,7 @@ function mountBox(
         fieldId: string;
         questionNumber: number;
         error: string;
+        guided: boolean;
     }> = {},
 ) {
     const type = props.type ?? 'mistake';
@@ -35,7 +36,7 @@ function mountBox(
             // Each kind of box holds a different shape: plain text, table
             // rows, or notes. The text here stands in for their content.
             modelValue: valueFor(type, props.modelValue ?? ''),
-            fieldId: 'field-mistake',
+            fieldId: props.fieldId ?? 'field-mistake',
             questionNumber: 1,
         },
     });
@@ -431,5 +432,76 @@ describe('the grammar notes box', () => {
         await animationFrame();
 
         expect(boxIsOpen(wrapper)).toBe(true);
+    });
+});
+
+describe('guided mode', () => {
+    it('opens by itself with the cursor in the paste field', async () => {
+        const wrapper = mountBox({ guided: true });
+
+        expect(boxIsOpen(wrapper)).toBe(true);
+        // The step above the box names it, so there is no header to close.
+        expect(wrapper.find('button[aria-label^="Close"]').exists()).toBe(
+            false,
+        );
+
+        await wrapper.vm.$nextTick();
+        await animationFrame();
+
+        expect(fieldIsShown(wrapper)).toBe(true);
+        expect(document.activeElement?.id).toBe('field-mistake-add');
+
+        wrapper.unmount();
+    });
+
+    it('opens a prose box with the cursor in its editor', async () => {
+        // A field id of its own: earlier tests leave their boxes mounted, and
+        // a shared id would put the cursor in one of those instead.
+        const wrapper = mountBox({
+            type: 'natural_version',
+            fieldId: 'field-guided-prose',
+            guided: true,
+        });
+
+        await wrapper.vm.$nextTick();
+        await animationFrame();
+
+        expect(document.activeElement?.id).toBe('field-guided-prose');
+
+        wrapper.unmount();
+    });
+
+    it('never shuts itself when focus leaves the box', async () => {
+        const wrapper = mountBox({ guided: true });
+
+        await wrapper.vm.$nextTick();
+        await animationFrame();
+
+        wrapper.element.dispatchEvent(
+            new FocusEvent('focusout', {
+                bubbles: true,
+                relatedTarget: document.body,
+            }),
+        );
+        await wrapper.vm.$nextTick();
+
+        expect(fieldIsShown(wrapper)).toBe(true);
+
+        wrapper.unmount();
+    });
+
+    it('leaves the cursor in the notes box to the empty note it adds', async () => {
+        const wrapper = mountBox({ type: 'grammar_note', guided: true });
+
+        await wrapper.vm.$nextTick();
+        await animationFrame();
+
+        expect(boxIsOpen(wrapper)).toBe(true);
+        // One blank note travels up to the form as soon as the box opens.
+        expect(wrapper.emitted('update:modelValue')?.[0]?.[0]).toEqual([
+            expect.objectContaining({ html: '' }),
+        ]);
+
+        wrapper.unmount();
     });
 });

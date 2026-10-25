@@ -444,3 +444,47 @@ describe('the phrases table', () => {
         expect(component.text()).toContain('Duplicate');
     });
 });
+
+describe('the paste area first', () => {
+    function mountGuided() {
+        const component = mount(FeedbackTable, {
+            attachTo: document.body,
+            props: {
+                entries: [row()],
+                config: MISTAKES_TABLE,
+                label: 'Mistakes for question 1',
+                fieldId: 'field-mistake',
+                pasteFirst: true,
+            },
+        });
+
+        wrapper = component;
+
+        return component;
+    }
+
+    it('orders the paste area ahead of the rows', () => {
+        const component = mountGuided();
+
+        const pasteArea = component.get('#field-mistake-add').element
+            .parentElement as HTMLElement;
+        const table = component.get('table').element
+            .parentElement as HTMLElement;
+
+        // The blocks stay in the order they are written; the classes below
+        // are what moves the paste area to the top for this one box.
+        expect(pasteArea.className).toContain('order-1');
+        expect(table.className).toContain('order-3');
+        expect(component.classes()).toContain('flex');
+    });
+
+    it('leaves the ordinary layout exactly where it is', () => {
+        const component = mountTable([row()]);
+
+        const pasteArea = component.get('#field-mistake-add').element
+            .parentElement as HTMLElement;
+
+        expect(component.classes()).toContain('space-y-2');
+        expect(pasteArea.className).not.toContain('order-');
+    });
+});

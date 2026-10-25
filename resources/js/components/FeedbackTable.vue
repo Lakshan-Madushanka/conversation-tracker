@@ -54,6 +54,11 @@ const props = defineProps<{
     fieldId: string;
     placeholder?: string;
     error?: string;
+    /**
+     * Puts the paste area above the rows instead of below them. Guided mode
+     * uses it, so an empty box opens with somewhere to paste straight away.
+     */
+    pasteFirst?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -331,13 +336,23 @@ function confirmCell(event: KeyboardEvent): void {
 </script>
 
 <template>
-    <div class="space-y-2" @keydown="handleKeyDown">
+    <div
+        :class="props.pasteFirst ? 'flex flex-col gap-2' : 'space-y-2'"
+        @keydown="handleKeyDown"
+    >
         <!-- The words above are also spoken, so the change is heard at once. -->
         <p role="status" aria-live="polite" class="sr-only">
             {{ announcement }}
         </p>
 
-        <div class="overflow-hidden rounded-lg border bg-card">
+        <!-- With the paste area first, the order classes below (on each
+            block) lift the paste area above the rows. Everywhere else the
+            blocks keep the spacing they are written with above. -->
+
+        <div
+            class="overflow-hidden rounded-lg border bg-card"
+            :class="props.pasteFirst ? 'order-3' : ''"
+        >
             <!-- A real table shares column sizing across every row, so the
                 header lines up with its records. On small screens it stacks,
                 each row becoming a labelled card. -->
@@ -593,19 +608,27 @@ function confirmCell(event: KeyboardEvent): void {
             </table>
         </div>
 
-        <p v-if="attention.size > 0" class="text-xs text-muted-foreground">
+        <p
+            v-if="attention.size > 0"
+            class="text-xs text-muted-foreground"
+            :class="props.pasteFirst ? 'order-4' : ''"
+        >
             {{ attention.size }}
             {{ attention.size === 1 ? 'row needs' : 'rows need' }} attention.
         </p>
 
         <UndoNotice
             v-if="notice"
+            :class="props.pasteFirst ? 'order-2' : ''"
             :message="notice.message"
             :undo-label="notice.undoLabel"
             @undo="undo"
         />
 
-        <div class="flex items-start gap-2">
+        <div
+            class="flex items-start gap-2"
+            :class="props.pasteFirst ? 'order-1' : ''"
+        >
             <Textarea
                 :id="addFieldId"
                 v-model="draft"
@@ -629,7 +652,10 @@ function confirmCell(event: KeyboardEvent): void {
             </Button>
         </div>
 
-        <div class="flex flex-wrap items-center gap-2">
+        <div
+            class="flex flex-wrap items-center gap-2"
+            :class="props.pasteFirst ? 'order-5' : ''"
+        >
             <Button
                 type="button"
                 variant="outline"
@@ -645,6 +671,7 @@ function confirmCell(event: KeyboardEvent): void {
             v-if="limitMessage !== ''"
             role="alert"
             class="text-xs font-medium text-destructive"
+            :class="props.pasteFirst ? 'order-6' : ''"
         >
             {{ limitMessage }}
         </p>
@@ -653,6 +680,7 @@ function confirmCell(event: KeyboardEvent): void {
             v-if="props.error"
             role="alert"
             class="text-xs font-medium text-destructive"
+            :class="props.pasteFirst ? 'order-7' : ''"
         >
             {{ props.error }}
         </p>

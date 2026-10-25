@@ -94,7 +94,7 @@ function pathMatches(href: string, path: string): boolean {
  */
 export function useActiveHref() {
     const page = usePage();
-    const path = computed(() => page.url.split('?')[0] ?? '/');
+    const path = computed(() => page.url?.split('?')[0] ?? '/');
 
     function activeWithin(hrefs: readonly string[]): string {
         const matches = hrefs.filter((href) => pathMatches(href, path.value));

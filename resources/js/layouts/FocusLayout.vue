@@ -15,23 +15,29 @@ defineProps<{
         current: number;
         total: number;
     };
+    /** What the bar measures, in words: a review, or one guided question. */
+    progressLabel?: string;
 }>();
 </script>
 
 <template>
     <div class="flex min-h-dvh flex-col bg-background">
         <header class="flex items-center gap-3 border-b px-4 py-3 sm:px-6">
-            <Button variant="ghost" size="sm" as-child>
-                <Link :href="exitHref">
-                    <ArrowLeftIcon aria-hidden="true" />
-                    Exit
-                </Link>
-            </Button>
+            <!-- A page can take the exit over when leaving means going back
+                into the page itself rather than to another address. -->
+            <slot name="exit">
+                <Button variant="ghost" size="sm" as-child>
+                    <Link :href="exitHref">
+                        <ArrowLeftIcon aria-hidden="true" />
+                        Exit
+                    </Link>
+                </Button>
+            </slot>
 
             <div class="flex-1">
                 <Progress
                     :model-value="progress"
-                    aria-label="Review progress"
+                    :aria-label="progressLabel ?? 'Review progress'"
                 />
             </div>
 

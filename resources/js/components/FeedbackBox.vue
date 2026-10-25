@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { ChevronDownIcon, ChevronUpIcon } from '@lucide/vue';
 import EntryList from '@/components/EntryList.vue';
 import FeedbackTable from '@/components/FeedbackTable.vue';
@@ -44,25 +44,33 @@ const props = defineProps<{
     error?: string;
     /** A row that still needs work, sent here so focus can land on it. */
     focusEntryId?: string | null;
+    /**
+     * Guided mode: the box opens as soon as it is shown, keeps the header and
+     * close button out of the way, never shuts itself, and puts the cursor
+     * straight into the first place to paste.
+     */
+    guided?: boolean;
 }>();
 
 const emit = defineEmits<{
     (event: 'update:modelValue', value: FeedbackValue): void;
 }>();
 
-const box = feedbackBoxFor(props.type);
+const box = computed(() => feedbackBoxFor(props.type));
 
 /** The columns and rules of a table box; only read for the table kind. */
 const tableConfig = computed<FeedbackTableConfig>(() => {
-    if (box.table === undefined) {
-        throw new Error(`The ${box.type} box has no table configuration.`);
+    if (box.value.table === undefined) {
+        throw new Error(
+            `The ${box.value.type} box has no table configuration.`,
+        );
     }
 
-    return box.table;
+    return box.value.table;
 });
 
 const tableEntries = computed(() =>
-    box.kind === 'table' ? (props.modelValue as TableRow[]) : [],
+    box.value.kind === 'table' ? (props.modelValue as TableRow[]) : [],
 );
 
 /** How many rows are still waiting for their attention column. */
@@ -74,35 +82,39 @@ const attentionCount = computed(
 );
 
 const listEntries = computed(() =>
-    box.kind === 'list' ? (props.modelValue as FeedbackEntry[]) : [],
+    box.value.kind === 'list' ? (props.modelValue as FeedbackEntry[]) : [],
 );
 
 const notes = computed(() =>
-    box.kind === 'notes' ? (props.modelValue as GrammarNote[]) : [],
+    box.value.kind === 'notes' ? (props.modelValue as GrammarNote[]) : [],
 );
 
 const html = computed(() =>
-    box.kind === 'text' ? (props.modelValue as string) : '',
+    box.value.kind === 'text' ? (props.modelValue as string) : '',
 );
 
 /** True while nothing in the box holds content. */
 const isBlank = computed(() => {
-    if (box.kind === 'text') {
+    if (box.value.kind === 'text') {
         return isRichTextBlank(html.value);
     }
 
-    if (box.kind === 'notes') {
+    if (box.value.kind === 'notes') {
         return notes.value.every((note) => isRichTextBlank(note.html));
     }
 
-    if (box.kind === 'table') {
+    if (box.value.kind === 'table') {
         return tableEntries.value.length === 0;
     }
 
     return listEntries.value.length === 0;
 });
 
-const expanded = ref(isBlank.value === false || Boolean(props.error));
+// A guided box is open the moment it is shown — that is what the step is
+// for — and otherwise it opens on content or a validation error, as ever.
+const expanded = ref(
+    Boolean(props.guided) || isBlank.value === false || Boolean(props.error),
+);
 
 /** True once the box has held anything, so its fields are built only once. */
 const opened = ref(expanded.value);
@@ -140,6 +152,9 @@ watch(
         expanded.value = true;
         focusElementById(attentionNoteId(props.fieldId, entryId));
     },
+    // The row can be sent with the box itself, as when a guided step opens
+    // straight onto the work that needs fixing.
+    { immediate: true },
 );
 
 const wrapper = ref<HTMLElement | null>(null);
@@ -151,7 +166,7 @@ const wrapper = ref<HTMLElement | null>(null);
 let isOpening = false;
 
 const accessibleLabel = computed(
-    () => `${box.label} for question ${props.questionNumber}`,
+    () => `${box.value.label} for question ${props.questionNumber}`,
 );
 
 /**
@@ -159,7 +174,7 @@ const accessibleLabel = computed(
  * filled box never hides what is inside — the count is always visible.
  */
 const summary = computed(() => {
-    if (box.kind === 'table') {
+    if (box.value.kind === 'table') {
         const count = tableEntries.value.length;
         const rows = `${count} ${count === 1 ? 'row' : 'rows'}`;
 
@@ -170,13 +185,13 @@ const summary = computed(() => {
         return rows;
     }
 
-    if (box.kind === 'list') {
+    if (box.value.kind === 'list') {
         const count = listEntries.value.length;
 
         return `${count} ${count === 1 ? 'entry' : 'entries'}`;
     }
 
-    if (box.kind === 'notes') {
+    if (box.value.kind === 'notes') {
         const count = notes.value.filter(
             (note) => !isRichTextBlank(note.html),
         ).length;
@@ -204,7 +219,7 @@ function open(): void {
     opened.value = true;
     expanded.value = true;
     focusElementById(
-        box.kind === 'table' ? `${props.fieldId}-add` : props.fieldId,
+        box.value.kind === 'table' ? `${props.fieldId}-add` : props.fieldId,
     );
 
     void nextTick(() => {
@@ -213,6 +228,22 @@ function open(): void {
         });
     });
 }
+
+/**
+ * Guided mode: as the step appears, the box opens and the cursor goes to the
+ * first place to paste — except in the notes box, which hands the cursor to
+ * the empty note it adds itself, and except when a row has been sent ahead
+ * (a Fix from the review), which keeps the cursor it was given.
+ */
+onMounted(() => {
+    if (
+        props.guided &&
+        box.value.kind !== 'notes' &&
+        props.focusEntryId == null
+    ) {
+        open();
+    }
+});
 
 /** Shrink the box. Content is kept, only hidden, so nothing is lost. */ function collapse(): void {
     expanded.value = false;
@@ -239,7 +270,7 @@ function collapseIfBlank(): void {
  * no field inside it — otherwise the click that opens the box reads as the
  * learner leaving, and it shuts again at once.
  */
-const holdsFocusWithoutField = computed(() => box.kind === 'notes');
+const holdsFocusWithoutField = computed(() => box.value.kind === 'notes');
 
 function focusIsInside(event: FocusEvent): boolean {
     const related = event.relatedTarget as Node | null;
@@ -254,6 +285,12 @@ function focusIsInside(event: FocusEvent): boolean {
 }
 
 function handleFocusOut(event: FocusEvent): void {
+    // A guided box never shuts itself: the step shows one box, and the
+    // learner moves on with the button rather than by clicking away.
+    if (props.guided) {
+        return;
+    }
+
     if (isOpening) {
         return;
     }
@@ -301,7 +338,12 @@ function handleFocusOut(event: FocusEvent): void {
             mounted while shrunk, so text the learner has typed but not saved
             survives being collapsed and reopened. -->
         <div v-if="opened" v-show="expanded">
-            <div class="flex flex-wrap items-center gap-2 px-3 pt-3">
+            <!-- Guided mode leaves the header out: the step above names the
+                box, and its own controls sit beside the box instead. -->
+            <div
+                v-if="!props.guided"
+                class="flex flex-wrap items-center gap-2 px-3 pt-3"
+            >
                 <SectionLabel :tone="box.tone">{{ box.label }}</SectionLabel>
 
                 <Button
@@ -317,7 +359,7 @@ function handleFocusOut(event: FocusEvent): void {
                 </Button>
             </div>
 
-            <div class="p-3 pt-2">
+            <div :class="props.guided ? 'p-3' : 'p-3 pt-2'">
                 <EntryList
                     v-if="box.kind === 'list'"
                     :entries="listEntries"
@@ -336,6 +378,7 @@ function handleFocusOut(event: FocusEvent): void {
                     :field-id="props.fieldId"
                     :placeholder="box.placeholder"
                     :error="props.error"
+                    :paste-first="props.guided"
                     @update:entries="updateTableEntries"
                 />
 
@@ -346,6 +389,7 @@ function handleFocusOut(event: FocusEvent): void {
                     :field-id="props.fieldId"
                     :placeholder="box.placeholder"
                     :error="props.error"
+                    :guided="props.guided"
                     @update:notes="emit('update:modelValue', $event)"
                 />
 

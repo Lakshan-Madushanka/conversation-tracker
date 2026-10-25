@@ -32,6 +32,14 @@ export interface AttentionScan {
     first: AttentionFocus | null;
 }
 
+/** How many of one box's rows still ask for something, and the first of them. */
+export interface BoxAttentionScan {
+    count: number;
+    firstEntryId: string | null;
+    /** What the first row is waiting for, for example "Add the correction.". */
+    reason: string | null;
+}
+
 /** The id the fields of a feedback box are built on, as QuestionCard builds it. */
 export function attentionFieldId(
     questionUid: string,
@@ -75,6 +83,44 @@ function holdsContent(config: FeedbackTableConfig, row: TableRow): boolean {
 }
 
 /**
+ * Scans one box of one question for rows still missing a correction or a
+ * meaning, carrying the wording the table would show beside the first of them.
+ * Blank rows are skipped, mirroring the server's rule that drops them.
+ */
+export function scanBoxAttention(
+    question: PracticeQuestionForm,
+    boxType: AttentionBox,
+): BoxAttentionScan {
+    const table = feedbackBoxFor(boxType).table;
+
+    if (table === undefined) {
+        return { count: 0, firstEntryId: null, reason: null };
+    }
+
+    let count = 0;
+    let firstEntryId: string | null = null;
+    let reason: string | null = null;
+
+    for (const row of question.feedback[boxType]) {
+        const entry = row as TableRow;
+        const why = rowAttention(table, entry);
+
+        if (why === null || !holdsContent(table, entry)) {
+            continue;
+        }
+
+        count += 1;
+
+        if (firstEntryId === null) {
+            firstEntryId = entry.id;
+            reason = why;
+        }
+    }
+
+    return { count, firstEntryId, reason };
+}
+
+/**
  * Scans the questions as they stand on screen for rows still missing a
  * correction or a meaning, in the order the learner meets them.
  *
@@ -89,30 +135,15 @@ export function scanAttention(
 
     for (const question of questions) {
         for (const boxType of ATTENTION_BOXES) {
-            const table = feedbackBoxFor(boxType).table;
-            const rows = question.feedback[boxType];
+            const box = scanBoxAttention(question, boxType);
 
-            if (table === undefined) {
-                continue;
-            }
+            count += box.count;
 
-            for (const row of rows) {
-                const entry = row as TableRow;
-
-                if (rowAttention(table, entry) === null) {
-                    continue;
-                }
-
-                if (!holdsContent(table, entry)) {
-                    continue;
-                }
-
-                count += 1;
-
-                first ??= {
+            if (first === null && box.firstEntryId !== null) {
+                first = {
                     questionUid: question.uid,
                     boxType,
-                    entryId: row.id,
+                    entryId: box.firstEntryId,
                 };
             }
         }

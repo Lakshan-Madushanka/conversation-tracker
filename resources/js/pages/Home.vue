@@ -10,7 +10,7 @@ import {
 } from '@lucide/vue';
 import ContinueSessionCard from '@/components/ContinueSessionCard.vue';
 import PageHeader from '@/components/PageHeader.vue';
-import FinishedSessionCard from '@/components/FinishedSessionCard.vue';
+import SessionCard from '@/components/SessionCard.vue';
 import StatTile from '@/components/StatTile.vue';
 import { Button } from '@/components/ui/button';
 import {
@@ -27,7 +27,7 @@ import {
     create as sessionsCreate,
     index as sessionsIndex,
 } from '@/routes/sessions';
-import type { ContinueCardData, FinishedSessionData } from '@/types';
+import type { ContinueCardData, SessionCardData } from '@/types';
 
 defineOptions({ layout: AppLayout });
 
@@ -36,7 +36,7 @@ withDefaults(
         /** The most recent unfinished session, if there is one. */
         unfinishedSession?: ContinueCardData | null;
         /** The most recent finished sessions, newest first. */
-        recentSessions?: FinishedSessionData[];
+        recentSessions?: SessionCardData[];
     }>(),
     { recentSessions: () => [] },
 );
@@ -132,13 +132,13 @@ const greeting = computed(() => {
                     :href="sessionsIndex.url()"
                     class="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
                 >
-                    View all
+                    View all sessions
                     <ArrowRightIcon class="size-3.5" aria-hidden="true" />
                 </Link>
             </div>
 
             <div class="grid gap-3">
-                <FinishedSessionCard
+                <SessionCard
                     v-for="session in recentSessions"
                     :key="session.id"
                     :session="session"

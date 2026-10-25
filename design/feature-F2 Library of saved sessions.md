@@ -196,27 +196,27 @@ This describes the intended approach at a high level, using the agreed stack (La
 
 All interface pieces in the Library should come from **shadcn-vue**, the component library already chosen for the app. Only build a custom piece when shadcn-vue has nothing suitable, and then build it by **composing shadcn-vue parts with Tailwind**. Do not add any other component library.
 
-| Library need | shadcn-vue component to use |
-|---|---|
-| Search box | Input (with an icon and a clear button) |
-| Topic filter (one or several topics) | Combobox, or Popover with Command and Checkbox |
-| Date filter (quick choices and custom range) | Select for the quick choices, plus Popover with Range Calendar for a custom range |
-| Content type and status filters | Toggle Group, or Select and Checkbox in a Popover |
-| Sort control | Select |
-| Active filter chips and status labels ("Finished," "Unfinished," "Archived") | Badge (with text, never color alone) |
-| Library and Archived view switch | Tabs |
-| Session cards | Card |
-| Single-session menu (Edit, Archive, Delete) | Dropdown Menu |
-| Explanation for the unavailable Archive option | Visible helper text, with Tooltip only as an extra (never the only place the reason appears) |
-| Selection checkboxes and the "I understand this cannot be undone" tick | Checkbox |
-| Selection bar actions and all buttons | Button |
-| Delete confirmations (simple and prominent warning) | Alert Dialog, with Alert for the warning callout |
-| Filters panel on phones | Sheet |
-| Messages with Undo ("3 sessions archived") | Sonner (toast) |
-| Loading states | Skeleton |
-| Empty and no-results states | Empty-state piece built from Card, Button, and existing icons |
-| "Load more" and result counts | Button, and plain text |
-| Dividers and layout details | Separator, Scroll Area |
+| Library need                                                                 | shadcn-vue component to use                                                                  |
+| ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Search box                                                                   | Input (with an icon and a clear button)                                                      |
+| Topic filter (one or several topics)                                         | Combobox, or Popover with Command and Checkbox                                               |
+| Date filter (quick choices and custom range)                                 | Select for the quick choices, plus Popover with Range Calendar for a custom range            |
+| Content type and status filters                                              | Toggle Group, or Select and Checkbox in a Popover                                            |
+| Sort control                                                                 | Select                                                                                       |
+| Active filter chips and status labels ("Finished," "Unfinished," "Archived") | Badge (with text, never color alone)                                                         |
+| Library and Archived view switch                                             | Tabs                                                                                         |
+| Session cards                                                                | Card                                                                                         |
+| Single-session menu (Edit, Archive, Delete)                                  | Dropdown Menu                                                                                |
+| Explanation for the unavailable Archive option                               | Visible helper text, with Tooltip only as an extra (never the only place the reason appears) |
+| Selection checkboxes and the "I understand this cannot be undone" tick       | Checkbox                                                                                     |
+| Selection bar actions and all buttons                                        | Button                                                                                       |
+| Delete confirmations (simple and prominent warning)                          | Alert Dialog, with Alert for the warning callout                                             |
+| Filters panel on phones                                                      | Sheet                                                                                        |
+| Messages with Undo ("3 sessions archived")                                   | Sonner (toast)                                                                               |
+| Loading states                                                               | Skeleton                                                                                     |
+| Empty and no-results states                                                  | Empty-state piece built from Card, Button, and existing icons                                |
+| "Load more" and result counts                                                | Button, and plain text                                                                       |
+| Dividers and layout details                                                  | Separator, Scroll Area                                                                       |
 
 Where a shadcn-vue component needs small changes (for example the destructive look of the finished-session warning), change its **variants and Tailwind classes** instead of replacing it, so the Library stays visually consistent with the rest of the app, in light and dark mode, and keeps the accessibility built into the components.
 
@@ -229,6 +229,7 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 **What it delivers:** A Library page, reachable from the main navigation and from Home, that lists all non-archived sessions newest first as cards with topic, date, counts, and status. Cards open the right page. Long lists load progressively, and empty states are in place.
 
 **Tests**
+
 - The Library link in the main navigation and the "View all sessions" link on Home both open the Library.
 - Finished and unfinished sessions are both listed, newest session date first.
 - Each card shows the topic, date, counts (questions, words, phrases, mistakes), and a text status label.
@@ -249,6 +250,7 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 **What it delivers:** Topic, date, content type, and status filters, plus sorting, with active filters shown as removable chips, a Clear all action, and filter state kept in the page address.
 
 **Tests**
+
 - Choosing one topic shows only that topic's sessions, and choosing several shows sessions from any of them.
 - The date filter works for each quick choice and for a custom range, using the session date.
 - A custom range with the end before the start is explained or corrected.
@@ -269,6 +271,7 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 **What it delivers:** A search box that finds any word, phrase, or mistake saved in any session, shows matching sessions with their matching items, highlights the match, and opens the session at that item.
 
 **Tests**
+
 - Results appear as the learner types, after a short pause, and not before two characters.
 - Search finds text in topics, tutor's questions, answers, mistakes (what I said, correction, reason), vocabulary (word, meaning, example), phrases (phrase, meaning or use, example), grammar notes, and natural versions.
 - Search ignores capitalization, accents ("cafe" finds "café"), and extra spaces, and matches parts of words.
@@ -292,6 +295,7 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 **What it delivers:** A session menu with Edit and Archive on cards and on the reading page, an Archived view with Restore, and the rules for what archiving hides.
 
 **Tests**
+
 - The menu on a card and on the reading page offers Edit, Archive, and Delete (Delete is added in Step 5), and works with the keyboard and touch.
 - Edit opens the editor for that session.
 - Archiving a finished session works immediately, with a message that offers Undo.
@@ -316,6 +320,7 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 **What it delivers:** Permanent deletion from cards, the reading page, and the Archived view, with a simple confirmation for unfinished sessions and a prominent warning for finished sessions. The finished-session warning shows the exact effect on progress totals and the streak before the learner confirms, and the deletion then lowers them accordingly.
 
 **Tests**
+
 - Delete always asks for confirmation first.
 - For an unfinished session, the confirmation names the session (topic and date), says how much will be removed, and states that it cannot be undone. It does not suggest Archive.
 - For a finished session, a prominent warning appears, visually distinct from other confirmations, with plain and serious wording.
@@ -350,6 +355,7 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 **What it delivers:** A selection mode in the Library and the Archived view, with Select all, range selection, and bulk Archive, Restore, and Delete.
 
 **Tests**
+
 - The Select button turns on selection mode, showing a checkbox on every card, and Cancel turns it off.
 - In selection mode, tapping a card selects or unselects it instead of opening it, and the single-session menu is hidden.
 - The selection bar shows the correct count, and the actions are unavailable when nothing is selected.
@@ -381,6 +387,7 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 **What it delivers:** The whole Library is checked end to end for speed, clarity, consistency, and accessibility.
 
 **Tests**
+
 - A full journey works: open the Library, filter by topic and date, search for a word, open the match, edit the session, return to the same place, archive it, restore it, and delete it, and also select several sessions and archive, restore, and delete them together.
 - Wording is friendly and consistent with the rest of the app, and nothing makes the learner feel judged.
 - All screens work on a phone, tablet, and computer, with no sideways scrolling, and at 200 percent zoom.

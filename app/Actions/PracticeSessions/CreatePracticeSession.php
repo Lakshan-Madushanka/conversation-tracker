@@ -7,8 +7,8 @@ namespace App\Actions\PracticeSessions;
 use App\Actions\PracticeQuestions\SavePracticeQuestions;
 use App\Actions\Topics\FindOrCreateTopic;
 use App\Models\PracticeSession;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\UniqueConstraintViolationException;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -46,7 +46,7 @@ final readonly class CreatePracticeSession
                     'topic_id' => $this->findOrCreateTopic->handle((string) $data['topic'])->id,
                     'client_key' => $clientKey,
                 ]);
-                $session->forceFill(['last_changed_at' => Carbon::now()])->saveQuietly();
+                $session->forceFill(['last_changed_at' => CarbonImmutable::now()])->saveQuietly();
             } catch (UniqueConstraintViolationException) {
                 // Another request created it a moment ago; reuse that session.
                 return PracticeSession::query()->where('client_key', $clientKey)->firstOrFail();

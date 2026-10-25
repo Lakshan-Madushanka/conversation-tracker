@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Actions\PracticeSessions\SplitLegacyFeedbackEntries;
+use Carbon\CarbonImmutable;
 use Database\Factories\PracticeSessionFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Scope;
@@ -13,7 +14,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Carbon;
+use Illuminate\Pagination\CursorPaginator;
 use Illuminate\Support\Collection;
 
 /**
@@ -22,15 +23,15 @@ use Illuminate\Support\Collection;
  * @property int $id
  * @property int $topic_id
  * @property string $status
- * @property Carbon|null $finished_at
- * @property Carbon|null $last_changed_at
+ * @property CarbonImmutable|null $finished_at
+ * @property CarbonImmutable|null $last_changed_at
  * @property int $version
  * @property string|null $client_key
  * @property string|null $last_save_key
  * @property Topic $topic
  * @property Collection<int, PracticeQuestion> $questions
- * @property Carbon|null $created_at
- * @property Carbon|null $updated_at
+ * @property CarbonImmutable|null $created_at
+ * @property CarbonImmutable|null $updated_at
  */
 #[Fillable(['topic_id', 'status', 'client_key'])]
 class PracticeSession extends Model
@@ -41,6 +42,9 @@ class PracticeSession extends Model
     public const STATUS_UNFINISHED = 'unfinished';
 
     public const STATUS_FINISHED = 'finished';
+
+    /** How many sessions the Library loads at a time. */
+    public const LIBRARY_PAGE_SIZE = 20;
 
     /**
      * Mirror the database default so a newly created session already reports
@@ -214,6 +218,79 @@ class PracticeSession extends Model
     }
 
     /**
+     * The sessions that belong in the Library and in the Home lists.
+     *
+     * Archiving arrives in Step 4. When it does, archived sessions are
+     * excluded here, once, so every list follows the same rule.
+     *
+     * @return Builder<self>
+     */
+    public static function libraryQuery(): Builder
+    {
+        return self::query();
+    }
+
+    /**
+     * One page of the Library, newest session date first. Sessions created on
+     * the same day fall back to the newest row first, and the id keeps the
+     * order stable when two rows share a moment.
+     *
+     * The cursor continues from the last session shown, not from a page
+     * number, so a session created while the list is open can never make a
+     * later page repeat or skip one.
+     *
+     * @return array{
+     *     sessions: list<array{id: int, topic: string, session_date: string|null, last_edited_at: string|null, status: string, counts: array{questions: int, words: int, phrases: int, mistakes: int, grammar_notes: int}}>,
+     *     next_cursor: string|null,
+     *     has_more: bool,
+     *     total: int
+     * }
+     */
+    public static function libraryPage(?string $cursor = null, int $perPage = self::LIBRARY_PAGE_SIZE): array
+    {
+        /** @var CursorPaginator<int, self> $paginator */
+        $paginator = self::libraryQuery()
+            ->with(['topic', 'questions.feedbackEntries'])
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->cursorPaginate(perPage: $perPage, cursor: $cursor);
+
+        return [
+            'sessions' => array_values(array_map(
+                fn (self $session): array => $session->toLibraryPayload(),
+                $paginator->items(),
+            )),
+            'next_cursor' => $paginator->nextCursor()?->encode(),
+            'has_more' => $paginator->hasMorePages(),
+            'total' => self::libraryTotal(),
+        ];
+    }
+
+    /** How many sessions the Library lists in total. */
+    public static function libraryTotal(): int
+    {
+        return self::libraryQuery()->count();
+    }
+
+    /**
+     * The day the practice happened. Recorded sessions use the day they were
+     * created; imported sessions will keep their original date here later.
+     */
+    public function sessionDate(): ?CarbonImmutable
+    {
+        return $this->created_at;
+    }
+
+    /**
+     * When the learner last changed the content. Opening or finishing a
+     * session does not count as an edit.
+     */
+    public function lastEditedAt(): ?CarbonImmutable
+    {
+        return $this->last_changed_at;
+    }
+
+    /**
      * The most recently touched unfinished session, shaped for the Home page's
      * "Continue where you left off" card. Returns null when nothing is waiting.
      *
@@ -221,7 +298,7 @@ class PracticeSession extends Model
      */
     public static function continueCard(): ?array
     {
-        $session = self::query()
+        $session = self::libraryQuery()
             ->unfinished()
             ->orderByDesc('updated_at')
             ->orderByDesc('id')
@@ -231,15 +308,15 @@ class PracticeSession extends Model
     }
 
     /**
-     * Finished sessions for a list — the Home page's most recent ones and the
-     * whole Library — newest change first. The limit keeps Home to its five
-     * newest; the Library asks for all of them.
+     * Finished sessions for the Home page's "Recent sessions" list, newest
+     * change first. They use the same card shape as the Library so both lists
+     * look and behave the same.
      *
-     * @return list<array{id: int, topic: string, finished_at: string|null, counts: array{questions: int, words: int, phrases: int, mistakes: int, grammar_notes: int}}>
+     * @return list<array{id: int, topic: string, session_date: string|null, last_edited_at: string|null, status: string, counts: array{questions: int, words: int, phrases: int, mistakes: int, grammar_notes: int}}>
      */
     public static function finishedSessions(?int $limit = null): array
     {
-        $query = self::query()
+        $query = self::libraryQuery()
             ->finished()
             ->with(['topic', 'questions.feedbackEntries'])
             ->orderByDesc('updated_at')
@@ -249,20 +326,31 @@ class PracticeSession extends Model
             $query->limit($limit);
         }
 
-        $sessions = $query->get();
+        return array_values(
+            $query
+                ->get()
+                ->map(fn (self $session): array => $session->toLibraryPayload())
+                ->all(),
+        );
+    }
 
-        $payload = [];
+    /**
+     * A session as a card in the Library or on Home.
+     *
+     * @return array{id: int, topic: string, session_date: string|null, last_edited_at: string|null, status: string, counts: array{questions: int, words: int, phrases: int, mistakes: int, grammar_notes: int}}
+     */
+    public function toLibraryPayload(): array
+    {
+        $this->loadMissing(['topic', 'questions.feedbackEntries']);
 
-        foreach ($sessions as $session) {
-            $payload[] = [
-                'id' => $session->id,
-                'topic' => $session->topic->name,
-                'finished_at' => $session->finished_at?->toIso8601String(),
-                'counts' => $session->counts(),
-            ];
-        }
-
-        return $payload;
+        return [
+            'id' => $this->id,
+            'topic' => $this->topic->name,
+            'session_date' => $this->sessionDate()?->toIso8601String(),
+            'last_edited_at' => $this->lastEditedAt()?->toIso8601String(),
+            'status' => $this->status,
+            'counts' => $this->counts(),
+        ];
     }
 
     /**

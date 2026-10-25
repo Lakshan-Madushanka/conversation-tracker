@@ -12,10 +12,12 @@ it('lists only finished sessions, newest change first', function (): void {
     $topic = Topic::factory()->create(['name' => 'Travel']);
 
     $older = PracticeSession::factory()->finished()->for($topic)->create([
+        'created_at' => now()->subDay(),
         'finished_at' => now()->subDay(),
         'updated_at' => now()->subDay(),
     ]);
     $newer = PracticeSession::factory()->finished()->for($topic)->create([
+        'created_at' => now(),
         'finished_at' => now(),
         'updated_at' => now(),
     ]);
@@ -32,7 +34,8 @@ it('lists only finished sessions, newest change first', function (): void {
             ->count('recentSessions', 2)
             ->where('recentSessions.0.id', $newer->id)
             ->where('recentSessions.0.topic', 'Travel')
-            ->where('recentSessions.0.finished_at', $newer->finished_at?->toIso8601String())
+            ->where('recentSessions.0.session_date', $newer->created_at?->toIso8601String())
+            ->where('recentSessions.0.status', PracticeSession::STATUS_FINISHED)
             ->where('recentSessions.1.id', $older->id));
 });
 

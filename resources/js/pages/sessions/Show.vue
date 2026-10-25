@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { Head, Link } from '@inertiajs/vue3';
-import { ArrowLeftIcon, PencilIcon } from '@lucide/vue';
+import { PencilIcon } from '@lucide/vue';
+import BackToLibrary from '@/components/BackToLibrary.vue';
 import PageHeader from '@/components/PageHeader.vue';
 import SectionLabel from '@/components/SectionLabel.vue';
 import StatTile from '@/components/StatTile.vue';
@@ -19,10 +20,7 @@ import {
 } from '@/lib/reading';
 import { isRichTextBlank } from '@/lib/rich-text';
 import { questionDataHasContent } from '@/lib/feedback';
-import {
-    edit as sessionsEdit,
-    index as sessionsIndex,
-} from '@/routes/sessions';
+import { edit as sessionsEdit } from '@/routes/sessions';
 import type {
     PracticeQuestionData,
     PracticeSessionData,
@@ -132,13 +130,7 @@ function partsOf(entry: ReadingEntry): ReadingPart[] {
     <div>
         <Head :title="props.session.topic.name" />
 
-        <Link
-            :href="sessionsIndex.url()"
-            class="mb-4 inline-flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
-        >
-            <ArrowLeftIcon class="size-4" aria-hidden="true" />
-            Library
-        </Link>
+        <BackToLibrary />
 
         <PageHeader
             :title="props.session.topic.name"

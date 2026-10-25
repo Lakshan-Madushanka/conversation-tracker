@@ -167,11 +167,14 @@ export interface ContinueCardData {
     updated_at: string;
 }
 
-/** A finished session as listed on Home and in the Library. */
-export interface FinishedSessionData {
+/** A session as listed on Home and in the Library. */
+export interface SessionCardData {
     id: number;
     topic: string;
-    /** ISO 8601 timestamp of when it was finished. */
-    finished_at: string | null;
+    /** ISO 8601 timestamp of the day the session happened. */
+    session_date: string | null;
+    /** ISO 8601 timestamp of the last content change, or null if never edited. */
+    last_edited_at: string | null;
+    status: 'finished' | 'unfinished';
     counts: SessionCounts;
 }

@@ -6,7 +6,7 @@ namespace App\Actions\PracticeSessions;
 
 use App\Models\PracticeQuestion;
 use App\Models\PracticeSession;
-use Illuminate\Support\Carbon;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -43,7 +43,7 @@ final readonly class FinishPracticeSession
             $wasFinished = $locked->isFinished() && $locked->finished_at !== null;
 
             $locked->status = PracticeSession::STATUS_FINISHED;
-            $locked->finished_at ??= Carbon::now();
+            $locked->finished_at ??= CarbonImmutable::now();
 
             if ($removed > 0 || ! $wasFinished) {
                 $locked->version += 1;

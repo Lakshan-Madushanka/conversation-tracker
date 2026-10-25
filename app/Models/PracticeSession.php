@@ -225,14 +225,14 @@ class PracticeSession extends Model
      * Archiving arrives in Step 4. When it does, archived sessions are
      * excluded here, once, so every list follows the same rule.
      *
+     * @param  Builder<self>  $query
      * @return Builder<self>
      */
-    public static function libraryQuery(?LibraryFilters $filters = null): Builder
+    #[Scope]
+    protected function library(Builder $query, ?LibraryFilters $filters = null): Builder
     {
-        $query = self::query();
-
         return $filters instanceof LibraryFilters
-            ? self::applyFilters($query, $filters)
+            ? $this->applyFilters($query, $filters)
             : $query;
     }
 
@@ -258,7 +258,8 @@ class PracticeSession extends Model
         ?string $cursor = null,
         int $perPage = self::LIBRARY_PAGE_SIZE,
     ): array {
-        $query = self::libraryQuery($filters)
+        $query = self::query()
+            ->library($filters)
             ->with(['topic', 'questions.feedbackEntries']);
 
         self::applySort($query, $filters?->sort() ?? LibraryFilters::SORT_NEWEST);
@@ -284,7 +285,7 @@ class PracticeSession extends Model
      */
     public static function libraryTotal(?LibraryFilters $filters = null): int
     {
-        return self::libraryQuery($filters)->count();
+        return self::query()->library($filters)->count();
     }
 
     /**
@@ -295,7 +296,8 @@ class PracticeSession extends Model
      */
     public static function libraryTopics(): array
     {
-        $topics = self::libraryQuery()
+        $topics = self::query()
+            ->library()
             ->join('topics', 'topics.id', '=', 'practice_sessions.topic_id')
             ->distinct()
             ->orderBy('topics.name')
@@ -317,7 +319,7 @@ class PracticeSession extends Model
      * @param  Builder<self>  $query
      * @return Builder<self>
      */
-    private static function applyFilters(Builder $query, LibraryFilters $filters): Builder
+    private function applyFilters(Builder $query, LibraryFilters $filters): Builder
     {
         if ($filters->topics() !== []) {
             $query->whereIn('topic_id', $filters->topics());
@@ -420,7 +422,8 @@ class PracticeSession extends Model
      */
     public static function continueCard(): ?array
     {
-        $session = self::libraryQuery()
+        $session = self::query()
+            ->library()
             ->unfinished()
             ->orderByDesc('updated_at')
             ->orderByDesc('id')
@@ -438,7 +441,8 @@ class PracticeSession extends Model
      */
     public static function finishedSessions(?int $limit = null): array
     {
-        $query = self::libraryQuery()
+        $query = self::query()
+            ->library()
             ->finished()
             ->with(['topic', 'questions.feedbackEntries'])
             ->orderByDesc('updated_at')

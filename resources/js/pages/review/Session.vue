@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue';
-import { Link } from '@inertiajs/vue3';
+import { Head, Link } from '@inertiajs/vue3';
 import { CheckCheckIcon, EyeIcon } from '@lucide/vue';
 import type { ReviewRating } from '@/components/RatingButtons.vue';
 import RatingButtons from '@/components/RatingButtons.vue';
@@ -58,6 +58,10 @@ function rate(rating: ReviewRating): void {
         :position="position"
         :exit-href="reviewIndex.url()"
     >
+        <Head title="Review session" />
+
+        <h1 class="sr-only">Review session</h1>
+
         <!-- Summary shown once every item is done -->
         <Card v-if="finished" class="text-center">
             <CardHeader>

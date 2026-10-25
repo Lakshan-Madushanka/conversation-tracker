@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
+import { Head } from '@inertiajs/vue3';
 import { MoonIcon, SunIcon } from '@lucide/vue';
 import {
     Card,
@@ -36,6 +37,8 @@ const level = ref('b1');
 
 <template>
     <div class="space-y-4">
+        <Head title="Preferences" />
+
         <!-- Appearance -->
         <Card>
             <CardHeader>
@@ -59,7 +62,10 @@ const level = ref('b1');
                         />
                         Dark mode
                     </span>
-                    <Switch v-model:model-value="isDark" />
+                    <Switch
+                        v-model:model-value="isDark"
+                        aria-label="Dark mode"
+                    />
                 </div>
             </CardContent>
         </Card>
@@ -69,19 +75,22 @@ const level = ref('b1');
             <CardHeader>
                 <CardTitle class="text-base">Daily reminder</CardTitle>
                 <CardDescription>
-                    Get a gentle nudge to practise at a time you choose.
+                    Get a gentle nudge to practice at a time you choose.
                 </CardDescription>
             </CardHeader>
             <CardContent class="space-y-4">
                 <div class="flex items-center justify-between gap-4">
                     <span class="text-sm">Remind me to review</span>
-                    <Switch v-model:model-value="reminderEnabled" />
+                    <Switch
+                        v-model:model-value="reminderEnabled"
+                        aria-label="Remind me to review"
+                    />
                 </div>
 
                 <div
                     class="flex items-center justify-between gap-4"
                     :class="
-                        !reminderEnabled && 'pointer-events-none opacity-50'
+                        !reminderEnabled && 'pointer-events-none opacity-60'
                     "
                 >
                     <label for="reminder-time" class="text-sm">Time</label>
@@ -89,6 +98,7 @@ const level = ref('b1');
                         id="reminder-time"
                         v-model="reminderTime"
                         type="time"
+                        :disabled="!reminderEnabled"
                         class="h-8 rounded-lg border border-input bg-transparent px-2.5 text-base md:text-sm"
                     />
                 </div>
@@ -105,7 +115,10 @@ const level = ref('b1');
             </CardHeader>
             <CardContent>
                 <Select v-model="level">
-                    <SelectTrigger class="w-full sm:w-56">
+                    <SelectTrigger
+                        class="w-full sm:w-56"
+                        aria-label="Your level"
+                    >
                         <SelectValue placeholder="Pick a level" />
                     </SelectTrigger>
                     <SelectContent>

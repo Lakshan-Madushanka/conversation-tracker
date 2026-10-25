@@ -28,6 +28,7 @@ import { Toaster } from '@/components/ui/sonner';
 
                 <main
                     id="main-content"
+                    tabindex="-1"
                     class="mx-auto w-full max-w-5xl flex-1 px-4 py-6 pb-24 md:px-8 md:pb-10"
                 >
                     <slot />

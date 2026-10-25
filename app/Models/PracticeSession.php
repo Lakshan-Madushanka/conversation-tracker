@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Actions\PracticeSessions\SplitLegacyFeedbackEntries;
+use App\Support\LibraryFilters;
 use Carbon\CarbonImmutable;
 use Database\Factories\PracticeSessionFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -218,22 +219,27 @@ class PracticeSession extends Model
     }
 
     /**
-     * The sessions that belong in the Library and in the Home lists.
+     * The sessions that belong in the Library and in the Home lists, narrowed
+     * by the learner's filters when they have chosen any.
      *
      * Archiving arrives in Step 4. When it does, archived sessions are
      * excluded here, once, so every list follows the same rule.
      *
      * @return Builder<self>
      */
-    public static function libraryQuery(): Builder
+    public static function libraryQuery(?LibraryFilters $filters = null): Builder
     {
-        return self::query();
+        $query = self::query();
+
+        return $filters instanceof LibraryFilters
+            ? self::applyFilters($query, $filters)
+            : $query;
     }
 
     /**
-     * One page of the Library, newest session date first. Sessions created on
-     * the same day fall back to the newest row first, and the id keeps the
-     * order stable when two rows share a moment.
+     * One page of the Library, in the chosen order. Sessions created on the
+     * same day fall back to the newest row first, and the id keeps the order
+     * stable when two rows share a moment.
      *
      * The cursor continues from the last session shown, not from a page
      * number, so a session created while the list is open can never make a
@@ -243,17 +249,22 @@ class PracticeSession extends Model
      *     sessions: list<array{id: int, topic: string, session_date: string|null, last_edited_at: string|null, status: string, counts: array{questions: int, words: int, phrases: int, mistakes: int, grammar_notes: int}}>,
      *     next_cursor: string|null,
      *     has_more: bool,
-     *     total: int
+     *     total: int,
+     *     all_total: int
      * }
      */
-    public static function libraryPage(?string $cursor = null, int $perPage = self::LIBRARY_PAGE_SIZE): array
-    {
+    public static function libraryPage(
+        ?LibraryFilters $filters = null,
+        ?string $cursor = null,
+        int $perPage = self::LIBRARY_PAGE_SIZE,
+    ): array {
+        $query = self::libraryQuery($filters)
+            ->with(['topic', 'questions.feedbackEntries']);
+
+        self::applySort($query, $filters?->sort() ?? LibraryFilters::SORT_NEWEST);
+
         /** @var CursorPaginator<int, self> $paginator */
-        $paginator = self::libraryQuery()
-            ->with(['topic', 'questions.feedbackEntries'])
-            ->orderByDesc('created_at')
-            ->orderByDesc('id')
-            ->cursorPaginate(perPage: $perPage, cursor: $cursor);
+        $paginator = $query->cursorPaginate(perPage: $perPage, cursor: $cursor);
 
         return [
             'sessions' => array_values(array_map(
@@ -262,14 +273,125 @@ class PracticeSession extends Model
             )),
             'next_cursor' => $paginator->nextCursor()?->encode(),
             'has_more' => $paginator->hasMorePages(),
-            'total' => self::libraryTotal(),
+            'total' => self::libraryTotal($filters),
+            'all_total' => self::libraryTotal(),
         ];
     }
 
-    /** How many sessions the Library lists in total. */
-    public static function libraryTotal(): int
+    /**
+     * How many sessions the Library lists, both after filtering and in total.
+     * A filtered list counts the sessions that match every chosen filter.
+     */
+    public static function libraryTotal(?LibraryFilters $filters = null): int
     {
-        return self::libraryQuery()->count();
+        return self::libraryQuery($filters)->count();
+    }
+
+    /**
+     * The topics used by at least one session in the Library, ordered by name.
+     * A topic no session uses any more simply stops being offered.
+     *
+     * @return list<array{id: int, name: string}>
+     */
+    public static function libraryTopics(): array
+    {
+        $topics = self::libraryQuery()
+            ->join('topics', 'topics.id', '=', 'practice_sessions.topic_id')
+            ->distinct()
+            ->orderBy('topics.name')
+            ->pluck('topics.name', 'topics.id');
+
+        $options = [];
+
+        foreach ($topics as $id => $name) {
+            $options[] = ['id' => (int) $id, 'name' => (string) $name];
+        }
+
+        return $options;
+    }
+
+    /**
+     * Apply every chosen kind of filter. Topic and content type values match
+     * any of the chosen options; the kinds themselves must all match.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    private static function applyFilters(Builder $query, LibraryFilters $filters): Builder
+    {
+        if ($filters->topics() !== []) {
+            $query->whereIn('topic_id', $filters->topics());
+        }
+
+        if ($filters->status() === self::STATUS_FINISHED) {
+            $query->finished();
+        } elseif ($filters->status() === self::STATUS_UNFINISHED) {
+            $query->unfinished();
+        }
+
+        $range = $filters->dateRange();
+
+        if ($range !== null) {
+            [$start, $end] = $range;
+
+            if ($start !== null && $end !== null) {
+                $query->whereBetween('created_at', [$start, $end]);
+            } elseif ($start !== null) {
+                $query->where('created_at', '>=', $start);
+            } elseif ($end !== null) {
+                $query->where('created_at', '<=', $end);
+            }
+        }
+
+        if ($filters->types() !== []) {
+            $types = $filters->types();
+
+            $query->whereHas('questions.feedbackEntries', function (Builder $entries) use ($types): void {
+                $entries
+                    ->whereIn('type', $types)
+                    ->where(function (Builder $nonEmpty): void {
+                        $nonEmpty
+                            ->where(function (Builder $rich): void {
+                                $rich
+                                    ->whereIn('type', PracticeFeedbackEntry::RICH_TYPES)
+                                    ->whereRaw("TRIM(content_text) <> ''");
+                            })
+                            ->orWhere(function (Builder $table): void {
+                                $table
+                                    ->whereIn('type', PracticeFeedbackEntry::TABLE_TYPES)
+                                    ->where(function (Builder $columns): void {
+                                        $columns
+                                            ->whereRaw("TRIM(content_text) <> ''")
+                                            ->orWhereRaw("TRIM(correction_text) <> ''")
+                                            ->orWhereRaw("TRIM(reason) <> ''")
+                                            ->orWhereRaw("TRIM(example) <> ''")
+                                            ->orWhereRaw("TRIM(content_html) <> ''")
+                                            ->orWhereRaw("TRIM(correction_html) <> ''");
+                                    });
+                            });
+                    });
+            });
+        }
+
+        return $query;
+    }
+
+    /**
+     * @param  Builder<self>  $query
+     */
+    private static function applySort(Builder $query, string $sort): void
+    {
+        match ($sort) {
+            LibraryFilters::SORT_OLDEST => $query
+                ->orderBy('created_at')
+                ->orderBy('id'),
+            LibraryFilters::SORT_RECENTLY_EDITED => $query
+                ->orderByDesc('last_changed_at')
+                ->orderByDesc('id'),
+            default => $query
+                ->orderByDesc('created_at')
+                ->orderByDesc('id'),
+        };
     }
 
     /**

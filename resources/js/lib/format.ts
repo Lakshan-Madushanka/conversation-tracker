@@ -33,6 +33,33 @@ export function relativeTime(iso: string, now: number = Date.now()): string {
 }
 
 /**
+ * The first moment of the day a timestamp falls on, in the learner's own
+ * timezone. Comparing these tells us whether something happened on a later
+ * calendar day, not merely a later moment.
+ */
+function startOfDay(time: number): number {
+    const date = new Date(time);
+
+    return new Date(
+        date.getFullYear(),
+        date.getMonth(),
+        date.getDate(),
+    ).getTime();
+}
+
+/** Whether an ISO timestamp falls on a calendar day after another one. */
+export function isLaterDay(iso: string, thanIso: string): boolean {
+    const time = Date.parse(iso);
+    const thanTime = Date.parse(thanIso);
+
+    if (Number.isNaN(time) || Number.isNaN(thanTime)) {
+        return false;
+    }
+
+    return startOfDay(time) > startOfDay(thanTime);
+}
+
+/**
  * Turns an ISO timestamp into a short date such as "12 Oct", keeping the year
  * only when it is not the current one. Returns an empty string when the
  * timestamp cannot be read.

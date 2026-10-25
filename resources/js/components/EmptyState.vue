@@ -1,17 +1,19 @@
 <script setup lang="ts">
-import type { Component } from 'vue';
+import { computed, type Component } from 'vue';
 import { BookOpenIcon } from '@lucide/vue';
 
-withDefaults(
-    defineProps<{
-        title: string;
-        description?: string;
-        icon?: Component;
-    }>(),
-    {
-        icon: BookOpenIcon,
-    },
-);
+const props = defineProps<{
+    title: string;
+    description?: string;
+    icon?: Component;
+}>();
+
+/**
+ * The icon is resolved here rather than as a prop default: Vue would call a
+ * component passed as a default like a factory, and the icon would lose the
+ * context it needs to render.
+ */
+const iconComponent = computed(() => props.icon ?? BookOpenIcon);
 </script>
 
 <template>
@@ -22,7 +24,10 @@ withDefaults(
             class="mb-3 flex size-12 items-center justify-center rounded-full bg-muted"
             aria-hidden="true"
         >
-            <component :is="icon" class="size-6 text-muted-foreground" />
+            <component
+                :is="iconComponent"
+                class="size-6 text-muted-foreground"
+            />
         </span>
         <h2 class="text-base font-semibold">{{ title }}</h2>
         <p

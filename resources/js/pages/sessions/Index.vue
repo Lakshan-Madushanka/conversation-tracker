@@ -1,32 +1,133 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
-import { PlusIcon, SearchIcon } from '@lucide/vue';
-import EmptyState from '@/components/EmptyState.vue';
-import FinishedSessionCard from '@/components/FinishedSessionCard.vue';
+import { computed, onBeforeUnmount, onMounted } from 'vue';
+import { Head, Link, router } from '@inertiajs/vue3';
+import { PlusIcon } from '@lucide/vue';
+import LibrarySessionList from '@/components/LibrarySessionList.vue';
 import PageHeader from '@/components/PageHeader.vue';
-import SectionLabel from '@/components/SectionLabel.vue';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { useLibrarySessions } from '@/composables/useLibrarySessions';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { create as sessionsCreate } from '@/routes/sessions';
-import type { FinishedSessionData } from '@/types';
+import {
+    consumeLibraryRestore,
+    readLibrarySnapshot,
+    saveLibrarySnapshot,
+    type LibraryPage,
+    type LibrarySnapshot,
+} from '@/lib/library';
+import {
+    create as sessionsCreate,
+    index as sessionsIndex,
+} from '@/routes/sessions';
 
 defineOptions({ layout: AppLayout });
 
-defineProps<{
-    /** Every finished session, newest first. */
-    sessions: FinishedSessionData[];
-}>();
+const props = defineProps<LibraryPage>();
+
+const {
+    sessions,
+    nextCursor,
+    hasMore,
+    total,
+    loading,
+    error,
+    loadMore,
+    refresh,
+    restore,
+} = useLibrarySessions(props);
+
+const description = computed(() => {
+    if (total.value === 0) {
+        return 'Every session you save will appear here, newest first.';
+    }
+
+    return `${total.value} ${
+        total.value === 1 ? 'session' : 'sessions'
+    }, newest first.`;
+});
+
+/** The last scroll position read, kept for the trip back from a session. */
+let lastScrollY = 0;
+
+function rememberScroll(): void {
+    lastScrollY = window.scrollY;
+}
+
+/**
+ * Puts the saved list back and returns to the same place on the page. The
+ * scroll runs a moment later, after Inertia has finished its own scroll reset.
+ */
+function restoreSnapshot(snapshot: LibrarySnapshot): void {
+    // An empty saved list would only hide the fresh page the server just sent,
+    // so let that page show instead.
+    if (snapshot.sessions.length === 0) {
+        return;
+    }
+
+    restore(snapshot);
+    void refresh();
+
+    window.setTimeout(() => {
+        window.scrollTo(0, snapshot.scrollY);
+    }, 0);
+}
+
+let stopListeningToHistory: (() => void) | null = null;
+
+onMounted(() => {
+    // "Back to Library" marks the visit, so the list comes back instantly.
+    if (consumeLibraryRestore()) {
+        const snapshot = readLibrarySnapshot();
+
+        if (snapshot !== null) {
+            restoreSnapshot(snapshot);
+        }
+    }
+
+    // The browser's Back button is a history visit. Restore the list the
+    // learner had, even though the page props only hold the first page.
+    stopListeningToHistory = router.on('navigate', (event) => {
+        if (event.detail.type !== 'history') {
+            return;
+        }
+
+        const path = new URL(event.detail.page.url, window.location.origin)
+            .pathname;
+
+        if (path !== sessionsIndex.url()) {
+            return;
+        }
+
+        const snapshot = readLibrarySnapshot();
+
+        if (snapshot !== null) {
+            restoreSnapshot(snapshot);
+        }
+    });
+
+    rememberScroll();
+    window.addEventListener('scroll', rememberScroll, { passive: true });
+});
+
+onBeforeUnmount(() => {
+    saveLibrarySnapshot({
+        sessions: sessions.value,
+        nextCursor: nextCursor.value,
+        hasMore: hasMore.value,
+        total: total.value,
+        scrollY: lastScrollY,
+        savedAt: Date.now(),
+    });
+
+    stopListeningToHistory?.();
+    window.removeEventListener('scroll', rememberScroll);
+});
 </script>
 
 <template>
     <div>
         <Head title="Library" />
 
-        <PageHeader
-            title="Library"
-            description="Every session you have finished, newest first."
-        >
+        <PageHeader title="Library" :description="description">
             <template #actions>
                 <Button size="lg" as-child>
                     <Link :href="sessionsCreate.url()">
@@ -37,54 +138,13 @@ defineProps<{
             </template>
         </PageHeader>
 
-        <!-- Search + filters. Placeholders only for now: saving, searching and
-             filtering are built in a later step. -->
-        <div class="mb-5 space-y-3">
-            <div class="relative">
-                <SearchIcon
-                    class="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
-                    aria-hidden="true"
-                />
-                <Input
-                    type="search"
-                    placeholder="Search words, phrases, mistakes"
-                    class="pl-9"
-                    aria-label="Search your sessions"
-                />
-            </div>
-
-            <div
-                class="flex flex-wrap items-center gap-2"
-                role="group"
-                aria-label="Filters"
-            >
-                <SectionLabel tone="neutral">Topic</SectionLabel>
-                <SectionLabel tone="neutral">Date</SectionLabel>
-                <SectionLabel tone="neutral">Content type</SectionLabel>
-            </div>
-        </div>
-
-        <div v-if="sessions.length > 0" class="grid gap-3">
-            <FinishedSessionCard
-                v-for="session in sessions"
-                :key="session.id"
-                :session="session"
-            />
-        </div>
-
-        <EmptyState
-            v-else
-            title="No sessions yet"
-            description="Finish your first practice session and it will show up here."
-        >
-            <template #actions>
-                <Button size="lg" as-child>
-                    <Link :href="sessionsCreate.url()">
-                        <PlusIcon aria-hidden="true" />
-                        Start your first session
-                    </Link>
-                </Button>
-            </template>
-        </EmptyState>
+        <LibrarySessionList
+            :sessions="sessions"
+            :has-more="hasMore"
+            :loading="loading"
+            :error="error"
+            :total="total"
+            @load-more="loadMore"
+        />
     </div>
 </template>

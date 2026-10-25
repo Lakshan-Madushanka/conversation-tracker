@@ -17,6 +17,8 @@ export type FeedbackType =
 export interface FeedbackEntry {
     id: string;
     text: string;
+    /** The same words as markup, once the entry has been saved. */
+    html?: string;
 }
 
 /**
@@ -35,26 +37,26 @@ export type MistakeEntry = {
 
 /**
  * One row of the vocabulary box: the word, its meaning, and an optional example
- * (a single line that keeps only bold and italic).
+ * (one piece of markup, or a list of entries the editor added).
  */
 export type VocabularyEntry = {
     id: string;
     text: string;
     meaning: string;
-    example_html: string;
+    example_html: string | FeedbackEntry[];
 };
 
 /**
  * One row of the phrases box: the phrase, its meaning or use, and an optional
- * example (a single line that keeps only bold and italic). A type alias, not
- * an interface, so a row can stand in for the generic shape the feedback table
- * works with.
+ * example (one piece of markup, or a list of entries the editor added). A type
+ * alias, not an interface, so a row can stand in for the generic shape the
+ * feedback table works with.
  */
 export type PhraseEntry = {
     id: string;
     text: string;
     meaning: string;
-    example_html: string;
+    example_html: string | FeedbackEntry[];
 };
 
 /** One grammar note, kept as formatted text and never split by line. */

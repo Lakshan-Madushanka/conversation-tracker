@@ -257,13 +257,6 @@ function collapseIfBlank(): void {
 }
 
 /**
- * Whether focus is inside the box right now. `relatedTarget` says where focus
- * moved to, but Firefox omits it on focusout, so the currently focused element
- * is used as a fallback. Focus that only looks like it is inside — an element
- * the box hid when it shrank — does not count, since a hidden element stays
- * the active element until something else is focused.
- */
-/**
  * The grammar notes box has no field of its own: it holds one editor per note,
  * and nothing at all until a note is added. So opening it focuses the box
  * itself, and the blur rule has to know that a notes box may hold focus with
@@ -272,6 +265,13 @@ function collapseIfBlank(): void {
  */
 const holdsFocusWithoutField = computed(() => box.value.kind === 'notes');
 
+/**
+ * Whether focus is inside the box right now. `relatedTarget` says where focus
+ * moved to, but Firefox omits it on focusout, so the currently focused element
+ * is used as a fallback. Focus that only looks like it is inside — an element
+ * the box hid when it shrank — does not count, since a hidden element stays
+ * the active element until something else is focused.
+ */
 function focusIsInside(event: FocusEvent): boolean {
     const related = event.relatedTarget as Node | null;
 

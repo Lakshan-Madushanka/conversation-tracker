@@ -1,6 +1,12 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue';
-import { CopyIcon, PencilIcon, PlusIcon, Trash2Icon } from '@lucide/vue';
+import {
+    CheckIcon,
+    CopyIcon,
+    PencilIcon,
+    PlusIcon,
+    Trash2Icon,
+} from '@lucide/vue';
 import UndoNotice from '@/components/UndoNotice.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -337,7 +343,7 @@ function handleKeyDown(event: KeyboardEvent): void {
                         :aria-label="`Save entry ${index + 1}`"
                         @mousedown.prevent="commitEdit"
                     >
-                        <PlusIcon aria-hidden="true" />
+                        <CheckIcon aria-hidden="true" />
                     </Button>
                 </template>
 

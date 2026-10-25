@@ -352,6 +352,50 @@ describe('the vocabulary table', () => {
         expect(component.text()).toContain('Add the meaning.');
     });
 
+    it('edits a row whose example was saved as one piece of markup', async () => {
+        const component = mountVocabulary([
+            {
+                id: 'v1',
+                text: 'reservation',
+                meaning: 'a booking',
+                example_html: '<p>I made a reservation.</p>',
+            },
+        ]);
+
+        await component
+            .get('[aria-label="Edit row 1: reservation"]')
+            .trigger('click');
+
+        const example = component.get('#field-vocabulary-example_html-v1');
+
+        expect(component.text()).toContain('I made a reservation.');
+        expect(example.attributes('aria-label')).toBe(
+            'Add an entry to Example (optional), row 1 of New vocabulary for question 1',
+        );
+    });
+
+    it('shows each example entry with the formatting it was saved with', () => {
+        const component = mountVocabulary([
+            {
+                id: 'v1',
+                text: 'reservation',
+                meaning: 'a booking',
+                example_html: [
+                    {
+                        id: 'e1',
+                        text: 'I made a reservation.',
+                        html: 'I made a <strong>reservation</strong>.',
+                    },
+                ],
+            },
+        ]);
+
+        const example = component.findAll('td')[2];
+
+        expect(example.text()).toContain('I made a reservation.');
+        expect(example.html()).toContain('<strong>reservation</strong>');
+    });
+
     it('tags a repeated word as a duplicate even with a different meaning', () => {
         const component = mountVocabulary([
             {

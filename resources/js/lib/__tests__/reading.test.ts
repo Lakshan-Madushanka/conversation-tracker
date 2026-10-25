@@ -100,6 +100,57 @@ describe('the sections a question can be read as', () => {
         ]);
     });
 
+    it('reads every example entry, keeping its formatting', () => {
+        const [vocabulary] = readingSections(
+            question({
+                vocabulary: [
+                    {
+                        id: 'v1',
+                        text: 'soup',
+                        meaning: 'a liquid food',
+                        example_html: [
+                            {
+                                id: 'e1',
+                                text: 'A warm soup.',
+                                html: 'A <strong>warm</strong> soup.',
+                            },
+                            {
+                                id: 'e2',
+                                text: 'Soup of the day.',
+                                html: 'Soup of the <em>day</em>.',
+                            },
+                        ],
+                    },
+                ],
+            }),
+        );
+
+        expect(vocabulary.entries[0].details).toEqual([
+            { value: 'a liquid food', formatted: false },
+            { value: 'A <strong>warm</strong> soup.', formatted: true },
+            { value: 'Soup of the <em>day</em>.', formatted: true },
+        ]);
+    });
+
+    it('reads an example saved as one piece of markup', () => {
+        const [vocabulary] = readingSections(
+            question({
+                vocabulary: [
+                    {
+                        id: 'v1',
+                        text: 'soup',
+                        meaning: '',
+                        example_html: 'I made a <em>reservation</em>.',
+                    },
+                ],
+            }),
+        );
+
+        expect(vocabulary.entries[0].details).toEqual([
+            { value: 'I made a <em>reservation</em>.', formatted: true },
+        ]);
+    });
+
     it('reads every grammar note as its own entry', () => {
         const [grammar] = readingSections(
             question({

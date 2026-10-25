@@ -9,6 +9,7 @@
  */
 
 import type { FeedbackTone } from '@/components/SectionLabel.vue';
+import { exampleParts } from '@/lib/example';
 import type { FeedbackBoxConfig } from '@/lib/feedback';
 import { feedbackBoxes, isFeedbackValueBlank } from '@/lib/feedback';
 import {
@@ -86,10 +87,32 @@ function readingEntries(
         return {
             text: partFor(lead, row),
             details: rest
-                .map((column) => partFor(column, row))
+                .flatMap((column) => partsFor(column, row))
                 .filter((part) => part.value.trim() !== ''),
         };
     });
+}
+
+/**
+ * Every part of one column. A plain column holds one piece of text; the
+ * example column may hold a list of entries, each with its own formatting.
+ */
+function partsFor(column: TableColumn, row: TableCells): ReadingPart[] {
+    const value = cellValue(column, row);
+
+    if (Array.isArray(value)) {
+        return exampleParts(value).map((part) => ({
+            value: part.html,
+            formatted: true,
+        }));
+    }
+
+    return [
+        {
+            value: typeof value === 'string' ? value : '',
+            formatted: column.formatted,
+        },
+    ];
 }
 
 function partFor(column: TableColumn, row: TableCells): ReadingPart {

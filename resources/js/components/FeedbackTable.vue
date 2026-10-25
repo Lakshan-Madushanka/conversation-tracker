@@ -16,6 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { attentionNoteId } from '@/lib/attention';
 import { focusElementById } from '@/lib/dom';
+import { exampleEntries, exampleParts } from '@/lib/example';
 import {
     cellText,
     cellValue,
@@ -31,7 +32,6 @@ import {
 } from '@/lib/feedback-table';
 import { plainTextFromPaste } from '@/lib/paste';
 import EntryList from '@/components/EntryList.vue';
-import { FeedbackEntry } from '@/types';
 
 /**
  * A table feedback box: a bordered table of rows, one column set per box, as
@@ -416,10 +416,12 @@ function confirmCell(event: KeyboardEvent): void {
                                     <EntryList
                                         v-if="column.key === 'example_html'"
                                         :entries="
-                                            entry.example_html as FeedbackEntry[]
+                                            exampleEntries(entry.example_html)
                                         "
-                                        label=""
-                                        field-id=""
+                                        :label="`${column.header}, row ${index + 1} of ${props.label}`"
+                                        :field-id="
+                                            rowFieldId(entry.id, column.key)
+                                        "
                                         @update:entries="
                                             updateRow(entry.id, {
                                                 [column.key]: $event,
@@ -482,11 +484,14 @@ function confirmCell(event: KeyboardEvent): void {
                                         class="list-none"
                                     >
                                         <li
-                                            v-for="record in entry.example_html as FeedbackEntry[]"
-                                            :key="record.id"
-                                        >
-                                            {{ record['text'] }}
-                                        </li>
+                                            v-for="(
+                                                part, partIndex
+                                            ) in exampleParts(
+                                                entry.example_html,
+                                            )"
+                                            :key="partIndex"
+                                            v-html="part.html"
+                                        ></li>
                                     </ul>
 
                                     <p

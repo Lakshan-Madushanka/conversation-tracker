@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { Link } from '@inertiajs/vue3';
+import { Head, Link } from '@inertiajs/vue3';
 import { ArrowLeftIcon, PencilIcon } from '@lucide/vue';
 import PageHeader from '@/components/PageHeader.vue';
 import SectionLabel from '@/components/SectionLabel.vue';
@@ -130,6 +130,8 @@ function partsOf(entry: ReadingEntry): ReadingPart[] {
 
 <template>
     <div>
+        <Head :title="props.session.topic.name" />
+
         <Link
             :href="sessionsIndex.url()"
             class="mb-4 inline-flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
@@ -255,6 +257,12 @@ function partsOf(entry: ReadingEntry): ReadingPart[] {
                                             )"
                                             :key="partIndex"
                                         >
+                                            <span
+                                                v-if="partIndex > 0"
+                                                class="sr-only"
+                                            >
+                                                ,
+                                            </span>
                                             <span
                                                 v-if="partIndex > 0"
                                                 class="text-muted-foreground"

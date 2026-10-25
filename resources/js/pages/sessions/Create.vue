@@ -11,6 +11,7 @@ import {
     PlusIcon,
 } from '@lucide/vue';
 import { toast } from 'vue-sonner';
+import BackToLibrary from '@/components/BackToLibrary.vue';
 import EmptySessionDialog from '@/components/EmptySessionDialog.vue';
 import FeedbackBox from '@/components/FeedbackBox.vue';
 import FinishSessionSummary from '@/components/FinishSessionSummary.vue';
@@ -1071,6 +1072,8 @@ onBeforeUnmount(() => {
         </FocusLayout>
 
         <AppLayout v-else>
+            <BackToLibrary />
+
             <!-- The plain editor: every question on one page. -->
             <PageHeader
                 :title="hasSession ? 'Edit session' : 'New session'"

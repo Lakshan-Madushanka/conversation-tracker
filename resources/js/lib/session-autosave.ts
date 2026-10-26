@@ -107,5 +107,18 @@ export const savePracticeSession: AutoSaveFunction = async (
         return { outcome: 'conflict', session: body.session };
     }
 
+    if (response.status === 423) {
+        const body = (await response.json().catch(() => ({}))) as {
+            message?: string;
+        };
+
+        return {
+            outcome: 'archived',
+            message:
+                body.message ??
+                'This session was archived. Restore it to keep editing.',
+        };
+    }
+
     return { outcome: 'failed' };
 };

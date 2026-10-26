@@ -1,5 +1,10 @@
 <script setup lang="ts">
-import { RefreshCwIcon, TriangleAlertIcon } from '@lucide/vue';
+import {
+    ArchiveIcon,
+    ArchiveRestoreIcon,
+    RefreshCwIcon,
+    TriangleAlertIcon,
+} from '@lucide/vue';
 import { Button } from '@/components/ui/button';
 import type { AutoSaveStatus } from '@/composables/useAutoSave';
 import type { PracticeSessionData } from '@/types';
@@ -11,19 +16,47 @@ const props = defineProps<{
     status: AutoSaveStatus;
     /** Plain words about the save that did not go through. */
     failureMessage: string;
+    /** What the server said when saving was refused because of an archive. */
+    archivedMessage?: string;
 }>();
 
 const emit = defineEmits<{
     (event: 'loadLatest'): void;
     (event: 'keepMine'): void;
     (event: 'retry'): void;
+    (event: 'restore'): void;
 }>();
 </script>
 
 <template>
+    <!-- The session was archived elsewhere. The text stays on screen, and
+        Restore brings saving back without leaving the editor. -->
+    <div
+        v-if="props.status === 'archived'"
+        role="alert"
+        class="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-3 text-sm"
+    >
+        <p class="flex items-start gap-2 font-medium">
+            <ArchiveIcon class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+            This session is archived.
+        </p>
+        <p class="mt-1 pl-6 text-muted-foreground">
+            {{
+                props.archivedMessage ||
+                'Your text is still here. Restore the session to keep editing.'
+            }}
+        </p>
+        <div class="mt-3 pl-6">
+            <Button type="button" size="sm" @click="emit('restore')">
+                <ArchiveRestoreIcon aria-hidden="true" />
+                Restore session
+            </Button>
+        </div>
+    </div>
+
     <!-- A change made elsewhere stops saving until resolved in place. -->
     <div
-        v-if="props.conflict"
+        v-else-if="props.conflict"
         role="alert"
         class="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-3 text-sm"
     >

@@ -17,6 +17,8 @@ import type { PracticeQuestionForm, PracticeSessionData } from '@/types';
  * - `retrying` — a save failed and another attempt is scheduled.
  * - `failed` — a save failed and needs the learner (fix a field or retry).
  * - `conflict` — another tab changed the session first.
+ * - `archived` — the session was archived elsewhere, so saves are refused
+ *   until it is restored.
  */
 export type AutoSaveStatus =
     | 'needs_topic'
@@ -24,7 +26,8 @@ export type AutoSaveStatus =
     | 'saved'
     | 'retrying'
     | 'failed'
-    | 'conflict';
+    | 'conflict'
+    | 'archived';
 
 /** The editor content, as the page holds it. */
 export interface AutoSaveSnapshot {
@@ -47,6 +50,7 @@ export type AutoSaveOutcome =
     | { outcome: 'saved'; session: PracticeSessionData; savedAt: string }
     | { outcome: 'invalid'; errors: Record<string, string> }
     | { outcome: 'conflict'; session: PracticeSessionData }
+    | { outcome: 'archived'; message: string }
     | { outcome: 'failed' };
 
 /** Performs one save. Injected so the logic can be tested without a network. */
@@ -118,6 +122,8 @@ export function useAutoSave(options: UseAutoSaveOptions) {
     );
     const errors = ref<Record<string, string>>({});
     const conflict = ref<PracticeSessionData | null>(null);
+    const archived = ref(false);
+    const archivedMessage = ref('');
     const lastSavedAt = ref<number | null>(null);
 
     /** Bumped on every change, so a save knows if newer edits appeared. */
@@ -155,6 +161,15 @@ export function useAutoSave(options: UseAutoSaveOptions) {
 
     function schedule(delay: number): void {
         clearTimer();
+
+        // A session archived elsewhere stays read-only until it is restored;
+        // nothing is queued in the meantime.
+        if (archived.value) {
+            status.value = 'archived';
+
+            return;
+        }
+
         timer = setTimeout(() => {
             timer = null;
             void attemptSave();
@@ -206,7 +221,7 @@ export function useAutoSave(options: UseAutoSaveOptions) {
     }
 
     async function performSave(): Promise<void> {
-        if (disposed || inFlight || conflict.value) {
+        if (disposed || archived.value || inFlight || conflict.value) {
             return;
         }
 
@@ -296,12 +311,20 @@ export function useAutoSave(options: UseAutoSaveOptions) {
             return;
         }
 
+        if (result.outcome === 'archived') {
+            archived.value = true;
+            archivedMessage.value = result.message;
+            status.value = 'archived';
+
+            return;
+        }
+
         scheduleRetry();
     }
 
     /** Try again now, usually from the Retry button. */
     function retry(): void {
-        if (disposed || conflict.value) {
+        if (disposed || archived.value || conflict.value) {
             return;
         }
 
@@ -356,7 +379,13 @@ export function useAutoSave(options: UseAutoSaveOptions) {
 
     /** Best-effort save for when the page is being hidden or left. */
     function flush(): void {
-        if (disposed || !dirty.value || conflict.value || !canSave()) {
+        if (
+            disposed ||
+            archived.value ||
+            !dirty.value ||
+            conflict.value ||
+            !canSave()
+        ) {
             return;
         }
 
@@ -382,18 +411,23 @@ export function useAutoSave(options: UseAutoSaveOptions) {
      * on work the server has not seen.
      */
     async function saveNow(): Promise<boolean> {
-        if (disposed || !options.hasTopic()) {
+        if (disposed || archived.value || !options.hasTopic()) {
             return false;
         }
 
         clearTimer();
 
-        while (!disposed && !conflict.value && dirty.value) {
-            while (currentSave !== null && !disposed && !conflict.value) {
+        while (!disposed && !archived.value && !conflict.value && dirty.value) {
+            while (
+                currentSave !== null &&
+                !disposed &&
+                !archived.value &&
+                !conflict.value
+            ) {
                 await currentSave;
             }
 
-            if (disposed || conflict.value) {
+            if (disposed || archived.value || conflict.value) {
                 return false;
             }
 
@@ -402,7 +436,28 @@ export function useAutoSave(options: UseAutoSaveOptions) {
             }
         }
 
-        return !disposed && !conflict.value;
+        return !disposed && !archived.value && !conflict.value;
+    }
+
+    /**
+     * Save again after the learner restored a session that was archived
+     * elsewhere. Their text stayed on screen while saving was refused.
+     */
+    function resumeAfterRestore(): void {
+        if (!archived.value) {
+            return;
+        }
+
+        archived.value = false;
+        archivedMessage.value = '';
+        retryAttempt = 0;
+        clearTimer();
+        pendingSaveKey = newId();
+        status.value = 'saved';
+
+        if (dirty.value) {
+            void attemptSave();
+        }
     }
 
     watch(
@@ -475,11 +530,14 @@ export function useAutoSave(options: UseAutoSaveOptions) {
         status,
         errors,
         conflict,
+        archived,
+        archivedMessage,
         lastSavedAt,
         hasUnsavedChanges: dirty,
         retry,
         loadLatest,
         keepMine,
+        resumeAfterRestore,
         flush,
         saveNow,
         dispose,

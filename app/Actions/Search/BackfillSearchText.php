@@ -7,6 +7,7 @@ namespace App\Actions\Search;
 use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeQuestion;
 use App\Models\Topic;
+use App\Support\EntrySearch;
 use App\Support\SearchText;
 use Illuminate\Support\Facades\DB;
 
@@ -94,7 +95,7 @@ final readonly class BackfillSearchText
             ->orderBy('id')
             ->chunkById(200, function ($entries) use (&$changed): void {
                 foreach ($entries as $entry) {
-                    $search = $entry->searchableText();
+                    $search = EntrySearch::text($entry);
 
                     if ($entry->search_text === $search) {
                         continue;

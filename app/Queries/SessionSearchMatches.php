@@ -6,6 +6,7 @@ namespace App\Queries;
 
 use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeSession;
+use App\Support\EntrySearch;
 use App\Support\LibraryFilters;
 use App\Support\SearchText;
 
@@ -90,13 +91,13 @@ final readonly class SessionSearchMatches
                     continue;
                 }
 
-                $searchText = $entry->search_text ?? $entry->searchableText();
+                $searchText = $entry->search_text ?? EntrySearch::text($entry);
 
                 if (! SearchText::matches($searchText, $terms)) {
                     continue;
                 }
 
-                $field = $entry->bestSearchField($terms);
+                $field = EntrySearch::bestField($entry, $terms);
 
                 $matches[] = [
                     'key' => 'entry:'.$entry->type->value.':'.($entry->client_id ?? $entry->id),

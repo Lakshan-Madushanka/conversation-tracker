@@ -14,12 +14,14 @@ use Illuminate\Database\Seeder;
 /**
  * Fills a fresh development database with enough sessions to exercise the
  * Library: a long list, both statuses, empty sessions, and sessions edited on
- * a later day. It only runs locally and tops up to the target instead of
- * adding another 300 every time.
+ * a later day. The words mix plain English with accents, other languages and
+ * punctuation, so search can be tried by hand against real variety. It only
+ * runs locally and tops up to the target instead of adding another 500 every
+ * time.
  */
 class LibrarySeeder extends Seeder
 {
-    private const int TARGET_SESSIONS = 300;
+    private const int TARGET_SESSIONS = 500;
 
     /** @var list<string> */
     private const array TOPICS = [
@@ -35,6 +37,10 @@ class LibrarySeeder extends Seeder
         'At the airport',
         'Making a complaint',
         'Talking about hobbies',
+        'Café conversations',
+        'Résumé and cover letters',
+        'Cooking with a friend',
+        'Explaining a problem',
     ];
 
     /** @var list<array{question: string, answer: string}> */
@@ -78,6 +84,38 @@ class LibrarySeeder extends Seeder
         [
             'question' => 'What kind of music do you like?',
             'answer' => 'I like jazz and old soul music.',
+        ],
+        [
+            'question' => 'What does “crème brûlée” mean?',
+            'answer' => 'It is a French dessert with a caramel top.',
+        ],
+        [
+            'question' => '¿Dónde está la estación?',
+            'answer' => 'Está cerca del café, a la derecha.',
+        ],
+        [
+            'question' => 'Comment dit-on « merci » en anglais ?',
+            'answer' => 'On dit “thank you”, avec un grand sourire.',
+        ],
+        [
+            'question' => 'Is “naïve” the same as “innocent”?',
+            'answer' => 'Not quite: naïve is more about being inexperienced.',
+        ],
+        [
+            'question' => 'Which email should I use?',
+            'answer' => 'learner+english@example.com — is that right?',
+        ],
+        [
+            'question' => 'How do you say “saudade” in English?',
+            'answer' => 'There is no single word for it, only a long explanation.',
+        ],
+        [
+            'question' => 'What is the plural of “analysis”?',
+            'answer' => 'It is “analyses”, with an -es ending.',
+        ],
+        [
+            'question' => 'How do you pronounce “though”?',
+            'answer' => 'It sounds like “thoh”, rhyming with “go”.',
         ],
     ];
 
@@ -123,6 +161,26 @@ class LibrarySeeder extends Seeder
             'correction' => 'If I have time, I will call.',
             'reason' => 'Do not use “will” in the if-clause.',
         ],
+        [
+            'said' => 'I have been to the café three times.',
+            'correction' => 'I have been to the café three times.',
+            'reason' => 'Nothing to fix here: the accents are correct.',
+        ],
+        [
+            'said' => 'She is more taller than me.',
+            'correction' => 'She is taller than me.',
+            'reason' => 'Do not use “more” with a comparative ending.',
+        ],
+        [
+            'said' => 'I am agree with you.',
+            'correction' => 'I agree with you.',
+            'reason' => '“Agree” is a verb, so it needs no “am”.',
+        ],
+        [
+            'said' => 'It depends of the weather.',
+            'correction' => 'It depends on the weather.',
+            'reason' => '“Depend” takes “on”.',
+        ],
     ];
 
     /** @var list<array{word: string, meaning: string, example: string}> */
@@ -135,6 +193,11 @@ class LibrarySeeder extends Seeder
         ['word' => 'affordable', 'meaning' => 'not too expensive', 'example' => 'The hotel was affordable.'],
         ['word' => 'neighbourhood', 'meaning' => 'the area around your home', 'example' => 'I like this neighbourhood.'],
         ['word' => 'appointment', 'meaning' => 'a planned meeting', 'example' => 'I have a dentist appointment.'],
+        ['word' => 'crème brûlée', 'meaning' => 'a French dessert', 'example' => 'We shared a crème brûlée.'],
+        ['word' => 'naïve', 'meaning' => 'inexperienced and trusting', 'example' => 'It was a naïve question.'],
+        ['word' => 'déjà vu', 'meaning' => 'the feeling that this happened before', 'example' => 'I had déjà vu in that street.'],
+        ['word' => 'fiancé', 'meaning' => 'the man you are engaged to', 'example' => 'Her fiancé cooks every Sunday.'],
+        ['word' => 'résumé', 'meaning' => 'a summary of your work history', 'example' => 'Send your résumé by Friday.'],
     ];
 
     /** @var list<array{phrase: string, meaning: string, example: string}> */
@@ -179,6 +242,21 @@ class LibrarySeeder extends Seeder
             'meaning' => 'Say you have not decided',
             'example' => 'I am not sure yet, let me check.',
         ],
+        [
+            'phrase' => 'Bon appétit',
+            'meaning' => 'Enjoy your meal',
+            'example' => 'Bon appétit, everyone!',
+        ],
+        [
+            'phrase' => 'Ça marche',
+            'meaning' => 'That works for me',
+            'example' => 'Friday at six? Ça marche.',
+        ],
+        [
+            'phrase' => 'No worries at all',
+            'meaning' => 'Say that something does not matter',
+            'example' => 'No worries at all, it happens.',
+        ],
     ];
 
     /** @var list<string> */
@@ -189,6 +267,10 @@ class LibrarySeeder extends Seeder
         'After “enjoy”, use the -ing form.',
         'Use “much” with uncountable nouns and “many” with countable ones.',
         'Use “since” with a point in time and “for” with a length of time.',
+        'In French, “café” keeps its accent, but English often drops it.',
+        'Use “the” before a specific place: the café on the corner.',
+        'Words like “analysis” and “crisis” form their plurals in -es.',
+        'A semicolon joins two closely related ideas; a comma does not.',
     ];
 
     /** @var list<string> */
@@ -198,6 +280,11 @@ class LibrarySeeder extends Seeder
         'I’m not sure I follow. Could you explain that again?',
         'I’d rather stay in tonight, if that’s okay.',
         'Thanks for letting me know. I’ll sort it out.',
+        'Honestly, the crème brûlée was the best part of the meal.',
+        'I’ve never been there, but I’d love to try it.',
+        'Sorry — I meant to say “analyses”, not “analysis”.',
+        'It was a naïve mistake, but I learned from it.',
+        'Ça marche for me; let’s meet at the café.',
     ];
 
     public function run(): void
@@ -298,7 +385,8 @@ class LibrarySeeder extends Seeder
             fake()->numberBetween(1, 3),
         );
 
-        $position = 1;
+        // Positions are zero-based, the same as entries saved by the editor.
+        $position = 0;
 
         foreach ($kinds as $kind) {
             $entry = match ($kind) {

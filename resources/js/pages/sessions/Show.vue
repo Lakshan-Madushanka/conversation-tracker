@@ -11,6 +11,7 @@ import { toast } from 'vue-sonner';
 import BackToLibrary from '@/components/BackToLibrary.vue';
 import PageHeader from '@/components/PageHeader.vue';
 import SectionLabel from '@/components/SectionLabel.vue';
+import SessionDeleteDialog from '@/components/SessionDeleteDialog.vue';
 import SessionMenu from '@/components/SessionMenu.vue';
 import StatTile from '@/components/StatTile.vue';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -20,6 +21,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { shortDate } from '@/lib/format';
+import {
+    forgetLibrarySession,
+    libraryReturnUrl,
+    markLibraryRestore,
+} from '@/lib/library';
 import {
     readingSections,
     type ReadingEntry,
@@ -133,6 +139,9 @@ const restoring = ref(false);
 /** True while an Archive is on its way, so the menu cannot repeat it. */
 const archiving = ref(false);
 
+/** Whether the permanent delete warning is on screen. */
+const deleteOpen = ref(false);
+
 /**
  * Bring the session back to the Library without leaving the page. The server
  * sends the session again, now editable, so the page switches to its normal
@@ -219,6 +228,44 @@ async function undoArchive(): Promise<void> {
     }
 
     toast.success('Session restored.');
+    router.reload();
+}
+
+/**
+ * The session was deleted from its reading page. Its saved card is dropped
+ * from the list waiting behind this page, and the learner returns to the view
+ * they came from — the Library or the Archived view — with its filters kept.
+ */
+function deletedFromReadingPage(deleted: { id: number; topic: string }): void {
+    deleteOpen.value = false;
+    forgetLibrarySession(deleted.id);
+    markLibraryRestore();
+    toast.success(`Deleted “${deleted.topic}”.`);
+    router.visit(libraryReturnUrl(isArchived.value));
+}
+
+/** Someone else deleted the session before this warning was opened. */
+function missingFromReadingPage(): void {
+    deleteOpen.value = false;
+    forgetLibrarySession(props.session.id);
+    markLibraryRestore();
+    toast.info('This session was already deleted.');
+    router.visit(libraryReturnUrl(isArchived.value));
+}
+
+/** Archive was chosen instead of Delete, so the reading page turns read-only. */
+function archivedFromDialog(): void {
+    deleteOpen.value = false;
+
+    toast.success('Session archived.', {
+        action: {
+            label: 'Undo',
+            onClick: () => {
+                void undoArchive();
+            },
+        },
+    });
+
     router.reload();
 }
 
@@ -409,6 +456,7 @@ function itemHasMoved(): void {
                     :finished="isFinished"
                     @archive="archive"
                     @restore="restore"
+                    @delete="deleteOpen = true"
                 />
 
                 <Button v-if="!isArchived" size="lg" as-child>
@@ -599,5 +647,16 @@ function itemHasMoved(): void {
                 </Link>
             </Button>
         </div>
+
+        <SessionDeleteDialog
+            :open="deleteOpen"
+            :session-id="props.session.id"
+            :topic="props.session.topic.name"
+            :session-date="props.session.finished_at"
+            @update:open="deleteOpen = $event"
+            @deleted="deletedFromReadingPage"
+            @archived="archivedFromDialog"
+            @missing="missingFromReadingPage"
+        />
     </div>
 </template>

@@ -2,9 +2,12 @@
 import { computed } from 'vue';
 import { Link } from '@inertiajs/vue3';
 import { ArrowLeftIcon } from '@lucide/vue';
-import { filtersToQuery, type LibraryView } from '@/lib/library-filters';
-import { markLibraryRestore, readLibrarySnapshot } from '@/lib/library';
-import { index as sessionsIndex } from '@/routes/sessions';
+import {
+    libraryReturnUrl,
+    markLibraryRestore,
+    readLibrarySnapshot,
+} from '@/lib/library';
+import type { LibraryView } from '@/lib/library-filters';
 
 const props = defineProps<{
     /** The session is archived, used when no saved list says otherwise. */
@@ -45,17 +48,7 @@ const label = computed(() =>
     originView === 'archived' ? 'Back to Archived' : 'Back to Library',
 );
 
-const href = computed(() => {
-    if (snapshot === null) {
-        return originView === 'archived'
-            ? sessionsIndex.url({ query: { view: 'archived' } })
-            : sessionsIndex.url();
-    }
-
-    return sessionsIndex.url({
-        query: filtersToQuery(snapshot.filters, snapshot.timezone),
-    });
-});
+const href = computed(() => libraryReturnUrl(originView === 'archived'));
 </script>
 
 <template>

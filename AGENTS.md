@@ -18,15 +18,37 @@
 
 # TDD
 
-Create tests beforehand where ever possible
+- Create tests beforehand where ever possible
+- Prefer feature tests that go through the route the learner uses; add a unit test for pure logic (enums, support classes, formatting)
+- Cover the behaviour at its boundary, not only inside the class that implements it
 
 # Architecture
 
-- All the actions(write operations) should have action class (Laravel Actions Pattern)
-- All the read queries should be in models
-- keep the controller clean - thin controllers fat model
-- All the validations should use form requests
-- Prefer grouping
+## Where code goes
+
+- `app/Actions` — every write operation (Laravel Actions Pattern). One class, one job, a `handle()` method.
+- `app/Http/Requests` — every validation rule. Never validate inside a controller.
+- `app/Http/Controllers` — thin. Take input, call an action or a query, render or respond. Nothing else.
+- `app/Queries` — reads that compose more than a single model call: filtering, sorting, pagination, aggregates, multi-table reads.
+- `app/Http/Resources` — shaping a model into a payload. This is the only place a payload's shape is decided.
+- `app/Support` — stateless helpers shared across the app: projections, shared rules, text formatting. Static or `final readonly`.
+- `app/Enums` — any fixed set of values. Never a `TYPE_*` string constant.
+
+## Models
+
+- Keep relations, casts, `#[Scope]` scopes and cheap derivations on the model.
+- Derived reads that need only already-loaded relations stay on the model (`counts()`, `needsAttention()`, `isEmpty()`, `sessionDate()`).
+- Anything that builds a payload, paginates, filters, sorts or sums across tables belongs in a query class or a resource.
+
+## Rules
+
+- Models never write. No read path (controller, resource, query) may change the database.
+- Reads that compose behaviour belong in a query class, not a static model method.
+- Payload shape belongs in a resource, not on the model. Do not introduce DTOs — use Resources.
+- Fixed value sets belong in an enum, with behaviour as methods (`$type->isTable()`, `$type->sortOrder()`), not as parallel constant arrays and `is*()` helpers.
+- When replacing an API, remove the old one and update every call site including tests. Do not leave deprecation aliases.
+- Put the legacy/repair side effects of a read in one place in the controller, so every endpoint keeps the same behaviour without the model mutating on read.
+- Prefer grouping.
 - Use vue best practices - https://vuejs.org/style-guide/rules-strongly-recommended.html
     - Prefer directive shorthands
 

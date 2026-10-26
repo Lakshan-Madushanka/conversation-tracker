@@ -1,5 +1,12 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import {
+    computed,
+    nextTick,
+    onBeforeUnmount,
+    onMounted,
+    ref,
+    watch,
+} from 'vue';
 import { Link } from '@inertiajs/vue3';
 import {
     ListFilterIcon,
@@ -25,6 +32,10 @@ const props = withDefaults(
         total?: number;
         allTotal?: number;
         hasFilters?: boolean;
+        /** True when a search is narrowing the list. */
+        hasSearch?: boolean;
+        /** True when any filter chip (not the search) is narrowing the list. */
+        hasFilterChips?: boolean;
         /** True while a new filter state is on its way. */
         updating?: boolean;
         /** True when that filter request failed. */
@@ -37,6 +48,8 @@ const props = withDefaults(
         total: 0,
         allTotal: 0,
         hasFilters: false,
+        hasSearch: false,
+        hasFilterChips: false,
         updating: false,
         filterError: false,
     },
@@ -45,11 +58,55 @@ const props = withDefaults(
 const emit = defineEmits<{
     (event: 'load-more'): void;
     (event: 'clear-filters'): void;
+    (event: 'clear-search'): void;
     (event: 'retry-filters'): void;
 }>();
 
 /** A short row of placeholders while the next page arrives. */
 const skeletonCount = 3;
+
+/** What the no-results state says, depending on what is narrowing the list. */
+const emptyTitle = computed(() =>
+    props.hasSearch
+        ? 'No sessions match your search'
+        : 'No sessions match these filters',
+);
+
+const emptyDescription = computed(() =>
+    props.hasSearch
+        ? 'Try different words, or clear the search to see everything again.'
+        : 'Try a different topic, date, content type or status. Your other sessions are still here.',
+);
+
+/** A "Clear all filters" button is only useful when a chip is on. */
+const showClearFilters = computed(
+    () => props.hasFilterChips || (!props.hasSearch && props.hasFilters),
+);
+
+/**
+ * What a screen reader hears once a search or filter has settled. It stays
+ * empty while a request is on its way, so typing a word announces one result
+ * count rather than a stream of them.
+ */
+const resultAnnouncement = computed(() => {
+    if (props.updating || props.loading) {
+        return '';
+    }
+
+    if (props.hasFilters && props.total === 0) {
+        return 'No sessions match.';
+    }
+
+    const counted = props.hasFilters
+        ? `${props.total} ${props.total === 1 ? 'session matches' : 'sessions match'}.`
+        : '';
+
+    if (props.hasMore) {
+        return `${counted} Showing ${props.sessions.length} of ${props.total}.`.trim();
+    }
+
+    return counted;
+});
 
 const sentinel = ref<HTMLElement | null>(null);
 let observer: IntersectionObserver | null = null;
@@ -101,6 +158,10 @@ onBeforeUnmount(() => observer?.disconnect());
 
 <template>
     <div>
+        <p class="sr-only" role="status" aria-live="polite" aria-atomic="true">
+            {{ resultAnnouncement }}
+        </p>
+
         <div
             v-if="props.updating"
             class="grid gap-3"
@@ -159,18 +220,33 @@ onBeforeUnmount(() => observer?.disconnect());
                     !props.filterError
                 "
                 :icon="ListFilterIcon"
-                title="No sessions match these filters"
-                description="Try a different topic, date, content type or status. Your other sessions are still here."
+                :title="emptyTitle"
+                :description="emptyDescription"
             >
                 <template #actions>
-                    <Button
-                        type="button"
-                        variant="outline"
-                        class="min-h-11 md:min-h-9"
-                        @click="emit('clear-filters')"
+                    <div
+                        class="flex flex-wrap items-center justify-center gap-2"
                     >
-                        Clear all filters
-                    </Button>
+                        <Button
+                            v-if="props.hasSearch"
+                            type="button"
+                            variant="outline"
+                            class="min-h-11 md:min-h-9"
+                            @click="emit('clear-search')"
+                        >
+                            Clear search
+                        </Button>
+
+                        <Button
+                            v-if="showClearFilters"
+                            type="button"
+                            variant="outline"
+                            class="min-h-11 md:min-h-9"
+                            @click="emit('clear-filters')"
+                        >
+                            Clear all filters
+                        </Button>
+                    </div>
                 </template>
             </EmptyState>
 
@@ -242,11 +318,7 @@ onBeforeUnmount(() => observer?.disconnect());
                 }}
             </p>
 
-            <p
-                v-if="props.hasMore"
-                class="text-xs text-muted-foreground"
-                aria-live="polite"
-            >
+            <p v-if="props.hasMore" class="text-xs text-muted-foreground">
                 Showing {{ props.sessions.length }} of {{ props.total }}
             </p>
         </div>

@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { PlusIcon } from '@lucide/vue';
 import LibraryFilterBar from '@/components/LibraryFilterBar.vue';
+import LibrarySearch from '@/components/LibrarySearch.vue';
 import LibrarySessionList from '@/components/LibrarySessionList.vue';
 import PageHeader from '@/components/PageHeader.vue';
 import { Button } from '@/components/ui/button';
@@ -16,7 +17,9 @@ import {
     type LibrarySnapshot,
 } from '@/lib/library';
 import {
+    activeFilterCount,
     hasActiveFilters,
+    hasSearch,
     sessionCountLabel,
     sortLabel,
     type LibraryFilters,
@@ -49,11 +52,19 @@ const {
     applyFilters,
     retryFilters,
     clearFilters,
+    setSearch,
+    clearSearch,
 } = useLibrarySessions(props);
 
 const filterBar = ref<InstanceType<typeof LibraryFilterBar> | null>(null);
+const searchBox = ref<InstanceType<typeof LibrarySearch> | null>(null);
 
 const filtered = computed(() => hasActiveFilters(filters.value));
+
+/** The filter chips in force, without counting the search. */
+const hasFilterChips = computed(() => activeFilterCount(filters.value) > 0);
+
+const searchActive = computed(() => hasSearch(filters.value));
 
 const count = computed(() =>
     sessionCountLabel(total.value, allTotal.value, filtered.value),
@@ -85,6 +96,17 @@ function changeFilters(next: LibraryFilters): void {
 function clearFromEmptyState(): void {
     clearFilters();
     filterBar.value?.focusFirstControl();
+}
+
+/** Search as the learner types; only the latest request may change the list. */
+function changeSearch(search: string): void {
+    setSearch(search);
+}
+
+/** Clear the words, keeping the filters, and put the cursor back in the box. */
+function clearSearchFromEmptyState(): void {
+    clearSearch();
+    searchBox.value?.focus();
 }
 
 /** The last scroll position read, kept for the trip back from a session. */
@@ -187,6 +209,13 @@ onBeforeUnmount(() => {
             {{ announcement }}
         </p>
 
+        <LibrarySearch
+            ref="searchBox"
+            :model-value="filters.q"
+            :updating="updating"
+            @search="changeSearch"
+        />
+
         <LibraryFilterBar
             ref="filterBar"
             :filters="filters"
@@ -205,10 +234,13 @@ onBeforeUnmount(() => {
             :total="total"
             :all-total="allTotal"
             :has-filters="filtered"
+            :has-search="searchActive"
+            :has-filter-chips="hasFilterChips"
             :updating="updating"
             :filter-error="filterError"
             @load-more="loadMore"
             @clear-filters="clearFromEmptyState"
+            @clear-search="clearSearchFromEmptyState"
             @retry-filters="retryFilters"
         />
     </div>

@@ -62,6 +62,7 @@ beforeEach(() => {
 
 afterEach(() => {
     vi.restoreAllMocks();
+    vi.useRealTimers();
 });
 
 describe('the Library page', () => {
@@ -134,5 +135,55 @@ describe('the Library page with filters', () => {
         });
 
         expect(wrapper.text()).toContain('1 session, oldest first.');
+    });
+});
+
+describe('the Library page with a search', () => {
+    it('searches after a pause and keeps the filters in force', async () => {
+        vi.useFakeTimers();
+
+        const get = vi.spyOn(router, 'get').mockImplementation(() => {});
+
+        const wrapper = mountLibrary([], 0, {
+            allTotal: 12,
+            filters: { ...defaultLibraryFilters(), status: 'finished' },
+        });
+
+        await wrapper.get('#library-search').setValue('beach');
+        vi.advanceTimersByTime(350);
+
+        expect(get).toHaveBeenCalledTimes(1);
+
+        const url = get.mock.calls[0]?.[0] as string;
+
+        expect(url).toContain('q=beach');
+        expect(url).toContain('status=finished');
+
+        wrapper.unmount();
+    });
+
+    it('clears only the search from the no-results state', async () => {
+        const get = vi.spyOn(router, 'get').mockImplementation(() => {});
+
+        const wrapper = mountLibrary([], 0, {
+            allTotal: 12,
+            filters: { ...defaultLibraryFilters(), q: 'zzzz' },
+        });
+
+        expect(wrapper.text()).toContain('No sessions match your search');
+
+        await wrapper
+            .findAll('button')
+            .find((button) => button.text().includes('Clear search'))
+            ?.trigger('click');
+
+        await wrapper.vm.$nextTick();
+
+        const url = get.mock.calls[0]?.[0] as string;
+
+        expect(url).not.toContain('q=');
+        expect(wrapper.text()).not.toContain('No sessions match your search');
+
+        wrapper.unmount();
     });
 });

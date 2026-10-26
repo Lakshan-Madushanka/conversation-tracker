@@ -381,4 +381,70 @@ describe('changing the filters', () => {
 
         expect(library.sessions.value.map((card) => card.id)).toEqual([2]);
     });
+
+    it('puts the search in the address and keeps every filter', () => {
+        const requests = captureRequests();
+        const library = useLibrarySessions(
+            page({ filters: filters({ topics: [1], status: 'finished' }) }),
+        );
+
+        library.setSearch('beach');
+
+        expect(requests).toHaveLength(1);
+        expect(requests[0]?.url).toContain('q=beach');
+        expect(requests[0]?.url).toContain('topics=1');
+        expect(requests[0]?.url).toContain('status=finished');
+        expect(library.filters.value.q).toBe('beach');
+    });
+
+    it('clears only the search, keeping the filters', () => {
+        const requests = captureRequests();
+        const library = useLibrarySessions(
+            page({ filters: filters({ topics: [1], q: 'beach' }) }),
+        );
+
+        library.clearSearch();
+
+        expect(requests).toHaveLength(1);
+        expect(requests[0]?.url).toContain('topics=1');
+        expect(requests[0]?.url).not.toContain('q=');
+        expect(library.filters.value.q).toBe('');
+    });
+
+    it('ignores the same search twice', () => {
+        const requests = captureRequests();
+        const library = useLibrarySessions(page());
+
+        library.setSearch('beach');
+        library.setSearch('beach');
+
+        expect(requests).toHaveLength(1);
+    });
+
+    it('lets only the latest search change the list', () => {
+        const requests = captureRequests();
+        const library = useLibrarySessions(page());
+
+        library.setSearch('beach');
+        library.setSearch('soup');
+
+        requests[0]?.options.onSuccess?.({
+            props: page({
+                sessions: [session(1)],
+                filters: filters({ q: 'beach' }),
+            }),
+        });
+
+        expect(library.sessions.value).toEqual([]);
+
+        requests[1]?.options.onSuccess?.({
+            props: page({
+                sessions: [session(2)],
+                filters: filters({ q: 'soup' }),
+            }),
+        });
+
+        expect(library.sessions.value.map((card) => card.id)).toEqual([2]);
+        expect(library.filters.value.q).toBe('soup');
+    });
 });

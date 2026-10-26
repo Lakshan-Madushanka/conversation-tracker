@@ -178,4 +178,101 @@ describe('the Library list', () => {
             'That is every matching session — 1 in total.',
         );
     });
+
+    it('announces the result count once a search settles', () => {
+        const wrapper = mount(LibrarySessionList, {
+            props: {
+                sessions: [session(1), session(2)],
+                total: 2,
+                allTotal: 12,
+                hasFilters: true,
+                hasSearch: true,
+            },
+        });
+
+        const status = wrapper.get('[role="status"]');
+
+        expect(status.attributes('aria-live')).toBe('polite');
+        expect(status.text()).toBe('2 sessions match.');
+    });
+
+    it('stays quiet while a search is on its way', () => {
+        const wrapper = mount(LibrarySessionList, {
+            props: {
+                sessions: [],
+                total: 0,
+                allTotal: 12,
+                hasFilters: true,
+                hasSearch: true,
+                updating: true,
+            },
+        });
+
+        expect(wrapper.get('[role="status"]').text()).toBe('');
+    });
+
+    it('announces that nothing matched', () => {
+        const wrapper = mount(LibrarySessionList, {
+            props: {
+                sessions: [],
+                total: 0,
+                allTotal: 12,
+                hasFilters: true,
+                hasSearch: true,
+            },
+        });
+
+        expect(wrapper.get('[role="status"]').text()).toBe(
+            'No sessions match.',
+        );
+    });
+
+    it('explains a search that matches nothing and offers to clear it', async () => {
+        const wrapper = mount(LibrarySessionList, {
+            props: {
+                sessions: [],
+                total: 0,
+                allTotal: 12,
+                hasFilters: true,
+                hasSearch: true,
+            },
+        });
+
+        expect(wrapper.text()).toContain('No sessions match your search');
+        expect(wrapper.text()).toContain('Try different words');
+
+        const clear = wrapper
+            .findAll('button')
+            .find((element) => element.text().includes('Clear search'));
+
+        await clear?.trigger('click');
+
+        expect(wrapper.emitted('clear-search')).toHaveLength(1);
+        expect(wrapper.emitted('clear-filters')).toBeUndefined();
+    });
+
+    it('offers both ways out when a search and filters are both on', async () => {
+        const wrapper = mount(LibrarySessionList, {
+            props: {
+                sessions: [],
+                total: 0,
+                allTotal: 12,
+                hasFilters: true,
+                hasSearch: true,
+                hasFilterChips: true,
+            },
+        });
+
+        const clearSearch = wrapper
+            .findAll('button')
+            .find((element) => element.text().includes('Clear search'));
+        const clearFilters = wrapper
+            .findAll('button')
+            .find((element) => element.text().includes('Clear all filters'));
+
+        await clearFilters?.trigger('click');
+
+        expect(clearSearch).toBeDefined();
+        expect(wrapper.emitted('clear-filters')).toHaveLength(1);
+    });
 });

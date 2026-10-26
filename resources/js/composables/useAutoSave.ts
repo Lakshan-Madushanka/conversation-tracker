@@ -19,6 +19,8 @@ import type { PracticeQuestionForm, PracticeSessionData } from '@/types';
  * - `conflict` — another tab changed the session first.
  * - `archived` — the session was archived elsewhere, so saves are refused
  *   until it is restored.
+ * - `deleted` — the session was deleted, so there is nothing left to save
+ *   into. The text stays on screen while the learner returns to the Library.
  */
 export type AutoSaveStatus =
     | 'needs_topic'
@@ -27,7 +29,8 @@ export type AutoSaveStatus =
     | 'retrying'
     | 'failed'
     | 'conflict'
-    | 'archived';
+    | 'archived'
+    | 'deleted';
 
 /** The editor content, as the page holds it. */
 export interface AutoSaveSnapshot {
@@ -51,6 +54,7 @@ export type AutoSaveOutcome =
     | { outcome: 'invalid'; errors: Record<string, string> }
     | { outcome: 'conflict'; session: PracticeSessionData }
     | { outcome: 'archived'; message: string }
+    | { outcome: 'deleted' }
     | { outcome: 'failed' };
 
 /** Performs one save. Injected so the logic can be tested without a network. */
@@ -124,6 +128,7 @@ export function useAutoSave(options: UseAutoSaveOptions) {
     const conflict = ref<PracticeSessionData | null>(null);
     const archived = ref(false);
     const archivedMessage = ref('');
+    const deleted = ref(false);
     const lastSavedAt = ref<number | null>(null);
 
     /** Bumped on every change, so a save knows if newer edits appeared. */
@@ -163,9 +168,16 @@ export function useAutoSave(options: UseAutoSaveOptions) {
         clearTimer();
 
         // A session archived elsewhere stays read-only until it is restored;
-        // nothing is queued in the meantime.
+        // nothing is queued in the meantime. A deleted session is gone for
+        // good, so there is nothing left to save into.
         if (archived.value) {
             status.value = 'archived';
+
+            return;
+        }
+
+        if (deleted.value) {
+            status.value = 'deleted';
 
             return;
         }
@@ -221,7 +233,13 @@ export function useAutoSave(options: UseAutoSaveOptions) {
     }
 
     async function performSave(): Promise<void> {
-        if (disposed || archived.value || inFlight || conflict.value) {
+        if (
+            disposed ||
+            archived.value ||
+            deleted.value ||
+            inFlight ||
+            conflict.value
+        ) {
             return;
         }
 
@@ -319,12 +337,19 @@ export function useAutoSave(options: UseAutoSaveOptions) {
             return;
         }
 
+        if (result.outcome === 'deleted') {
+            deleted.value = true;
+            status.value = 'deleted';
+
+            return;
+        }
+
         scheduleRetry();
     }
 
     /** Try again now, usually from the Retry button. */
     function retry(): void {
-        if (disposed || archived.value || conflict.value) {
+        if (disposed || archived.value || deleted.value || conflict.value) {
             return;
         }
 
@@ -382,6 +407,7 @@ export function useAutoSave(options: UseAutoSaveOptions) {
         if (
             disposed ||
             archived.value ||
+            deleted.value ||
             !dirty.value ||
             conflict.value ||
             !canSave()
@@ -411,23 +437,35 @@ export function useAutoSave(options: UseAutoSaveOptions) {
      * on work the server has not seen.
      */
     async function saveNow(): Promise<boolean> {
-        if (disposed || archived.value || !options.hasTopic()) {
+        if (
+            disposed ||
+            archived.value ||
+            deleted.value ||
+            !options.hasTopic()
+        ) {
             return false;
         }
 
         clearTimer();
 
-        while (!disposed && !archived.value && !conflict.value && dirty.value) {
+        while (
+            !disposed &&
+            !archived.value &&
+            !deleted.value &&
+            !conflict.value &&
+            dirty.value
+        ) {
             while (
                 currentSave !== null &&
                 !disposed &&
                 !archived.value &&
+                !deleted.value &&
                 !conflict.value
             ) {
                 await currentSave;
             }
 
-            if (disposed || archived.value || conflict.value) {
+            if (disposed || archived.value || deleted.value || conflict.value) {
                 return false;
             }
 
@@ -436,7 +474,9 @@ export function useAutoSave(options: UseAutoSaveOptions) {
             }
         }
 
-        return !disposed && !archived.value && !conflict.value;
+        return (
+            !disposed && !archived.value && !deleted.value && !conflict.value
+        );
     }
 
     /**
@@ -532,6 +572,7 @@ export function useAutoSave(options: UseAutoSaveOptions) {
         conflict,
         archived,
         archivedMessage,
+        deleted,
         lastSavedAt,
         hasUnsavedChanges: dirty,
         retry,

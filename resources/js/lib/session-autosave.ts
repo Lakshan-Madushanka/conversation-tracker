@@ -91,6 +91,12 @@ export const savePracticeSession: AutoSaveFunction = async (
         };
     }
 
+    // An update for a session that no longer exists. The text on screen stays,
+    // but nothing more can be saved into the deleted session.
+    if (!creating && response.status === 404) {
+        return { outcome: 'deleted' };
+    }
+
     if (response.status === 422) {
         const body = (await response.json()) as {
             errors?: Record<string, string>;

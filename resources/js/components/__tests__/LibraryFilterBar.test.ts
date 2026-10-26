@@ -127,4 +127,23 @@ describe('the Library filter bar', () => {
                 .some((button) => button.text() === 'Clear all'),
         ).toBe(false);
     });
+
+    it('leaves the Status filter out of the Archived view', () => {
+        const wrapper = mount(LibraryFilterBar, {
+            props: {
+                filters: filters({ view: 'archived' }),
+                topics,
+            },
+        });
+
+        expect(wrapper.find('[aria-label="Status"]').exists()).toBe(false);
+        expect(wrapper.find('[aria-label="Sort sessions"]').exists()).toBe(
+            true,
+        );
+        expect(
+            wrapper
+                .findAll('[data-chip-remove]')
+                .some((chip) => chip.text().includes('Finished')),
+        ).toBe(false);
+    });
 });

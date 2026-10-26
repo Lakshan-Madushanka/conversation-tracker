@@ -2,9 +2,14 @@
 import { computed } from 'vue';
 import { Link } from '@inertiajs/vue3';
 import { ArrowLeftIcon } from '@lucide/vue';
-import { filtersToQuery } from '@/lib/library-filters';
+import { filtersToQuery, type LibraryView } from '@/lib/library-filters';
 import { markLibraryRestore, readLibrarySnapshot } from '@/lib/library';
 import { index as sessionsIndex } from '@/routes/sessions';
+
+const props = defineProps<{
+    /** The session is archived, used when no saved list says otherwise. */
+    archived?: boolean;
+}>();
 
 /**
  * A link back to the Library that brings the learner's loaded list, filters
@@ -29,11 +34,22 @@ function rememberLibrary(event: MouseEvent): void {
  * The saved filters make the address match the list that is about to be put
  * back, so a refresh or a bookmark after returning keeps the same view.
  */
-const href = computed(() => {
-    const snapshot = readLibrarySnapshot();
+const snapshot = readLibrarySnapshot();
 
+/** Which list the learner came from, so the way back says the same thing. */
+const originView: LibraryView =
+    snapshot?.filters.view ??
+    (props.archived === true ? 'archived' : 'library');
+
+const label = computed(() =>
+    originView === 'archived' ? 'Back to Archived' : 'Back to Library',
+);
+
+const href = computed(() => {
     if (snapshot === null) {
-        return sessionsIndex.url();
+        return originView === 'archived'
+            ? sessionsIndex.url({ query: { view: 'archived' } })
+            : sessionsIndex.url();
     }
 
     return sessionsIndex.url({
@@ -49,6 +65,6 @@ const href = computed(() => {
         @click="rememberLibrary"
     >
         <ArrowLeftIcon class="size-4" aria-hidden="true" />
-        Back to Library
+        {{ label }}
     </Link>
 </template>

@@ -1,9 +1,13 @@
 import { mount } from '@vue/test-utils';
-import { describe, expect, it } from 'vite-plus/test';
+import { afterEach, describe, expect, it } from 'vite-plus/test';
 import SessionCard from '@/components/SessionCard.vue';
 import { shortDate } from '@/lib/format';
 import { edit as sessionsEdit, show as sessionsShow } from '@/routes/sessions';
 import type { SearchMatch, SessionCardData } from '@/types';
+
+afterEach(() => {
+    document.body.innerHTML = '';
+});
 
 function session(overrides: Partial<SessionCardData> = {}): SessionCardData {
     return {
@@ -11,6 +15,7 @@ function session(overrides: Partial<SessionCardData> = {}): SessionCardData {
         topic: 'Ordering at a restaurant',
         session_date: '2026-10-12T09:00:00.000000Z',
         last_edited_at: null,
+        archived_at: null,
         status: 'finished',
         counts: {
             questions: 6,
@@ -101,6 +106,91 @@ describe('a session in a list', () => {
 
         expect(wrapper.findAll('time')).toHaveLength(0);
         expect(wrapper.text()).toContain('6 questions');
+    });
+});
+
+describe('a session that was archived', () => {
+    it('shows Archived instead of its finished state', () => {
+        const wrapper = mountCard(
+            session({ archived_at: '2026-10-20T09:00:00.000000Z' }),
+        );
+
+        expect(wrapper.text()).toContain('Archived');
+        expect(wrapper.text()).not.toContain('Finished');
+    });
+
+    it('still opens the reading page', () => {
+        const wrapper = mountCard(
+            session({ archived_at: '2026-10-20T09:00:00.000000Z' }),
+        );
+
+        expect(wrapper.get('a').attributes('href')).toBe(sessionsShow.url(7));
+    });
+
+    it('offers Restore, and emits the session it belongs to', async () => {
+        const card = session({ archived_at: '2026-10-20T09:00:00.000000Z' });
+        const wrapper = mount(SessionCard, {
+            attachTo: document.body,
+            props: { session: card },
+        });
+
+        (
+            wrapper.get('button[aria-haspopup="menu"]').element as HTMLElement
+        ).click();
+        await wrapper.vm.$nextTick();
+        await wrapper.vm.$nextTick();
+
+        const items = [
+            ...document.querySelectorAll<HTMLElement>('[role="menuitem"]'),
+        ];
+
+        expect(items.map((item) => item.textContent?.trim())).toEqual([
+            'Restore',
+        ]);
+
+        items[0]?.click();
+        await wrapper.vm.$nextTick();
+
+        expect(wrapper.emitted('restore')?.[0]).toEqual([card]);
+        expect(wrapper.emitted('archive')).toBeUndefined();
+
+        wrapper.unmount();
+    });
+
+    it('archives a finished session from the card menu', async () => {
+        const card = session();
+        const wrapper = mount(SessionCard, {
+            attachTo: document.body,
+            props: { session: card },
+        });
+
+        (
+            wrapper.get('button[aria-haspopup="menu"]').element as HTMLElement
+        ).click();
+        await wrapper.vm.$nextTick();
+        await wrapper.vm.$nextTick();
+
+        const archive = [
+            ...document.querySelectorAll<HTMLElement>('[role="menuitem"]'),
+        ].find((item) => item.textContent?.includes('Archive'));
+
+        archive?.click();
+        await wrapper.vm.$nextTick();
+
+        expect(wrapper.emitted('archive')?.[0]).toEqual([card]);
+
+        wrapper.unmount();
+    });
+
+    it('can be shown without actions, as it is on Home', () => {
+        const wrapper = mount(SessionCard, {
+            props: { session: session(), showMenu: false },
+        });
+
+        expect(wrapper.find('button[aria-haspopup="menu"]').exists()).toBe(
+            false,
+        );
+        expect(wrapper.get('a').attributes('href')).toBe(sessionsShow.url(7));
     });
 });
 

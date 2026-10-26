@@ -208,7 +208,7 @@ class PracticeFeedbackEntry extends Model
                         ->orWhereRaw("example LIKE ? ESCAPE '!'", [$like]);
                 });
             })
-            ->whereHas('practiceQuestion.practiceSession', fn (Builder $query): Builder => $query->finished())
+            ->whereHas('practiceQuestion.practiceSession', fn (Builder $query): Builder => $query->study())
             ->where(fn (Builder $query): Builder => $query
                 ->where('content_text', '!=', '')
                 ->orWhere('content_html', '!=', ''))

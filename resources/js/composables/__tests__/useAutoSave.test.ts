@@ -32,6 +32,7 @@ function savedSession(
         status: 'unfinished',
         finished_at: null,
         last_changed_at: null,
+        archived_at: null,
         version: 1,
         topic: { id: 1, name: 'Travel' },
         questions: [],
@@ -334,6 +335,113 @@ describe('failures', () => {
         await vi.advanceTimersByTimeAsync(RETRY * 10);
 
         expect(test.save).toHaveBeenCalledTimes(1);
+
+        test.scope.stop();
+    });
+});
+
+describe('a session archived elsewhere', () => {
+    it('stops saving, keeps the text and says why', async () => {
+        const test = setup({
+            topic: 'Travel',
+            questions: [formQuestion('<p>Mine</p>')],
+            sessionId: 5,
+            version: 1,
+            responder: () => ({
+                outcome: 'archived',
+                message:
+                    'This session was archived. Restore it to keep editing.',
+            }),
+        });
+
+        test.questions.value[0]!.question_html = '<p>Mine edited</p>';
+        await nextTick();
+        await vi.advanceTimersByTimeAsync(DEBOUNCE);
+
+        expect(test.api.status.value).toBe('archived');
+        expect(test.api.archived.value).toBe(true);
+        expect(test.api.archivedMessage.value).toBe(
+            'This session was archived. Restore it to keep editing.',
+        );
+        expect(test.api.hasUnsavedChanges.value).toBe(true);
+
+        // Further typing must not queue another save while it is read-only.
+        test.questions.value[0]!.question_html = '<p>Still mine</p>';
+        await nextTick();
+        await vi.advanceTimersByTimeAsync(DEBOUNCE * 5);
+
+        expect(test.save).toHaveBeenCalledTimes(1);
+        expect(test.api.status.value).toBe('archived');
+
+        test.scope.stop();
+    });
+
+    it('cannot be retried or saved until it is restored', async () => {
+        const test = setup({
+            topic: 'Travel',
+            questions: [formQuestion('<p>Mine</p>')],
+            sessionId: 5,
+            version: 1,
+            responder: () => ({
+                outcome: 'archived',
+                message:
+                    'This session was archived. Restore it to keep editing.',
+            }),
+        });
+
+        test.questions.value[0]!.question_html = '<p>Mine edited</p>';
+        await nextTick();
+        await vi.advanceTimersByTimeAsync(DEBOUNCE);
+        expect(test.api.archived.value).toBe(true);
+
+        test.api.retry();
+        await expect(test.api.saveNow()).resolves.toBe(false);
+        await vi.advanceTimersByTimeAsync(RETRY * 5);
+
+        expect(test.save).toHaveBeenCalledTimes(1);
+
+        test.scope.stop();
+    });
+
+    it('saves the kept text again once it is restored', async () => {
+        const test = setup({
+            topic: 'Travel',
+            questions: [formQuestion('<p>Mine</p>')],
+            sessionId: 5,
+            version: 1,
+            responder: (_request, attempt) =>
+                attempt === 1
+                    ? {
+                          outcome: 'archived',
+                          message:
+                              'This session was archived. Restore it to keep editing.',
+                      }
+                    : {
+                          outcome: 'saved',
+                          session: savedSession({ id: 5, version: 2 }),
+                          savedAt: '2026-10-16T00:00:00Z',
+                      },
+        });
+
+        test.questions.value[0]!.question_html = '<p>Mine edited</p>';
+        await nextTick();
+        await vi.advanceTimersByTimeAsync(DEBOUNCE);
+        expect(test.api.archived.value).toBe(true);
+
+        test.questions.value[0]!.question_html = '<p>Still mine</p>';
+        await nextTick();
+
+        test.api.resumeAfterRestore();
+        await flush();
+
+        expect(test.api.archived.value).toBe(false);
+        expect(test.api.archivedMessage.value).toBe('');
+        expect(test.api.status.value).toBe('saved');
+        expect(test.api.hasUnsavedChanges.value).toBe(false);
+        expect(test.save).toHaveBeenCalledTimes(2);
+        expect(test.calls[1]?.questions[0]?.question_html).toBe(
+            '<p>Still mine</p>',
+        );
 
         test.scope.stop();
     });

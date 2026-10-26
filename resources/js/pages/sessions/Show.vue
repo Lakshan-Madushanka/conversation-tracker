@@ -1,10 +1,17 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { Head, Link } from '@inertiajs/vue3';
-import { InfoIcon, PencilIcon } from '@lucide/vue';
+import { Head, Link, router } from '@inertiajs/vue3';
+import {
+    ArchiveIcon,
+    ArchiveRestoreIcon,
+    InfoIcon,
+    PencilIcon,
+} from '@lucide/vue';
+import { toast } from 'vue-sonner';
 import BackToLibrary from '@/components/BackToLibrary.vue';
 import PageHeader from '@/components/PageHeader.vue';
 import SectionLabel from '@/components/SectionLabel.vue';
+import SessionMenu from '@/components/SessionMenu.vue';
 import StatTile from '@/components/StatTile.vue';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -26,6 +33,7 @@ import {
     revealSearchTarget,
     type SearchTarget,
 } from '@/lib/search-target';
+import { restoreSession, archiveSession } from '@/lib/session-archive';
 import { edit as sessionsEdit } from '@/routes/sessions';
 import type {
     FeedbackType,
@@ -113,9 +121,106 @@ function nonBlank(entries: unknown): unknown[] {
 
 const isFinished = computed(() => props.session.finished_at !== null);
 
+const isArchived = computed(() => props.session.archived_at !== null);
+
 const statusLabel = computed(() =>
     isFinished.value ? 'Finished' : 'Unfinished',
 );
+
+/** True while a Restore is on its way, so the button cannot be pressed twice. */
+const restoring = ref(false);
+
+/** True while an Archive is on its way, so the menu cannot repeat it. */
+const archiving = ref(false);
+
+/**
+ * Bring the session back to the Library without leaving the page. The server
+ * sends the session again, now editable, so the page switches to its normal
+ * reading state in place.
+ */
+async function restore(): Promise<void> {
+    if (restoring.value) {
+        return;
+    }
+
+    restoring.value = true;
+
+    try {
+        const restored = await restoreSession(props.session.id);
+
+        if (!restored) {
+            toast.error(
+                'We could not restore this session. Nothing was changed.',
+            );
+
+            return;
+        }
+
+        toast.success('Session restored.');
+        router.reload();
+    } finally {
+        restoring.value = false;
+    }
+}
+
+/**
+ * Put the session away without leaving the page. The reading page turns into
+ * its archived state, and the message offers Undo for a change of mind.
+ */
+async function archive(): Promise<void> {
+    if (archiving.value) {
+        return;
+    }
+
+    archiving.value = true;
+
+    try {
+        const outcome = await archiveSession(props.session.id);
+
+        if (outcome === 'unfinished') {
+            toast.error('Finish this session to archive it.');
+
+            return;
+        }
+
+        if (outcome === 'failed') {
+            toast.error(
+                'We could not archive this session. Nothing was changed.',
+            );
+
+            return;
+        }
+
+        toast.success('Session archived.', {
+            action: {
+                label: 'Undo',
+                onClick: () => {
+                    void undoArchive();
+                },
+            },
+        });
+
+        router.reload();
+    } finally {
+        archiving.value = false;
+    }
+}
+
+/** Undo an archive from the message, returning the page to its normal state. */
+async function undoArchive(): Promise<void> {
+    const restored = await restoreSession(props.session.id);
+
+    if (!restored) {
+        toast.error(
+            'We could not restore this session. You can restore it from the Archived view.',
+        );
+
+        return;
+    }
+
+    toast.success('Session restored.');
+    router.reload();
+}
 
 const description = computed(() => {
     const count = `${cards.value.length} ${
@@ -275,7 +380,7 @@ function itemHasMoved(): void {
     <div>
         <Head :title="props.session.topic.name" />
 
-        <BackToLibrary />
+        <BackToLibrary :archived="isArchived" />
 
         <PageHeader
             :title="props.session.topic.name"
@@ -283,12 +388,30 @@ function itemHasMoved(): void {
         >
             <template #actions>
                 <Badge
-                    :variant="isFinished ? 'default' : 'secondary'"
+                    :variant="
+                        isArchived
+                            ? 'outline'
+                            : isFinished
+                              ? 'default'
+                              : 'secondary'
+                    "
                     class="hidden sm:inline-flex"
                 >
-                    {{ statusLabel }}
+                    {{ isArchived ? 'Archived' : statusLabel }}
                 </Badge>
-                <Button size="lg" as-child>
+
+                <SessionMenu
+                    :topic="props.session.topic.name"
+                    :edit-href="
+                        isArchived ? null : sessionsEdit.url(props.session.id)
+                    "
+                    :archived="isArchived"
+                    :finished="isFinished"
+                    @archive="archive"
+                    @restore="restore"
+                />
+
+                <Button v-if="!isArchived" size="lg" as-child>
                     <Link :href="sessionsEdit.url(props.session.id)">
                         <PencilIcon aria-hidden="true" />
                         Edit session
@@ -296,6 +419,26 @@ function itemHasMoved(): void {
                 </Button>
             </template>
         </PageHeader>
+
+        <Alert v-if="isArchived" class="mb-6">
+            <ArchiveIcon aria-hidden="true" />
+            <AlertTitle>This session is archived</AlertTitle>
+            <AlertDescription>
+                <p>
+                    It is read-only until you restore it. Its content, dates and
+                    totals stay exactly as they are.
+                </p>
+                <Button
+                    type="button"
+                    :disabled="restoring"
+                    class="mt-3"
+                    @click="restore"
+                >
+                    <ArchiveRestoreIcon aria-hidden="true" />
+                    {{ restoring ? 'Restoring…' : 'Restore session' }}
+                </Button>
+            </AlertDescription>
+        </Alert>
 
         <Alert v-if="targetNotice !== ''" class="mb-6" role="status">
             <InfoIcon aria-hidden="true" />
@@ -448,7 +591,7 @@ function itemHasMoved(): void {
 
         <!-- On a phone, the Edit button is repeated at the bottom so it is
             always within reach after reading a long session. -->
-        <div class="mt-8 flex justify-center sm:hidden">
+        <div v-if="!isArchived" class="mt-8 flex justify-center sm:hidden">
             <Button size="lg" as-child>
                 <Link :href="sessionsEdit.url(props.session.id)">
                     <PencilIcon aria-hidden="true" />

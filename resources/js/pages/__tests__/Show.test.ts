@@ -1,6 +1,7 @@
 import { nextTick } from 'vue';
-import { mount } from '@vue/test-utils';
+import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
+import { router } from '@inertiajs/vue3';
 import { shortDate } from '@/lib/format';
 import Show from '@/pages/sessions/Show.vue';
 import {
@@ -17,6 +18,7 @@ function session(
         status: 'finished',
         finished_at: '2026-10-12T09:00:00.000000Z',
         last_changed_at: '2026-10-12T10:00:00.000000Z',
+        archived_at: null,
         version: 3,
         topic: { id: 1, name: 'Ordering at a restaurant' },
         questions: [
@@ -56,6 +58,8 @@ function mountShow(saved: PracticeSessionData = session()) {
 
 afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    window.sessionStorage.clear();
     window.history.replaceState(null, '', '/');
 });
 
@@ -144,6 +148,66 @@ describe('a session opened to be read', () => {
         expect(wrapper.text()).toContain(
             'Nothing has been written into this session yet.',
         );
+    });
+});
+
+describe('a session that was archived', () => {
+    const archived = session({
+        archived_at: '2026-10-20T09:00:00.000000Z',
+    });
+
+    it('says it is archived and explains it is read-only', () => {
+        const wrapper = mountShow(archived);
+
+        expect(wrapper.text()).toContain('Archived');
+        expect(wrapper.text()).toContain('This session is archived');
+        expect(wrapper.text()).toContain(
+            'It is read-only until you restore it.',
+        );
+        expect(wrapper.text()).toContain('Restore session');
+    });
+
+    it('does not offer the editor', () => {
+        const wrapper = mountShow(archived);
+
+        expect(
+            wrapper
+                .findAll('a')
+                .some((link) => link.text().includes('Edit session')),
+        ).toBe(false);
+    });
+
+    it('leads back to the Archived view', () => {
+        const wrapper = mountShow(archived);
+        const back = wrapper
+            .findAll('a')
+            .find((anchor) => anchor.text().includes('Back to Archived'));
+
+        expect(back?.attributes('href')).toBe(
+            sessionsIndex.url({ query: { view: 'archived' } }),
+        );
+    });
+
+    it('restores the session and reloads the page in place', async () => {
+        const fetch = vi.fn(
+            async (_url: string, _options?: RequestInit) =>
+                new Response(null, { status: 200 }),
+        );
+        vi.stubGlobal('fetch', fetch);
+        const reload = vi.spyOn(router, 'reload').mockImplementation(() => {});
+
+        const wrapper = mountShow(archived);
+
+        await wrapper
+            .findAll('button')
+            .find((button) => button.text().includes('Restore session'))
+            ?.trigger('click');
+        await flushPromises();
+
+        expect(String(fetch.mock.calls[0]?.[0])).toContain(
+            '/sessions/7/restore',
+        );
+        expect(reload).toHaveBeenCalledTimes(1);
     });
 });
 

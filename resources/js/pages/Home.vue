@@ -142,6 +142,7 @@ const greeting = computed(() => {
                     v-for="session in recentSessions"
                     :key="session.id"
                     :session="session"
+                    :show-menu="false"
                 />
             </div>
         </div>

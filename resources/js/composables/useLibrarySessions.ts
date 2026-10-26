@@ -9,8 +9,10 @@ import {
     normalizeLibraryFilters,
     withSearch,
     withSort,
+    withView,
     type LibraryFilters,
     type LibrarySort,
+    type LibraryView,
 } from '@/lib/library-filters';
 import {
     isLibraryPage,
@@ -28,6 +30,7 @@ const FILTER_PROPS = [
     'has_more',
     'total',
     'all_total',
+    'archived_total',
     'filters',
     'topics',
     'timezone',
@@ -47,6 +50,7 @@ export function useLibrarySessions(initial: LibraryPage) {
     const hasMore = ref(initial.has_more);
     const total = ref(initial.total);
     const allTotal = ref(initial.all_total);
+    const archivedTotal = ref(initial.archived_total);
     const filters = ref<LibraryFilters>(
         normalizeLibraryFilters(initial.filters),
     );
@@ -146,6 +150,7 @@ export function useLibrarySessions(initial: LibraryPage) {
         hasMore.value = page.has_more;
         total.value = page.total;
         allTotal.value = page.all_total;
+        archivedTotal.value = page.archived_total;
 
         return true;
     }
@@ -212,6 +217,7 @@ export function useLibrarySessions(initial: LibraryPage) {
         hasMore.value = lastPage.has_more;
         total.value = lastPage.total;
         allTotal.value = lastPage.all_total;
+        archivedTotal.value = lastPage.archived_total;
         topics.value = [...lastPage.topics];
         timezone.value = lastPage.timezone;
     }
@@ -232,6 +238,11 @@ export function useLibrarySessions(initial: LibraryPage) {
 
     function setSort(sort: LibrarySort): void {
         applyFilters(withSort(filters.value, sort));
+    }
+
+    /** Switch between the Library and the Archived view. */
+    function setView(view: LibraryView): void {
+        applyFilters(withView(filters.value, view));
     }
 
     function clearFilters(): void {
@@ -314,6 +325,7 @@ export function useLibrarySessions(initial: LibraryPage) {
         hasMore.value = page.has_more;
         total.value = page.total;
         allTotal.value = page.all_total;
+        archivedTotal.value = page.archived_total;
         filters.value = normalizeLibraryFilters(page.filters);
         topics.value = [...page.topics];
         timezone.value = page.timezone;
@@ -328,6 +340,7 @@ export function useLibrarySessions(initial: LibraryPage) {
         hasMore.value = snapshot.hasMore;
         total.value = snapshot.total;
         allTotal.value = snapshot.allTotal;
+        archivedTotal.value = snapshot.archivedTotal;
         filters.value = normalizeLibraryFilters(snapshot.filters);
         timezone.value = snapshot.timezone;
     }
@@ -338,6 +351,7 @@ export function useLibrarySessions(initial: LibraryPage) {
         hasMore,
         total,
         allTotal,
+        archivedTotal,
         filters,
         topics,
         timezone,
@@ -352,6 +366,7 @@ export function useLibrarySessions(initial: LibraryPage) {
         applyFilters,
         retryFilters,
         setSort,
+        setView,
         clearFilters,
         setSearch,
         clearSearch,

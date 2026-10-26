@@ -70,6 +70,7 @@ import {
     type SearchTarget,
 } from '@/lib/search-target';
 import { savePracticeSession } from '@/lib/session-autosave';
+import { restoreSession } from '@/lib/session-archive';
 import { discardSession, finishSession } from '@/lib/session-finish';
 import { home } from '@/routes';
 import { edit as sessionsEdit, show as sessionsShow } from '@/routes/sessions';
@@ -328,10 +329,12 @@ const {
     status,
     errors,
     conflict,
+    archivedMessage,
     lastSavedAt,
     retry,
     loadLatest,
     keepMine,
+    resumeAfterRestore,
     flush,
     saveNow,
 } = useAutoSave({
@@ -589,6 +592,31 @@ async function finishNow(): Promise<void> {
     } finally {
         finishing.value = false;
     }
+}
+
+/**
+ * The session was archived while this editor was open, so saving was refused.
+ * Restore it first, then save the text that stayed on screen.
+ */
+async function restoreArchivedSession(): Promise<void> {
+    const id = sessionId.value;
+
+    if (id === null) {
+        return;
+    }
+
+    const restored = await restoreSession(id);
+
+    if (!restored) {
+        toast.error(
+            'We could not restore this session. Your text is still here.',
+        );
+
+        return;
+    }
+
+    resumeAfterRestore();
+    toast.success('Session restored. Saving your text again.');
 }
 
 /**
@@ -1078,9 +1106,11 @@ onBeforeUnmount(() => {
                 :conflict="conflict"
                 :status="status"
                 :failure-message="failureMessage"
+                :archived-message="archivedMessage"
                 @load-latest="loadLatest"
                 @keep-mine="keepMine"
                 @retry="retry"
+                @restore="restoreArchivedSession"
             />
 
             <GuidedStep
@@ -1243,9 +1273,11 @@ onBeforeUnmount(() => {
                 :conflict="conflict"
                 :status="status"
                 :failure-message="failureMessage"
+                :archived-message="archivedMessage"
                 @load-latest="loadLatest"
                 @keep-mine="keepMine"
                 @retry="retry"
+                @restore="restoreArchivedSession"
             />
 
             <Alert v-if="targetNotice !== ''" class="mb-4" role="status">

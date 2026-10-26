@@ -14,6 +14,8 @@ export interface LibraryPage {
     total: number;
     /** How many sessions the Library holds in total. */
     all_total: number;
+    /** How many sessions the Archived view holds, whatever the filters. */
+    archived_total: number;
     filters: LibraryFilters;
     topics: TopicSummary[];
     timezone: string;
@@ -30,6 +32,7 @@ export interface LibrarySnapshot {
     hasMore: boolean;
     total: number;
     allTotal: number;
+    archivedTotal: number;
     filters: LibraryFilters;
     timezone: string;
     scrollY: number;
@@ -90,6 +93,7 @@ export function isLibraryPage(value: unknown): value is LibraryPage {
         typeof page.has_more === 'boolean' &&
         typeof page.total === 'number' &&
         typeof page.all_total === 'number' &&
+        typeof page.archived_total === 'number' &&
         typeof page.timezone === 'string' &&
         isLibraryFilters(page.filters) &&
         Array.isArray(page.topics)
@@ -112,6 +116,9 @@ export function isLibraryFilters(value: unknown): value is LibraryFilters {
         (typeof filters.to === 'string' || filters.to === null) &&
         typeof filters.status === 'string' &&
         typeof filters.sort === 'string' &&
+        (filters.view === undefined || typeof filters.view === 'string') &&
+        (filters.archivedSearch === undefined ||
+            typeof filters.archivedSearch === 'string') &&
         (filters.q === undefined || typeof filters.q === 'string')
     );
 }
@@ -162,6 +169,7 @@ export function readLibrarySnapshot(): LibrarySnapshot | null {
             hasMore: stored.hasMore,
             total: stored.total,
             allTotal: stored.allTotal ?? stored.total,
+            archivedTotal: stored.archivedTotal ?? 0,
             filters: normalizeLibraryFilters(stored.filters),
             timezone: stored.timezone ?? browserTimezone(),
             scrollY: stored.scrollY,
@@ -211,6 +219,7 @@ interface StoredLibrarySnapshot {
     scrollY: number;
     savedAt: number;
     allTotal?: number;
+    archivedTotal?: number;
     filters?: LibraryFilters;
     timezone?: string;
 }
@@ -232,6 +241,8 @@ function isStoredSnapshot(value: unknown): value is StoredLibrarySnapshot {
         typeof snapshot.savedAt === 'number' &&
         (snapshot.allTotal === undefined ||
             typeof snapshot.allTotal === 'number') &&
+        (snapshot.archivedTotal === undefined ||
+            typeof snapshot.archivedTotal === 'number') &&
         (snapshot.filters === undefined ||
             isLibraryFilters(snapshot.filters)) &&
         (snapshot.timezone === undefined ||

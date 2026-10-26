@@ -22,10 +22,9 @@ class LibraryController extends Controller
      */
     public function __invoke(LibrarySessionsRequest $request): Response|JsonResponse
     {
-        $topics = PracticeSession::libraryTopics();
-        $filters = $request->filters()->restrictTopics(
-            array_column($topics, 'id'),
-        );
+        $filters = $request->filters();
+        $topics = PracticeSession::libraryTopics($filters->archivedView());
+        $filters->restrictTopics(array_column($topics, 'id'));
 
         $page = PracticeSession::libraryPage(
             filters: $filters,

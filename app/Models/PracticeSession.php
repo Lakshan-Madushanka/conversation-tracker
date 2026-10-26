@@ -27,6 +27,7 @@ use Illuminate\Support\Collection;
  * @property string $status
  * @property CarbonImmutable|null $finished_at
  * @property CarbonImmutable|null $last_changed_at
+ * @property CarbonImmutable|null $archived_at
  * @property int $version
  * @property string|null $client_key
  * @property string|null $last_save_key
@@ -70,7 +71,61 @@ class PracticeSession extends Model
             'version' => 'integer',
             'finished_at' => 'datetime',
             'last_changed_at' => 'datetime',
+            'archived_at' => 'datetime',
         ];
+    }
+
+    /**
+     * Sessions the learner can still see in the Library, on Home and in
+     * search. Archived sessions are hidden here, once, so every list follows
+     * the same rule.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    #[Scope]
+    protected function visible(Builder $query): Builder
+    {
+        return $query->whereNull('archived_at');
+    }
+
+    /**
+     * Sessions the learner has put away in the Archived view.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    #[Scope]
+    protected function archived(Builder $query): Builder
+    {
+        return $query->whereNotNull('archived_at');
+    }
+
+    /**
+     * Sessions included in progress totals, practice days, streaks and
+     * exports. Archived sessions still count, because archiving never removes
+     * anything from the learner's history.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    #[Scope]
+    protected function countable(Builder $query): Builder
+    {
+        return $query->finished();
+    }
+
+    /**
+     * Sessions used as study material by Collections and Review. Only
+     * finished sessions that are not archived feed them.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    #[Scope]
+    protected function study(Builder $query): Builder
+    {
+        return $query->finished()->visible();
     }
 
     /**
@@ -103,6 +158,11 @@ class PracticeSession extends Model
         return $this->status === self::STATUS_FINISHED;
     }
 
+    public function isArchived(): bool
+    {
+        return $this->archived_at !== null;
+    }
+
     /**
      * @return BelongsTo<Topic, $this>
      */
@@ -131,6 +191,8 @@ class PracticeSession extends Model
      *     id: int,
      *     status: string,
      *     finished_at: string|null,
+     *     last_changed_at: string|null,
+     *     archived_at: string|null,
      *     version: int,
      *     topic: array{id: int, name: string},
      *     questions: array<int, array{
@@ -155,6 +217,7 @@ class PracticeSession extends Model
             'status' => $this->status,
             'finished_at' => $this->finished_at?->toIso8601String(),
             'last_changed_at' => $this->last_changed_at?->toIso8601String(),
+            'archived_at' => $this->archived_at?->toIso8601String(),
             'version' => $this->version,
             'topic' => [
                 'id' => $this->topic->id,
@@ -226,8 +289,9 @@ class PracticeSession extends Model
      * The sessions that belong in the Library and in the Home lists, narrowed
      * by the learner's filters when they have chosen any.
      *
-     * Archiving arrives in Step 4. When it does, archived sessions are
-     * excluded here, once, so every list follows the same rule.
+     * A normal Library visit lists visible sessions; the Archived view lists
+     * only archived ones. Every list reads this one rule rather than deciding
+     * for itself what archiving hides.
      *
      * @param  Builder<self>  $query
      * @return Builder<self>
@@ -235,6 +299,10 @@ class PracticeSession extends Model
     #[Scope]
     protected function library(Builder $query, ?LibraryFilters $filters = null): Builder
     {
+        $query = $filters instanceof LibraryFilters && $filters->archivedView()
+            ? $query->archived()
+            : $query->visible();
+
         return $filters instanceof LibraryFilters
             ? $this->applyFilters($query, $filters)
             : $query;
@@ -250,11 +318,12 @@ class PracticeSession extends Model
      * later page repeat or skip one.
      *
      * @return array{
-     *     sessions: list<array{id: int, topic: string, session_date: string|null, last_edited_at: string|null, status: string, counts: array{questions: int, words: int, phrases: int, mistakes: int, grammar_notes: int}, topic_segments?: list<array{text: string, match: bool}>, match_count?: int, matches?: list<array{key: string, kind: string, type: string|null, question_position: int|null, entry_id: string|null, entry_position: int|null, segments: list<array{text: string, match: bool}>}>}>,
+     *     sessions: list<array{id: int, topic: string, session_date: string|null, last_edited_at: string|null, archived_at: string|null, status: string, counts: array{questions: int, words: int, phrases: int, mistakes: int, grammar_notes: int}, topic_segments?: list<array{text: string, match: bool}>, match_count?: int, matches?: list<array{key: string, kind: string, type: string|null, question_position: int|null, entry_id: string|null, entry_position: int|null, segments: list<array{text: string, match: bool}>}>}>,
      *     next_cursor: string|null,
      *     has_more: bool,
      *     total: int,
-     *     all_total: int
+     *     all_total: int,
+     *     archived_total: int
      * }
      */
     public static function libraryPage(
@@ -279,7 +348,12 @@ class PracticeSession extends Model
             'next_cursor' => $paginator->nextCursor()?->encode(),
             'has_more' => $paginator->hasMorePages(),
             'total' => self::libraryTotal($filters),
-            'all_total' => self::libraryTotal(),
+            'all_total' => self::libraryTotal(
+                LibraryFilters::forView($filters?->view() ?? LibraryFilters::VIEW_LIBRARY),
+            ),
+            'archived_total' => self::libraryTotal(
+                LibraryFilters::forView(LibraryFilters::VIEW_ARCHIVED),
+            ),
         ];
     }
 
@@ -293,15 +367,16 @@ class PracticeSession extends Model
     }
 
     /**
-     * The topics used by at least one session in the Library, ordered by name.
-     * A topic no session uses any more simply stops being offered.
+     * The topics used by at least one session in the view being shown,
+     * ordered by name. A topic no session uses any more simply stops being
+     * offered. The Archived view offers only topics used by archived sessions.
      *
      * @return list<array{id: int, name: string}>
      */
-    public static function libraryTopics(): array
+    public static function libraryTopics(bool $archived = false): array
     {
         $topics = self::query()
-            ->library()
+            ->when($archived, fn (Builder $query): Builder => $query->archived(), fn (Builder $query): Builder => $query->visible())
             ->join('topics', 'topics.id', '=', 'practice_sessions.topic_id')
             ->distinct()
             ->orderBy('topics.name')
@@ -506,7 +581,7 @@ class PracticeSession extends Model
      * change first. They use the same card shape as the Library so both lists
      * look and behave the same.
      *
-     * @return list<array{id: int, topic: string, session_date: string|null, last_edited_at: string|null, status: string, counts: array{questions: int, words: int, phrases: int, mistakes: int, grammar_notes: int}}>
+     * @return list<array{id: int, topic: string, session_date: string|null, last_edited_at: string|null, archived_at: string|null, status: string, counts: array{questions: int, words: int, phrases: int, mistakes: int, grammar_notes: int}}>
      */
     public static function finishedSessions(?int $limit = null): array
     {
@@ -534,7 +609,7 @@ class PracticeSession extends Model
      * force, the card also carries the matching items and the highlighted
      * pieces of its topic, so the list can explain why it matched.
      *
-     * @return array{id: int, topic: string, session_date: string|null, last_edited_at: string|null, status: string, counts: array{questions: int, words: int, phrases: int, mistakes: int, grammar_notes: int}, topic_segments?: list<array{text: string, match: bool}>, match_count?: int, matches?: list<array{key: string, kind: string, type: string|null, question_position: int|null, entry_id: string|null, entry_position: int|null, segments: list<array{text: string, match: bool}>}>}
+     * @return array{id: int, topic: string, session_date: string|null, last_edited_at: string|null, archived_at: string|null, status: string, counts: array{questions: int, words: int, phrases: int, mistakes: int, grammar_notes: int}, topic_segments?: list<array{text: string, match: bool}>, match_count?: int, matches?: list<array{key: string, kind: string, type: string|null, question_position: int|null, entry_id: string|null, entry_position: int|null, segments: list<array{text: string, match: bool}>}>}
      */
     public function toLibraryPayload(?LibraryFilters $filters = null): array
     {
@@ -545,6 +620,7 @@ class PracticeSession extends Model
             'topic' => $this->topic->name,
             'session_date' => $this->sessionDate()?->toIso8601String(),
             'last_edited_at' => $this->lastEditedAt()?->toIso8601String(),
+            'archived_at' => $this->archived_at?->toIso8601String(),
             'status' => $this->status,
             'counts' => $this->counts(),
         ];

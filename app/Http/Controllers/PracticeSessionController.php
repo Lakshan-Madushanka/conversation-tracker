@@ -4,11 +4,15 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Actions\PracticeSessions\ArchivePracticeSession;
 use App\Actions\PracticeSessions\CreatePracticeSession;
 use App\Actions\PracticeSessions\DiscardPracticeSession;
 use App\Actions\PracticeSessions\FinishPracticeSession;
+use App\Actions\PracticeSessions\RestorePracticeSession;
 use App\Actions\PracticeSessions\UpdatePracticeSession;
+use App\Exceptions\PracticeSessionArchivedException;
 use App\Exceptions\PracticeSessionConflictException;
+use App\Exceptions\PracticeSessionNotFinishedException;
 use App\Http\Requests\AutosavePracticeSessionRequest;
 use App\Http\Requests\StorePracticeSessionRequest;
 use App\Models\PracticeSession;
@@ -52,8 +56,14 @@ class PracticeSessionController extends Controller
         return redirect()->route('sessions.edit', $session);
     }
 
-    public function edit(PracticeSession $session): Response
+    public function edit(PracticeSession $session): Response|RedirectResponse
     {
+        // An archived session is read-only. The reading page explains that and
+        // offers Restore, so a stale editor address lands there calmly.
+        if ($session->isArchived()) {
+            return redirect()->route('sessions.show', $session);
+        }
+
         return Inertia::render('sessions/Create', [
             'topics' => Topic::pickerOptions(),
             'session' => $session->toEditorPayload(),
@@ -65,7 +75,13 @@ class PracticeSessionController extends Controller
         StorePracticeSessionRequest $request,
         UpdatePracticeSession $updatePracticeSession,
     ): RedirectResponse {
-        $updatePracticeSession->handle($session, $request->validated());
+        try {
+            $updatePracticeSession->handle($session, $request->validated());
+        } catch (PracticeSessionArchivedException) {
+            return redirect()
+                ->route('sessions.show', $session)
+                ->with('error', 'This session is archived. Restore it to keep editing.');
+        }
 
         return redirect()->route('sessions.edit', $session);
     }
@@ -94,6 +110,11 @@ class PracticeSessionController extends Controller
     ): JsonResponse {
         try {
             $session = $updatePracticeSession->handle($session, $request->validated());
+        } catch (PracticeSessionArchivedException) {
+            return response()->json([
+                'archived' => true,
+                'message' => 'This session was archived. Restore it to keep editing.',
+            ], 423);
         } catch (PracticeSessionConflictException $exception) {
             return response()->json([
                 'conflict' => true,
@@ -103,6 +124,44 @@ class PracticeSessionController extends Controller
         }
 
         return $this->savedResponse($session);
+    }
+
+    /**
+     * Puts a finished session away. It is a gentle, reversible change, so the
+     * learner gets the session back and a message with Undo. An unfinished
+     * session is refused with the reason and nothing is changed.
+     */
+    public function archive(
+        PracticeSession $session,
+        ArchivePracticeSession $archivePracticeSession,
+    ): JsonResponse {
+        try {
+            $archived = $archivePracticeSession->handle($session);
+        } catch (PracticeSessionNotFinishedException $exception) {
+            return response()->json([
+                'message' => $exception->getMessage(),
+            ], 422);
+        }
+
+        return response()->json([
+            'archived' => true,
+            'session' => $archived->toEditorPayload(),
+        ]);
+    }
+
+    /**
+     * Brings an archived session back exactly as it was. Safe to repeat.
+     */
+    public function restore(
+        PracticeSession $session,
+        RestorePracticeSession $restorePracticeSession,
+    ): JsonResponse {
+        $restored = $restorePracticeSession->handle($session);
+
+        return response()->json([
+            'archived' => false,
+            'session' => $restored->toEditorPayload(),
+        ]);
     }
 
     /**

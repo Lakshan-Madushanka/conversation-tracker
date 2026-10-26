@@ -4,7 +4,8 @@ import { Link } from '@inertiajs/vue3';
 import { ArrowRightIcon, CheckIcon, SquarePenIcon } from '@lucide/vue';
 import HighlightedText from '@/components/HighlightedText.vue';
 import SectionLabel from '@/components/SectionLabel.vue';
-import { Badge } from '@/components/ui/badge';
+import SessionMenu from '@/components/SessionMenu.vue';
+import { Badge, type BadgeVariants } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
@@ -21,15 +22,40 @@ import type { SessionCardData } from '@/types';
 const INITIAL_MATCHES = 5;
 
 /** One session, as listed on Home and in the Library. */
-const props = defineProps<{
-    session: SessionCardData;
+const props = withDefaults(
+    defineProps<{
+        session: SessionCardData;
+        /** Home shows cards without actions; the Library and Archived view offer them. */
+        showMenu?: boolean;
+    }>(),
+    { showMenu: true },
+);
+
+const emit = defineEmits<{
+    (event: 'archive', session: SessionCardData): void;
+    (event: 'restore', session: SessionCardData): void;
 }>();
 
 const isFinished = computed(() => props.session.status === 'finished');
 
+const isArchived = computed(() => props.session.archived_at !== null);
+
 const statusLabel = computed(() =>
     isFinished.value ? 'Finished' : 'Unfinished',
 );
+
+/** An archived session is called that instead of repeating its finished state. */
+const badgeLabel = computed(() =>
+    isArchived.value ? 'Archived' : statusLabel.value,
+);
+
+const badgeVariant = computed<BadgeVariants['variant']>(() => {
+    if (isArchived.value) {
+        return 'outline';
+    }
+
+    return isFinished.value ? 'default' : 'secondary';
+});
 
 /** A finished session is read first; an unfinished one opens its editor. */
 const href = computed(() =>
@@ -116,68 +142,84 @@ watch(
 <template>
     <Card>
         <CardContent class="p-4">
-            <Link
-                :href="href"
-                class="group flex items-start gap-3 rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-            >
-                <component
-                    :is="isFinished ? CheckIcon : SquarePenIcon"
-                    class="mt-0.5 size-4 shrink-0 text-muted-foreground"
-                    aria-hidden="true"
-                />
+            <div class="flex items-start gap-2">
+                <Link
+                    :href="href"
+                    class="group flex min-w-0 flex-1 items-start gap-3 rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                >
+                    <component
+                        :is="isFinished ? CheckIcon : SquarePenIcon"
+                        class="mt-0.5 size-4 shrink-0 text-muted-foreground"
+                        aria-hidden="true"
+                    />
 
-                <span class="min-w-0 flex-1">
-                    <span class="flex items-start justify-between gap-2">
+                    <span class="min-w-0 flex-1">
+                        <span class="flex items-start justify-between gap-2">
+                            <span
+                                class="line-clamp-2 min-w-0 flex-1 text-sm font-medium break-words group-hover:text-primary"
+                            >
+                                <HighlightedText
+                                    v-if="topicSegments !== null"
+                                    :segments="topicSegments"
+                                />
+                                <template v-else>{{
+                                    props.session.topic
+                                }}</template>
+                            </span>
+                            <Badge :variant="badgeVariant" class="shrink-0">
+                                {{ badgeLabel }}
+                            </Badge>
+                        </span>
+
                         <span
-                            class="line-clamp-2 min-w-0 flex-1 text-sm font-medium break-words group-hover:text-primary"
+                            class="mt-1 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground"
                         >
-                            <HighlightedText
-                                v-if="topicSegments !== null"
-                                :segments="topicSegments"
-                            />
-                            <template v-else>{{
-                                props.session.topic
-                            }}</template>
+                            <time
+                                v-if="sessionOn !== ''"
+                                :datetime="
+                                    props.session.session_date ?? undefined
+                                "
+                            >
+                                {{ sessionOn }}
+                            </time>
+                            <span v-if="sessionOn !== ''" aria-hidden="true">
+                                ·
+                            </span>
+                            <span>{{ countsLine }}</span>
                         </span>
-                        <Badge
-                            :variant="isFinished ? 'default' : 'secondary'"
-                            class="shrink-0"
-                        >
-                            {{ statusLabel }}
-                        </Badge>
-                    </span>
 
-                    <span
-                        class="mt-1 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground"
-                    >
                         <time
-                            v-if="sessionOn !== ''"
-                            :datetime="props.session.session_date ?? undefined"
+                            v-if="showEdited"
+                            :datetime="
+                                props.session.last_edited_at ?? undefined
+                            "
+                            :title="`Edited ${editedOn}`"
+                            class="mt-0.5 block text-xs text-muted-foreground"
                         >
-                            {{ sessionOn }}
+                            <span>Edited {{ editedAgo }}</span>
+                            <span class="sr-only">, on {{ editedOn }}</span>
                         </time>
-                        <span v-if="sessionOn !== ''" aria-hidden="true">
-                            ·
-                        </span>
-                        <span>{{ countsLine }}</span>
                     </span>
 
-                    <time
-                        v-if="showEdited"
-                        :datetime="props.session.last_edited_at ?? undefined"
-                        :title="`Edited ${editedOn}`"
-                        class="mt-0.5 block text-xs text-muted-foreground"
-                    >
-                        <span>Edited {{ editedAgo }}</span>
-                        <span class="sr-only">, on {{ editedOn }}</span>
-                    </time>
-                </span>
+                    <ArrowRightIcon
+                        class="mt-1 size-4 shrink-0 text-muted-foreground"
+                        aria-hidden="true"
+                    />
+                </Link>
 
-                <ArrowRightIcon
-                    class="mt-1 size-4 shrink-0 text-muted-foreground"
-                    aria-hidden="true"
+                <SessionMenu
+                    v-if="props.showMenu"
+                    :topic="props.session.topic"
+                    :edit-href="
+                        isArchived ? null : sessionsEdit.url(props.session.id)
+                    "
+                    :archived="isArchived"
+                    :finished="isFinished"
+                    class="shrink-0"
+                    @archive="emit('archive', props.session)"
+                    @restore="emit('restore', props.session)"
                 />
-            </Link>
+            </div>
 
             <!-- The matching items sit beside the session link, never inside
                 it, so each one is its own destination. -->

@@ -7,6 +7,9 @@ export type LibraryDateFilter = 'any' | 'today' | 'last7' | 'last30' | 'custom';
 
 export type LibraryStatusFilter = 'all' | 'finished' | 'unfinished';
 
+/** The two lists the Library page offers: everything, or what was archived. */
+export type LibraryView = 'library' | 'archived';
+
 export type LibrarySort = 'newest' | 'oldest' | 'recently_edited';
 
 export interface LibraryFilters {
@@ -17,8 +20,12 @@ export interface LibraryFilters {
     to: string | null;
     status: LibraryStatusFilter;
     sort: LibrarySort;
-    /** The search as it is kept in the address, or an empty string. */
+    /** Which list is on screen: the Library or the Archived view. */
+    view: LibraryView;
+    /** The Library's search as it is kept in the address, or an empty string. */
     q: string;
+    /** The Archived view's search, kept apart from the Library's (`q`). */
+    archivedSearch: string;
 }
 
 /** How many non-space characters a search needs before it runs. */
@@ -84,7 +91,9 @@ export function defaultLibraryFilters(): LibraryFilters {
         to: null,
         status: 'all',
         sort: 'newest',
+        view: 'library',
         q: '',
+        archivedSearch: '',
     };
 }
 
@@ -134,6 +143,9 @@ export function normalizeLibraryFilters(
         .map((option) => option.type)
         .filter((type) => filters.types?.includes(type));
 
+    const view: LibraryView =
+        filters.view === 'archived' ? 'archived' : 'library';
+
     const from = isIsoDay(filters.from) ? filters.from : null;
     const to = isIsoDay(filters.to) ? filters.to : null;
 
@@ -160,15 +172,22 @@ export function normalizeLibraryFilters(
         date,
         from: date === 'custom' || start !== null ? start : null,
         to: date === 'custom' || end !== null ? end : null,
+        // The Archived view holds only finished sessions, so a status choice
+        // would have nothing to narrow.
         status:
-            filters.status === 'finished' || filters.status === 'unfinished'
-                ? filters.status
-                : 'all',
+            view === 'archived'
+                ? 'all'
+                : filters.status === 'finished' ||
+                    filters.status === 'unfinished'
+                  ? filters.status
+                  : 'all',
         sort:
             filters.sort === 'oldest' || filters.sort === 'recently_edited'
                 ? filters.sort
                 : 'newest',
+        view,
         q: normalizeSearch(filters.q),
+        archivedSearch: normalizeSearch(filters.archivedSearch),
     };
 }
 
@@ -218,12 +237,22 @@ export function filtersToQuery(
         query.status = filters.status;
     }
 
+    if (filters.view === 'archived') {
+        query.view = 'archived';
+    }
+
     if (filters.sort !== 'newest') {
         query.sort = filters.sort;
     }
 
     if (filters.q !== '') {
         query.q = filters.q;
+    }
+
+    // `aq` carries the Archived view's search, so each list can keep its own
+    // words while the learner moves between them.
+    if (filters.archivedSearch !== '') {
+        query.aq = filters.archivedSearch;
     }
 
     if (timezone !== '') {
@@ -241,9 +270,18 @@ export function hasActiveFilters(filters: LibraryFilters): boolean {
     return activeFilterCount(filters) > 0 || hasSearch(filters);
 }
 
-/** Whether a search is in force. */
+/**
+ * The search kept for the view on screen. The Library and the Archived view
+ * each remember their own words, so switching lists never carries a search
+ * from one into the other.
+ */
+export function searchFor(filters: LibraryFilters): string {
+    return filters.view === 'archived' ? filters.archivedSearch : filters.q;
+}
+
+/** Whether the view on screen is searching. */
 export function hasSearch(filters: LibraryFilters): boolean {
-    return filters.q !== '';
+    return searchFor(filters) !== '';
 }
 
 /** How many separate filters are active, shown on the phone Filters button. */
@@ -263,26 +301,55 @@ export function withSort(
     return { ...copyLibraryFilters(filters), sort };
 }
 
-/**
- * Clear every filter while keeping the order the learner chose and the search
- * they typed. Search and filters are cleared separately, so removing filters
- * never throws away the words being looked for.
- */
-export function clearLibraryFilters(filters: LibraryFilters): LibraryFilters {
-    return { ...defaultLibraryFilters(), sort: filters.sort, q: filters.q };
+/** Show the other list, keeping the search and every filter that still applies. */
+export function withView(
+    filters: LibraryFilters,
+    view: LibraryView,
+): LibraryFilters {
+    return normalizeLibraryFilters({ ...copyLibraryFilters(filters), view });
 }
 
-/** Replace the search, keeping every filter and the chosen order. */
+/**
+ * Clear every filter while keeping the order the learner chose, the search
+ * they typed and the list they are looking at. Search and filters are cleared
+ * separately, so removing filters never throws away the words being looked
+ * for, and clearing never sends the learner back to the other list.
+ */
+export function clearLibraryFilters(filters: LibraryFilters): LibraryFilters {
+    return {
+        ...defaultLibraryFilters(),
+        sort: filters.sort,
+        view: filters.view,
+        q: filters.q,
+        archivedSearch: filters.archivedSearch,
+    };
+}
+
+/**
+ * Replace the search of the view on screen, keeping every filter, the chosen
+ * order and the other view's search.
+ */
 export function withSearch(
     filters: LibraryFilters,
     search: string,
 ): LibraryFilters {
-    return { ...copyLibraryFilters(filters), q: normalizeSearch(search) };
+    const next = copyLibraryFilters(filters);
+    const cleaned = normalizeSearch(search);
+
+    if (next.view === 'archived') {
+        next.archivedSearch = cleaned;
+
+        return next;
+    }
+
+    next.q = cleaned;
+
+    return next;
 }
 
-/** Clear only the search, keeping every filter and the chosen order. */
+/** Clear only the search of the view on screen, keeping everything else. */
 export function clearSearch(filters: LibraryFilters): LibraryFilters {
-    return { ...copyLibraryFilters(filters), q: '' };
+    return withSearch(filters, '');
 }
 
 export type LibraryFilterChip =

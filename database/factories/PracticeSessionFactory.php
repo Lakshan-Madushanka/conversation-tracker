@@ -31,4 +31,12 @@ class PracticeSessionFactory extends Factory
             'finished_at' => now(),
         ]);
     }
+
+    /** A finished session the learner has put away in the Archived view. */
+    public function archived(): static
+    {
+        return $this->finished()->state(fn (): array => [
+            'archived_at' => now(),
+        ]);
+    }
 }

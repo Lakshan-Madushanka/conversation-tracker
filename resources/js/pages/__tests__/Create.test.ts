@@ -26,6 +26,7 @@ function savedSession(
         status: 'unfinished',
         finished_at: null,
         last_changed_at: '2026-10-12T10:00:00.000000Z',
+        archived_at: null,
         version: 3,
         topic: { id: 1, name: 'Ordering at a restaurant' },
         questions: [question()],

@@ -31,6 +31,10 @@ final class LibraryFilters
 
     public const string STATUS_ALL = 'all';
 
+    public const string VIEW_LIBRARY = 'library';
+
+    public const string VIEW_ARCHIVED = 'archived';
+
     public const string SORT_NEWEST = 'newest';
 
     public const string SORT_OLDEST = 'oldest';
@@ -49,6 +53,9 @@ final class LibraryFilters
     /** @var list<string> */
     private array $types = [];
 
+    /** Which Library view is on screen: the normal one or the Archived one. */
+    private string $view = self::VIEW_LIBRARY;
+
     private string $date = self::DATE_ANY;
 
     private ?string $from = null;
@@ -61,8 +68,11 @@ final class LibraryFilters
 
     private string $timezone = 'UTC';
 
-    /** The words the learner is looking for, trimmed and kept as typed. */
+    /** The Library's search, trimmed and kept as typed. */
     private string $search = '';
+
+    /** The Archived view's search, kept apart from the Library's. */
+    private string $archivedSearch = '';
 
     /** @var list<string>|null */
     private ?array $searchTerms = null;
@@ -80,11 +90,17 @@ final class LibraryFilters
         $filters = new self;
 
         $filters->timezone = self::timezoneFrom($input['tz'] ?? $fallbackTimezone);
+        $filters->view = self::viewFrom($input['view'] ?? null);
         $filters->topics = self::topicList($input['topics'] ?? null);
         $filters->types = self::typeList($input['types'] ?? null);
-        $filters->status = self::statusFrom($input['status'] ?? null);
+        // The Archived view holds only finished sessions, so a status filter
+        // would have nothing to narrow and is quietly left at "all".
+        $filters->status = $filters->archivedView()
+            ? self::STATUS_ALL
+            : self::statusFrom($input['status'] ?? null);
         $filters->sort = self::sortFrom($input['sort'] ?? null);
         $filters->search = self::searchFrom($input['q'] ?? null);
+        $filters->archivedSearch = self::searchFrom($input['aq'] ?? null);
 
         $filters->from = self::dateValue($input['from'] ?? null);
         $filters->to = self::dateValue($input['to'] ?? null);
@@ -98,6 +114,18 @@ final class LibraryFilters
             $filters->from,
             $filters->to,
         );
+
+        return $filters;
+    }
+
+    /**
+     * A quiet filter state for one view, used when the page only needs the
+     * count of that view (or all of its sessions).
+     */
+    public static function forView(string $view): self
+    {
+        $filters = new self;
+        $filters->view = self::viewFrom($view);
 
         return $filters;
     }
@@ -155,6 +183,17 @@ final class LibraryFilters
         return $this->status;
     }
 
+    public function view(): string
+    {
+        return $this->view;
+    }
+
+    /** Whether the learner is looking at the Archived view. */
+    public function archivedView(): bool
+    {
+        return $this->view === self::VIEW_ARCHIVED;
+    }
+
     public function sort(): string
     {
         return $this->sort;
@@ -165,10 +204,14 @@ final class LibraryFilters
         return $this->timezone;
     }
 
-    /** The search as the learner typed it, or an empty string. */
+    /**
+     * The words the view on screen is looking for. The Library and the
+     * Archived view each remember their own search, so switching lists never
+     * carries the words from one into the other.
+     */
     public function search(): string
     {
-        return $this->search;
+        return $this->archivedView() ? $this->archivedSearch : $this->search;
     }
 
     /**
@@ -178,13 +221,13 @@ final class LibraryFilters
      */
     public function searchTerms(): array
     {
-        return $this->searchTerms ??= SearchText::terms($this->search);
+        return $this->searchTerms ??= SearchText::terms($this->search());
     }
 
     /** Whether a search is in force. A search is not a filter chip. */
     public function hasSearch(): bool
     {
-        return $this->search !== '';
+        return $this->search() !== '';
     }
 
     /** Whether anything narrows the list. Sorting never counts as a filter. */
@@ -226,7 +269,9 @@ final class LibraryFilters
      *     to: string|null,
      *     status: string,
      *     sort: string,
-     *     q: string
+     *     q: string,
+     *     archivedSearch: string,
+     *     view: string
      * }
      */
     public function toArray(): array
@@ -240,6 +285,8 @@ final class LibraryFilters
             'status' => $this->status,
             'sort' => $this->sort,
             'q' => $this->search,
+            'archivedSearch' => $this->archivedSearch,
+            'view' => $this->view,
         ];
     }
 
@@ -319,6 +366,13 @@ final class LibraryFilters
         return in_array($value, ['finished', 'unfinished'], true)
             ? $value
             : self::STATUS_ALL;
+    }
+
+    private static function viewFrom(mixed $value): string
+    {
+        return $value === self::VIEW_ARCHIVED
+            ? self::VIEW_ARCHIVED
+            : self::VIEW_LIBRARY;
     }
 
     private static function sortFrom(mixed $value): string

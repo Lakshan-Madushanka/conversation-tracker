@@ -1,6 +1,7 @@
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vite-plus/test';
 import LibrarySessionList from '@/components/LibrarySessionList.vue';
+import SessionCard from '@/components/SessionCard.vue';
 import { create as sessionsCreate } from '@/routes/sessions';
 import type { SessionCardData } from '@/types';
 
@@ -10,6 +11,7 @@ function session(id: number): SessionCardData {
         topic: `Topic ${id}`,
         session_date: '2026-10-12T09:00:00.000000Z',
         last_edited_at: null,
+        archived_at: null,
         status: 'finished',
         counts: {
             questions: 1,
@@ -274,5 +276,71 @@ describe('the Library list', () => {
 
         expect(clearSearch).toBeDefined();
         expect(wrapper.emitted('clear-filters')).toHaveLength(1);
+    });
+});
+
+describe('the archived list', () => {
+    it('explains an empty Archived view without offering a new session', () => {
+        const wrapper = mount(LibrarySessionList, {
+            props: { sessions: [], total: 0, archivedView: true },
+        });
+
+        expect(wrapper.text()).toContain('No archived sessions');
+        expect(wrapper.text()).toContain(
+            'Finished sessions you archive will appear here.',
+        );
+        expect(
+            wrapper
+                .findAll('a')
+                .some((link) =>
+                    link.text().includes('Start your first session'),
+                ),
+        ).toBe(false);
+    });
+
+    it('counts archived sessions in its own words', () => {
+        const wrapper = mount(LibrarySessionList, {
+            props: {
+                sessions: [session(1), session(2)],
+                total: 2,
+                allTotal: 2,
+                archivedView: true,
+            },
+        });
+
+        expect(wrapper.text()).toContain(
+            'That is every archived session — 2 in total.',
+        );
+    });
+
+    it('narrows an archived filter to other archived sessions', () => {
+        const wrapper = mount(LibrarySessionList, {
+            props: {
+                sessions: [],
+                total: 0,
+                allTotal: 2,
+                hasFilters: true,
+                archivedView: true,
+            },
+        });
+
+        expect(wrapper.text()).toContain('No sessions match these filters');
+        expect(wrapper.text()).toContain(
+            'Your other archived sessions are still here.',
+        );
+        expect(wrapper.text()).not.toContain('or status');
+    });
+
+    it('forwards an archive or restore from a card', async () => {
+        const wrapper = mount(LibrarySessionList, {
+            props: { sessions: [session(1)], total: 1 },
+        });
+
+        wrapper.findComponent(SessionCard).vm.$emit('archive', session(1));
+        wrapper.findComponent(SessionCard).vm.$emit('restore', session(1));
+        await wrapper.vm.$nextTick();
+
+        expect(wrapper.emitted('archive')?.[0]).toEqual([session(1)]);
+        expect(wrapper.emitted('restore')?.[0]).toEqual([session(1)]);
     });
 });

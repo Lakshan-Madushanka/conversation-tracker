@@ -1,4 +1,9 @@
 <script lang="ts" setup>
+// Sonner ships its own stylesheet, which is what fixes the toaster to the
+// corner asked for and gives every toast its shape. Without it the list falls
+// into the page flow, so keep this import with the component that needs it.
+import 'vue-sonner/style.css'
+
 import type { ToasterProps } from 'vue-sonner'
 
 import {

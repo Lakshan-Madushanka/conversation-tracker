@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Actions\PracticeQuestions\SavePracticeFeedback;
 use App\Enums\FeedbackType;
+use App\Http\Resources\SessionEditorResource;
 use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeQuestion;
 use App\Models\PracticeSession;
@@ -96,7 +97,7 @@ test('the editor payload provides every saved box keyed by type', function (): v
     ]);
 
     $session = PracticeSession::firstOrFail();
-    $payload = $session->toEditorPayload();
+    $payload = SessionEditorResource::make($session)->resolve();
 
     $feedback = $payload['questions'][0]['feedback'];
 

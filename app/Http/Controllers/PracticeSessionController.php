@@ -9,12 +9,14 @@ use App\Actions\PracticeSessions\CreatePracticeSession;
 use App\Actions\PracticeSessions\DiscardPracticeSession;
 use App\Actions\PracticeSessions\FinishPracticeSession;
 use App\Actions\PracticeSessions\RestorePracticeSession;
+use App\Actions\PracticeSessions\SplitLegacyFeedbackEntries;
 use App\Actions\PracticeSessions\UpdatePracticeSession;
 use App\Exceptions\PracticeSessionArchivedException;
 use App\Exceptions\PracticeSessionConflictException;
 use App\Exceptions\PracticeSessionNotFinishedException;
 use App\Http\Requests\AutosavePracticeSessionRequest;
 use App\Http\Requests\StorePracticeSessionRequest;
+use App\Http\Resources\SessionEditorResource;
 use App\Models\PracticeSession;
 use App\Models\Topic;
 use Illuminate\Http\JsonResponse;
@@ -34,8 +36,10 @@ class PracticeSessionController extends Controller
             return redirect()->route('sessions.edit', $session);
         }
 
+        app(SplitLegacyFeedbackEntries::class)->handle($session);
+
         return Inertia::render('sessions/Show', [
-            'session' => $session->toEditorPayload(),
+            'session' => SessionEditorResource::make($session)->resolve(),
         ]);
     }
 
@@ -64,9 +68,11 @@ class PracticeSessionController extends Controller
             return redirect()->route('sessions.show', $session);
         }
 
+        app(SplitLegacyFeedbackEntries::class)->handle($session);
+
         return Inertia::render('sessions/Create', [
             'topics' => Topic::pickerOptions(),
-            'session' => $session->toEditorPayload(),
+            'session' => SessionEditorResource::make($session)->resolve(),
         ]);
     }
 
@@ -119,7 +125,7 @@ class PracticeSessionController extends Controller
             return response()->json([
                 'conflict' => true,
                 'message' => 'This session was changed somewhere else. Load the latest version or keep your changes.',
-                'session' => $exception->session->toEditorPayload(),
+                'session' => SessionEditorResource::make($exception->session)->resolve(),
             ], 409);
         }
 
@@ -145,7 +151,7 @@ class PracticeSessionController extends Controller
 
         return response()->json([
             'archived' => true,
-            'session' => $archived->toEditorPayload(),
+            'session' => SessionEditorResource::make($archived)->resolve(),
         ]);
     }
 
@@ -160,7 +166,7 @@ class PracticeSessionController extends Controller
 
         return response()->json([
             'archived' => false,
-            'session' => $restored->toEditorPayload(),
+            'session' => SessionEditorResource::make($restored)->resolve(),
         ]);
     }
 
@@ -189,7 +195,7 @@ class PracticeSessionController extends Controller
 
         return response()->json([
             'empty' => false,
-            'session' => $finished->toEditorPayload(),
+            'session' => SessionEditorResource::make($finished)->resolve(),
             'counts' => $counts,
             'needs_attention' => $needsAttention,
             'empty_questions_removed' => $result->emptyQuestionsRemoved,
@@ -218,7 +224,7 @@ class PracticeSessionController extends Controller
     private function savedResponse(PracticeSession $session, int $status = 200): JsonResponse
     {
         return response()->json([
-            'session' => $session->toEditorPayload(),
+            'session' => SessionEditorResource::make($session)->resolve(),
             'saved_at' => now()->toIso8601String(),
         ], $status);
     }

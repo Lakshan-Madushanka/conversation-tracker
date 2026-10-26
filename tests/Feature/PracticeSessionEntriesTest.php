@@ -2,7 +2,9 @@
 
 declare(strict_types=1);
 
+use App\Actions\PracticeSessions\SplitLegacyFeedbackEntries;
 use App\Enums\FeedbackType;
+use App\Http\Resources\SessionEditorResource;
 use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeQuestion;
 use App\Models\PracticeSession;
@@ -71,6 +73,20 @@ function boxEntries(PracticeSession $session, FeedbackType $type): array
         ->sortBy('position')
         ->values()
         ->all();
+}
+
+/**
+ * Open a session the way the editor does: content saved before entries
+ * existed is split once, then the editor payload is built.
+ *
+ * @return array<string, mixed>
+ */
+function openSessionPayload(PracticeSession $session): array
+{
+    app(SplitLegacyFeedbackEntries::class)->handle($session);
+    $session->refresh();
+
+    return SessionEditorResource::make($session)->resolve();
 }
 
 describe('a pasted list becomes one entry per line', function (): void {
@@ -283,7 +299,7 @@ describe('the vocabulary table', function (): void {
             'is_split' => true,
         ]);
 
-        $rows = $session->toEditorPayload()['questions'][0]['feedback']['vocabulary'];
+        $rows = openSessionPayload($session)['questions'][0]['feedback']['vocabulary'];
 
         expect($rows)->toHaveCount(1)
             ->and($rows[0]['text'])->toBe('reluctant')
@@ -349,7 +365,7 @@ describe('the phrases table', function (): void {
             'is_split' => true,
         ]);
 
-        $rows = $session->toEditorPayload()['questions'][0]['feedback']['phrase'];
+        $rows = openSessionPayload($session)['questions'][0]['feedback']['phrase'];
 
         expect($rows)->toHaveCount(1)
             ->and($rows[0]['text'])->toBe('Could I have the bill, please?')
@@ -367,7 +383,7 @@ describe('the phrases table', function (): void {
             'content_text' => "off the beaten track - away from the usual places\na long way",
         ]);
 
-        $rows = $session->toEditorPayload()['questions'][0]['feedback']['phrase'];
+        $rows = openSessionPayload($session)['questions'][0]['feedback']['phrase'];
 
         expect($rows)->toHaveCount(2)
             ->and($rows[0]['text'])->toBe('off the beaten track')
@@ -437,7 +453,7 @@ describe('sessions saved before entries existed', function (): void {
             'content_text' => "I go → I went\nsaid → told",
         ]);
 
-        $payload = $session->toEditorPayload();
+        $payload = openSessionPayload($session);
 
         $entries = $payload['questions'][0]['feedback']['mistake'];
 
@@ -464,7 +480,7 @@ describe('sessions saved before entries existed', function (): void {
             'content_text' => 'Where did you end up going?',
         ]);
 
-        $payload = $session->toEditorPayload();
+        $payload = openSessionPayload($session);
 
         expect($payload['questions'][0]['feedback']['grammar_note'])->toHaveCount(1)
             ->and($payload['questions'][0]['feedback']['grammar_note'][0]['html'])
@@ -484,10 +500,10 @@ describe('sessions saved before entries existed', function (): void {
             'content_text' => "a long way\noff",
         ]);
 
-        $session->toEditorPayload();
+        openSessionPayload($session);
         $first = PracticeFeedbackEntry::query()->pluck('id', 'content_text');
 
-        $session->refresh()->toEditorPayload();
+        openSessionPayload($session);
         $second = PracticeFeedbackEntry::query()->pluck('id', 'content_text');
 
         expect($second->all())->toBe($first->all())

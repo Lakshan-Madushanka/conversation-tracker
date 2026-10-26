@@ -6,6 +6,7 @@ namespace App\Actions\PracticeSessions;
 
 use App\Actions\PracticeQuestions\SavePracticeQuestions;
 use App\Actions\Topics\FindOrCreateTopic;
+use App\Exceptions\PracticeSessionArchivedException;
 use App\Exceptions\PracticeSessionConflictException;
 use App\Models\PracticeSession;
 use Carbon\CarbonImmutable;
@@ -40,6 +41,13 @@ final readonly class UpdatePracticeSession
                 ->whereKey($session->getKey())
                 ->lockForUpdate()
                 ->firstOrFail();
+
+            // An archived session is read-only. Refusing before the version
+            // check keeps the message about archiving clear, even when another
+            // tab has also changed the content.
+            if ($locked->isArchived()) {
+                throw new PracticeSessionArchivedException($locked);
+            }
 
             if (! $this->applyTopicAndVersion($locked, $data)) {
                 // The exact same save was already applied; a retry changes nothing.

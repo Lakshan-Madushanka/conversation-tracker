@@ -358,6 +358,7 @@ it('ignores values it cannot understand and offers only topics in use', function
             'status' => 'all',
             'sort' => 'newest',
             'q' => '',
+            'view' => 'library',
         ])
         ->and($response['timezone'])->toBe(config('app.timezone'))
         ->and(array_column($response['topics'], 'id'))->toBe([$used->id])

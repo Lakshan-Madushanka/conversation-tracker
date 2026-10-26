@@ -31,6 +31,10 @@ final class LibraryFilters
 
     public const string STATUS_ALL = 'all';
 
+    public const string VIEW_LIBRARY = 'library';
+
+    public const string VIEW_ARCHIVED = 'archived';
+
     public const string SORT_NEWEST = 'newest';
 
     public const string SORT_OLDEST = 'oldest';
@@ -48,6 +52,9 @@ final class LibraryFilters
 
     /** @var list<string> */
     private array $types = [];
+
+    /** Which Library view is on screen: the normal one or the Archived one. */
+    private string $view = self::VIEW_LIBRARY;
 
     private string $date = self::DATE_ANY;
 
@@ -80,9 +87,14 @@ final class LibraryFilters
         $filters = new self;
 
         $filters->timezone = self::timezoneFrom($input['tz'] ?? $fallbackTimezone);
+        $filters->view = self::viewFrom($input['view'] ?? null);
         $filters->topics = self::topicList($input['topics'] ?? null);
         $filters->types = self::typeList($input['types'] ?? null);
-        $filters->status = self::statusFrom($input['status'] ?? null);
+        // The Archived view holds only finished sessions, so a status filter
+        // would have nothing to narrow and is quietly left at "all".
+        $filters->status = $filters->archivedView()
+            ? self::STATUS_ALL
+            : self::statusFrom($input['status'] ?? null);
         $filters->sort = self::sortFrom($input['sort'] ?? null);
         $filters->search = self::searchFrom($input['q'] ?? null);
 
@@ -98,6 +110,18 @@ final class LibraryFilters
             $filters->from,
             $filters->to,
         );
+
+        return $filters;
+    }
+
+    /**
+     * A quiet filter state for one view, used when the page only needs the
+     * count of that view (or all of its sessions).
+     */
+    public static function forView(string $view): self
+    {
+        $filters = new self;
+        $filters->view = self::viewFrom($view);
 
         return $filters;
     }
@@ -153,6 +177,17 @@ final class LibraryFilters
     public function status(): string
     {
         return $this->status;
+    }
+
+    public function view(): string
+    {
+        return $this->view;
+    }
+
+    /** Whether the learner is looking at the Archived view. */
+    public function archivedView(): bool
+    {
+        return $this->view === self::VIEW_ARCHIVED;
     }
 
     public function sort(): string
@@ -226,7 +261,8 @@ final class LibraryFilters
      *     to: string|null,
      *     status: string,
      *     sort: string,
-     *     q: string
+     *     q: string,
+     *     view: string
      * }
      */
     public function toArray(): array
@@ -240,6 +276,7 @@ final class LibraryFilters
             'status' => $this->status,
             'sort' => $this->sort,
             'q' => $this->search,
+            'view' => $this->view,
         ];
     }
 
@@ -319,6 +356,13 @@ final class LibraryFilters
         return in_array($value, ['finished', 'unfinished'], true)
             ? $value
             : self::STATUS_ALL;
+    }
+
+    private static function viewFrom(mixed $value): string
+    {
+        return $value === self::VIEW_ARCHIVED
+            ? self::VIEW_ARCHIVED
+            : self::VIEW_LIBRARY;
     }
 
     private static function sortFrom(mixed $value): string

@@ -69,6 +69,7 @@ final class LibrarySessionsRequest extends FormRequest
             'to' => $this->query('to'),
             'status' => $this->query('status'),
             'sort' => $this->query('sort'),
+            'q' => $this->query('q'),
             'tz' => $timezone,
         ]);
     }

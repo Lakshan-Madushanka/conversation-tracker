@@ -37,6 +37,12 @@ final class LibraryFilters
 
     public const string SORT_RECENTLY_EDITED = 'recently_edited';
 
+    /** How many non-space characters a search needs before it runs. */
+    public const int MIN_SEARCH_LENGTH = SearchText::MIN_LENGTH;
+
+    /** The longest search the Library keeps. */
+    public const int MAX_SEARCH_LENGTH = SearchText::MAX_LENGTH;
+
     /** @var list<int> */
     private array $topics = [];
 
@@ -55,6 +61,12 @@ final class LibraryFilters
 
     private string $timezone = 'UTC';
 
+    /** The words the learner is looking for, trimmed and kept as typed. */
+    private string $search = '';
+
+    /** @var list<string>|null */
+    private ?array $searchTerms = null;
+
     private function __construct() {}
 
     /**
@@ -72,6 +84,7 @@ final class LibraryFilters
         $filters->types = self::typeList($input['types'] ?? null);
         $filters->status = self::statusFrom($input['status'] ?? null);
         $filters->sort = self::sortFrom($input['sort'] ?? null);
+        $filters->search = self::searchFrom($input['q'] ?? null);
 
         $filters->from = self::dateValue($input['from'] ?? null);
         $filters->to = self::dateValue($input['to'] ?? null);
@@ -152,6 +165,28 @@ final class LibraryFilters
         return $this->timezone;
     }
 
+    /** The search as the learner typed it, or an empty string. */
+    public function search(): string
+    {
+        return $this->search;
+    }
+
+    /**
+     * The separate words search asks for, normalised once.
+     *
+     * @return list<string>
+     */
+    public function searchTerms(): array
+    {
+        return $this->searchTerms ??= SearchText::terms($this->search);
+    }
+
+    /** Whether a search is in force. A search is not a filter chip. */
+    public function hasSearch(): bool
+    {
+        return $this->search !== '';
+    }
+
     /** Whether anything narrows the list. Sorting never counts as a filter. */
     public function hasFilters(): bool
     {
@@ -190,7 +225,8 @@ final class LibraryFilters
      *     from: string|null,
      *     to: string|null,
      *     status: string,
-     *     sort: string
+     *     sort: string,
+     *     q: string
      * }
      */
     public function toArray(): array
@@ -203,6 +239,7 @@ final class LibraryFilters
             'to' => $this->to,
             'status' => $this->status,
             'sort' => $this->sort,
+            'q' => $this->search,
         ];
     }
 
@@ -230,6 +267,33 @@ final class LibraryFilters
     {
         return CarbonImmutable::createFromFormat('!Y-m-d', $date, $this->timezone)
             ->startOfDay();
+    }
+
+    /**
+     * Keep a search that can actually find something: trimmed, with its spaces
+     * collapsed, at most the Library's limit, and at least two non-space
+     * characters. Anything shorter is ignored, so typing one letter never
+     * searches the whole Library.
+     */
+    private static function searchFrom(mixed $value): string
+    {
+        if (! is_string($value)) {
+            return '';
+        }
+
+        $search = trim((string) preg_replace('/\s+/u', ' ', $value));
+
+        if ($search === '') {
+            return '';
+        }
+
+        if (mb_strlen($search) > self::MAX_SEARCH_LENGTH) {
+            $search = mb_substr($search, 0, self::MAX_SEARCH_LENGTH);
+        }
+
+        $meaningful = (string) preg_replace('/\s+/u', '', $search);
+
+        return mb_strlen($meaningful) >= self::MIN_SEARCH_LENGTH ? $search : '';
     }
 
     private static function dateFrom(mixed $value, ?string $from, ?string $to): string

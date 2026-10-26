@@ -6,6 +6,7 @@ namespace App\Models;
 
 use App\Actions\PracticeSessions\SplitLegacyFeedbackEntries;
 use App\Support\LibraryFilters;
+use App\Support\SearchText;
 use Carbon\CarbonImmutable;
 use Database\Factories\PracticeSessionFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -46,6 +47,9 @@ class PracticeSession extends Model
 
     /** How many sessions the Library loads at a time. */
     public const LIBRARY_PAGE_SIZE = 20;
+
+    /** How many matching items one session shows before "show more". */
+    public const LIBRARY_MAX_MATCHES = 50;
 
     /**
      * Mirror the database default so a newly created session already reports
@@ -246,7 +250,7 @@ class PracticeSession extends Model
      * later page repeat or skip one.
      *
      * @return array{
-     *     sessions: list<array{id: int, topic: string, session_date: string|null, last_edited_at: string|null, status: string, counts: array{questions: int, words: int, phrases: int, mistakes: int, grammar_notes: int}}>,
+     *     sessions: list<array{id: int, topic: string, session_date: string|null, last_edited_at: string|null, status: string, counts: array{questions: int, words: int, phrases: int, mistakes: int, grammar_notes: int}, topic_segments?: list<array{text: string, match: bool}>, match_count?: int, matches?: list<array{key: string, kind: string, type: string|null, question_position: int|null, entry_id: string|null, entry_position: int|null, segments: list<array{text: string, match: bool}>}>}>,
      *     next_cursor: string|null,
      *     has_more: bool,
      *     total: int,
@@ -269,7 +273,7 @@ class PracticeSession extends Model
 
         return [
             'sessions' => array_values(array_map(
-                fn (self $session): array => $session->toLibraryPayload(),
+                fn (self $session): array => $session->toLibraryPayload($filters),
                 $paginator->items(),
             )),
             'next_cursor' => $paginator->nextCursor()?->encode(),
@@ -375,7 +379,72 @@ class PracticeSession extends Model
             });
         }
 
+        $this->applySearch($query, $filters);
+
         return $query;
+    }
+
+    /**
+     * Narrow the list to sessions holding at least one item with every search
+     * word. With content types chosen, only those boxes are searched, so the
+     * search and the filter never disagree about what is on screen.
+     *
+     * @param  Builder<self>  $query
+     */
+    private function applySearch(Builder $query, LibraryFilters $filters): void
+    {
+        $terms = $filters->searchTerms();
+
+        if ($terms === []) {
+            return;
+        }
+
+        $types = $filters->types();
+
+        $query->where(function (Builder $search) use ($terms, $types): void {
+            $search->whereHas(
+                'questions.feedbackEntries',
+                function (Builder $entries) use ($terms, $types): void {
+                    if ($types !== []) {
+                        $entries->whereIn('type', $types);
+                    }
+
+                    SearchText::whereAll(
+                        $entries,
+                        'practice_feedback_entries.search_text',
+                        $terms,
+                    );
+                },
+            );
+
+            // A content type filter says exactly which boxes are in play, so
+            // topics, questions and answers are not searched beside them.
+            if ($types !== []) {
+                return;
+            }
+
+            $search->orWhereHas('questions', function (Builder $questions) use ($terms): void {
+                $questions
+                    ->where(function (Builder $questionField) use ($terms): void {
+                        SearchText::whereAll(
+                            $questionField,
+                            'practice_questions.question_search_text',
+                            $terms,
+                        );
+                    })
+                    ->orWhere(function (Builder $answerField) use ($terms): void {
+                        SearchText::whereAll(
+                            $answerField,
+                            'practice_questions.answer_search_text',
+                            $terms,
+                        );
+                    });
+            });
+
+            $search->orWhereHas('topic', function (Builder $topic) use ($terms): void {
+                SearchText::whereAll($topic, 'topics.search_text', $terms);
+            });
+        });
     }
 
     /**
@@ -461,15 +530,17 @@ class PracticeSession extends Model
     }
 
     /**
-     * A session as a card in the Library or on Home.
+     * A session as a card in the Library or on Home. When a search is in
+     * force, the card also carries the matching items and the highlighted
+     * pieces of its topic, so the list can explain why it matched.
      *
-     * @return array{id: int, topic: string, session_date: string|null, last_edited_at: string|null, status: string, counts: array{questions: int, words: int, phrases: int, mistakes: int, grammar_notes: int}}
+     * @return array{id: int, topic: string, session_date: string|null, last_edited_at: string|null, status: string, counts: array{questions: int, words: int, phrases: int, mistakes: int, grammar_notes: int}, topic_segments?: list<array{text: string, match: bool}>, match_count?: int, matches?: list<array{key: string, kind: string, type: string|null, question_position: int|null, entry_id: string|null, entry_position: int|null, segments: list<array{text: string, match: bool}>}>}
      */
-    public function toLibraryPayload(): array
+    public function toLibraryPayload(?LibraryFilters $filters = null): array
     {
         $this->loadMissing(['topic', 'questions.feedbackEntries']);
 
-        return [
+        $payload = [
             'id' => $this->id,
             'topic' => $this->topic->name,
             'session_date' => $this->sessionDate()?->toIso8601String(),
@@ -477,6 +548,115 @@ class PracticeSession extends Model
             'status' => $this->status,
             'counts' => $this->counts(),
         ];
+
+        if (! $filters instanceof LibraryFilters || ! $filters->hasSearch()) {
+            return $payload;
+        }
+
+        $terms = $filters->searchTerms();
+        $matches = $this->searchMatches($filters);
+
+        $payload['topic_segments'] = SearchText::snippet($this->topic->name, $terms);
+        $payload['match_count'] = count($matches);
+        $payload['matches'] = array_slice($matches, 0, self::LIBRARY_MAX_MATCHES);
+
+        return $payload;
+    }
+
+    /**
+     * The items inside this session that hold every search word, in the order
+     * the reading page shows them: the topic, then each question, then its
+     * boxes in their usual order.
+     *
+     * @return list<array{key: string, kind: string, type: string|null, question_position: int|null, entry_id: string|null, entry_position: int|null, segments: list<array{text: string, match: bool}>}>
+     */
+    public function searchMatches(LibraryFilters $filters): array
+    {
+        $terms = $filters->searchTerms();
+
+        if ($terms === []) {
+            return [];
+        }
+
+        $types = $filters->types();
+        $this->loadMissing(['topic', 'questions.feedbackEntries']);
+
+        $matches = [];
+
+        if ($types === [] && SearchText::matches($this->topic->name, $terms)) {
+            $matches[] = [
+                'key' => 'topic',
+                'kind' => 'topic',
+                'type' => null,
+                'question_position' => null,
+                'entry_id' => null,
+                'entry_position' => null,
+                'segments' => SearchText::snippet($this->topic->name, $terms),
+            ];
+        }
+
+        foreach ($this->questions as $question) {
+            if ($types === []) {
+                if (SearchText::matches($question->question_text, $terms)) {
+                    $matches[] = [
+                        'key' => 'question:'.$question->position,
+                        'kind' => 'question',
+                        'type' => null,
+                        'question_position' => $question->position,
+                        'entry_id' => null,
+                        'entry_position' => null,
+                        'segments' => SearchText::snippet($question->question_text, $terms),
+                    ];
+                }
+
+                if (SearchText::matches($question->answer_text, $terms)) {
+                    $matches[] = [
+                        'key' => 'answer:'.$question->position,
+                        'kind' => 'answer',
+                        'type' => null,
+                        'question_position' => $question->position,
+                        'entry_id' => null,
+                        'entry_position' => null,
+                        'segments' => SearchText::snippet($question->answer_text, $terms),
+                    ];
+                }
+            }
+
+            $entries = $question->feedbackEntries
+                ->filter(fn (PracticeFeedbackEntry $entry): bool => ! $entry->isBlank())
+                ->sortBy(fn (PracticeFeedbackEntry $entry): array => [
+                    array_search($entry->type, PracticeFeedbackEntry::TYPES, true) ?: 0,
+                    $entry->position,
+                    $entry->id,
+                ])
+                ->values();
+
+            foreach ($entries as $entry) {
+                if ($types !== [] && ! in_array($entry->type, $types, true)) {
+                    continue;
+                }
+
+                $searchText = $entry->search_text ?? $entry->searchableText();
+
+                if (! SearchText::matches($searchText, $terms)) {
+                    continue;
+                }
+
+                $field = $entry->bestSearchField($terms);
+
+                $matches[] = [
+                    'key' => 'entry:'.$entry->type.':'.($entry->client_id ?? $entry->id),
+                    'kind' => 'entry',
+                    'type' => $entry->type,
+                    'question_position' => $question->position,
+                    'entry_id' => $entry->client_id,
+                    'entry_position' => $entry->position,
+                    'segments' => SearchText::snippet($field['text'], $terms),
+                ];
+            }
+        }
+
+        return $matches;
     }
 
     /**

@@ -1,8 +1,20 @@
 import { mount } from '@vue/test-utils';
-import { beforeEach, describe, expect, it } from 'vite-plus/test';
+import {
+    afterEach,
+    beforeEach,
+    describe,
+    expect,
+    it,
+    vi,
+} from 'vite-plus/test';
+import { router } from '@inertiajs/vue3';
+import {
+    defaultLibraryFilters,
+    type LibraryFilters,
+} from '@/lib/library-filters';
 import Index from '@/pages/sessions/Index.vue';
 import { create as sessionsCreate } from '@/routes/sessions';
-import type { SessionCardData } from '@/types';
+import type { SessionCardData, TopicSummary } from '@/types';
 
 function session(id: number): SessionCardData {
     return {
@@ -24,6 +36,11 @@ function session(id: number): SessionCardData {
 function mountLibrary(
     sessions: SessionCardData[] = [session(1)],
     total = sessions.length,
+    options: {
+        allTotal?: number;
+        filters?: LibraryFilters;
+        topics?: TopicSummary[];
+    } = {},
 ) {
     return mount(Index, {
         props: {
@@ -31,12 +48,20 @@ function mountLibrary(
             next_cursor: null,
             has_more: false,
             total,
+            all_total: options.allTotal ?? total,
+            filters: options.filters ?? defaultLibraryFilters(),
+            topics: options.topics ?? [],
+            timezone: 'UTC',
         },
     });
 }
 
 beforeEach(() => {
     window.sessionStorage.clear();
+});
+
+afterEach(() => {
+    vi.restoreAllMocks();
 });
 
 describe('the Library page', () => {
@@ -67,5 +92,47 @@ describe('the Library page', () => {
             );
 
         expect(start?.attributes('href')).toBe(sessionsCreate.url());
+    });
+});
+
+describe('the Library page with filters', () => {
+    it('counts matching sessions out of every session', () => {
+        const wrapper = mountLibrary([session(1), session(2)], 12, {
+            allTotal: 42,
+            filters: { ...defaultLibraryFilters(), topics: [1] },
+            topics: [{ id: 1, name: 'Work' }],
+        });
+
+        expect(wrapper.text()).toContain('12 of 42 sessions, newest first.');
+        expect(wrapper.text()).toContain('Topic: Work');
+    });
+
+    it('clears the filters from the no-results state and keeps focus useful', async () => {
+        const get = vi.spyOn(router, 'get').mockImplementation(() => {});
+
+        const wrapper = mountLibrary([], 0, {
+            allTotal: 42,
+            filters: { ...defaultLibraryFilters(), status: 'finished' },
+        });
+
+        await wrapper
+            .findAll('button')
+            .find((button) => button.text().includes('Clear all filters'))
+            ?.trigger('click');
+
+        await wrapper.vm.$nextTick();
+
+        expect(get).toHaveBeenCalledTimes(1);
+        expect(get.mock.calls[0]?.[0] as string).not.toContain('status=');
+
+        wrapper.unmount();
+    });
+
+    it('keeps the chosen order in the description', () => {
+        const wrapper = mountLibrary([session(1)], 1, {
+            filters: { ...defaultLibraryFilters(), sort: 'oldest' },
+        });
+
+        expect(wrapper.text()).toContain('1 session, oldest first.');
     });
 });

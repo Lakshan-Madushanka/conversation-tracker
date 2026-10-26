@@ -102,4 +102,80 @@ describe('the Library list', () => {
 
         expect(start?.attributes('href')).toBe(sessionsCreate.url());
     });
+
+    it('explains filters that match nothing and offers Clear all', async () => {
+        const wrapper = mount(LibrarySessionList, {
+            props: {
+                sessions: [],
+                total: 0,
+                allTotal: 12,
+                hasFilters: true,
+            },
+        });
+
+        expect(wrapper.text()).toContain('No sessions match these filters');
+        expect(wrapper.text()).toContain('Your other sessions are still here.');
+
+        const clear = wrapper
+            .findAll('button')
+            .find((element) => element.text().includes('Clear all filters'));
+
+        await clear?.trigger('click');
+
+        expect(wrapper.emitted('clear-filters')).toHaveLength(1);
+    });
+
+    it('shows placeholders instead of a stale list while filters change', () => {
+        const wrapper = mount(LibrarySessionList, {
+            props: {
+                sessions: [session(1)],
+                updating: true,
+                total: 1,
+            },
+        });
+
+        expect(wrapper.text()).not.toContain('Topic 1');
+        expect(wrapper.find('[aria-label="Updating the list"]').exists()).toBe(
+            true,
+        );
+        expect(
+            wrapper.findAll('[data-slot="skeleton"]').length,
+        ).toBeGreaterThan(0);
+    });
+
+    it('explains a failed filter change and offers to try again', async () => {
+        const wrapper = mount(LibrarySessionList, {
+            props: {
+                sessions: [session(1)],
+                filterError: true,
+                hasFilters: true,
+                total: 1,
+            },
+        });
+
+        expect(wrapper.text()).toContain('Could not update the list');
+
+        const retry = wrapper
+            .findAll('button')
+            .find((element) => element.text().includes('Try again'));
+
+        await retry?.trigger('click');
+
+        expect(wrapper.emitted('retry-filters')).toHaveLength(1);
+    });
+
+    it('says how many sessions match when filters are on', () => {
+        const wrapper = mount(LibrarySessionList, {
+            props: {
+                sessions: [session(1)],
+                total: 1,
+                allTotal: 12,
+                hasFilters: true,
+            },
+        });
+
+        expect(wrapper.text()).toContain(
+            'That is every matching session — 1 in total.',
+        );
+    });
 });

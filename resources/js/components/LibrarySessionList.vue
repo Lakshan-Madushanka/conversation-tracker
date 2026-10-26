@@ -1,7 +1,12 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Link } from '@inertiajs/vue3';
-import { LoaderCircleIcon, PlusIcon, TriangleAlertIcon } from '@lucide/vue';
+import {
+    ListFilterIcon,
+    LoaderCircleIcon,
+    PlusIcon,
+    TriangleAlertIcon,
+} from '@lucide/vue';
 import EmptyState from '@/components/EmptyState.vue';
 import SessionCard from '@/components/SessionCard.vue';
 import SessionCardSkeleton from '@/components/SessionCardSkeleton.vue';
@@ -18,17 +23,29 @@ const props = withDefaults(
         loading?: boolean;
         error?: boolean;
         total?: number;
+        allTotal?: number;
+        hasFilters?: boolean;
+        /** True while a new filter state is on its way. */
+        updating?: boolean;
+        /** True when that filter request failed. */
+        filterError?: boolean;
     }>(),
     {
         hasMore: false,
         loading: false,
         error: false,
         total: 0,
+        allTotal: 0,
+        hasFilters: false,
+        updating: false,
+        filterError: false,
     },
 );
 
 const emit = defineEmits<{
     (event: 'load-more'): void;
+    (event: 'clear-filters'): void;
+    (event: 'retry-filters'): void;
 }>();
 
 /** A short row of placeholders while the next page arrives. */
@@ -57,6 +74,7 @@ function observeSentinel(): void {
         (entries) => {
             if (
                 !props.loading &&
+                !props.updating &&
                 entries.some((entry) => entry.isIntersecting)
             ) {
                 emit('load-more');
@@ -84,66 +102,121 @@ onBeforeUnmount(() => observer?.disconnect());
 <template>
     <div>
         <div
-            v-if="props.sessions.length > 0"
+            v-if="props.updating"
             class="grid gap-3"
-            :aria-busy="props.loading"
+            aria-busy="true"
+            aria-label="Updating the list"
         >
-            <SessionCard
-                v-for="session in props.sessions"
-                :key="session.id"
-                :session="session"
-            />
-
-            <SessionCardSkeleton
-                v-for="skeleton in props.loading ? skeletonCount : 0"
-                :key="`skeleton-${skeleton}`"
-            />
-        </div>
-
-        <div v-else-if="props.loading" class="grid gap-3" aria-hidden="true">
             <SessionCardSkeleton
                 v-for="skeleton in skeletonCount"
                 :key="skeleton"
             />
         </div>
 
-        <EmptyState
-            v-else-if="!props.error"
-            title="No sessions yet"
-            description="Start your first practice session and it will show up here."
-        >
-            <template #actions>
-                <Button size="lg" as-child>
-                    <Link :href="sessionsCreate.url()">
-                        <PlusIcon aria-hidden="true" />
-                        Start your first session
-                    </Link>
-                </Button>
-            </template>
-        </EmptyState>
+        <template v-else>
+            <div
+                v-if="props.sessions.length > 0 || props.loading"
+                class="grid gap-3"
+                :aria-busy="props.loading"
+            >
+                <SessionCard
+                    v-for="session in props.sessions"
+                    :key="session.id"
+                    :session="session"
+                />
 
-        <Alert v-if="props.error" variant="destructive" class="mt-4">
-            <TriangleAlertIcon aria-hidden="true" />
-            <AlertTitle>Could not load more sessions</AlertTitle>
-            <AlertDescription>
-                <p>
-                    Your saved sessions are still here. Check your connection
-                    and try again.
-                </p>
-                <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    class="mt-3"
-                    @click="emit('load-more')"
-                >
-                    Try again
-                </Button>
-            </AlertDescription>
-        </Alert>
+                <SessionCardSkeleton
+                    v-for="skeleton in props.loading ? skeletonCount : 0"
+                    :key="`skeleton-${skeleton}`"
+                />
+            </div>
+
+            <EmptyState
+                v-else-if="
+                    props.allTotal === 0 &&
+                    !props.loading &&
+                    !props.error &&
+                    !props.filterError
+                "
+                title="No sessions yet"
+                description="Start your first practice session and it will show up here."
+            >
+                <template #actions>
+                    <Button size="lg" as-child>
+                        <Link :href="sessionsCreate.url()">
+                            <PlusIcon aria-hidden="true" />
+                            Start your first session
+                        </Link>
+                    </Button>
+                </template>
+            </EmptyState>
+
+            <EmptyState
+                v-else-if="
+                    props.sessions.length === 0 &&
+                    props.hasFilters &&
+                    !props.error &&
+                    !props.filterError
+                "
+                :icon="ListFilterIcon"
+                title="No sessions match these filters"
+                description="Try a different topic, date, content type or status. Your other sessions are still here."
+            >
+                <template #actions>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        class="min-h-11 md:min-h-9"
+                        @click="emit('clear-filters')"
+                    >
+                        Clear all filters
+                    </Button>
+                </template>
+            </EmptyState>
+
+            <Alert v-if="props.filterError" variant="destructive" class="mt-4">
+                <TriangleAlertIcon aria-hidden="true" />
+                <AlertTitle>Could not update the list</AlertTitle>
+                <AlertDescription>
+                    <p>
+                        Your saved sessions are still here. Check your
+                        connection and try again.
+                    </p>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        class="mt-3"
+                        @click="emit('retry-filters')"
+                    >
+                        Try again
+                    </Button>
+                </AlertDescription>
+            </Alert>
+
+            <Alert v-if="props.error" variant="destructive" class="mt-4">
+                <TriangleAlertIcon aria-hidden="true" />
+                <AlertTitle>Could not load more sessions</AlertTitle>
+                <AlertDescription>
+                    <p>
+                        Your saved sessions are still here. Check your
+                        connection and try again.
+                    </p>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        class="mt-3"
+                        @click="emit('load-more')"
+                    >
+                        Try again
+                    </Button>
+                </AlertDescription>
+            </Alert>
+        </template>
 
         <div
-            v-if="props.sessions.length > 0"
+            v-if="props.sessions.length > 0 && !props.updating"
             class="mt-5 flex flex-col items-center gap-3"
         >
             <Button
@@ -162,7 +235,11 @@ onBeforeUnmount(() => observer?.disconnect());
             </Button>
 
             <p v-else class="text-xs text-muted-foreground">
-                That is every session — {{ props.total }} in total.
+                {{
+                    props.hasFilters
+                        ? `That is every matching session — ${props.total} in total.`
+                        : `That is every session — ${props.total} in total.`
+                }}
             </p>
 
             <p
@@ -175,7 +252,7 @@ onBeforeUnmount(() => observer?.disconnect());
         </div>
 
         <div
-            v-if="props.hasMore"
+            v-if="props.hasMore && !props.updating"
             ref="sentinel"
             class="h-px"
             aria-hidden="true"

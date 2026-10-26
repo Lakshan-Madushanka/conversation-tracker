@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Support\SearchText;
 use Database\Factories\TopicFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Casts\Attribute;
@@ -17,6 +18,7 @@ use Illuminate\Support\Carbon;
  * @property int $id
  * @property string $name
  * @property string $normalized_name
+ * @property string|null $search_text
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
@@ -37,7 +39,11 @@ class Topic extends Model
         return Attribute::make(set: function (string $value): array {
             $name = self::normalizeName($value);
 
-            return ['name' => $name, 'normalized_name' => mb_strtolower($name)];
+            return [
+                'name' => $name,
+                'normalized_name' => mb_strtolower($name),
+                'search_text' => SearchText::normalize($name),
+            ];
         });
     }
 

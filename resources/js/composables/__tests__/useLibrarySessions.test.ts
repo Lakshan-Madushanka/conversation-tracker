@@ -491,6 +491,29 @@ describe('changing the filters', () => {
         expect(library.filters.value.view).toBe('library');
     });
 
+    it('keeps the Library and Archived searches apart', () => {
+        const requests = captureRequests();
+        const library = useLibrarySessions(
+            page({ filters: filters({ q: 'beach' }) }),
+        );
+
+        library.setView('archived');
+        library.setSearch('soup');
+
+        expect(requests).toHaveLength(2);
+        expect(requests[1]?.url).toContain('view=archived');
+        expect(requests[1]?.url).toContain('q=beach');
+        expect(requests[1]?.url).toContain('aq=soup');
+        expect(library.filters.value.q).toBe('beach');
+        expect(library.filters.value.archivedSearch).toBe('soup');
+
+        library.setView('library');
+
+        expect(requests[2]?.url).toContain('q=beach');
+        expect(requests[2]?.url).toContain('aq=soup');
+        expect(requests[2]?.url).not.toContain('view=archived');
+    });
+
     it('takes the archived total from the page the server sends', () => {
         const requests = captureRequests();
         const library = useLibrarySessions(page());

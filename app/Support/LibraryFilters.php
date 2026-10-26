@@ -68,8 +68,11 @@ final class LibraryFilters
 
     private string $timezone = 'UTC';
 
-    /** The words the learner is looking for, trimmed and kept as typed. */
+    /** The Library's search, trimmed and kept as typed. */
     private string $search = '';
+
+    /** The Archived view's search, kept apart from the Library's. */
+    private string $archivedSearch = '';
 
     /** @var list<string>|null */
     private ?array $searchTerms = null;
@@ -97,6 +100,7 @@ final class LibraryFilters
             : self::statusFrom($input['status'] ?? null);
         $filters->sort = self::sortFrom($input['sort'] ?? null);
         $filters->search = self::searchFrom($input['q'] ?? null);
+        $filters->archivedSearch = self::searchFrom($input['aq'] ?? null);
 
         $filters->from = self::dateValue($input['from'] ?? null);
         $filters->to = self::dateValue($input['to'] ?? null);
@@ -200,10 +204,14 @@ final class LibraryFilters
         return $this->timezone;
     }
 
-    /** The search as the learner typed it, or an empty string. */
+    /**
+     * The words the view on screen is looking for. The Library and the
+     * Archived view each remember their own search, so switching lists never
+     * carries the words from one into the other.
+     */
     public function search(): string
     {
-        return $this->search;
+        return $this->archivedView() ? $this->archivedSearch : $this->search;
     }
 
     /**
@@ -213,13 +221,13 @@ final class LibraryFilters
      */
     public function searchTerms(): array
     {
-        return $this->searchTerms ??= SearchText::terms($this->search);
+        return $this->searchTerms ??= SearchText::terms($this->search());
     }
 
     /** Whether a search is in force. A search is not a filter chip. */
     public function hasSearch(): bool
     {
-        return $this->search !== '';
+        return $this->search() !== '';
     }
 
     /** Whether anything narrows the list. Sorting never counts as a filter. */
@@ -262,6 +270,7 @@ final class LibraryFilters
      *     status: string,
      *     sort: string,
      *     q: string,
+     *     archivedSearch: string,
      *     view: string
      * }
      */
@@ -276,6 +285,7 @@ final class LibraryFilters
             'status' => $this->status,
             'sort' => $this->sort,
             'q' => $this->search,
+            'archivedSearch' => $this->archivedSearch,
             'view' => $this->view,
         ];
     }

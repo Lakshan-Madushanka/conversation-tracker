@@ -22,8 +22,10 @@ export interface LibraryFilters {
     sort: LibrarySort;
     /** Which list is on screen: the Library or the Archived view. */
     view: LibraryView;
-    /** The search as it is kept in the address, or an empty string. */
+    /** The Library's search as it is kept in the address, or an empty string. */
     q: string;
+    /** The Archived view's search, kept apart from the Library's (`q`). */
+    archivedSearch: string;
 }
 
 /** How many non-space characters a search needs before it runs. */
@@ -91,6 +93,7 @@ export function defaultLibraryFilters(): LibraryFilters {
         sort: 'newest',
         view: 'library',
         q: '',
+        archivedSearch: '',
     };
 }
 
@@ -184,6 +187,7 @@ export function normalizeLibraryFilters(
                 : 'newest',
         view,
         q: normalizeSearch(filters.q),
+        archivedSearch: normalizeSearch(filters.archivedSearch),
     };
 }
 
@@ -245,6 +249,12 @@ export function filtersToQuery(
         query.q = filters.q;
     }
 
+    // `aq` carries the Archived view's search, so each list can keep its own
+    // words while the learner moves between them.
+    if (filters.archivedSearch !== '') {
+        query.aq = filters.archivedSearch;
+    }
+
     if (timezone !== '') {
         query.tz = timezone;
     }
@@ -260,9 +270,18 @@ export function hasActiveFilters(filters: LibraryFilters): boolean {
     return activeFilterCount(filters) > 0 || hasSearch(filters);
 }
 
-/** Whether a search is in force. */
+/**
+ * The search kept for the view on screen. The Library and the Archived view
+ * each remember their own words, so switching lists never carries a search
+ * from one into the other.
+ */
+export function searchFor(filters: LibraryFilters): string {
+    return filters.view === 'archived' ? filters.archivedSearch : filters.q;
+}
+
+/** Whether the view on screen is searching. */
 export function hasSearch(filters: LibraryFilters): boolean {
-    return filters.q !== '';
+    return searchFor(filters) !== '';
 }
 
 /** How many separate filters are active, shown on the phone Filters button. */
@@ -302,20 +321,35 @@ export function clearLibraryFilters(filters: LibraryFilters): LibraryFilters {
         sort: filters.sort,
         view: filters.view,
         q: filters.q,
+        archivedSearch: filters.archivedSearch,
     };
 }
 
-/** Replace the search, keeping every filter and the chosen order. */
+/**
+ * Replace the search of the view on screen, keeping every filter, the chosen
+ * order and the other view's search.
+ */
 export function withSearch(
     filters: LibraryFilters,
     search: string,
 ): LibraryFilters {
-    return { ...copyLibraryFilters(filters), q: normalizeSearch(search) };
+    const next = copyLibraryFilters(filters);
+    const cleaned = normalizeSearch(search);
+
+    if (next.view === 'archived') {
+        next.archivedSearch = cleaned;
+
+        return next;
+    }
+
+    next.q = cleaned;
+
+    return next;
 }
 
-/** Clear only the search, keeping every filter and the chosen order. */
+/** Clear only the search of the view on screen, keeping everything else. */
 export function clearSearch(filters: LibraryFilters): LibraryFilters {
-    return { ...copyLibraryFilters(filters), q: '' };
+    return withSearch(filters, '');
 }
 
 export type LibraryFilterChip =

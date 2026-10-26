@@ -12,6 +12,7 @@ import {
     normalizeLibraryFilters,
     normalizeSearch,
     removeFilterChip,
+    searchFor,
     sessionCountLabel,
     sortLabel,
     withSearch,
@@ -42,6 +43,7 @@ describe('a safe filter state', () => {
             sort: 'newest',
             view: 'library',
             q: '',
+            archivedSearch: '',
         });
     });
 
@@ -379,7 +381,7 @@ describe('the Library and Archived views', () => {
             types: ['phrase'],
             date: 'last30',
             sort: 'recently_edited',
-            q: 'soup',
+            archivedSearch: 'soup',
         });
 
         expect(withView(archived, 'library')).toEqual({
@@ -403,13 +405,75 @@ describe('the Library and Archived views', () => {
                 topics: [1],
                 status: 'all',
                 sort: 'oldest',
-                q: 'soup',
+                archivedSearch: 'soup',
             }),
         );
 
         expect(cleared.view).toBe('archived');
         expect(cleared.sort).toBe('oldest');
-        expect(cleared.q).toBe('soup');
+        expect(cleared.archivedSearch).toBe('soup');
+    });
+
+    it('keeps a separate search for each view', () => {
+        const both = filters({ q: 'beach', archivedSearch: 'soup' });
+
+        expect(searchFor(both)).toBe('beach');
+        expect(searchFor(withView(both, 'archived'))).toBe('soup');
+        expect(searchFor(withView(both, 'library'))).toBe('beach');
+    });
+
+    it('only searches the view whose words are typed', () => {
+        expect(hasSearch(filters({ q: 'beach' }))).toBe(true);
+        expect(hasSearch(filters({ view: 'archived', q: 'beach' }))).toBe(
+            false,
+        );
+        expect(
+            hasSearch(filters({ view: 'archived', archivedSearch: 'soup' })),
+        ).toBe(true);
+        expect(hasSearch(filters({ archivedSearch: 'soup' }))).toBe(false);
+    });
+
+    it('writes both searches to the address, each under its own name', () => {
+        expect(
+            filtersToQuery(
+                filters({ q: 'beach', archivedSearch: 'soup' }),
+                'UTC',
+            ),
+        ).toEqual({
+            q: 'beach',
+            aq: 'soup',
+            tz: 'UTC',
+        });
+    });
+
+    it('changes only the search of the view on screen', () => {
+        const before = filters({
+            view: 'archived',
+            q: 'beach',
+            archivedSearch: 'soup',
+        });
+        const after = withSearch(before, 'tea');
+
+        expect(after).toEqual({ ...before, archivedSearch: 'tea' });
+        expect(after.q).toBe('beach');
+    });
+
+    it('clears only the search of the view on screen', () => {
+        const before = filters({
+            view: 'archived',
+            q: 'beach',
+            archivedSearch: 'soup',
+        });
+
+        expect(clearSearch(before)).toEqual({ ...before, archivedSearch: '' });
+        expect(clearSearch(before).q).toBe('beach');
+    });
+
+    it('normalises the archived search on the way in', () => {
+        expect(
+            normalizeLibraryFilters({ archivedSearch: '  soup  ' })
+                .archivedSearch,
+        ).toBe('soup');
     });
 });
 

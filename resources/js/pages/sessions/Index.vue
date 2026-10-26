@@ -22,6 +22,7 @@ import {
     activeFilterCount,
     hasActiveFilters,
     hasSearch,
+    searchFor,
     sessionCountLabel,
     sortLabel,
     type LibraryFilters,
@@ -77,6 +78,9 @@ const filtered = computed(() => hasActiveFilters(filters.value));
 const hasFilterChips = computed(() => activeFilterCount(filters.value) > 0);
 
 const searchActive = computed(() => hasSearch(filters.value));
+
+/** The words kept for the view on screen; the other view keeps its own. */
+const activeSearch = computed(() => searchFor(filters.value));
 
 const count = computed(() =>
     sessionCountLabel(total.value, allTotal.value, filtered.value),
@@ -317,7 +321,8 @@ onBeforeUnmount(() => {
 
         <LibrarySearch
             ref="searchBox"
-            :model-value="filters.q"
+            :key="filters.view"
+            :model-value="activeSearch"
             :updating="updating"
             :label="
                 archivedView

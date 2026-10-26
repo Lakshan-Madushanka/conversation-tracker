@@ -210,6 +210,31 @@ describe('the Library page with the archived view', () => {
             'That is every archived session — 2 in total.',
         );
     });
+
+    it('shows the search each view remembers', async () => {
+        vi.spyOn(router, 'get').mockImplementation(() => {});
+
+        const wrapper = mountLibrary([], 0, {
+            filters: {
+                ...defaultLibraryFilters(),
+                q: 'beach',
+                archivedSearch: 'soup',
+            },
+        });
+
+        const search = () =>
+            (wrapper.get('#library-search').element as HTMLInputElement).value;
+
+        expect(search()).toBe('beach');
+
+        await wrapper
+            .findAll('[role="tab"]')
+            .find((tab) => tab.text().includes('Archived'))
+            ?.trigger('mousedown');
+        await wrapper.vm.$nextTick();
+
+        expect(search()).toBe('soup');
+    });
 });
 
 describe('the Library page with a search', () => {
@@ -257,6 +282,39 @@ describe('the Library page with a search', () => {
 
         expect(url).not.toContain('q=');
         expect(wrapper.text()).not.toContain('No sessions match your search');
+
+        wrapper.unmount();
+    });
+
+    it('searches the Archived view with its own words', async () => {
+        vi.useFakeTimers();
+
+        const get = vi.spyOn(router, 'get').mockImplementation(() => {});
+
+        const wrapper = mountLibrary([], 0, {
+            allTotal: 12,
+            archivedTotal: 3,
+            filters: {
+                ...defaultLibraryFilters(),
+                view: 'archived',
+                q: 'beach',
+            },
+        });
+
+        expect(
+            (wrapper.get('#library-search').element as HTMLInputElement).value,
+        ).toBe('');
+
+        await wrapper.get('#library-search').setValue('soup');
+        vi.advanceTimersByTime(350);
+
+        expect(get).toHaveBeenCalledTimes(1);
+
+        const url = get.mock.calls[0]?.[0] as string;
+
+        expect(url).toContain('view=archived');
+        expect(url).toContain('aq=soup');
+        expect(url).toContain('q=beach');
 
         wrapper.unmount();
     });

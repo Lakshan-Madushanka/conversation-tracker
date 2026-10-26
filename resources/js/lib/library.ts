@@ -117,6 +117,8 @@ export function isLibraryFilters(value: unknown): value is LibraryFilters {
         typeof filters.status === 'string' &&
         typeof filters.sort === 'string' &&
         (filters.view === undefined || typeof filters.view === 'string') &&
+        (filters.archivedSearch === undefined ||
+            typeof filters.archivedSearch === 'string') &&
         (filters.q === undefined || typeof filters.q === 'string')
     );
 }

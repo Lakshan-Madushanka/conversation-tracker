@@ -211,10 +211,52 @@ it('searches only visible sessions, and archived ones only in the archived view'
         ->assertJsonPath('total', 1)
         ->assertJsonPath('sessions.0.id', $visible->id);
 
-    $this->getJson(route('sessions.index', ['view' => 'archived', 'q' => 'beach']))
+    $this->getJson(route('sessions.index', ['view' => 'archived', 'aq' => 'beach']))
         ->assertOk()
         ->assertJsonPath('total', 1)
         ->assertJsonPath('sessions.0.id', $archived->id);
+});
+
+it('keeps the Library and Archived searches apart', function (): void {
+    PracticeSession::factory()->archived()
+        ->for(Topic::factory()->create(['name' => 'Hidden beach']))
+        ->create();
+
+    $archivedSoup = PracticeSession::factory()->archived()
+        ->for(Topic::factory()->create(['name' => 'Hidden soup']))
+        ->create();
+
+    $visibleBeach = PracticeSession::factory()->finished()
+        ->for(Topic::factory()->create(['name' => 'Visible beach']))
+        ->create();
+
+    PracticeSession::factory()->finished()
+        ->for(Topic::factory()->create(['name' => 'Visible soup']))
+        ->create();
+
+    $library = $this->getJson(route('sessions.index', ['q' => 'beach', 'aq' => 'soup']))
+        ->assertOk()
+        ->json();
+
+    expect($library['total'])->toBe(1)
+        ->and($library['sessions'][0]['id'])->toBe($visibleBeach->id)
+        ->and($library['filters']['q'])->toBe('beach')
+        ->and($library['filters']['archivedSearch'])->toBe('soup');
+
+    $archivedPage = $this->getJson(route('sessions.index', [
+        'view' => 'archived',
+        'q' => 'beach',
+        'aq' => 'soup',
+    ]))->assertOk()->json();
+
+    expect($archivedPage['total'])->toBe(1)
+        ->and($archivedPage['sessions'][0]['id'])->toBe($archivedSoup->id);
+
+    // Neither view borrows the other view's words.
+    expect($this->getJson(route('sessions.index', ['view' => 'archived', 'q' => 'beach']))->json('total'))
+        ->toBe(2)
+        ->and($this->getJson(route('sessions.index', ['aq' => 'soup']))->json('total'))
+        ->toBe(2);
 });
 
 it('opens archived sessions on the reading page and sends their editor to it', function (): void {

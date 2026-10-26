@@ -1,5 +1,6 @@
+import { nextTick } from 'vue';
 import { mount } from '@vue/test-utils';
-import { describe, expect, it } from 'vite-plus/test';
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 import { shortDate } from '@/lib/format';
 import Show from '@/pages/sessions/Show.vue';
 import {
@@ -52,6 +53,11 @@ function session(
 function mountShow(saved: PracticeSessionData = session()) {
     return mount(Show, { props: { session: saved } });
 }
+
+afterEach(() => {
+    vi.restoreAllMocks();
+    window.history.replaceState(null, '', '/');
+});
 
 describe('a session opened to be read', () => {
     it('says what it is and when it was finished', () => {
@@ -138,5 +144,52 @@ describe('a session opened to be read', () => {
         expect(wrapper.text()).toContain(
             'Nothing has been written into this session yet.',
         );
+    });
+});
+
+describe('a session opened from a search result', () => {
+    it('names the place of every item so a result can find it', () => {
+        const wrapper = mountShow();
+
+        expect(wrapper.find('#reading-1-question').exists()).toBe(true);
+        expect(wrapper.find('#reading-1-answer').exists()).toBe(true);
+        expect(wrapper.find('#reading-1-section-mistake').exists()).toBe(true);
+        expect(wrapper.find('#reading-1-entry-m1').exists()).toBe(true);
+        expect(wrapper.find('#reading-1-entry-v1').exists()).toBe(true);
+    });
+
+    it('opens calmly at the top when the question is gone', async () => {
+        vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+
+        window.history.replaceState(
+            null,
+            '',
+            '/sessions/7?question=9&field=question',
+        );
+
+        const wrapper = mountShow();
+
+        await nextTick();
+
+        expect(wrapper.text()).toContain('That item has changed');
+        expect(wrapper.text()).toContain(
+            'The item you searched for has changed since you found it.',
+        );
+    });
+
+    it('opens calmly at the top when the entry is gone', async () => {
+        vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+
+        window.history.replaceState(
+            null,
+            '',
+            '/sessions/7?question=1&field=entry&type=mistake&entry=gone',
+        );
+
+        const wrapper = mountShow();
+
+        await nextTick();
+
+        expect(wrapper.text()).toContain('That item has changed');
     });
 });

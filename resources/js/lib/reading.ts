@@ -17,7 +17,12 @@ import {
     type TableColumn,
     type TableCells,
 } from '@/lib/feedback-table';
-import type { FeedbackValue, GrammarNote, PracticeQuestionData } from '@/types';
+import type {
+    FeedbackType,
+    FeedbackValue,
+    GrammarNote,
+    PracticeQuestionData,
+} from '@/types';
 
 /** One piece of an entry: its words, and how those words are stored. */
 export interface ReadingPart {
@@ -36,6 +41,8 @@ export interface ReadingEntry {
 
 /** One feedback box of a question, ready to be shown. */
 export interface ReadingSection {
+    /** Which box this is, used to find it from a search result. */
+    type: FeedbackType;
     tone: FeedbackTone;
     label: string;
     entries: ReadingEntry[];
@@ -55,6 +62,7 @@ export function readingSections(
         }
 
         sections.push({
+            type: box.type,
             tone: box.tone,
             label: box.label,
             entries: readingEntries(box, value),

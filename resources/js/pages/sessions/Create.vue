@@ -7,6 +7,7 @@ import {
     ChevronDownIcon,
     ChevronUpIcon,
     EyeIcon,
+    InfoIcon,
     ListOrderedIcon,
     PlusIcon,
 } from '@lucide/vue';
@@ -33,6 +34,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useAutoSave } from '@/composables/useAutoSave';
@@ -61,6 +63,12 @@ import {
 } from '@/lib/guided';
 import type { GuidedView } from '@/lib/guided';
 import { isRichTextBlank } from '@/lib/rich-text';
+import {
+    editorEntryId,
+    readSearchTarget,
+    revealSearchTarget,
+    type SearchTarget,
+} from '@/lib/search-target';
 import { savePracticeSession } from '@/lib/session-autosave';
 import { discardSession, finishSession } from '@/lib/session-finish';
 import { home } from '@/routes';
@@ -180,6 +188,106 @@ function collapseAll(): void {
     for (const q of questions.value) {
         collapseCard(q.uid);
     }
+}
+
+/** A calm note when a search result no longer points at anything. */
+const targetNotice = ref('');
+
+/**
+ * Take the learner to the item a search result named. The item is found before
+ * anything is scrolled, so a session that has changed since the search opens
+ * calmly at the top instead of jumping to the wrong card.
+ */
+function revealTargetFromAddress(): void {
+    const target = readSearchTarget(window.location.href);
+
+    if (target === null || target.question === null) {
+        return;
+    }
+
+    const index = questionIndexForPosition(target.question);
+    const question = questions.value[index];
+
+    if (question === undefined) {
+        targetHasMoved();
+
+        return;
+    }
+
+    // A long session collapses most cards; the target's card must be open
+    // before its fields exist to be found.
+    expandCard(question.uid);
+
+    const id = targetElementId(question, target);
+
+    if (id === null) {
+        targetHasMoved();
+
+        return;
+    }
+
+    revealSearchTarget(id, (found) => {
+        if (!found) {
+            targetHasMoved();
+        }
+    });
+}
+
+/** The editor card for a saved question, by its stored position. */
+function questionIndexForPosition(position: number): number {
+    const saved = props.session?.questions ?? [];
+    const index = saved.findIndex((question) => question.position === position);
+
+    return index >= 0 ? index : position - 1;
+}
+
+/** The field a target names inside one question, or null when it is gone. */
+function targetElementId(
+    question: PracticeQuestionForm,
+    target: SearchTarget,
+): string | null {
+    if (target.field === 'question') {
+        return `question-${question.uid}`;
+    }
+
+    if (target.field === 'answer') {
+        return `answer-${question.uid}`;
+    }
+
+    if (target.field !== 'entry' || target.type === null) {
+        return null;
+    }
+
+    // The natural version is one editor, so its box is the item.
+    if (target.type === 'natural_version') {
+        return `feedback-${question.uid}-natural_version`;
+    }
+
+    const entries = question.feedback[target.type];
+
+    if (!Array.isArray(entries)) {
+        return null;
+    }
+
+    const byId =
+        target.entry === null
+            ? undefined
+            : entries.find((entry) => entry.id === target.entry);
+
+    const entry =
+        byId ??
+        (target.position === null ? undefined : entries[target.position]);
+
+    return entry === undefined
+        ? null
+        : editorEntryId(question.uid, target.type, entry.id);
+}
+
+function targetHasMoved(): void {
+    targetNotice.value =
+        'The item you searched for has changed since you found it. You are at the top of the session.';
+
+    window.scrollTo({ top: 0 });
 }
 
 /** How many feedback entries a question's collapsed card summarizes. */
@@ -913,6 +1021,8 @@ onMounted(() => {
     const location = readGuidedLocation(window.location.href);
 
     if (location === null) {
+        revealTargetFromAddress();
+
         return;
     }
 
@@ -1137,6 +1247,12 @@ onBeforeUnmount(() => {
                 @keep-mine="keepMine"
                 @retry="retry"
             />
+
+            <Alert v-if="targetNotice !== ''" class="mb-4" role="status">
+                <InfoIcon aria-hidden="true" />
+                <AlertTitle>That item has changed</AlertTitle>
+                <AlertDescription>{{ targetNotice }}</AlertDescription>
+            </Alert>
 
             <form class="grid grid-cols-1 gap-4" novalidate @submit.prevent>
                 <TopicField

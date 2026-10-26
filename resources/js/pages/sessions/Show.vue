@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { Head, Link } from '@inertiajs/vue3';
-import { PencilIcon } from '@lucide/vue';
+import { InfoIcon, PencilIcon } from '@lucide/vue';
 import BackToLibrary from '@/components/BackToLibrary.vue';
 import PageHeader from '@/components/PageHeader.vue';
 import SectionLabel from '@/components/SectionLabel.vue';
 import StatTile from '@/components/StatTile.vue';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,8 +21,14 @@ import {
 } from '@/lib/reading';
 import { isRichTextBlank } from '@/lib/rich-text';
 import { questionDataHasContent } from '@/lib/feedback';
+import {
+    readSearchTarget,
+    revealSearchTarget,
+    type SearchTarget,
+} from '@/lib/search-target';
 import { edit as sessionsEdit } from '@/routes/sessions';
 import type {
+    FeedbackType,
     PracticeQuestionData,
     PracticeSessionData,
     SessionCounts,
@@ -124,6 +131,144 @@ const description = computed(() => {
 function partsOf(entry: ReadingEntry): ReadingPart[] {
     return [entry.text, ...entry.details];
 }
+
+/** A calm note when a search result no longer points at anything. */
+const targetNotice = ref('');
+
+onMounted(revealTarget);
+
+/**
+ * Take the learner to the item a search result named. The item is found
+ * before anything is scrolled, so a session that has changed since the search
+ * opens calmly at the top instead of jumping to the wrong place.
+ */
+function revealTarget(): void {
+    const target = readSearchTarget(window.location.href);
+
+    if (target === null || target.question === null) {
+        return;
+    }
+
+    const card = cards.value.find(
+        (candidate) => candidate.question.position === target.question,
+    );
+
+    if (card === undefined) {
+        itemHasMoved();
+
+        return;
+    }
+
+    const id = targetElementId(card, target);
+
+    if (id === null) {
+        itemHasMoved();
+
+        return;
+    }
+
+    revealSearchTarget(id, (found) => {
+        if (!found) {
+            itemHasMoved();
+        }
+    });
+}
+
+/** The id of the element a target names, or null when it is gone. */
+function targetElementId(
+    card: QuestionCard,
+    target: SearchTarget,
+): string | null {
+    const position = card.question.position;
+
+    if (target.field === 'question') {
+        return `reading-${position}-question`;
+    }
+
+    if (target.field === 'answer') {
+        return `reading-${position}-answer`;
+    }
+
+    if (target.field !== 'entry' || target.type === null) {
+        return null;
+    }
+
+    const section = card.sections.find(
+        (candidate) => candidate.type === target.type,
+    );
+
+    if (section === undefined) {
+        return null;
+    }
+
+    // The natural version is one piece of text, so its section is the item.
+    if (section.type === 'natural_version') {
+        return `reading-${position}-section-natural_version`;
+    }
+
+    const index = entryIndexFor(card, section.type, target);
+
+    if (index === null) {
+        return null;
+    }
+
+    const id = entryIds(card, section.type)[index];
+
+    return id === undefined || id === ''
+        ? `reading-${position}-section-${section.type}`
+        : `reading-${position}-entry-${id}`;
+}
+
+/** The place of a matching entry in its box, by id first and position second. */
+function entryIndexFor(
+    card: QuestionCard,
+    type: FeedbackType,
+    target: { entry: string | null; position: number | null },
+): number | null {
+    const ids = entryIds(card, type);
+
+    if (target.entry !== null) {
+        const byId = ids.indexOf(target.entry);
+
+        if (byId >= 0) {
+            return byId;
+        }
+    }
+
+    if (target.position === null) {
+        return null;
+    }
+
+    // Entry positions are stored zero-based, matching the array order.
+    return target.position < ids.length ? target.position : null;
+}
+
+/** The stored ids of one box's entries, in the order the page shows them. */
+function entryIds(card: QuestionCard, type: FeedbackType): string[] {
+    const value = card.question.feedback[type];
+
+    return Array.isArray(value) ? value.map((entry) => entry.id) : [];
+}
+
+/** The id of one entry on the reading page, when it has one. */
+function entryTargetId(
+    card: QuestionCard,
+    section: ReadingSection,
+    index: number,
+): string | undefined {
+    const id = entryIds(card, section.type)[index];
+
+    return id === undefined || id === ''
+        ? undefined
+        : `reading-${card.question.position}-entry-${id}`;
+}
+
+function itemHasMoved(): void {
+    targetNotice.value =
+        'The item you searched for has changed since you found it. The session has opened at the top so you can look around.';
+
+    window.scrollTo({ top: 0 });
+}
 </script>
 
 <template>
@@ -151,6 +296,12 @@ function partsOf(entry: ReadingEntry): ReadingPart[] {
                 </Button>
             </template>
         </PageHeader>
+
+        <Alert v-if="targetNotice !== ''" class="mb-6" role="status">
+            <InfoIcon aria-hidden="true" />
+            <AlertTitle>That item has changed</AlertTitle>
+            <AlertDescription>{{ targetNotice }}</AlertDescription>
+        </Alert>
 
         <!-- Small tiles for what the session holds, matching the counts the
             editor shows when finishing. -->
@@ -194,6 +345,7 @@ function partsOf(entry: ReadingEntry): ReadingPart[] {
                     <div class="space-y-3">
                         <div
                             v-if="!isRichTextBlank(card.question.question_html)"
+                            :id="`reading-${card.question.position}-question`"
                         >
                             <p
                                 class="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase"
@@ -208,7 +360,10 @@ function partsOf(entry: ReadingEntry): ReadingPart[] {
                             ></div>
                         </div>
 
-                        <div v-if="!isRichTextBlank(card.question.answer_html)">
+                        <div
+                            v-if="!isRichTextBlank(card.question.answer_html)"
+                            :id="`reading-${card.question.position}-answer`"
+                        >
                             <p
                                 class="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase"
                             >
@@ -227,7 +382,8 @@ function partsOf(entry: ReadingEntry): ReadingPart[] {
                         <dl class="space-y-3">
                             <div
                                 v-for="section in card.sections"
-                                :key="section.label"
+                                :key="section.type"
+                                :id="`reading-${card.question.position}-section-${section.type}`"
                             >
                                 <dt class="mb-1">
                                     <SectionLabel :tone="section.tone">
@@ -240,6 +396,13 @@ function partsOf(entry: ReadingEntry): ReadingPart[] {
                                         v-for="(
                                             entry, entryIndex
                                         ) in section.entries"
+                                        :id="
+                                            entryTargetId(
+                                                card,
+                                                section,
+                                                entryIndex,
+                                            )
+                                        "
                                         :key="entryIndex"
                                         class="text-sm leading-relaxed"
                                     >

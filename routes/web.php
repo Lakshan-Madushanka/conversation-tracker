@@ -16,6 +16,8 @@ Route::post('/sessions/autosave', [PracticeSessionController::class, 'autosaveSt
 Route::post('/sessions', [PracticeSessionController::class, 'store'])->name('sessions.store');
 
 Route::get('/sessions/{session}/edit', [PracticeSessionController::class, 'edit'])->name('sessions.edit');
+Route::get('/sessions/{session}/delete-preview', [PracticeSessionController::class, 'deletePreview'])->name('sessions.deletePreview');
+Route::delete('/sessions/{sessionId}/delete', [PracticeSessionController::class, 'deletePermanently'])->name('sessions.deletePermanently');
 Route::put('/sessions/{session}/autosave', [PracticeSessionController::class, 'autosaveUpdate'])->name('sessions.autosave.update');
 Route::post('/sessions/{session}/finish', [PracticeSessionController::class, 'finish'])->name('sessions.finish');
 Route::post('/sessions/{session}/archive', [PracticeSessionController::class, 'archive'])->name('sessions.archive');

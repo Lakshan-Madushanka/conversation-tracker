@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 
 use App\Actions\PracticeSessions\ArchivePracticeSession;
 use App\Actions\PracticeSessions\CreatePracticeSession;
+use App\Actions\PracticeSessions\DeletePracticeSession;
 use App\Actions\PracticeSessions\DiscardPracticeSession;
 use App\Actions\PracticeSessions\FinishPracticeSession;
 use App\Actions\PracticeSessions\RestorePracticeSession;
@@ -14,11 +15,16 @@ use App\Actions\PracticeSessions\UpdatePracticeSession;
 use App\Exceptions\PracticeSessionArchivedException;
 use App\Exceptions\PracticeSessionConflictException;
 use App\Exceptions\PracticeSessionNotFinishedException;
+use App\Exceptions\SessionDeletionStaleException;
 use App\Http\Requests\AutosavePracticeSessionRequest;
+use App\Http\Requests\DeletePracticeSessionRequest;
+use App\Http\Requests\SessionDeletionPreviewRequest;
 use App\Http\Requests\StorePracticeSessionRequest;
+use App\Http\Resources\SessionDeletionPreviewResource;
 use App\Http\Resources\SessionEditorResource;
 use App\Models\PracticeSession;
 use App\Models\Topic;
+use App\Queries\SessionDeletionPreview;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
@@ -215,6 +221,58 @@ class PracticeSessionController extends Controller
         $discardPracticeSession->handle($session);
 
         return response()->json(['discarded' => true]);
+    }
+
+    /**
+     * What deleting this session would remove and change, worked out without
+     * altering anything. The page opens the warning with these exact numbers.
+     */
+    public function deletePreview(
+        PracticeSession $session,
+        SessionDeletionPreviewRequest $request,
+        SessionDeletionPreview $preview,
+    ): JsonResponse {
+        $effect = $preview->for($session, $request->timezone());
+
+        return response()->json(
+            SessionDeletionPreviewResource::make($effect)->resolve(),
+        );
+    }
+
+    /**
+     * Deletes a session and everything in it for good. The signed token says
+     * which state the learner confirmed; a changed session is refused with the
+     * fresh numbers. A session that is already gone is reported as deleted, so
+     * repeating the confirmation stays safe.
+     */
+    public function deletePermanently(
+        string $sessionId,
+        DeletePracticeSessionRequest $request,
+        DeletePracticeSession $deletePracticeSession,
+    ): JsonResponse {
+        try {
+            $result = $deletePracticeSession->handle(
+                (int) $sessionId,
+                $request->token(),
+                $request->timezone(),
+            );
+        } catch (SessionDeletionStaleException $exception) {
+            return response()->json([
+                'stale' => true,
+                'message' => 'This session changed since you opened the warning. Check the numbers and confirm again.',
+                'preview' => SessionDeletionPreviewResource::make($exception->effect)->resolve(),
+            ], 409);
+        }
+
+        return response()->json([
+            'deleted' => true,
+            'already_deleted' => $result->alreadyDeleted,
+            'session' => [
+                'id' => $result->sessionId,
+                'topic' => $result->topic,
+            ],
+            'counts' => $result->counts,
+        ]);
     }
 
     private function savedResponse(PracticeSession $session, int $status = 200): JsonResponse

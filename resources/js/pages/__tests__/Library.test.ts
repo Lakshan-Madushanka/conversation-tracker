@@ -22,6 +22,7 @@ function session(id: number): SessionCardData {
         topic: `Topic ${id}`,
         session_date: '2026-10-12T09:00:00.000000Z',
         last_edited_at: null,
+        archived_at: null,
         status: 'finished',
         counts: {
             questions: 1,
@@ -38,6 +39,7 @@ function mountLibrary(
     total = sessions.length,
     options: {
         allTotal?: number;
+        archivedTotal?: number;
         filters?: LibraryFilters;
         topics?: TopicSummary[];
     } = {},
@@ -49,6 +51,7 @@ function mountLibrary(
             has_more: false,
             total,
             all_total: options.allTotal ?? total,
+            archived_total: options.archivedTotal ?? 0,
             filters: options.filters ?? defaultLibraryFilters(),
             topics: options.topics ?? [],
             timezone: 'UTC',
@@ -135,6 +138,77 @@ describe('the Library page with filters', () => {
         });
 
         expect(wrapper.text()).toContain('1 session, oldest first.');
+    });
+});
+
+describe('the Library page with the archived view', () => {
+    it('shows how many sessions are archived beside the tab', () => {
+        const wrapper = mountLibrary([session(1)], 1, { archivedTotal: 3 });
+
+        expect(
+            wrapper
+                .findAll('[role="tab"]')
+                .some((tab) => tab.text() === 'Archived (3)'),
+        ).toBe(true);
+        expect(
+            wrapper
+                .findAll('[role="tab"]')
+                .some((tab) => tab.text() === 'Library'),
+        ).toBe(true);
+    });
+
+    it('describes an empty Archived view in its own words', () => {
+        const wrapper = mountLibrary([], 0, {
+            archivedTotal: 0,
+            filters: {
+                ...defaultLibraryFilters(),
+                view: 'archived',
+            },
+        });
+
+        expect(wrapper.text()).toContain(
+            'Finished sessions you archive will appear here.',
+        );
+    });
+
+    it('switches to the Archived view in the address, without status', async () => {
+        const get = vi.spyOn(router, 'get').mockImplementation(() => {});
+
+        const wrapper = mountLibrary([session(1)], 1, {
+            filters: {
+                ...defaultLibraryFilters(),
+                status: 'finished',
+            },
+        });
+
+        await wrapper
+            .findAll('[role="tab"]')
+            .find((tab) => tab.text().includes('Archived'))
+            ?.trigger('mousedown');
+
+        expect(get).toHaveBeenCalledTimes(1);
+
+        const url = get.mock.calls[0]?.[0] as string;
+
+        expect(url).toContain('view=archived');
+        expect(url).not.toContain('status=');
+
+        wrapper.unmount();
+    });
+
+    it('counts archived sessions in the description', () => {
+        const wrapper = mountLibrary([session(1), session(2)], 2, {
+            archivedTotal: 2,
+            filters: {
+                ...defaultLibraryFilters(),
+                view: 'archived',
+            },
+        });
+
+        expect(wrapper.text()).toContain('2 sessions, newest first.');
+        expect(wrapper.text()).toContain(
+            'That is every archived session — 2 in total.',
+        );
     });
 });
 

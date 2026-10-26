@@ -40,6 +40,8 @@ const props = withDefaults(
         updating?: boolean;
         /** True when that filter request failed. */
         filterError?: boolean;
+        /** True when the Archived view is on screen. */
+        archivedView?: boolean;
     }>(),
     {
         hasMore: false,
@@ -52,6 +54,7 @@ const props = withDefaults(
         hasFilterChips: false,
         updating: false,
         filterError: false,
+        archivedView: false,
     },
 );
 
@@ -60,6 +63,8 @@ const emit = defineEmits<{
     (event: 'clear-filters'): void;
     (event: 'clear-search'): void;
     (event: 'retry-filters'): void;
+    (event: 'archive', session: SessionCardData): void;
+    (event: 'restore', session: SessionCardData): void;
 }>();
 
 /** A short row of placeholders while the next page arrives. */
@@ -72,11 +77,15 @@ const emptyTitle = computed(() =>
         : 'No sessions match these filters',
 );
 
-const emptyDescription = computed(() =>
-    props.hasSearch
-        ? 'Try different words, or clear the search to see everything again.'
-        : 'Try a different topic, date, content type or status. Your other sessions are still here.',
-);
+const emptyDescription = computed(() => {
+    if (props.hasSearch) {
+        return 'Try different words, or clear the search to see everything again.';
+    }
+
+    return props.archivedView
+        ? 'Try a different topic, date or content type. Your other archived sessions are still here.'
+        : 'Try a different topic, date, content type or status. Your other sessions are still here.';
+});
 
 /** A "Clear all filters" button is only useful when a chip is on. */
 const showClearFilters = computed(
@@ -184,6 +193,8 @@ onBeforeUnmount(() => observer?.disconnect());
                     v-for="session in props.sessions"
                     :key="session.id"
                     :session="session"
+                    @archive="emit('archive', $event)"
+                    @restore="emit('restore', $event)"
                 />
 
                 <SessionCardSkeleton
@@ -191,6 +202,18 @@ onBeforeUnmount(() => observer?.disconnect());
                     :key="`skeleton-${skeleton}`"
                 />
             </div>
+
+            <EmptyState
+                v-else-if="
+                    props.archivedView &&
+                    props.allTotal === 0 &&
+                    !props.loading &&
+                    !props.error &&
+                    !props.filterError
+                "
+                title="No archived sessions"
+                description="Finished sessions you archive will appear here. You can restore one at any time."
+            />
 
             <EmptyState
                 v-else-if="
@@ -314,7 +337,9 @@ onBeforeUnmount(() => observer?.disconnect());
                 {{
                     props.hasFilters
                         ? `That is every matching session — ${props.total} in total.`
-                        : `That is every session — ${props.total} in total.`
+                        : props.archivedView
+                          ? `That is every archived session — ${props.total} in total.`
+                          : `That is every session — ${props.total} in total.`
                 }}
             </p>
 

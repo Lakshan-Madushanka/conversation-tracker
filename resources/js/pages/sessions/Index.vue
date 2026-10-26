@@ -2,11 +2,13 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { PlusIcon } from '@lucide/vue';
+import { toast } from 'vue-sonner';
 import LibraryFilterBar from '@/components/LibraryFilterBar.vue';
 import LibrarySearch from '@/components/LibrarySearch.vue';
 import LibrarySessionList from '@/components/LibrarySessionList.vue';
 import PageHeader from '@/components/PageHeader.vue';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useLibrarySessions } from '@/composables/useLibrarySessions';
 import AppLayout from '@/layouts/AppLayout.vue';
 import {
@@ -23,11 +25,14 @@ import {
     sessionCountLabel,
     sortLabel,
     type LibraryFilters,
+    type LibraryView,
 } from '@/lib/library-filters';
+import { archiveSession, restoreSession } from '@/lib/session-archive';
 import {
     create as sessionsCreate,
     index as sessionsIndex,
 } from '@/routes/sessions';
+import type { SessionCardData } from '@/types';
 
 defineOptions({ layout: AppLayout });
 
@@ -39,6 +44,7 @@ const {
     hasMore,
     total,
     allTotal,
+    archivedTotal,
     filters,
     topics,
     timezone,
@@ -52,12 +58,18 @@ const {
     applyFilters,
     retryFilters,
     clearFilters,
+    setView,
     setSearch,
     clearSearch,
 } = useLibrarySessions(props);
 
 const filterBar = ref<InstanceType<typeof LibraryFilterBar> | null>(null);
 const searchBox = ref<InstanceType<typeof LibrarySearch> | null>(null);
+
+/** Whether the Archived view is the one on screen. */
+const archivedView = computed(() => filters.value.view === 'archived');
+
+const archivedTabLabel = computed(() => `Archived (${archivedTotal.value})`);
 
 const filtered = computed(() => hasActiveFilters(filters.value));
 
@@ -71,6 +83,14 @@ const count = computed(() =>
 );
 
 const description = computed(() => {
+    if (archivedView.value) {
+        if (archivedTotal.value === 0) {
+            return 'Finished sessions you archive will appear here.';
+        }
+
+        return `${count.value}, ${sortLabel(filters.value.sort)}.`;
+    }
+
     if (allTotal.value === 0) {
         return 'Every session you save will appear here, newest first.';
     }
@@ -107,6 +127,78 @@ function changeSearch(search: string): void {
 function clearSearchFromEmptyState(): void {
     clearSearch();
     searchBox.value?.focus();
+}
+
+/** Switch between the Library and the Archived view. */
+function changeView(value: string | number): void {
+    const view: LibraryView = value === 'archived' ? 'archived' : 'library';
+
+    if (view === filters.value.view) {
+        return;
+    }
+
+    setView(view);
+}
+
+/**
+ * Archive a finished session straight away and offer Undo in the message.
+ * The list refreshes from the server, so every count and topic stays true.
+ */
+async function archiveFromList(session: SessionCardData): Promise<void> {
+    const outcome = await archiveSession(session.id);
+
+    if (outcome === 'unfinished') {
+        toast.error('Finish this session to archive it.');
+
+        return;
+    }
+
+    if (outcome === 'failed') {
+        toast.error('We could not archive this session. Nothing was changed.');
+
+        return;
+    }
+
+    toast.success('Session archived.', {
+        action: {
+            label: 'Undo',
+            onClick: () => {
+                void undoArchive(session.id);
+            },
+        },
+    });
+
+    await refresh();
+}
+
+/** Undo an archive from the message, putting the session back where it was. */
+async function undoArchive(sessionId: number): Promise<void> {
+    const restored = await restoreSession(sessionId);
+
+    if (!restored) {
+        toast.error(
+            'We could not restore this session. You can restore it from the Archived view.',
+        );
+
+        return;
+    }
+
+    toast.success('Session restored.');
+    await refresh();
+}
+
+/** Bring an archived session back to the Library. */
+async function restoreFromList(session: SessionCardData): Promise<void> {
+    const restored = await restoreSession(session.id);
+
+    if (!restored) {
+        toast.error('We could not restore this session. Nothing was changed.');
+
+        return;
+    }
+
+    toast.success('Session restored.');
+    await refresh();
 }
 
 /** The last scroll position read, kept for the trip back from a session. */
@@ -179,6 +271,7 @@ onBeforeUnmount(() => {
         hasMore: hasMore.value,
         total: total.value,
         allTotal: allTotal.value,
+        archivedTotal: archivedTotal.value,
         filters: filters.value,
         timezone: timezone.value,
         scrollY: lastScrollY,
@@ -209,10 +302,28 @@ onBeforeUnmount(() => {
             {{ announcement }}
         </p>
 
+        <Tabs
+            :model-value="filters.view"
+            class="mb-4"
+            @update:model-value="changeView"
+        >
+            <TabsList class="w-full sm:w-fit">
+                <TabsTrigger value="library">Library</TabsTrigger>
+                <TabsTrigger value="archived">
+                    {{ archivedTabLabel }}
+                </TabsTrigger>
+            </TabsList>
+        </Tabs>
+
         <LibrarySearch
             ref="searchBox"
             :model-value="filters.q"
             :updating="updating"
+            :label="
+                archivedView
+                    ? 'Search archived sessions'
+                    : 'Search your sessions'
+            "
             @search="changeSearch"
         />
 
@@ -238,10 +349,13 @@ onBeforeUnmount(() => {
             :has-filter-chips="hasFilterChips"
             :updating="updating"
             :filter-error="filterError"
+            :archived-view="archivedView"
             @load-more="loadMore"
             @clear-filters="clearFromEmptyState"
             @clear-search="clearSearchFromEmptyState"
             @retry-filters="retryFilters"
+            @archive="archiveFromList"
+            @restore="restoreFromList"
         />
     </div>
 </template>

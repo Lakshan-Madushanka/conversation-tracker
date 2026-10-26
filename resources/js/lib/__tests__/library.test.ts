@@ -21,6 +21,7 @@ function session(
         topic: `Topic ${id}`,
         session_date: '2026-10-12T09:00:00.000000Z',
         last_edited_at: null,
+        archived_at: null,
         status: 'finished',
         counts: {
             questions: 1,
@@ -40,6 +41,7 @@ function snapshot(overrides: Partial<LibrarySnapshot> = {}): LibrarySnapshot {
         hasMore: true,
         total: 4,
         allTotal: 4,
+        archivedTotal: 0,
         filters: defaultLibraryFilters(),
         timezone: 'UTC',
         scrollY: 320,
@@ -71,6 +73,7 @@ describe('keeping the Library list together', () => {
                 has_more: false,
                 total: 0,
                 all_total: 0,
+                archived_total: 0,
                 filters: defaultLibraryFilters(),
                 topics: [],
                 timezone: 'UTC',
@@ -79,6 +82,21 @@ describe('keeping the Library list together', () => {
 
         expect(isLibraryPage({ sessions: [] })).toBe(false);
         expect(isLibraryPage(null)).toBe(false);
+    });
+
+    it('needs the archived count to trust a page', () => {
+        expect(
+            isLibraryPage({
+                sessions: [],
+                next_cursor: null,
+                has_more: false,
+                total: 0,
+                all_total: 0,
+                filters: defaultLibraryFilters(),
+                topics: [],
+                timezone: 'UTC',
+            }),
+        ).toBe(false);
     });
 });
 
@@ -89,6 +107,43 @@ describe('bringing the list back from a session', () => {
         saveLibrarySnapshot(saved);
 
         expect(readLibrarySnapshot()).toEqual(saved);
+    });
+
+    it('keeps the Archived view and its count with the list', () => {
+        saveLibrarySnapshot(
+            snapshot({
+                archivedTotal: 3,
+                filters: {
+                    ...defaultLibraryFilters(),
+                    view: 'archived',
+                },
+            }),
+        );
+
+        const read = readLibrarySnapshot();
+
+        expect(read?.archivedTotal).toBe(3);
+        expect(read?.filters.view).toBe('archived');
+    });
+
+    it('starts an older saved list in the Library view', () => {
+        window.sessionStorage.setItem(
+            'library:snapshot',
+            JSON.stringify({
+                sessions: [session(1)],
+                nextCursor: null,
+                hasMore: false,
+                total: 1,
+                scrollY: 0,
+                savedAt: Date.now(),
+            }),
+        );
+
+        const read = readLibrarySnapshot();
+
+        expect(read?.archivedTotal).toBe(0);
+        expect(read?.allTotal).toBe(1);
+        expect(read?.filters).toEqual(defaultLibraryFilters());
     });
 
     it('drops a list that has gone stale', () => {

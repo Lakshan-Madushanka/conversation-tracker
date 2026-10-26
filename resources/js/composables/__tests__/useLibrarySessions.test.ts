@@ -17,6 +17,7 @@ function session(
         topic: `Topic ${id}`,
         session_date: '2026-10-12T09:00:00.000000Z',
         last_edited_at: null,
+        archived_at: null,
         status: 'finished',
         counts: {
             questions: 1,
@@ -36,6 +37,7 @@ function page(overrides: Partial<LibraryPage> = {}): LibraryPage {
         has_more: false,
         total: 0,
         all_total: 0,
+        archived_total: 0,
         filters: defaultLibraryFilters(),
         topics: [],
         timezone: 'UTC',
@@ -79,6 +81,7 @@ describe('loading more of the Library', () => {
                 next_cursor: 'third',
                 has_more: true,
                 total: 6,
+                archived_total: 4,
             }),
         ]);
 
@@ -99,6 +102,7 @@ describe('loading more of the Library', () => {
         expect(library.nextCursor.value).toBe('third');
         expect(library.hasMore.value).toBe(true);
         expect(library.total.value).toBe(6);
+        expect(library.archivedTotal.value).toBe(4);
         expect(mock).toHaveBeenCalledTimes(1);
         expect(String(mock.mock.calls[0]?.[0])).toContain('cursor=second');
     });
@@ -155,6 +159,7 @@ describe('refreshing the Library after an edit', () => {
                 next_cursor: null,
                 has_more: false,
                 total: 4,
+                archived_total: 3,
             }),
         ]);
 
@@ -173,6 +178,7 @@ describe('refreshing the Library after an edit', () => {
             hasMore: false,
             total: 4,
             allTotal: 4,
+            archivedTotal: 0,
             filters: defaultLibraryFilters(),
             timezone: 'UTC',
             scrollY: 0,
@@ -188,6 +194,7 @@ describe('refreshing the Library after an edit', () => {
         expect(mock).toHaveBeenCalledTimes(2);
         expect(library.hasMore.value).toBe(false);
         expect(library.nextCursor.value).toBeNull();
+        expect(library.archivedTotal.value).toBe(3);
     });
 
     it('leaves the list alone when the network drops', async () => {
@@ -446,5 +453,58 @@ describe('changing the filters', () => {
 
         expect(library.sessions.value.map((card) => card.id)).toEqual([2]);
         expect(library.filters.value.q).toBe('soup');
+    });
+
+    it('switches to the Archived view and leaves status out of it', () => {
+        const requests = captureRequests();
+        const library = useLibrarySessions(
+            page({
+                filters: filters({
+                    topics: [1],
+                    status: 'finished',
+                    q: 'beach',
+                }),
+            }),
+        );
+
+        library.setView('archived');
+
+        expect(requests).toHaveLength(1);
+        expect(requests[0]?.url).toContain('view=archived');
+        expect(requests[0]?.url).toContain('topics=1');
+        expect(requests[0]?.url).toContain('q=beach');
+        expect(requests[0]?.url).not.toContain('status=');
+        expect(library.filters.value.view).toBe('archived');
+        expect(library.filters.value.status).toBe('all');
+    });
+
+    it('switches back to the Library view without an archived address', () => {
+        const requests = captureRequests();
+        const library = useLibrarySessions(
+            page({ filters: filters({ view: 'archived' }) }),
+        );
+
+        library.setView('library');
+
+        expect(requests).toHaveLength(1);
+        expect(requests[0]?.url).not.toContain('view=archived');
+        expect(library.filters.value.view).toBe('library');
+    });
+
+    it('takes the archived total from the page the server sends', () => {
+        const requests = captureRequests();
+        const library = useLibrarySessions(page());
+
+        library.setView('archived');
+
+        requests[0]?.options.onSuccess?.({
+            props: page({
+                filters: filters({ view: 'archived' }),
+                archived_total: 5,
+            }),
+        });
+
+        expect(library.filters.value.view).toBe('archived');
+        expect(library.archivedTotal.value).toBe(5);
     });
 });

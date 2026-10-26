@@ -132,7 +132,11 @@ defineExpose({ focusFirstControl });
                 <SheetHeader class="mb-4 text-left">
                     <SheetTitle>Filters</SheetTitle>
                     <SheetDescription>
-                        Narrow the Library by topic, date, content or status.
+                        {{
+                            props.filters.view === 'archived'
+                                ? 'Narrow the archived sessions by topic, date or content.'
+                                : 'Narrow the Library by topic, date, content or status.'
+                        }}
                     </SheetDescription>
                 </SheetHeader>
 

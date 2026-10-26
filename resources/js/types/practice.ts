@@ -119,6 +119,11 @@ export interface PracticeSessionData {
      */
     last_changed_at: string | null;
     /**
+     * When the session was archived, or null while it is still in the Library.
+     * An archived session is read-only until it is restored.
+     */
+    archived_at: string | null;
+    /**
      * Bumped on every save. The editor sends the version it last read so the
      * server can refuse a save that would overwrite newer work from another tab.
      */
@@ -199,6 +204,8 @@ export interface SessionCardData {
     /** ISO 8601 timestamp of the last content change, or null if never edited. */
     last_edited_at: string | null;
     status: 'finished' | 'unfinished';
+    /** When the session was archived, or null while it is in the Library. */
+    archived_at: string | null;
     counts: SessionCounts;
     /** The topic split into plain and matched pieces while a search is active. */
     topic_segments?: SearchSegment[];

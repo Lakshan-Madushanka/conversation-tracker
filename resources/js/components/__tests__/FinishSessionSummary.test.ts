@@ -12,6 +12,7 @@ function summary(overrides: Partial<FinishSummary> = {}): FinishSummary {
             status: 'finished',
             finished_at: '2026-10-19T10:00:00Z',
             last_changed_at: '2026-10-19T10:00:00Z',
+            archived_at: null,
             version: 4,
             topic: { id: 1, name: 'Travel' },
             questions: [],

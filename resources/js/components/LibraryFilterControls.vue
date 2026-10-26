@@ -79,6 +79,9 @@ const contentOpen = ref(false);
 const selectedTopicCount = computed(() => props.filters.topics.length);
 const selectedTypeCount = computed(() => props.filters.types.length);
 
+/** The Archived view holds only finished sessions, so status is not offered. */
+const showStatus = computed(() => props.filters.view !== 'archived');
+
 const rangePlaceholder = computed(() =>
     parseDate(props.filters.from ?? todayDay()),
 );
@@ -366,7 +369,7 @@ function todayDay(): string {
             </Popover>
         </div>
 
-        <div :class="props.stacked ? 'grid gap-1.5' : ''">
+        <div v-if="showStatus" :class="props.stacked ? 'grid gap-1.5' : ''">
             <span
                 v-if="props.stacked"
                 class="text-xs font-medium text-muted-foreground"

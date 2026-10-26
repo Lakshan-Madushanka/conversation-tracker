@@ -17,6 +17,7 @@ function session(
         status: 'finished',
         finished_at: '2026-10-12T09:00:00.000000Z',
         last_changed_at: '2026-10-12T10:00:00.000000Z',
+        archived_at: null,
         version: 3,
         topic: { id: 1, name: 'Ordering at a restaurant' },
         questions: [

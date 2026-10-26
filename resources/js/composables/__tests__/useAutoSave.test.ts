@@ -32,6 +32,7 @@ function savedSession(
         status: 'unfinished',
         finished_at: null,
         last_changed_at: null,
+        archived_at: null,
         version: 1,
         topic: { id: 1, name: 'Travel' },
         questions: [],

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Actions\PracticeSessions\SplitLegacyFeedbackEntries;
+use App\Enums\FeedbackType;
 use App\Support\LibraryFilters;
 use App\Support\SearchText;
 use Carbon\CarbonImmutable;
@@ -230,8 +231,8 @@ class PracticeSession extends Model
                     'question_html' => $question->question_html,
                     'answer_html' => $question->answer_html,
                     'feedback' => $question->feedbackEntries
-                        ->groupBy('type')
-                        ->map(fn (Collection $entries, string $type): mixed => $this->feedbackPayload($type, $entries))
+                        ->groupBy(fn (PracticeFeedbackEntry $entry): string => $entry->type->value)
+                        ->map(fn (Collection $entries, string $type): mixed => $this->feedbackPayload(FeedbackType::from($type), $entries))
                         ->all(),
                 ])
                 ->all(),
@@ -246,9 +247,9 @@ class PracticeSession extends Model
      * @param  Collection<int, PracticeFeedbackEntry>  $entries
      * @return list<array{id: string, text: string, correction_html: string, reason: string}|array{id: string, text: string, meaning: string, example_html: string|list<array{id: string, text: string, html: string}>}|array{id: string, html: string}>|string
      */
-    private function feedbackPayload(string $type, Collection $entries): array|string
+    private function feedbackPayload(FeedbackType $type, Collection $entries): array|string
     {
-        if ($type === PracticeFeedbackEntry::TYPE_NATURAL_VERSION) {
+        if ($type === FeedbackType::NaturalVersion) {
             return $entries->first()?->editableContent() ?? '';
         }
 
@@ -257,7 +258,7 @@ class PracticeSession extends Model
         foreach ($entries as $entry) {
             $id = $entry->client_id ?? '';
 
-            if ($type === PracticeFeedbackEntry::TYPE_MISTAKE) {
+            if ($type === FeedbackType::Mistake) {
                 $payload[] = [
                     'id' => $id,
                     'text' => $entry->content_text,
@@ -268,7 +269,7 @@ class PracticeSession extends Model
                 continue;
             }
 
-            if (PracticeFeedbackEntry::isTable($type)) {
+            if ($type->isTable()) {
                 $payload[] = [
                     'id' => $id,
                     'text' => $entry->content_text,
@@ -434,12 +435,12 @@ class PracticeSession extends Model
                         $nonEmpty
                             ->where(function (Builder $rich): void {
                                 $rich
-                                    ->whereIn('type', PracticeFeedbackEntry::RICH_TYPES)
+                                    ->whereIn('type', FeedbackType::richValues())
                                     ->whereRaw("TRIM(content_text) <> ''");
                             })
                             ->orWhere(function (Builder $table): void {
                                 $table
-                                    ->whereIn('type', PracticeFeedbackEntry::TABLE_TYPES)
+                                    ->whereIn('type', FeedbackType::tableValues())
                                     ->where(function (Builder $columns): void {
                                         $columns
                                             ->whereRaw("TRIM(content_text) <> ''")
@@ -701,14 +702,14 @@ class PracticeSession extends Model
             $entries = $question->feedbackEntries
                 ->filter(fn (PracticeFeedbackEntry $entry): bool => ! $entry->isBlank())
                 ->sortBy(fn (PracticeFeedbackEntry $entry): array => [
-                    array_search($entry->type, PracticeFeedbackEntry::TYPES, true) ?: 0,
+                    $entry->type->sortOrder(),
                     $entry->position,
                     $entry->id,
                 ])
                 ->values();
 
             foreach ($entries as $entry) {
-                if ($types !== [] && ! in_array($entry->type, $types, true)) {
+                if ($types !== [] && ! in_array($entry->type->value, $types, true)) {
                     continue;
                 }
 
@@ -721,9 +722,9 @@ class PracticeSession extends Model
                 $field = $entry->bestSearchField($terms);
 
                 $matches[] = [
-                    'key' => 'entry:'.$entry->type.':'.($entry->client_id ?? $entry->id),
+                    'key' => 'entry:'.$entry->type->value.':'.($entry->client_id ?? $entry->id),
                     'kind' => 'entry',
-                    'type' => $entry->type,
+                    'type' => $entry->type->value,
                     'question_position' => $question->position,
                     'entry_id' => $entry->client_id,
                     'entry_position' => $entry->position,
@@ -766,10 +767,10 @@ class PracticeSession extends Model
                 }
 
                 match ($entry->type) {
-                    PracticeFeedbackEntry::TYPE_VOCABULARY => $counts['words'] += 1,
-                    PracticeFeedbackEntry::TYPE_PHRASE => $counts['phrases'] += 1,
-                    PracticeFeedbackEntry::TYPE_MISTAKE => $counts['mistakes'] += 1,
-                    PracticeFeedbackEntry::TYPE_GRAMMAR_NOTE => $counts['grammar_notes'] += 1,
+                    FeedbackType::Vocabulary => $counts['words'] += 1,
+                    FeedbackType::Phrase => $counts['phrases'] += 1,
+                    FeedbackType::Mistake => $counts['mistakes'] += 1,
+                    FeedbackType::GrammarNote => $counts['grammar_notes'] += 1,
                     default => null,
                 };
             }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\PracticeQuestions;
 
+use App\Enums\FeedbackType;
 use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeQuestion;
 use App\Support\FeedbackTable;
@@ -26,8 +27,8 @@ final class SavePracticeFeedback
      */
     public function handle(PracticeQuestion $question, array $feedback): void
     {
-        foreach (PracticeFeedbackEntry::TYPES as $type) {
-            $this->saveBox($question, $type, $feedback[$type] ?? null);
+        foreach (FeedbackType::ordered() as $type) {
+            $this->saveBox($question, $type, $feedback[$type->value] ?? null);
         }
     }
 
@@ -36,9 +37,9 @@ final class SavePracticeFeedback
      *
      * @param  mixed  $submitted  the box as the editor sent it
      */
-    private function saveBox(PracticeQuestion $question, string $type, mixed $submitted): void
+    private function saveBox(PracticeQuestion $question, FeedbackType $type, mixed $submitted): void
     {
-        $rows = $question->feedbackEntries()->where('type', $type)->get()->all();
+        $rows = $question->feedbackEntries()->where('type', $type->value)->get()->all();
         $claimed = [];
         $stored = [];
         $seenIds = [];
@@ -83,7 +84,7 @@ final class SavePracticeFeedback
      *
      * @return list<array{content_html: string, content_text: string, correction_html: string, correction_text: string, reason: string, example: string, example_html: string|list<array{id: string, text: string, html: string}>, client_id: string|null, is_split: bool}>
      */
-    private function entriesToStore(string $type, mixed $submitted): array
+    private function entriesToStore(FeedbackType $type, mixed $submitted): array
     {
         if ($submitted === null) {
             return [];
@@ -127,9 +128,9 @@ final class SavePracticeFeedback
      * @param  array<mixed>  $item
      * @return list<array{content_html: string, content_text: string, correction_html: string, correction_text: string, reason: string, example: string, example_html: string|list<array{id: string, text: string, html: string}>, is_split: bool}>
      */
-    private function itemEntries(string $type, array $item): array
+    private function itemEntries(FeedbackType $type, array $item): array
     {
-        if (PracticeFeedbackEntry::isTable($type)) {
+        if ($type->isTable()) {
             return $this->tableEntries($type, $item);
         }
 
@@ -154,7 +155,7 @@ final class SavePracticeFeedback
      * @param  array<mixed>  $item
      * @return list<array{content_html: string, content_text: string, correction_html: string, correction_text: string, reason: string, example: string, example_html: string|list<array{id: string, text: string, html: string}>, is_split: bool}>
      */
-    private function tableEntries(string $type, array $item): array
+    private function tableEntries(FeedbackType $type, array $item): array
     {
         if (! array_key_exists(FeedbackTable::attentionKey($type), $item)) {
             $text = is_string($item['text'] ?? null) ? $item['text'] : '';
@@ -183,7 +184,7 @@ final class SavePracticeFeedback
      *
      * @return list<array{content_html: string, content_text: string, correction_html: string, correction_text: string, reason: string, example: string, example_html: string|list<array{id: string, text: string, html: string}>, is_split: bool}>
      */
-    private function tableLines(string $type, string $content): array
+    private function tableLines(FeedbackType $type, string $content): array
     {
         $entries = [];
 
@@ -207,9 +208,9 @@ final class SavePracticeFeedback
      *
      * @return list<array{content_html: string, content_text: string, correction_html: string, correction_text: string, reason: string, example: string, example_html: string|list<array{id: string, text: string, html: string}>, client_id: string|null, is_split: bool}>
      */
-    private function singleEntry(string $type, string $content): array
+    private function singleEntry(FeedbackType $type, string $content): array
     {
-        if (PracticeFeedbackEntry::isTable($type)) {
+        if ($type->isTable()) {
             return array_map(
                 fn (array $entry): array => [...$entry, 'client_id' => null],
                 $this->tableLines($type, $content),
@@ -232,7 +233,7 @@ final class SavePracticeFeedback
      */
     private function claimRow(
         PracticeQuestion $question,
-        string $type,
+        FeedbackType $type,
         array $rows,
         array $claimed,
         ?string $clientId,
@@ -272,8 +273,8 @@ final class SavePracticeFeedback
         ];
     }
 
-    private function contentKey(string $type): string
+    private function contentKey(FeedbackType $type): string
     {
-        return PracticeFeedbackEntry::isRich($type) ? 'html' : 'text';
+        return $type->isRich() ? 'html' : 'text';
     }
 }

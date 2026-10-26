@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Support;
 
-use App\Models\PracticeFeedbackEntry;
+use App\Enums\FeedbackType;
 use Carbon\CarbonImmutable;
 use Throwable;
 
@@ -418,7 +418,7 @@ final class LibraryFilters
         );
 
         return array_values(array_filter(
-            PracticeFeedbackEntry::TYPES,
+            FeedbackType::values(),
             fn (string $type): bool => in_array($type, $wanted, true),
         ));
     }

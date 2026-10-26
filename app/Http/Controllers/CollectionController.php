@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Enums\FeedbackType;
 use App\Models\PracticeFeedbackEntry;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -17,25 +18,25 @@ class CollectionController extends Controller
         return Inertia::render('collections/Index', [
             'vocabulary' => Inertia::scroll(
                 fn (): LengthAwarePaginator => PracticeFeedbackEntry::collection(
-                    PracticeFeedbackEntry::TYPE_VOCABULARY,
+                    FeedbackType::Vocabulary,
                     $this->getSearchTerm($request, 'vocabulary')
                 )
             ),
             'phrases' => Inertia::scroll(
                 fn (): LengthAwarePaginator => PracticeFeedbackEntry::collection(
-                    PracticeFeedbackEntry::TYPE_PHRASE,
+                    FeedbackType::Phrase,
                     $this->getSearchTerm($request, 'phrases')
                 )
             ),
             'grammar' => Inertia::scroll(
                 fn (): LengthAwarePaginator => PracticeFeedbackEntry::collection(
-                    PracticeFeedbackEntry::TYPE_GRAMMAR_NOTE,
+                    FeedbackType::GrammarNote,
                     $this->getSearchTerm($request, 'grammar')
                 )
             ),
             'mistakes' => Inertia::scroll(
                 fn (): LengthAwarePaginator => PracticeFeedbackEntry::collection(
-                    PracticeFeedbackEntry::TYPE_MISTAKE,
+                    FeedbackType::Mistake,
                     $this->getSearchTerm($request, 'mistakes')
                 )
             ),

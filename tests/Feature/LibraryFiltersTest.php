@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Enums\FeedbackType;
 use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeQuestion;
 use App\Models\PracticeSession;
@@ -26,7 +27,7 @@ function librarySession(
     ]);
 }
 
-function libraryEntry(PracticeSession $session, string $type, array $values = []): void
+function libraryEntry(PracticeSession $session, FeedbackType $type, array $values = []): void
 {
     $question = PracticeQuestion::factory()->for($session)->create();
 
@@ -169,37 +170,37 @@ it('filters by each content type and by several at once', function (): void {
     $topic = Topic::factory()->create();
 
     $mistake = librarySession($topic, now()->subMinutes(1)->toImmutable());
-    libraryEntry($mistake, PracticeFeedbackEntry::TYPE_MISTAKE, [
+    libraryEntry($mistake, FeedbackType::Mistake, [
         'content_text' => 'I go',
         'correction_text' => 'I went',
     ]);
 
     $vocabulary = librarySession($topic, now()->subMinutes(2)->toImmutable());
-    libraryEntry($vocabulary, PracticeFeedbackEntry::TYPE_VOCABULARY, [
+    libraryEntry($vocabulary, FeedbackType::Vocabulary, [
         'content_text' => 'soup',
         'correction_text' => 'a liquid food',
     ]);
 
     $phrase = librarySession($topic, now()->subMinutes(3)->toImmutable());
-    libraryEntry($phrase, PracticeFeedbackEntry::TYPE_PHRASE, [
+    libraryEntry($phrase, FeedbackType::Phrase, [
         'content_text' => 'Could I have',
         'correction_text' => 'a polite request',
     ]);
 
     $grammar = librarySession($topic, now()->subMinutes(4)->toImmutable());
-    libraryEntry($grammar, PracticeFeedbackEntry::TYPE_GRAMMAR_NOTE, [
+    libraryEntry($grammar, FeedbackType::GrammarNote, [
         'content_html' => '<p>Use the past tense.</p>',
         'content_text' => 'Use the past tense.',
     ]);
 
     $natural = librarySession($topic, now()->subMinutes(5)->toImmutable());
-    libraryEntry($natural, PracticeFeedbackEntry::TYPE_NATURAL_VERSION, [
+    libraryEntry($natural, FeedbackType::NaturalVersion, [
         'content_html' => '<p>I would like the soup.</p>',
         'content_text' => 'I would like the soup.',
     ]);
 
     $blank = librarySession($topic, now()->subMinutes(6)->toImmutable());
-    libraryEntry($blank, PracticeFeedbackEntry::TYPE_MISTAKE, [
+    libraryEntry($blank, FeedbackType::Mistake, [
         'content_text' => '',
         'content_html' => '',
         'correction_text' => '',
@@ -255,23 +256,23 @@ it('combines every kind of filter', function (): void {
     $food = Topic::factory()->create();
 
     $matching = librarySession($travel, CarbonImmutable::parse('2026-10-12 12:00:00', 'UTC'));
-    libraryEntry($matching, PracticeFeedbackEntry::TYPE_MISTAKE);
+    libraryEntry($matching, FeedbackType::Mistake);
 
     $wrongTopic = librarySession($food, CarbonImmutable::parse('2026-10-12 12:00:00', 'UTC'));
-    libraryEntry($wrongTopic, PracticeFeedbackEntry::TYPE_MISTAKE);
+    libraryEntry($wrongTopic, FeedbackType::Mistake);
 
     $wrongDate = librarySession($travel, CarbonImmutable::parse('2026-09-01 12:00:00', 'UTC'));
-    libraryEntry($wrongDate, PracticeFeedbackEntry::TYPE_MISTAKE);
+    libraryEntry($wrongDate, FeedbackType::Mistake);
 
     $wrongStatus = librarySession(
         $travel,
         CarbonImmutable::parse('2026-10-12 12:00:00', 'UTC'),
         PracticeSession::STATUS_UNFINISHED,
     );
-    libraryEntry($wrongStatus, PracticeFeedbackEntry::TYPE_MISTAKE);
+    libraryEntry($wrongStatus, FeedbackType::Mistake);
 
     $wrongType = librarySession($travel, CarbonImmutable::parse('2026-10-12 12:00:00', 'UTC'));
-    libraryEntry($wrongType, PracticeFeedbackEntry::TYPE_VOCABULARY);
+    libraryEntry($wrongType, FeedbackType::Vocabulary);
 
     $response = $this->getJson(route('sessions.index', [
         'topics' => $travel->id,
@@ -316,7 +317,7 @@ it('counts the matching sessions and the whole Library separately', function ():
 
     foreach (range(1, 3) as $index) {
         $session = librarySession($topic, now()->subDays($index)->toImmutable());
-        libraryEntry($session, PracticeFeedbackEntry::TYPE_MISTAKE);
+        libraryEntry($session, FeedbackType::Mistake);
     }
 
     foreach (range(4, 6) as $index) {
@@ -337,7 +338,7 @@ it('ignores values it cannot understand and offers only topics in use', function
     $unused = Topic::factory()->create(['name' => 'Unused']);
 
     $session = librarySession($used, now()->subDay()->toImmutable());
-    libraryEntry($session, PracticeFeedbackEntry::TYPE_MISTAKE);
+    libraryEntry($session, FeedbackType::Mistake);
 
     $response = $this->getJson(route('sessions.index', [
         'topics' => "{$used->id},999999,not-a-number",
@@ -373,7 +374,7 @@ it('loads more within the chosen filters without leaking other sessions', functi
 
     foreach (range(0, 24) as $index) {
         $session = librarySession($topic, now()->subMinutes($index + 1)->toImmutable());
-        libraryEntry($session, PracticeFeedbackEntry::TYPE_MISTAKE);
+        libraryEntry($session, FeedbackType::Mistake);
         $matching[] = $session->id;
     }
 
@@ -404,7 +405,7 @@ it('keeps the number of queries flat as filtered sessions grow', function (): vo
 
     $makeSession = function () use ($topic): void {
         $session = librarySession($topic, now()->subMinute()->toImmutable());
-        libraryEntry($session, PracticeFeedbackEntry::TYPE_MISTAKE);
+        libraryEntry($session, FeedbackType::Mistake);
     };
 
     $makeSession();

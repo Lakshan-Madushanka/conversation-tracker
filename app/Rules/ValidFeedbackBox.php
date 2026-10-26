@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Rules;
 
-use App\Models\PracticeFeedbackEntry;
+use App\Enums\FeedbackType;
 use App\Support\FeedbackTable;
 use App\Support\ListEntries;
 use App\Support\RichText;
@@ -32,11 +32,11 @@ final readonly class ValidFeedbackBox implements ValidationRule
     public const int MAX_LENGTH = ListEntries::MAX_LENGTH;
 
     /**
-     * @param  string  $type  The feedback box this rule checks.
+     * @param  FeedbackType  $type  The feedback box this rule checks.
      * @param  int  $maxTextLength  Longest single piece of text, for a box saved before entries existed or one grammar note.
      */
     public function __construct(
-        private string $type,
+        private FeedbackType $type,
         private int $maxTextLength,
     ) {}
 
@@ -81,7 +81,7 @@ final readonly class ValidFeedbackBox implements ValidationRule
      */
     private function countAndCheck(array $value, Closure $fail): int
     {
-        if (PracticeFeedbackEntry::isTable($this->type)) {
+        if ($this->type->isTable()) {
             return $this->countTable($value, $fail);
         }
 

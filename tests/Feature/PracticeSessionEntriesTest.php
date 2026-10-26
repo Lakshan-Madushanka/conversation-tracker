@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Enums\FeedbackType;
 use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeQuestion;
 use App\Models\PracticeSession;
@@ -59,7 +60,7 @@ function saveEntrySession(array $feedback): PracticeSession
 }
 
 /** The stored entries of one box, in the order they were saved. */
-function boxEntries(PracticeSession $session, string $type): array
+function boxEntries(PracticeSession $session, FeedbackType $type): array
 {
     $question = PracticeQuestion::firstOrFail();
 
@@ -78,7 +79,7 @@ describe('a pasted list becomes one entry per line', function (): void {
             'phrase' => textEntries(['a long way', 'off the beaten track', 'a shortcut']),
         ]);
 
-        $entries = boxEntries($session, PracticeFeedbackEntry::TYPE_PHRASE);
+        $entries = boxEntries($session, FeedbackType::Phrase);
 
         expect($entries)->toHaveCount(3)
             ->and(array_column($entries, 'content_text'))->toBe(['a long way', 'off the beaten track', 'a shortcut'])
@@ -90,7 +91,7 @@ describe('a pasted list becomes one entry per line', function (): void {
             'phrase' => textEntries(["a long way\noff the beaten track\na shortcut"], 'paste'),
         ]);
 
-        $entries = boxEntries($session, PracticeFeedbackEntry::TYPE_PHRASE);
+        $entries = boxEntries($session, FeedbackType::Phrase);
 
         expect($entries)->toHaveCount(3)
             ->and(array_column($entries, 'content_text'))->toBe(['a long way', 'off the beaten track', 'a shortcut'])
@@ -104,7 +105,7 @@ describe('a pasted list becomes one entry per line', function (): void {
             'phrase' => textEntries(["•\ta long way\n1. off the beaten track\n- a shortcut\n\n   "], 'paste'),
         ]);
 
-        $entries = boxEntries($session, PracticeFeedbackEntry::TYPE_PHRASE);
+        $entries = boxEntries($session, FeedbackType::Phrase);
 
         expect(array_column($entries, 'content_text'))->toBe(['a long way', 'off the beaten track', 'a shortcut']);
     });
@@ -114,7 +115,7 @@ describe('a pasted list becomes one entry per line', function (): void {
 
         $session = saveEntrySession(['phrase' => textEntries([$long], 'paste')]);
 
-        expect(array_column(boxEntries($session, PracticeFeedbackEntry::TYPE_PHRASE), 'content_text'))->toBe([$long]);
+        expect(array_column(boxEntries($session, FeedbackType::Phrase), 'content_text'))->toBe([$long]);
     });
 });
 
@@ -137,7 +138,7 @@ describe('entries keep their identity between saves', function (): void {
             ],
         ])->assertRedirect();
 
-        $entries = boxEntries($session->fresh() ?? $session, PracticeFeedbackEntry::TYPE_VOCABULARY);
+        $entries = boxEntries($session->fresh() ?? $session, FeedbackType::Vocabulary);
 
         expect($entries)->toHaveCount(2)
             ->and(array_column($entries, 'correction_text'))->toBe(['not wanting to', 'cheap']);
@@ -173,7 +174,7 @@ describe('entries keep their identity between saves', function (): void {
             ],
         ]);
 
-        expect(array_column(boxEntries($session, PracticeFeedbackEntry::TYPE_VOCABULARY), 'content_text'))->toBe(['first', 'third']);
+        expect(array_column(boxEntries($session, FeedbackType::Vocabulary), 'content_text'))->toBe(['first', 'third']);
     });
 
     it('keeps the entries of one box apart from the entries of another', function (): void {
@@ -190,7 +191,7 @@ describe('entries keep their identity between saves', function (): void {
             'vocabulary' => [['text' => 'reluctant']],
         ]);
 
-        $entry = boxEntries($session, PracticeFeedbackEntry::TYPE_VOCABULARY)[0];
+        $entry = boxEntries($session, FeedbackType::Vocabulary)[0];
 
         expect($entry->client_id)->toBeString()->not->toBe('');
     });
@@ -203,7 +204,7 @@ describe('entries keep their identity between saves', function (): void {
             ],
         ]);
 
-        $entries = boxEntries($session, PracticeFeedbackEntry::TYPE_GRAMMAR_NOTE);
+        $entries = boxEntries($session, FeedbackType::GrammarNote);
 
         expect($entries)->toHaveCount(2)
             ->and($entries[0]->content_html)->toBe('<p>Use the <strong>past tense</strong>.</p>')
@@ -219,7 +220,7 @@ describe('entries keep their identity between saves', function (): void {
             ],
         ]);
 
-        $entries = boxEntries($session, PracticeFeedbackEntry::TYPE_GRAMMAR_NOTE);
+        $entries = boxEntries($session, FeedbackType::GrammarNote);
 
         expect($entries)->toHaveCount(1)
             ->and($entries[0]->content_text)->toBe('Keep me');
@@ -230,7 +231,7 @@ describe('entries keep their identity between saves', function (): void {
             'natural_version' => '<p>Where did you <em>end up</em> going?</p>',
         ]);
 
-        $entry = boxEntries($session, PracticeFeedbackEntry::TYPE_NATURAL_VERSION)[0];
+        $entry = boxEntries($session, FeedbackType::NaturalVersion)[0];
 
         expect($entry->content_html)->toBe('<p>Where did you <em>end up</em> going?</p>')
             ->and(PracticeFeedbackEntry::count())->toBe(1);
@@ -248,7 +249,7 @@ describe('the vocabulary table', function (): void {
             ],
         ]]);
 
-        $entry = boxEntries($session, PracticeFeedbackEntry::TYPE_VOCABULARY)[0];
+        $entry = boxEntries($session, FeedbackType::Vocabulary)[0];
 
         expect($entry->content_text)->toBe('reluctant')
             ->and($entry->correction_text)->toBe('unwilling')
@@ -263,7 +264,7 @@ describe('the vocabulary table', function (): void {
             ['id' => 'v-0', 'text' => 'reluctant → unwilling'],
         ]]);
 
-        $entry = boxEntries($session, PracticeFeedbackEntry::TYPE_VOCABULARY)[0];
+        $entry = boxEntries($session, FeedbackType::Vocabulary)[0];
 
         expect($entry->content_text)->toBe('reluctant')
             ->and($entry->correction_text)->toBe('unwilling');
@@ -274,7 +275,7 @@ describe('the vocabulary table', function (): void {
         $question = PracticeQuestion::factory()->for($session)->create(['position' => 1]);
 
         PracticeFeedbackEntry::factory()->for($question)->create([
-            'type' => PracticeFeedbackEntry::TYPE_VOCABULARY,
+            'type' => FeedbackType::Vocabulary,
             'content_text' => 'reluctant',
             'correction_text' => 'unwilling',
             'example' => 'He was reluctant.',
@@ -302,7 +303,7 @@ describe('the phrases table', function (): void {
             ],
         ]]);
 
-        $entry = boxEntries($session, PracticeFeedbackEntry::TYPE_PHRASE)[0];
+        $entry = boxEntries($session, FeedbackType::Phrase)[0];
 
         expect($entry->content_text)->toBe('Could I have the menu, please?')
             ->and($entry->correction_text)->toBe('a polite way to ask')
@@ -317,7 +318,7 @@ describe('the phrases table', function (): void {
             ['id' => 'p-0', 'text' => 'off the beaten track → away from the usual places'],
         ]]);
 
-        $entry = boxEntries($session, PracticeFeedbackEntry::TYPE_PHRASE)[0];
+        $entry = boxEntries($session, FeedbackType::Phrase)[0];
 
         expect($entry->content_text)->toBe('off the beaten track')
             ->and($entry->correction_text)->toBe('away from the usual places');
@@ -328,7 +329,7 @@ describe('the phrases table', function (): void {
             ['id' => 'p-0', 'text' => 'Excuse me, could I have the menu, please?'],
         ]]);
 
-        $entry = boxEntries($session, PracticeFeedbackEntry::TYPE_PHRASE)[0];
+        $entry = boxEntries($session, FeedbackType::Phrase)[0];
 
         expect($entry->content_text)->toBe('Excuse me, could I have the menu, please?')
             ->and($entry->correction_text)->toBe('')
@@ -340,7 +341,7 @@ describe('the phrases table', function (): void {
         $question = PracticeQuestion::factory()->for($session)->create(['position' => 1]);
 
         PracticeFeedbackEntry::factory()->for($question)->create([
-            'type' => PracticeFeedbackEntry::TYPE_PHRASE,
+            'type' => FeedbackType::Phrase,
             'content_text' => 'Could I have the bill, please?',
             'correction_text' => 'a polite way to ask for the bill',
             'example' => 'Could I have the bill, please?',
@@ -361,7 +362,7 @@ describe('the phrases table', function (): void {
         $question = PracticeQuestion::factory()->for($session)->create(['position' => 1]);
 
         PracticeFeedbackEntry::factory()->for($question)->create([
-            'type' => PracticeFeedbackEntry::TYPE_PHRASE,
+            'type' => FeedbackType::Phrase,
             'content_html' => '',
             'content_text' => "off the beaten track - away from the usual places\na long way",
         ]);
@@ -431,7 +432,7 @@ describe('sessions saved before entries existed', function (): void {
         $question = PracticeQuestion::factory()->for($session)->create(['position' => 1]);
 
         PracticeFeedbackEntry::factory()->for($question)->create([
-            'type' => PracticeFeedbackEntry::TYPE_MISTAKE,
+            'type' => FeedbackType::Mistake,
             'content_html' => '',
             'content_text' => "I go → I went\nsaid → told",
         ]);
@@ -458,7 +459,7 @@ describe('sessions saved before entries existed', function (): void {
 
         PracticeFeedbackEntry::factory()->for($question)->rich()->create();
         PracticeFeedbackEntry::factory()->for($question)->create([
-            'type' => PracticeFeedbackEntry::TYPE_NATURAL_VERSION,
+            'type' => FeedbackType::NaturalVersion,
             'content_html' => '<p>Where did you <em>end up</em> going?</p>',
             'content_text' => 'Where did you end up going?',
         ]);
@@ -478,7 +479,7 @@ describe('sessions saved before entries existed', function (): void {
         $question = PracticeQuestion::factory()->for($session)->create(['position' => 1]);
 
         PracticeFeedbackEntry::factory()->for($question)->create([
-            'type' => PracticeFeedbackEntry::TYPE_PHRASE,
+            'type' => FeedbackType::Phrase,
             'content_html' => '',
             'content_text' => "a long way\noff",
         ]);
@@ -498,7 +499,7 @@ describe('sessions saved before entries existed', function (): void {
         $question = PracticeQuestion::factory()->for($session)->create(['position' => 1]);
 
         PracticeFeedbackEntry::factory()->for($question)->create([
-            'type' => PracticeFeedbackEntry::TYPE_VOCABULARY,
+            'type' => FeedbackType::Vocabulary,
             'content_html' => '',
             'content_text' => "journey\nreluctant",
         ]);

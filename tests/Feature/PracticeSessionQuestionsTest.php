@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Actions\PracticeQuestions\SavePracticeFeedback;
+use App\Enums\FeedbackType;
 use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeQuestion;
 use App\Models\PracticeSession;
@@ -71,14 +72,14 @@ test('all five feedback boxes can be saved for one question', function (): void 
 
     expect($question->feedbackEntries)->toHaveCount(5);
 
-    $entries = $question->feedbackEntries->keyBy('type');
+    $entries = $question->feedbackEntries->keyBy(fn (PracticeFeedbackEntry $entry): string => $entry->type->value);
 
-    expect($entries[PracticeFeedbackEntry::TYPE_MISTAKE]->content_text)->toBe('I go')
-        ->and($entries[PracticeFeedbackEntry::TYPE_MISTAKE]->correction_text)->toBe('I went')
-        ->and($entries[PracticeFeedbackEntry::TYPE_VOCABULARY]->content_text)->toBe('journey')
-        ->and($entries[PracticeFeedbackEntry::TYPE_PHRASE]->content_text)->toBe('a long way')
-        ->and($entries[PracticeFeedbackEntry::TYPE_GRAMMAR_NOTE]->content_html)->toBe('<p>Use the <strong>past tense</strong>.</p>')
-        ->and($entries[PracticeFeedbackEntry::TYPE_NATURAL_VERSION]->content_html)->toBe('<p>Where did you <em>end up</em> going?</p>');
+    expect($entries[FeedbackType::Mistake->value]->content_text)->toBe('I go')
+        ->and($entries[FeedbackType::Mistake->value]->correction_text)->toBe('I went')
+        ->and($entries[FeedbackType::Vocabulary->value]->content_text)->toBe('journey')
+        ->and($entries[FeedbackType::Phrase->value]->content_text)->toBe('a long way')
+        ->and($entries[FeedbackType::GrammarNote->value]->content_html)->toBe('<p>Use the <strong>past tense</strong>.</p>')
+        ->and($entries[FeedbackType::NaturalVersion->value]->content_html)->toBe('<p>Where did you <em>end up</em> going?</p>');
 });
 
 test('the editor payload provides every saved box keyed by type', function (): void {
@@ -174,17 +175,17 @@ test('plain feedback keeps its text and does not store markup', function (): voi
         ],
     ]);
 
-    $entries = PracticeFeedbackEntry::all()->keyBy('type');
+    $entries = PracticeFeedbackEntry::all()->keyBy(fn (PracticeFeedbackEntry $entry): string => $entry->type->value);
 
     $phrases = PracticeFeedbackEntry::query()
-        ->where('type', PracticeFeedbackEntry::TYPE_PHRASE)
+        ->where('type', FeedbackType::Phrase->value)
         ->orderBy('position')
         ->get();
 
-    expect($entries[PracticeFeedbackEntry::TYPE_MISTAKE]->content_html)->toBe('')
-        ->and($entries[PracticeFeedbackEntry::TYPE_MISTAKE]->content_text)->toBe('<b>said</b>')
-        ->and($entries[PracticeFeedbackEntry::TYPE_MISTAKE]->correction_text)->toBe('told')
-        ->and($entries[PracticeFeedbackEntry::TYPE_VOCABULARY]->content_html)->toBe('')
+    expect($entries[FeedbackType::Mistake->value]->content_html)->toBe('')
+        ->and($entries[FeedbackType::Mistake->value]->content_text)->toBe('<b>said</b>')
+        ->and($entries[FeedbackType::Mistake->value]->correction_text)->toBe('told')
+        ->and($entries[FeedbackType::Vocabulary->value]->content_html)->toBe('')
         ->and(array_column($phrases->all(), 'content_text'))->toBe(['a long way', 'off'])
         ->and(array_column($phrases->all(), 'content_html'))->toBe(['', '']);
 });
@@ -202,11 +203,11 @@ test('unsafe markup is stripped from rich feedback', function (): void {
         ],
     ]);
 
-    $entries = PracticeFeedbackEntry::all()->keyBy('type');
+    $entries = PracticeFeedbackEntry::all()->keyBy(fn (PracticeFeedbackEntry $entry): string => $entry->type->value);
 
-    expect($entries[PracticeFeedbackEntry::TYPE_GRAMMAR_NOTE]->content_html)->toBe('<p>Safe</p>')
-        ->and($entries[PracticeFeedbackEntry::TYPE_GRAMMAR_NOTE]->content_text)->toBe('Safe')
-        ->and($entries[PracticeFeedbackEntry::TYPE_NATURAL_VERSION]->content_html)->toBe('<p>No <strong>handlers</strong></p>');
+    expect($entries[FeedbackType::GrammarNote->value]->content_html)->toBe('<p>Safe</p>')
+        ->and($entries[FeedbackType::GrammarNote->value]->content_text)->toBe('Safe')
+        ->and($entries[FeedbackType::NaturalVersion->value]->content_html)->toBe('<p>No <strong>handlers</strong></p>');
 });
 
 test('removing one of several questions removes only that question and its feedback', function (): void {

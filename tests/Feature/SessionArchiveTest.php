@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Enums\FeedbackType;
 use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeQuestion;
 use App\Models\PracticeSession;
@@ -156,14 +157,14 @@ it('leaves archived entries out of collections but keeps them countable', functi
         $question = PracticeQuestion::factory()->for($session)->create();
 
         PracticeFeedbackEntry::factory()->for($question)->create([
-            'type' => PracticeFeedbackEntry::TYPE_VOCABULARY,
+            'type' => FeedbackType::Vocabulary,
             'content_text' => 'soup',
             'correction_text' => 'a liquid food',
             'is_split' => true,
         ]);
     }
 
-    $entries = PracticeFeedbackEntry::collection(PracticeFeedbackEntry::TYPE_VOCABULARY, null);
+    $entries = PracticeFeedbackEntry::collection(FeedbackType::Vocabulary, null);
 
     expect($entries->total())->toBe(1)
         ->and($entries->items()[0]->practiceQuestion->practiceSession->id)->toBe($visible->id)

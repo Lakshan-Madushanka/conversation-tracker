@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\PracticeSessions;
 
+use App\Enums\FeedbackType;
 use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeQuestion;
 use App\Models\PracticeSession;
@@ -71,7 +72,7 @@ final class SplitLegacyFeedbackEntries
     {
         $changed = false;
 
-        foreach (PracticeFeedbackEntry::TYPES as $type) {
+        foreach (FeedbackType::ordered() as $type) {
             $changed = $this->convertBox($question, $type) || $changed;
         }
 
@@ -81,9 +82,9 @@ final class SplitLegacyFeedbackEntries
     /**
      * Split one box into entries, one per line, and renumber them in order.
      */
-    private function convertBox(PracticeQuestion $question, string $type): bool
+    private function convertBox(PracticeQuestion $question, FeedbackType $type): bool
     {
-        if (PracticeFeedbackEntry::isTable($type)) {
+        if ($type->isTable()) {
             return $this->convertTableBox($question, $type);
         }
 
@@ -120,7 +121,7 @@ final class SplitLegacyFeedbackEntries
      * existed holds one line; it is split by the separator rules into the
      * columns and marked as split so it is never touched again.
      */
-    private function convertTableBox(PracticeQuestion $question, string $type): bool
+    private function convertTableBox(PracticeQuestion $question, FeedbackType $type): bool
     {
         $rows = $question->feedbackEntries
             ->filter(fn (PracticeFeedbackEntry $entry): bool => $entry->type === $type)
@@ -181,7 +182,7 @@ final class SplitLegacyFeedbackEntries
      * Split one legacy table line onto a row's columns. Returns whether the row
      * changed.
      */
-    private function alignTable(PracticeFeedbackEntry $row, string $type, string $line, int $position): bool
+    private function alignTable(PracticeFeedbackEntry $row, FeedbackType $type, string $line, int $position): bool
     {
         $stored = FeedbackTable::storedFromLine($type, $line);
 
@@ -233,7 +234,7 @@ final class SplitLegacyFeedbackEntries
      * Bring one row in line with the stored shape: a stable id, a position and
      * a single clean line. Returns whether the row changed.
      */
-    private function align(PracticeFeedbackEntry $row, string $type, string $text, int $position): bool
+    private function align(PracticeFeedbackEntry $row, FeedbackType $type, string $text, int $position): bool
     {
         $clientId = $row->client_id ?? (string) Str::uuid();
 
@@ -241,7 +242,7 @@ final class SplitLegacyFeedbackEntries
 
         if ($row->content_text !== $text) {
             $row->content_text = $text;
-            $row->content_html = PracticeFeedbackEntry::isRich($type) ? $row->content_html : '';
+            $row->content_html = $type->isRich() ? $row->content_html : '';
         }
 
         if ($row->position !== $position) {

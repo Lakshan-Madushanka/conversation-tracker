@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\FeedbackType;
 use App\Support\FeedbackTable;
 use App\Support\SearchText;
 use Database\Factories\PracticeFeedbackEntryFactory;
@@ -32,7 +33,7 @@ use Illuminate\Support\Carbon;
  *
  * @property int $id
  * @property int $practice_question_id
- * @property string $type
+ * @property FeedbackType $type
  * @property int $position
  * @property string|null $client_id
  * @property string $content_html
@@ -77,94 +78,13 @@ class PracticeFeedbackEntry extends Model
         });
     }
 
-    public const TYPE_MISTAKE = 'mistake';
-
-    public const TYPE_VOCABULARY = 'vocabulary';
-
-    public const TYPE_PHRASE = 'phrase';
-
-    public const TYPE_GRAMMAR_NOTE = 'grammar_note';
-
-    public const TYPE_NATURAL_VERSION = 'natural_version';
-
-    /**
-     * Boxes shown as a table of mistakes, each with a correction and an
-     * optional why.
-     *
-     * @var list<string>
-     */
-    public const MISTAKE_TYPES = [
-        self::TYPE_MISTAKE,
-    ];
-
-    /**
-     * Boxes shown as a table: a fixed set of columns, one row per pasted line.
-     *
-     * @var list<string>
-     */
-    public const TABLE_TYPES = [
-        self::TYPE_MISTAKE,
-        self::TYPE_VOCABULARY,
-        self::TYPE_PHRASE,
-    ];
-
-    /**
-     * Boxes that hold many entries under one question. Only the natural
-     * version stays a single piece of text.
-     *
-     * @var list<string>
-     */
-    public const ENTRY_TYPES = [
-        ...self::TABLE_TYPES,
-        self::TYPE_GRAMMAR_NOTE,
-    ];
-
-    /**
-     * Every feedback box a question can have, in the order they are shown.
-     *
-     * @var list<string>
-     */
-    public const TYPES = [
-        self::TYPE_MISTAKE,
-        self::TYPE_VOCABULARY,
-        self::TYPE_PHRASE,
-        self::TYPE_GRAMMAR_NOTE,
-        self::TYPE_NATURAL_VERSION,
-    ];
-
-    /**
-     * Types edited as rich text; everything else is plain text.
-     *
-     * @var list<string>
-     */
-    public const RICH_TYPES = [
-        self::TYPE_GRAMMAR_NOTE,
-        self::TYPE_NATURAL_VERSION,
-    ];
-
-    public static function isRich(string $type): bool
-    {
-        return in_array($type, self::RICH_TYPES, true);
-    }
-
-    /** Whether a box holds a table of rows, one column set per box. */
-    public static function isTable(string $type): bool
-    {
-        return in_array($type, self::TABLE_TYPES, true);
-    }
-
-    /** Whether a box holds mistakes, each with a correction and a why. */
-    public static function isMistake(string $type): bool
-    {
-        return in_array($type, self::MISTAKE_TYPES, true);
-    }
-
     /**
      * @return array<string, string>
      */
     protected function casts(): array
     {
         return [
+            'type' => FeedbackType::class,
             'is_split' => 'boolean',
             'example_html' => 'array',
         ];
@@ -188,7 +108,7 @@ class PracticeFeedbackEntry extends Model
      *
      * @return LengthAwarePaginator<int, PracticeFeedbackEntry>
      */
-    public static function collection(string $type, ?string $search): LengthAwarePaginator
+    public static function collection(FeedbackType $type, ?string $search): LengthAwarePaginator
     {
         return self::query()
             ->with([
@@ -212,9 +132,9 @@ class PracticeFeedbackEntry extends Model
             ->where(fn (Builder $query): Builder => $query
                 ->where('content_text', '!=', '')
                 ->orWhere('content_html', '!=', ''))
-            ->where('type', $type)
+            ->where('type', $type->value)
             ->latest()
-            ->paginate(perPage: 4, pageName: $type);
+            ->paginate(perPage: 4, pageName: $type->value);
     }
 
     /**
@@ -223,7 +143,7 @@ class PracticeFeedbackEntry extends Model
      */
     public function editableContent(): string
     {
-        return self::isRich($this->type) ? $this->content_html : $this->content_text;
+        return $this->type->isRich() ? $this->content_html : $this->content_text;
     }
 
     /**
@@ -233,7 +153,7 @@ class PracticeFeedbackEntry extends Model
      */
     public function isBlank(): bool
     {
-        if (self::isTable($this->type)) {
+        if ($this->type->isTable()) {
             return FeedbackTable::isBlank([
                 'content_html' => $this->content_html,
                 'content_text' => $this->content_text,
@@ -257,12 +177,12 @@ class PracticeFeedbackEntry extends Model
      */
     public function needsAttention(): bool
     {
-        if ($this->type === self::TYPE_MISTAKE) {
+        if ($this->type === FeedbackType::Mistake) {
             return trim($this->correction_text) === ''
                 && trim(strip_tags($this->correction_html)) === '';
         }
 
-        if ($this->type === self::TYPE_VOCABULARY) {
+        if ($this->type === FeedbackType::Vocabulary) {
             return trim($this->correction_text) === '';
         }
 
@@ -277,7 +197,7 @@ class PracticeFeedbackEntry extends Model
      */
     public function searchableFields(): array
     {
-        if (! self::isTable($this->type)) {
+        if (! $this->type->isTable()) {
             return ['content' => (string) $this->content_text];
         }
 
@@ -287,7 +207,7 @@ class PracticeFeedbackEntry extends Model
             'reason' => (string) $this->reason,
         ];
 
-        if (in_array($this->type, [self::TYPE_VOCABULARY, self::TYPE_PHRASE], true)) {
+        if (in_array($this->type, [FeedbackType::Vocabulary, FeedbackType::Phrase], true)) {
             $fields['example'] = $this->exampleText();
         }
 

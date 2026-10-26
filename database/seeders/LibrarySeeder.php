@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
+use App\Enums\FeedbackType;
 use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeQuestion;
 use App\Models\PracticeSession;
@@ -412,7 +413,7 @@ class LibrarySeeder extends Seeder
         $mistake = fake()->randomElement(self::MISTAKES);
 
         return [
-            'type' => PracticeFeedbackEntry::TYPE_MISTAKE,
+            'type' => FeedbackType::Mistake,
             'content_text' => $mistake['said'],
             'correction_text' => $mistake['correction'],
             'correction_html' => '<strong>'.e($mistake['correction']).'</strong>',
@@ -429,7 +430,7 @@ class LibrarySeeder extends Seeder
         $word = fake()->randomElement(self::VOCABULARY);
 
         return [
-            'type' => PracticeFeedbackEntry::TYPE_VOCABULARY,
+            'type' => FeedbackType::Vocabulary,
             'content_text' => $word['word'],
             'correction_text' => $word['meaning'],
             'example' => $word['example'],
@@ -445,7 +446,7 @@ class LibrarySeeder extends Seeder
         $phrase = fake()->randomElement(self::PHRASES);
 
         return [
-            'type' => PracticeFeedbackEntry::TYPE_PHRASE,
+            'type' => FeedbackType::Phrase,
             'content_text' => $phrase['phrase'],
             'correction_text' => $phrase['meaning'],
             'example' => $phrase['example'],
@@ -461,7 +462,7 @@ class LibrarySeeder extends Seeder
         $note = fake()->randomElement(self::GRAMMAR_NOTES);
 
         return [
-            'type' => PracticeFeedbackEntry::TYPE_GRAMMAR_NOTE,
+            'type' => FeedbackType::GrammarNote,
             'content_html' => '<p>'.e($note).'</p>',
             'content_text' => $note,
         ];
@@ -475,7 +476,7 @@ class LibrarySeeder extends Seeder
         $version = fake()->randomElement(self::NATURAL_VERSIONS);
 
         return [
-            'type' => PracticeFeedbackEntry::TYPE_NATURAL_VERSION,
+            'type' => FeedbackType::NaturalVersion,
             'content_html' => '<p>'.e($version).'</p>',
             'content_text' => $version,
         ];

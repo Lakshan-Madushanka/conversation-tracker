@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Support;
 
-use App\Models\PracticeFeedbackEntry;
+use App\Enums\FeedbackType;
 use Illuminate\Support\Arr;
 
 /**
@@ -47,9 +47,9 @@ final class FeedbackTable
      *
      * @return list<array{key: string, formatted: bool}>
      */
-    public static function columns(string $type): array
+    public static function columns(FeedbackType $type): array
     {
-        if ($type === PracticeFeedbackEntry::TYPE_MISTAKE) {
+        if ($type === FeedbackType::Mistake) {
             return [
                 ['key' => 'text', 'formatted' => false],
                 ['key' => 'correction_html', 'formatted' => true],
@@ -70,7 +70,7 @@ final class FeedbackTable
      * correction of a mistake, the meaning of a vocabulary row. A phrase row's
      * empty meaning is normal and never asks for attention.
      */
-    public static function attentionKey(string $type): string
+    public static function attentionKey(FeedbackType $type): string
     {
         return self::columns($type)[1]['key'];
     }
@@ -117,7 +117,7 @@ final class FeedbackTable
      *
      * @return array{content_html: string, content_text: string, correction_html: string, correction_text: string, reason: string, example: string, example_html: string|list<array{id: string, text: string, html: string}>}
      */
-    public static function storedFromLine(string $type, string $line): array
+    public static function storedFromLine(FeedbackType $type, string $line): array
     {
         $parts = [...self::splitLine($line), ''];
 
@@ -131,7 +131,7 @@ final class FeedbackTable
      * @param  array<string, mixed>  $cells
      * @return array{content_html: string, content_text: string, correction_html: string, correction_text: string, reason: string, example: string, example_html: string|list<array{id: string, text: string, html: string}>}
      */
-    public static function storedFromCells(string $type, array $cells): array
+    public static function storedFromCells(FeedbackType $type, array $cells): array
     {
         [$first, $second, $third] = self::columns($type);
 
@@ -259,7 +259,7 @@ final class FeedbackTable
      * @param  list<string>  $parts
      * @return array{content_html: string, content_text: string, correction_html: string, correction_text: string, reason: string, example: string, example_html: string|list<array{id: string, text: string, html: string}>}
      */
-    private static function mapStored(string $type, array $parts): array
+    private static function mapStored(FeedbackType $type, array $parts): array
     {
         [$first, $second, $third] = self::columns($type);
 
@@ -287,9 +287,9 @@ final class FeedbackTable
      * @param  array{text: string, html: string|list<array{id: string, text: string, html: string}>}  $last
      * @return array{content_html: string, content_text: string, correction_html: string, correction_text: string, reason: string, example: string, example_html: string|list<array{id: string, text: string, html: string}>}
      */
-    private static function withLastColumn(string $type, array $stored, array $last): array
+    private static function withLastColumn(FeedbackType $type, array $stored, array $last): array
     {
-        if ($type === PracticeFeedbackEntry::TYPE_MISTAKE) {
+        if ($type === FeedbackType::Mistake) {
             $stored['reason'] = $last['text'];
 
             return $stored;

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
-use App\Models\PracticeSession;
+use App\Queries\LibrarySessions;
 use App\Support\LibraryFilters;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -40,11 +40,11 @@ final class LibrarySessionsRequest extends FormRequest
 
     public function perPage(): int
     {
-        $perPage = (int) $this->validated('per_page', PracticeSession::LIBRARY_PAGE_SIZE);
+        $perPage = (int) $this->validated('per_page', LibrarySessions::PAGE_SIZE);
 
         return $perPage >= 1 && $perPage <= 100
             ? $perPage
-            : PracticeSession::LIBRARY_PAGE_SIZE;
+            : LibrarySessions::PAGE_SIZE;
     }
 
     /**

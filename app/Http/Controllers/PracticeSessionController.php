@@ -9,12 +9,14 @@ use App\Actions\PracticeSessions\CreatePracticeSession;
 use App\Actions\PracticeSessions\DiscardPracticeSession;
 use App\Actions\PracticeSessions\FinishPracticeSession;
 use App\Actions\PracticeSessions\RestorePracticeSession;
+use App\Actions\PracticeSessions\SplitLegacyFeedbackEntries;
 use App\Actions\PracticeSessions\UpdatePracticeSession;
 use App\Exceptions\PracticeSessionArchivedException;
 use App\Exceptions\PracticeSessionConflictException;
 use App\Exceptions\PracticeSessionNotFinishedException;
 use App\Http\Requests\AutosavePracticeSessionRequest;
 use App\Http\Requests\StorePracticeSessionRequest;
+use App\Http\Resources\SessionEditorResource;
 use App\Models\PracticeSession;
 use App\Models\Topic;
 use Illuminate\Http\JsonResponse;
@@ -35,7 +37,7 @@ class PracticeSessionController extends Controller
         }
 
         return Inertia::render('sessions/Show', [
-            'session' => $session->toEditorPayload(),
+            'session' => $this->payload($session),
         ]);
     }
 
@@ -66,7 +68,7 @@ class PracticeSessionController extends Controller
 
         return Inertia::render('sessions/Create', [
             'topics' => Topic::pickerOptions(),
-            'session' => $session->toEditorPayload(),
+            'session' => $this->payload($session),
         ]);
     }
 
@@ -119,7 +121,7 @@ class PracticeSessionController extends Controller
             return response()->json([
                 'conflict' => true,
                 'message' => 'This session was changed somewhere else. Load the latest version or keep your changes.',
-                'session' => $exception->session->toEditorPayload(),
+                'session' => $this->payload($exception->session),
             ], 409);
         }
 
@@ -145,7 +147,7 @@ class PracticeSessionController extends Controller
 
         return response()->json([
             'archived' => true,
-            'session' => $archived->toEditorPayload(),
+            'session' => $this->payload($archived),
         ]);
     }
 
@@ -160,7 +162,7 @@ class PracticeSessionController extends Controller
 
         return response()->json([
             'archived' => false,
-            'session' => $restored->toEditorPayload(),
+            'session' => $this->payload($restored),
         ]);
     }
 
@@ -189,7 +191,7 @@ class PracticeSessionController extends Controller
 
         return response()->json([
             'empty' => false,
-            'session' => $finished->toEditorPayload(),
+            'session' => $this->payload($finished),
             'counts' => $counts,
             'needs_attention' => $needsAttention,
             'empty_questions_removed' => $result->emptyQuestionsRemoved,
@@ -218,8 +220,21 @@ class PracticeSessionController extends Controller
     private function savedResponse(PracticeSession $session, int $status = 200): JsonResponse
     {
         return response()->json([
-            'session' => $session->toEditorPayload(),
+            'session' => $this->payload($session),
             'saved_at' => now()->toIso8601String(),
         ], $status);
+    }
+
+    /**
+     * The session shaped for the editor. Content saved before entries existed
+     * is split once, so old content looks the same as new content.
+     *
+     * @return array<string, mixed>
+     */
+    private function payload(PracticeSession $session): array
+    {
+        app(SplitLegacyFeedbackEntries::class)->handle($session);
+
+        return SessionEditorResource::make($session)->resolve();
     }
 }

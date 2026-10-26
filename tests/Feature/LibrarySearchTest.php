@@ -7,6 +7,7 @@ use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeQuestion;
 use App\Models\PracticeSession;
 use App\Models\Topic;
+use App\Queries\SessionSearchMatches;
 use Illuminate\Support\Facades\DB;
 
 function searchSession(string $topicName = 'Travel plans'): PracticeSession
@@ -249,7 +250,7 @@ it('keeps a sensible number of items per session and counts the rest', function 
     $payload = searchResponse(['q' => 'alpha'])['sessions'][0];
 
     expect($payload['match_count'])->toBe(60)
-        ->and($payload['matches'])->toHaveCount(PracticeSession::LIBRARY_MAX_MATCHES);
+        ->and($payload['matches'])->toHaveCount(SessionSearchMatches::MAX_MATCHES);
 });
 
 it('returns a friendly empty result and a total that matches the search', function (): void {

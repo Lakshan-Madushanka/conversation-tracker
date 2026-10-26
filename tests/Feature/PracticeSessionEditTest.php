@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Enums\FeedbackType;
 use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeQuestion;
 use App\Models\PracticeSession;
@@ -90,6 +91,26 @@ describe('opening a session', function (): void {
             ->toBe($before?->updated_at?->toIso8601String())
             ->and($after?->last_changed_at)
             ->toBe($before?->last_changed_at);
+    });
+
+    it('splits content saved before entries existed when the editor opens', function (): void {
+        $session = PracticeSession::factory()->create();
+        $question = PracticeQuestion::factory()->for($session)->create(['position' => 1]);
+
+        PracticeFeedbackEntry::factory()->for($question)->create([
+            'type' => FeedbackType::Mistake,
+            'content_html' => '',
+            'content_text' => 'I go → I went',
+            'is_split' => false,
+        ]);
+
+        $this->get(route('sessions.edit', $session))->assertOk();
+
+        $entry = PracticeFeedbackEntry::firstOrFail();
+
+        expect($entry->content_text)->toBe('I go')
+            ->and($entry->correction_text)->toBe('I went')
+            ->and($entry->is_split)->toBeTrue();
     });
 });
 

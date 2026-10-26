@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Enums\FeedbackType;
 use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeQuestion;
 use App\Models\PracticeSession;
@@ -14,7 +15,7 @@ use Inertia\Testing\AssertableInertia as Assert;
  *
  * @param  array<string, mixed>  $attributes
  */
-function collectionEntry(string $type, string $content, array $attributes = []): PracticeFeedbackEntry
+function collectionEntry(FeedbackType $type, string $content, array $attributes = []): PracticeFeedbackEntry
 {
     $topic = Topic::factory()->create();
     $session = PracticeSession::factory()->finished()->for($topic)->create();
@@ -28,11 +29,11 @@ function collectionEntry(string $type, string $content, array $attributes = []):
 }
 
 it('lists each feedback type under its own tab, newest first', function (): void {
-    collectionEntry(PracticeFeedbackEntry::TYPE_VOCABULARY, 'older word', ['created_at' => now()->subDays(2)]);
-    collectionEntry(PracticeFeedbackEntry::TYPE_VOCABULARY, 'newer word', ['created_at' => now()->subDay()]);
-    collectionEntry(PracticeFeedbackEntry::TYPE_PHRASE, 'catch up');
-    collectionEntry(PracticeFeedbackEntry::TYPE_GRAMMAR_NOTE, 'Use the past tense.');
-    collectionEntry(PracticeFeedbackEntry::TYPE_MISTAKE, 'I go');
+    collectionEntry(FeedbackType::Vocabulary, 'older word', ['created_at' => now()->subDays(2)]);
+    collectionEntry(FeedbackType::Vocabulary, 'newer word', ['created_at' => now()->subDay()]);
+    collectionEntry(FeedbackType::Phrase, 'catch up');
+    collectionEntry(FeedbackType::GrammarNote, 'Use the past tense.');
+    collectionEntry(FeedbackType::Mistake, 'I go');
 
     $this->get(route('collections.index'))
         ->assertOk()
@@ -42,19 +43,19 @@ it('lists each feedback type under its own tab, newest first', function (): void
             ->where('vocabulary.data.0.content_text', 'newer word')
             ->where('vocabulary.data.1.content_text', 'older word')
             ->count('phrases.data', 1)
-            ->where('phrases.data.0.type', PracticeFeedbackEntry::TYPE_PHRASE)
+            ->where('phrases.data.0.type', FeedbackType::Phrase->value)
             ->count('grammar.data', 1)
-            ->where('grammar.data.0.type', PracticeFeedbackEntry::TYPE_GRAMMAR_NOTE)
+            ->where('grammar.data.0.type', FeedbackType::GrammarNote->value)
             ->count('mistakes.data', 1)
-            ->where('mistakes.data.0.type', PracticeFeedbackEntry::TYPE_MISTAKE));
+            ->where('mistakes.data.0.type', FeedbackType::Mistake->value));
 });
 
 it('paginates every tab under its own page name', function (): void {
     foreach (range(1, 5) as $index) {
-        collectionEntry(PracticeFeedbackEntry::TYPE_VOCABULARY, "word {$index}");
-        collectionEntry(PracticeFeedbackEntry::TYPE_PHRASE, "phrase {$index}");
-        collectionEntry(PracticeFeedbackEntry::TYPE_GRAMMAR_NOTE, "note {$index}");
-        collectionEntry(PracticeFeedbackEntry::TYPE_MISTAKE, "mistake {$index}");
+        collectionEntry(FeedbackType::Vocabulary, "word {$index}");
+        collectionEntry(FeedbackType::Phrase, "phrase {$index}");
+        collectionEntry(FeedbackType::GrammarNote, "note {$index}");
+        collectionEntry(FeedbackType::Mistake, "mistake {$index}");
     }
 
     $this->get(route('collections.index'))
@@ -70,10 +71,10 @@ it('paginates every tab under its own page name', function (): void {
 });
 
 it('filters only the tab the search belongs to', function (): void {
-    collectionEntry(PracticeFeedbackEntry::TYPE_VOCABULARY, 'soup');
-    collectionEntry(PracticeFeedbackEntry::TYPE_VOCABULARY, 'relish');
-    collectionEntry(PracticeFeedbackEntry::TYPE_PHRASE, 'soup of the day');
-    collectionEntry(PracticeFeedbackEntry::TYPE_PHRASE, 'catch up');
+    collectionEntry(FeedbackType::Vocabulary, 'soup');
+    collectionEntry(FeedbackType::Vocabulary, 'relish');
+    collectionEntry(FeedbackType::Phrase, 'soup of the day');
+    collectionEntry(FeedbackType::Phrase, 'catch up');
 
     $this->get(route('collections.index', ['search' => 'soup', 'forPage' => 'vocabulary']))
         ->assertOk()
@@ -85,9 +86,9 @@ it('filters only the tab the search belongs to', function (): void {
 });
 
 it('treats like wildcards in the search term as plain characters', function (): void {
-    collectionEntry(PracticeFeedbackEntry::TYPE_VOCABULARY, 'soup');
-    collectionEntry(PracticeFeedbackEntry::TYPE_VOCABULARY, 'relish');
-    collectionEntry(PracticeFeedbackEntry::TYPE_VOCABULARY, '100% sure');
+    collectionEntry(FeedbackType::Vocabulary, 'soup');
+    collectionEntry(FeedbackType::Vocabulary, 'relish');
+    collectionEntry(FeedbackType::Vocabulary, '100% sure');
 
     $this->get(route('collections.index', ['search' => '%', 'forPage' => 'vocabulary']))
         ->assertOk()
@@ -98,9 +99,9 @@ it('treats like wildcards in the search term as plain characters', function (): 
 });
 
 it('treats an underscore in the search term as a plain character', function (): void {
-    collectionEntry(PracticeFeedbackEntry::TYPE_VOCABULARY, 'cat');
-    collectionEntry(PracticeFeedbackEntry::TYPE_VOCABULARY, 'car');
-    collectionEntry(PracticeFeedbackEntry::TYPE_VOCABULARY, 'c_t');
+    collectionEntry(FeedbackType::Vocabulary, 'cat');
+    collectionEntry(FeedbackType::Vocabulary, 'car');
+    collectionEntry(FeedbackType::Vocabulary, 'c_t');
 
     $this->get(route('collections.index', ['search' => '_', 'forPage' => 'vocabulary']))
         ->assertOk()
@@ -111,7 +112,7 @@ it('treats an underscore in the search term as a plain character', function (): 
 });
 
 it('finds a word by what it means', function (): void {
-    collectionEntry(PracticeFeedbackEntry::TYPE_VOCABULARY, 'soup', ['correction_text' => 'a liquid food']);
+    collectionEntry(FeedbackType::Vocabulary, 'soup', ['correction_text' => 'a liquid food']);
 
     $this->get(route('collections.index', ['search' => 'liquid', 'forPage' => 'vocabulary']))
         ->assertOk()
@@ -122,7 +123,7 @@ it('finds a word by what it means', function (): void {
 });
 
 it('finds a phrase by its example', function (): void {
-    collectionEntry(PracticeFeedbackEntry::TYPE_PHRASE, 'of course', ['example' => 'Of course, right away.']);
+    collectionEntry(FeedbackType::Phrase, 'of course', ['example' => 'Of course, right away.']);
 
     $this->get(route('collections.index', ['search' => 'right away', 'forPage' => 'phrases']))
         ->assertOk()
@@ -133,14 +134,14 @@ it('finds a phrase by its example', function (): void {
 });
 
 it('never lists an entry that holds nothing', function (): void {
-    collectionEntry(PracticeFeedbackEntry::TYPE_VOCABULARY, 'soup');
+    collectionEntry(FeedbackType::Vocabulary, 'soup');
 
     $question = PracticeQuestion::factory()
         ->for(PracticeSession::factory()->finished())
         ->create();
 
     PracticeFeedbackEntry::factory()->for($question)->create([
-        'type' => PracticeFeedbackEntry::TYPE_VOCABULARY,
+        'type' => FeedbackType::Vocabulary,
         'content_text' => '',
         'content_html' => '',
         'is_split' => true,
@@ -162,12 +163,12 @@ it('leaves the entries of an unfinished session out', function (): void {
     $question = PracticeQuestion::factory()->for($draft)->create();
 
     PracticeFeedbackEntry::factory()->for($question)->create([
-        'type' => PracticeFeedbackEntry::TYPE_VOCABULARY,
+        'type' => FeedbackType::Vocabulary,
         'content_text' => 'draft word',
         'is_split' => true,
     ]);
 
-    collectionEntry(PracticeFeedbackEntry::TYPE_VOCABULARY, 'finished word');
+    collectionEntry(FeedbackType::Vocabulary, 'finished word');
 
     $this->get(route('collections.index'))
         ->assertOk()
@@ -183,7 +184,7 @@ it('includes the session and topic every entry came from', function (): void {
     $question = PracticeQuestion::factory()->for($session)->create();
 
     PracticeFeedbackEntry::factory()->for($question)->create([
-        'type' => PracticeFeedbackEntry::TYPE_VOCABULARY,
+        'type' => FeedbackType::Vocabulary,
         'content_text' => 'relish',
         'is_split' => true,
     ]);

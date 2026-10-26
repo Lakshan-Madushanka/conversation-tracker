@@ -9,11 +9,9 @@ use App\Support\FeedbackTable;
 use App\Support\SearchText;
 use Database\Factories\PracticeFeedbackEntryFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
 
 /**
@@ -88,53 +86,6 @@ class PracticeFeedbackEntry extends Model
             'is_split' => 'boolean',
             'example_html' => 'array',
         ];
-    }
-
-    /**
-     * One page of entries of a single type, newest first, optionally narrowed
-     * to a search term.
-     *
-     * Only finished sessions feed a collection, so a draft the learner is
-     * still working on never shows up half-written. An entry that holds
-     * nothing at all is left out too, so a stray blank row can never render
-     * an empty card or inflate a tab's total.
-     *
-     * The term is matched literally against the word or phrase, what it means
-     * and its example: LIKE wildcards the learner typed (`%` and `_`) are
-     * escaped, so searching for `100%` finds `100% sure` and nothing else. An
-     * escape character of `!` keeps the query portable — sqlite has no default
-     * escape character, and MySQL's backslash would have to be escaped
-     * differently in each dialect.
-     *
-     * @return LengthAwarePaginator<int, PracticeFeedbackEntry>
-     */
-    public static function collection(FeedbackType $type, ?string $search): LengthAwarePaginator
-    {
-        return self::query()
-            ->with([
-                'practiceQuestion:id,practice_session_id',
-                'practiceQuestion.practiceSession:id,topic_id',
-                'practiceQuestion.practiceSession.topic:id,name',
-            ])
-            ->when($search, function (Builder $query) use ($search): void {
-                $like = '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $search).'%';
-
-                $query->where(function (Builder $query) use ($like): void {
-                    $query
-                        ->whereRaw("content_text LIKE ? ESCAPE '!'", [$like])
-                        ->orWhereRaw("content_html LIKE ? ESCAPE '!'", [$like])
-                        ->orWhereRaw("correction_text LIKE ? ESCAPE '!'", [$like])
-                        ->orWhereRaw("correction_html LIKE ? ESCAPE '!'", [$like])
-                        ->orWhereRaw("example LIKE ? ESCAPE '!'", [$like]);
-                });
-            })
-            ->whereHas('practiceQuestion.practiceSession', fn (Builder $query): Builder => $query->study())
-            ->where(fn (Builder $query): Builder => $query
-                ->where('content_text', '!=', '')
-                ->orWhere('content_html', '!=', ''))
-            ->where('type', $type->value)
-            ->latest()
-            ->paginate(perPage: 4, pageName: $type->value);
     }
 
     /**

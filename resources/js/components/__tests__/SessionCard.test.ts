@@ -146,6 +146,7 @@ describe('a session that was archived', () => {
 
         expect(items.map((item) => item.textContent?.trim())).toEqual([
             'Restore',
+            'Delete',
         ]);
 
         items[0]?.click();
@@ -153,6 +154,32 @@ describe('a session that was archived', () => {
 
         expect(wrapper.emitted('restore')?.[0]).toEqual([card]);
         expect(wrapper.emitted('archive')).toBeUndefined();
+
+        wrapper.unmount();
+    });
+
+    it('emits the session when Delete is chosen', async () => {
+        const card = session({ archived_at: '2026-10-20T09:00:00.000000Z' });
+        const wrapper = mount(SessionCard, {
+            attachTo: document.body,
+            props: { session: card },
+        });
+
+        (
+            wrapper.get('button[aria-haspopup="menu"]').element as HTMLElement
+        ).click();
+        await wrapper.vm.$nextTick();
+        await wrapper.vm.$nextTick();
+
+        const remove = [
+            ...document.querySelectorAll<HTMLElement>('[role="menuitem"]'),
+        ].find((item) => item.textContent?.includes('Delete'));
+
+        remove?.click();
+        await wrapper.vm.$nextTick();
+
+        expect(wrapper.emitted('delete')?.[0]).toEqual([card]);
+        expect(wrapper.emitted('restore')).toBeUndefined();
 
         wrapper.unmount();
     });

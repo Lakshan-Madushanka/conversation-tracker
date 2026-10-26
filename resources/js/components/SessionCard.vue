@@ -34,6 +34,7 @@ const props = withDefaults(
 const emit = defineEmits<{
     (event: 'archive', session: SessionCardData): void;
     (event: 'restore', session: SessionCardData): void;
+    (event: 'delete', session: SessionCardData): void;
 }>();
 
 const isFinished = computed(() => props.session.status === 'finished');
@@ -140,10 +141,11 @@ watch(
 </script>
 
 <template>
-    <Card>
+    <Card :id="`session-card-${props.session.id}`">
         <CardContent class="p-4">
             <div class="flex items-start gap-2">
                 <Link
+                    :id="`session-link-${props.session.id}`"
                     :href="href"
                     class="group flex min-w-0 flex-1 items-start gap-3 rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
                 >
@@ -218,6 +220,7 @@ watch(
                     class="shrink-0"
                     @archive="emit('archive', props.session)"
                     @restore="emit('restore', props.session)"
+                    @delete="emit('delete', props.session)"
                 />
             </div>
 

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vite-plus/test';
 import SessionCard from '@/components/SessionCard.vue';
 import { shortDate } from '@/lib/format';
 import { edit as sessionsEdit, show as sessionsShow } from '@/routes/sessions';
-import type { SessionCardData } from '@/types';
+import type { SearchMatch, SessionCardData } from '@/types';
 
 function session(overrides: Partial<SessionCardData> = {}): SessionCardData {
     return {
@@ -101,5 +101,152 @@ describe('a session in a list', () => {
 
         expect(wrapper.findAll('time')).toHaveLength(0);
         expect(wrapper.text()).toContain('6 questions');
+    });
+});
+
+function match(overrides: Partial<SearchMatch> = {}): SearchMatch {
+    return {
+        key: 'entry:vocabulary:v1',
+        kind: 'entry',
+        type: 'vocabulary',
+        question_position: 2,
+        entry_id: 'v1',
+        entry_position: 0,
+        segments: [
+            { text: 'A warm ', match: false },
+            { text: 'soup', match: true },
+        ],
+        ...overrides,
+    };
+}
+
+function matches(count: number): SearchMatch[] {
+    return Array.from({ length: count }, (_, index) =>
+        match({
+            key: `entry:vocabulary:v${index + 1}`,
+            entry_id: `v${index + 1}`,
+            entry_position: index,
+            segments: [{ text: `soup ${index + 1}`, match: true }],
+        }),
+    );
+}
+
+describe('a session card while searching', () => {
+    it('highlights the part of the topic that matched', () => {
+        const wrapper = mountCard(
+            session({
+                topic: 'Ordering at a restaurant',
+                topic_segments: [
+                    { text: 'Ordering at a ', match: false },
+                    { text: 'restaurant', match: true },
+                ],
+            }),
+        );
+
+        expect(wrapper.get('mark').text()).toBe('restaurant');
+        expect(wrapper.text()).toContain('Ordering at a restaurant');
+    });
+
+    it('lists the matching items with their section and question number', () => {
+        const wrapper = mountCard(
+            session({
+                match_count: 1,
+                matches: [match()],
+            }),
+        );
+
+        expect(wrapper.text()).toContain('New vocabulary');
+        expect(wrapper.text()).toContain('Question 2');
+        expect(wrapper.text()).toContain('A warm soup');
+        expect(wrapper.get('mark').text()).toBe('soup');
+    });
+
+    it('shows five items first, then offers the rest', async () => {
+        const wrapper = mountCard(
+            session({ match_count: 7, matches: matches(7) }),
+        );
+
+        expect(wrapper.findAll('mark')).toHaveLength(5);
+        expect(wrapper.text()).toContain('Show 2 more items');
+
+        const more = wrapper
+            .findAll('button')
+            .find((button) => button.text().includes('Show 2 more items'));
+
+        await more?.trigger('click');
+
+        expect(wrapper.findAll('mark')).toHaveLength(7);
+        expect(wrapper.text()).not.toContain('Show 2 more items');
+    });
+
+    it('says when the server stopped at its limit', () => {
+        const wrapper = mountCard(
+            session({
+                match_count: 60,
+                matches: matches(50),
+            }),
+        );
+
+        expect(wrapper.text()).toContain(
+            'Showing the first 50 matching items. There are 10 more in this session.',
+        );
+    });
+
+    it('opens each matching item on its own, never nested in the card link', () => {
+        const wrapper = mountCard(
+            session({ match_count: 1, matches: [match()] }),
+        );
+
+        const links = wrapper.findAll('a');
+
+        expect(links).toHaveLength(2);
+        expect(wrapper.find('a a').exists()).toBe(false);
+
+        const item = links[1]!;
+        const params = new URL(
+            item.attributes('href') ?? '',
+            'http://localhost',
+        ).searchParams;
+
+        expect(item.attributes('href')).toContain(sessionsShow.url(7));
+        expect(params.get('question')).toBe('2');
+        expect(params.get('field')).toBe('entry');
+        expect(params.get('type')).toBe('vocabulary');
+        expect(params.get('entry')).toBe('v1');
+    });
+
+    it('sends an unfinished session to its editor at the item', () => {
+        const wrapper = mountCard(
+            session({
+                status: 'unfinished',
+                match_count: 1,
+                matches: [match()],
+            }),
+        );
+
+        const item = wrapper.findAll('a')[1];
+
+        expect(item?.attributes('href')).toContain(sessionsEdit.url(7));
+    });
+
+    it('folds the items again when a new search replaces them', async () => {
+        const wrapper = mountCard(
+            session({ match_count: 7, matches: matches(7) }),
+        );
+
+        const more = wrapper
+            .findAll('button')
+            .find((button) => button.text().includes('Show 2 more items'));
+
+        await more?.trigger('click');
+
+        expect(wrapper.findAll('mark')).toHaveLength(7);
+
+        await wrapper.setProps({
+            session: session({ match_count: 2, matches: matches(2) }),
+        });
+
+        expect(wrapper.findAll('mark')).toHaveLength(2);
+        expect(wrapper.text()).not.toContain('Show 2 more items');
     });
 });

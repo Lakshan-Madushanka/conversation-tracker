@@ -167,6 +167,29 @@ export interface ContinueCardData {
     updated_at: string;
 }
 
+/** One piece of a search snippet: plain words, or words that matched. */
+export interface SearchSegment {
+    text: string;
+    match: boolean;
+}
+
+/** What kind of item a search match sits in. */
+export type SearchMatchKind = 'topic' | 'question' | 'answer' | 'entry';
+
+/** One matching item inside a session, as the Library lists it. */
+export interface SearchMatch {
+    /** Stable key for the list, unique inside one session. */
+    key: string;
+    kind: SearchMatchKind;
+    /** The feedback box for an entry match, or null for topic, question and answer. */
+    type: FeedbackType | null;
+    question_position: number | null;
+    entry_id: string | null;
+    /** The entry's place in its box, used when its id has changed. */
+    entry_position: number | null;
+    segments: SearchSegment[];
+}
+
 /** A session as listed on Home and in the Library. */
 export interface SessionCardData {
     id: number;
@@ -177,4 +200,10 @@ export interface SessionCardData {
     last_edited_at: string | null;
     status: 'finished' | 'unfinished';
     counts: SessionCounts;
+    /** The topic split into plain and matched pieces while a search is active. */
+    topic_segments?: SearchSegment[];
+    /** How many items in the session matched, before the list is capped. */
+    match_count?: number;
+    /** The matching items shown beneath the card, capped by the server. */
+    matches?: SearchMatch[];
 }

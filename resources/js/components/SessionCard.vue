@@ -1,12 +1,24 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { Link } from '@inertiajs/vue3';
 import { ArrowRightIcon, CheckIcon, SquarePenIcon } from '@lucide/vue';
+import HighlightedText from '@/components/HighlightedText.vue';
+import SectionLabel from '@/components/SectionLabel.vue';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
 import { isLaterDay, relativeTime, shortDate } from '@/lib/format';
+import {
+    matchKindLabel,
+    matchTone,
+    searchMatchHref,
+} from '@/lib/library-search';
 import { edit as sessionsEdit, show as sessionsShow } from '@/routes/sessions';
 import type { SessionCardData } from '@/types';
+
+/** How many matching items a card shows before offering the rest. */
+const INITIAL_MATCHES = 5;
 
 /** One session, as listed on Home and in the Library. */
 const props = defineProps<{
@@ -68,6 +80,37 @@ const countsLine = computed(() => {
         `${counts.mistakes} ${counts.mistakes === 1 ? 'mistake' : 'mistakes'}`,
     ].join(' · ');
 });
+
+/** The topic split into plain and matching pieces while a search is on. */
+const topicSegments = computed(() => props.session.topic_segments ?? null);
+
+const matches = computed(() => props.session.matches ?? []);
+
+/** Whether the learner has asked to see every matching item on this card. */
+const showAllMatches = ref(false);
+
+const visibleMatches = computed(() =>
+    showAllMatches.value
+        ? matches.value
+        : matches.value.slice(0, INITIAL_MATCHES),
+);
+
+const hiddenMatchCount = computed(() =>
+    Math.max(0, matches.value.length - INITIAL_MATCHES),
+);
+
+/** The server keeps the list short, so say when there is more to find. */
+const cappedMatchCount = computed(() =>
+    Math.max(0, (props.session.match_count ?? 0) - matches.value.length),
+);
+
+// A new search replaces the matching items, so start each card folded again.
+watch(
+    () => props.session.matches,
+    () => {
+        showAllMatches.value = false;
+    },
+);
 </script>
 
 <template>
@@ -88,7 +131,13 @@ const countsLine = computed(() => {
                         <span
                             class="line-clamp-2 min-w-0 flex-1 text-sm font-medium break-words group-hover:text-primary"
                         >
-                            {{ props.session.topic }}
+                            <HighlightedText
+                                v-if="topicSegments !== null"
+                                :segments="topicSegments"
+                            />
+                            <template v-else>{{
+                                props.session.topic
+                            }}</template>
                         </span>
                         <Badge
                             :variant="isFinished ? 'default' : 'secondary'"
@@ -129,6 +178,59 @@ const countsLine = computed(() => {
                     aria-hidden="true"
                 />
             </Link>
+
+            <!-- The matching items sit beside the session link, never inside
+                it, so each one is its own destination. -->
+            <template v-if="matches.length > 0">
+                <Separator class="my-3" />
+
+                <ul class="space-y-1">
+                    <li v-for="match in visibleMatches" :key="match.key">
+                        <Link
+                            :href="searchMatchHref(props.session, match)"
+                            class="flex min-h-11 flex-wrap items-start gap-x-2 gap-y-1 rounded-md px-1 py-2 outline-none hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/50"
+                        >
+                            <SectionLabel :tone="matchTone(match)">
+                                {{ matchKindLabel(match) }}
+                            </SectionLabel>
+
+                            <Badge
+                                v-if="match.question_position !== null"
+                                variant="outline"
+                                class="shrink-0"
+                            >
+                                Question {{ match.question_position }}
+                            </Badge>
+
+                            <span
+                                class="min-w-0 flex-1 text-sm leading-relaxed break-words text-muted-foreground"
+                            >
+                                <HighlightedText :segments="match.segments" />
+                            </span>
+                        </Link>
+                    </li>
+                </ul>
+
+                <Button
+                    v-if="hiddenMatchCount > 0 && !showAllMatches"
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    class="mt-1"
+                    @click="showAllMatches = true"
+                >
+                    Show {{ hiddenMatchCount }} more
+                    {{ hiddenMatchCount === 1 ? 'item' : 'items' }}
+                </Button>
+
+                <p
+                    v-if="cappedMatchCount > 0"
+                    class="mt-1 px-1 text-xs text-muted-foreground"
+                >
+                    Showing the first {{ matches.length }} matching items. There
+                    are {{ cappedMatchCount }} more in this session.
+                </p>
+            </template>
         </CardContent>
     </Card>
 </template>

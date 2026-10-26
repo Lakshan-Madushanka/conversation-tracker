@@ -111,7 +111,8 @@ export function isLibraryFilters(value: unknown): value is LibraryFilters {
         (typeof filters.from === 'string' || filters.from === null) &&
         (typeof filters.to === 'string' || filters.to === null) &&
         typeof filters.status === 'string' &&
-        typeof filters.sort === 'string'
+        typeof filters.sort === 'string' &&
+        (filters.q === undefined || typeof filters.q === 'string')
     );
 }
 

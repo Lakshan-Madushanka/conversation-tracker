@@ -2,14 +2,19 @@ import { describe, expect, it } from 'vite-plus/test';
 import {
     activeFilterCount,
     clearLibraryFilters,
+    clearSearch,
     defaultLibraryFilters,
     filtersToQuery,
     hasActiveFilters,
+    hasSearch,
     libraryFilterChips,
+    MAX_SEARCH_LENGTH,
     normalizeLibraryFilters,
+    normalizeSearch,
     removeFilterChip,
     sessionCountLabel,
     sortLabel,
+    withSearch,
     withSort,
     type LibraryFilters,
 } from '@/lib/library-filters';
@@ -34,6 +39,7 @@ describe('a safe filter state', () => {
             to: null,
             status: 'all',
             sort: 'newest',
+            q: '',
         });
     });
 
@@ -251,6 +257,77 @@ describe('the chips that show active filters', () => {
 
     it('shows no chips when nothing narrows the list', () => {
         expect(libraryFilterChips(defaultLibraryFilters(), topics)).toEqual([]);
+    });
+});
+
+describe('the words the learner is looking for', () => {
+    it('tidies a search and ignores one that is too short', () => {
+        expect(normalizeSearch('  Café   au lait ')).toBe('Café au lait');
+        expect(normalizeSearch('a')).toBe('');
+        expect(normalizeSearch(' a ')).toBe('');
+        expect(normalizeSearch('  ')).toBe('');
+        expect(normalizeSearch(undefined)).toBe('');
+    });
+
+    it('keeps at most the Library limit', () => {
+        expect(
+            normalizeSearch('a'.repeat(MAX_SEARCH_LENGTH + 20)),
+        ).toHaveLength(MAX_SEARCH_LENGTH);
+    });
+
+    it('changes only the search', () => {
+        const before = filters({
+            topics: [1],
+            types: ['mistake'],
+            date: 'last7',
+            status: 'finished',
+            sort: 'oldest',
+        });
+
+        const after = withSearch(before, 'beach');
+
+        expect(after).toEqual({ ...before, q: 'beach' });
+        expect(hasSearch(after)).toBe(true);
+    });
+
+    it('clears only the search, keeping every filter and the order', () => {
+        const before = filters({
+            topics: [1],
+            types: ['mistake'],
+            date: 'last7',
+            status: 'finished',
+            sort: 'oldest',
+            q: 'beach',
+        });
+
+        expect(clearSearch(before)).toEqual({
+            ...before,
+            q: '',
+        });
+        expect(hasSearch(clearSearch(before))).toBe(false);
+    });
+
+    it('counts a search as narrowing the list without adding a filter chip', () => {
+        const searching = filters({ q: 'beach' });
+
+        expect(hasActiveFilters(searching)).toBe(true);
+        expect(activeFilterCount(searching)).toBe(0);
+        expect(libraryFilterChips(searching, topics)).toEqual([]);
+    });
+
+    it('keeps the search when the filters are cleared', () => {
+        expect(
+            clearLibraryFilters(filters({ topics: [1], q: 'beach' })).q,
+        ).toBe('beach');
+    });
+
+    it('puts the search in the address and normalises it on the way in', () => {
+        expect(filtersToQuery(filters({ q: 'café au lait' }), 'UTC')).toEqual({
+            q: 'café au lait',
+            tz: 'UTC',
+        });
+
+        expect(normalizeLibraryFilters({ q: '  beach  ' }).q).toBe('beach');
     });
 });
 

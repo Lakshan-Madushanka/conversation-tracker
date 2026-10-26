@@ -74,6 +74,7 @@ afterEach(() => {
     mounted?.unmount();
     mounted = undefined;
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
     window.history.replaceState(null, '', '/');
 });
 
@@ -332,5 +333,141 @@ describe('coming back through the browser', () => {
         );
 
         expect(visit).not.toHaveBeenCalled();
+    });
+});
+
+/** Run the next animation frame at once, so a reveal can be checked. */
+function runFramesImmediately(): void {
+    vi.stubGlobal('requestAnimationFrame', (callback: () => void) => {
+        callback();
+
+        return 0;
+    });
+}
+
+describe('an editor opened from a search result', () => {
+    it('opens calmly at the top when the question is gone', async () => {
+        vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+
+        window.history.replaceState(
+            null,
+            '',
+            '/sessions/7/edit?question=99&field=question',
+        );
+
+        const wrapper = await mountCreate({ session: savedSession() });
+
+        expect(wrapper.text()).toContain('That item has changed');
+        expect(wrapper.text()).toContain(
+            'The item you searched for has changed since you found it.',
+        );
+    });
+
+    it('takes the learner to the tutor question that matched', async () => {
+        runFramesImmediately();
+
+        window.history.replaceState(
+            null,
+            '',
+            '/sessions/7/edit?question=1&field=question',
+        );
+
+        await mountCreate({ session: savedSession() });
+        await nextTick();
+
+        expect(
+            document
+                .getElementById('question-q1')
+                ?.classList.contains('search-target'),
+        ).toBe(true);
+    });
+
+    it('takes the learner to a matching table row', async () => {
+        runFramesImmediately();
+
+        window.history.replaceState(
+            null,
+            '',
+            '/sessions/7/edit?question=1&field=entry&type=vocabulary&entry=v1&position=0',
+        );
+
+        await mountCreate({
+            session: savedSession({
+                questions: [
+                    question({
+                        feedback: {
+                            vocabulary: [
+                                {
+                                    id: 'v1',
+                                    text: 'soup',
+                                    meaning: 'a liquid food',
+                                    example_html: '',
+                                },
+                            ],
+                        },
+                    }),
+                ],
+            }),
+        });
+        await nextTick();
+
+        expect(
+            document
+                .getElementById('feedback-q1-vocabulary-row-v1')
+                ?.classList.contains('search-target'),
+        ).toBe(true);
+    });
+
+    it('takes the learner to the natural version that matched', async () => {
+        runFramesImmediately();
+
+        window.history.replaceState(
+            null,
+            '',
+            '/sessions/7/edit?question=1&field=entry&type=natural_version&entry=nv1&position=0',
+        );
+
+        await mountCreate({
+            session: savedSession({
+                questions: [
+                    question({
+                        feedback: {
+                            natural_version: '<p>I would love to go.</p>',
+                        },
+                    }),
+                ],
+            }),
+        });
+        await nextTick();
+
+        expect(
+            document
+                .getElementById('feedback-q1-natural_version')
+                ?.classList.contains('search-target'),
+        ).toBe(true);
+    });
+
+    it('opens the card of a question hidden in a long session', async () => {
+        runFramesImmediately();
+
+        window.history.replaceState(
+            null,
+            '',
+            '/sessions/7/edit?question=6&field=question',
+        );
+
+        const questions = Array.from({ length: 6 }, (_, index) =>
+            question({
+                id: index + 1,
+                position: index + 1,
+                question_html: `<p>Question ${index + 1}</p>`,
+                answer_html: '',
+            }),
+        );
+
+        await mountCreate({ session: savedSession({ questions }) });
+        await nextTick();
+
+        expect(document.getElementById('question-q6')).not.toBeNull();
     });
 });

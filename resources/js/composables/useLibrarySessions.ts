@@ -7,6 +7,7 @@ import {
     clearLibraryFilters,
     filtersToQuery,
     normalizeLibraryFilters,
+    withSearch,
     withSort,
     type LibraryFilters,
     type LibrarySort,
@@ -237,6 +238,16 @@ export function useLibrarySessions(initial: LibraryPage) {
         applyFilters(clearLibraryFilters(filters.value));
     }
 
+    /** Replace the search, keeping every filter and the chosen order. */
+    function setSearch(search: string): void {
+        applyFilters(withSearch(filters.value, search));
+    }
+
+    /** Clear only the search, keeping every filter and the chosen order. */
+    function clearSearch(): void {
+        applyFilters(withSearch(filters.value, ''));
+    }
+
     function requestFilters(next: LibraryFilters, force = false): void {
         if (!force && sameFilters(next, filters.value)) {
             return;
@@ -342,6 +353,8 @@ export function useLibrarySessions(initial: LibraryPage) {
         retryFilters,
         setSort,
         clearFilters,
+        setSearch,
+        clearSearch,
     };
 }
 

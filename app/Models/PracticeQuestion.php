@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Support\SearchText;
 use Database\Factories\PracticeQuestionFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -22,8 +23,10 @@ use Illuminate\Support\Collection;
  * @property int $position
  * @property string $question_html
  * @property string $question_text
+ * @property string|null $question_search_text
  * @property string $answer_html
  * @property string $answer_text
+ * @property string|null $answer_search_text
  * @property Collection<int, PracticeFeedbackEntry> $feedbackEntries
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
@@ -40,6 +43,18 @@ class PracticeQuestion extends Model
 {
     /** @use HasFactory<PracticeQuestionFactory> */
     use HasFactory;
+
+    /**
+     * Keep the searchable copy in step with the words, so a saved question is
+     * found straight away and an edited one stops matching its old wording.
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (self $question): void {
+            $question->question_search_text = SearchText::normalize($question->question_text);
+            $question->answer_search_text = SearchText::normalize($question->answer_text);
+        });
+    }
 
     /**
      * @return BelongsTo<PracticeSession, $this>

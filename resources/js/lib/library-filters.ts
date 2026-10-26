@@ -17,7 +17,15 @@ export interface LibraryFilters {
     to: string | null;
     status: LibraryStatusFilter;
     sort: LibrarySort;
+    /** The search as it is kept in the address, or an empty string. */
+    q: string;
 }
+
+/** How many non-space characters a search needs before it runs. */
+export const MIN_SEARCH_LENGTH = 2;
+
+/** The longest search the Library keeps. */
+export const MAX_SEARCH_LENGTH = 100;
 
 export interface ContentTypeOption {
     type: FeedbackType;
@@ -76,7 +84,32 @@ export function defaultLibraryFilters(): LibraryFilters {
         to: null,
         status: 'all',
         sort: 'newest',
+        q: '',
     };
+}
+
+/**
+ * Keep a search that can actually find something: trimmed, with its spaces
+ * collapsed, at most the Library's limit, and at least two non-space
+ * characters. Anything shorter is ignored, so one letter never searches the
+ * whole Library.
+ */
+export function normalizeSearch(value: unknown): string {
+    if (typeof value !== 'string') {
+        return '';
+    }
+
+    const search = value.replace(/\s+/gu, ' ').trim();
+
+    if (search === '') {
+        return '';
+    }
+
+    const clipped = search.slice(0, MAX_SEARCH_LENGTH);
+
+    return clipped.replace(/\s+/gu, '').length >= MIN_SEARCH_LENGTH
+        ? clipped
+        : '';
 }
 
 /**
@@ -135,6 +168,7 @@ export function normalizeLibraryFilters(
             filters.sort === 'oldest' || filters.sort === 'recently_edited'
                 ? filters.sort
                 : 'newest',
+        q: normalizeSearch(filters.q),
     };
 }
 
@@ -188,6 +222,10 @@ export function filtersToQuery(
         query.sort = filters.sort;
     }
 
+    if (filters.q !== '') {
+        query.q = filters.q;
+    }
+
     if (timezone !== '') {
         query.tz = timezone;
     }
@@ -195,9 +233,17 @@ export function filtersToQuery(
     return query;
 }
 
-/** Whether anything narrows the list. The sort never counts as a filter. */
+/**
+ * Whether anything narrows the list. The sort never counts as a filter, and a
+ * search counts separately from the filter chips.
+ */
 export function hasActiveFilters(filters: LibraryFilters): boolean {
-    return activeFilterCount(filters) > 0;
+    return activeFilterCount(filters) > 0 || hasSearch(filters);
+}
+
+/** Whether a search is in force. */
+export function hasSearch(filters: LibraryFilters): boolean {
+    return filters.q !== '';
 }
 
 /** How many separate filters are active, shown on the phone Filters button. */
@@ -217,9 +263,26 @@ export function withSort(
     return { ...copyLibraryFilters(filters), sort };
 }
 
-/** Clear every filter while keeping the order the learner chose. */
+/**
+ * Clear every filter while keeping the order the learner chose and the search
+ * they typed. Search and filters are cleared separately, so removing filters
+ * never throws away the words being looked for.
+ */
 export function clearLibraryFilters(filters: LibraryFilters): LibraryFilters {
-    return { ...defaultLibraryFilters(), sort: filters.sort };
+    return { ...defaultLibraryFilters(), sort: filters.sort, q: filters.q };
+}
+
+/** Replace the search, keeping every filter and the chosen order. */
+export function withSearch(
+    filters: LibraryFilters,
+    search: string,
+): LibraryFilters {
+    return { ...copyLibraryFilters(filters), q: normalizeSearch(search) };
+}
+
+/** Clear only the search, keeping every filter and the chosen order. */
+export function clearSearch(filters: LibraryFilters): LibraryFilters {
+    return { ...copyLibraryFilters(filters), q: '' };
 }
 
 export type LibraryFilterChip =

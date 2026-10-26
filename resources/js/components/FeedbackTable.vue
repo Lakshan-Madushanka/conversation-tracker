@@ -387,6 +387,7 @@ function confirmCell(event: KeyboardEvent): void {
                         :key="entry.id"
                     >
                         <tr
+                            :id="`${props.fieldId}-row-${entry.id}`"
                             class="block sm:table-row"
                             :class="
                                 duplicateIds.has(entry.id)

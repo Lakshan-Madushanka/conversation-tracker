@@ -22,6 +22,43 @@ function button(wrapper: ReturnType<typeof mount>, text: string) {
         .find((candidate) => candidate.text().includes(text));
 }
 
+describe('a save refused because the session was deleted', () => {
+    it('keeps the text on screen and offers the Library', () => {
+        const wrapper = mount(SaveNotices, {
+            props: {
+                conflict: null,
+                status: 'deleted',
+                failureMessage: '',
+            },
+        });
+
+        expect(wrapper.get('[role="alert"]').text()).toContain(
+            'This session was deleted.',
+        );
+        expect(wrapper.text()).toContain(
+            'It no longer exists, so your latest text could not be saved.',
+        );
+        expect(wrapper.get('a').attributes('href')).toBe('/sessions');
+    });
+
+    it('does not show a conflict or retry after the session is gone', () => {
+        const wrapper = mount(SaveNotices, {
+            props: {
+                conflict: conflictSession(),
+                status: 'deleted',
+                failureMessage: 'We could not save your changes.',
+            },
+        });
+
+        expect(wrapper.text()).toContain('This session was deleted.');
+        expect(wrapper.text()).not.toContain(
+            'This session was changed somewhere else.',
+        );
+        expect(button(wrapper, 'Retry')).toBeUndefined();
+        expect(button(wrapper, 'Load latest version')).toBeUndefined();
+    });
+});
+
 describe('a save refused because the session was archived', () => {
     it('keeps the learner informed with the server’s words', () => {
         const wrapper = mount(SaveNotices, {

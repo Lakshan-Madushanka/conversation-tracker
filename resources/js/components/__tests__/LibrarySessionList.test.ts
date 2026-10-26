@@ -331,16 +331,18 @@ describe('the archived list', () => {
         expect(wrapper.text()).not.toContain('or status');
     });
 
-    it('forwards an archive or restore from a card', async () => {
+    it('forwards an archive, restore or delete from a card', async () => {
         const wrapper = mount(LibrarySessionList, {
             props: { sessions: [session(1)], total: 1 },
         });
 
         wrapper.findComponent(SessionCard).vm.$emit('archive', session(1));
         wrapper.findComponent(SessionCard).vm.$emit('restore', session(1));
+        wrapper.findComponent(SessionCard).vm.$emit('delete', session(1));
         await wrapper.vm.$nextTick();
 
         expect(wrapper.emitted('archive')?.[0]).toEqual([session(1)]);
         expect(wrapper.emitted('restore')?.[0]).toEqual([session(1)]);
+        expect(wrapper.emitted('delete')?.[0]).toEqual([session(1)]);
     });
 });

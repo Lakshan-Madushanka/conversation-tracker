@@ -454,14 +454,6 @@ final class LibraryFilters
 
     private static function timezoneFrom(mixed $value): string
     {
-        $fallback = config('app.timezone');
-        $default = is_string($fallback) && self::isTimezone($fallback) ? $fallback : 'UTC';
-
-        return is_string($value) && self::isTimezone($value) ? $value : $default;
-    }
-
-    private static function isTimezone(string $value): bool
-    {
-        return in_array($value, timezone_identifiers_list(), true);
+        return LearnerTimezone::normalise($value);
     }
 }

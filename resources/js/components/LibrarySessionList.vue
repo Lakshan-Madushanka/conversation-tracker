@@ -65,6 +65,7 @@ const emit = defineEmits<{
     (event: 'retry-filters'): void;
     (event: 'archive', session: SessionCardData): void;
     (event: 'restore', session: SessionCardData): void;
+    (event: 'delete', session: SessionCardData): void;
 }>();
 
 /** A short row of placeholders while the next page arrives. */
@@ -195,6 +196,7 @@ onBeforeUnmount(() => observer?.disconnect());
                     :session="session"
                     @archive="emit('archive', $event)"
                     @restore="emit('restore', $event)"
+                    @delete="emit('delete', $event)"
                 />
 
                 <SessionCardSkeleton

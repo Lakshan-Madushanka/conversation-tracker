@@ -345,6 +345,33 @@ export function useLibrarySessions(initial: LibraryPage) {
         timezone.value = snapshot.timezone;
     }
 
+    /**
+     * Takes a deleted card out of the list straight away, so it can never be
+     * seen or focused again while the refreshed list is on its way. The next
+     * refresh confirms the exact totals and drops any topic left unused.
+     */
+    function removeSession(sessionId: number): boolean {
+        const removed = sessions.value.find(
+            (session) => session.id === sessionId,
+        );
+
+        if (removed === undefined) {
+            return false;
+        }
+
+        sessions.value = sessions.value.filter(
+            (session) => session.id !== sessionId,
+        );
+        total.value = Math.max(0, total.value - 1);
+        allTotal.value = Math.max(0, allTotal.value - 1);
+
+        if (removed.archived_at !== null) {
+            archivedTotal.value = Math.max(0, archivedTotal.value - 1);
+        }
+
+        return true;
+    }
+
     return {
         sessions,
         nextCursor,
@@ -363,6 +390,7 @@ export function useLibrarySessions(initial: LibraryPage) {
         loadMore,
         refresh,
         restore,
+        removeSession,
         applyFilters,
         retryFilters,
         setSort,

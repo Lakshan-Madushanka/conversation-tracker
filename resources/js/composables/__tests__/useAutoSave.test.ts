@@ -447,6 +447,60 @@ describe('a session archived elsewhere', () => {
     });
 });
 
+describe('a session deleted elsewhere', () => {
+    it('stops saving, keeps the text and says the session is gone', async () => {
+        const test = setup({
+            topic: 'Travel',
+            questions: [formQuestion('<p>Mine</p>')],
+            sessionId: 5,
+            version: 1,
+            responder: () => ({ outcome: 'deleted' }),
+        });
+
+        test.questions.value[0]!.question_html = '<p>Mine edited</p>';
+        await nextTick();
+        await vi.advanceTimersByTimeAsync(DEBOUNCE);
+
+        expect(test.api.status.value).toBe('deleted');
+        expect(test.api.deleted.value).toBe(true);
+        expect(test.api.hasUnsavedChanges.value).toBe(true);
+
+        // The text stays, but nothing more is queued for a session that is gone.
+        test.questions.value[0]!.question_html = '<p>Still mine</p>';
+        await nextTick();
+        await vi.advanceTimersByTimeAsync(DEBOUNCE * 5);
+
+        expect(test.save).toHaveBeenCalledTimes(1);
+        expect(test.api.status.value).toBe('deleted');
+
+        test.scope.stop();
+    });
+
+    it('cannot be retried or saved after the session is gone', async () => {
+        const test = setup({
+            topic: 'Travel',
+            questions: [formQuestion('<p>Mine</p>')],
+            sessionId: 5,
+            version: 1,
+            responder: () => ({ outcome: 'deleted' }),
+        });
+
+        test.questions.value[0]!.question_html = '<p>Mine edited</p>';
+        await nextTick();
+        await vi.advanceTimersByTimeAsync(DEBOUNCE);
+
+        expect(test.api.deleted.value).toBe(true);
+
+        test.api.retry();
+        await expect(test.api.saveNow()).resolves.toBe(false);
+        await vi.advanceTimersByTimeAsync(DEBOUNCE * 5);
+
+        expect(test.save).toHaveBeenCalledTimes(1);
+
+        test.scope.stop();
+    });
+});
+
 describe('conflicts', () => {
     it('stops saving and keeps the on-screen text until the learner decides', async () => {
         const test = setup({

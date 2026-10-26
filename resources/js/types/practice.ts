@@ -150,6 +150,50 @@ export interface SessionCounts {
     grammar_notes: number;
 }
 
+/** The totals and practice numbers the Progress screen shows. */
+export interface ProgressNumbers {
+    words: number;
+    phrases: number;
+    mistakes: number;
+    grammar_notes: number;
+    practice_days: number;
+    current_streak: number;
+}
+
+/** The session a delete warning names, before anything is removed. */
+export interface SessionDeletionSession {
+    id: number;
+    topic: string;
+    session_date: string | null;
+    finished: boolean;
+    archived: boolean;
+}
+
+/**
+ * Everything the delete warning needs: what the session holds, progress before
+ * and after removing it, and the signed token to confirm that exact state.
+ */
+export interface SessionDeletionPreview {
+    session: SessionDeletionSession;
+    counts: SessionCounts;
+    progress: {
+        before: ProgressNumbers;
+        after: ProgressNumbers;
+    };
+    token: string;
+}
+
+/** The result of a permanent delete. Repeating it is reported as already deleted. */
+export interface SessionDeletionResult {
+    deleted: true;
+    already_deleted: boolean;
+    session: {
+        id: number;
+        topic: string;
+    };
+    counts: SessionCounts;
+}
+
 /** The result of finishing a session: either a summary, or an empty warning. */
 export type FinishSessionResult =
     | {

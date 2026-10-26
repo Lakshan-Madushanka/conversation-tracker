@@ -57,12 +57,13 @@ describe('the menu on a session', () => {
         );
     });
 
-    it('offers Edit and Archive while the session is in the Library', async () => {
+    it('offers Edit, Archive and Delete while the session is in the Library', async () => {
         const items = await openMenu();
 
         expect(items.map((item) => item.textContent?.trim())).toEqual([
             'Edit',
             'Archive',
+            'Delete',
         ]);
 
         expect(itemWith(items, 'Edit')?.getAttribute('href')).toBe(
@@ -80,11 +81,12 @@ describe('the menu on a session', () => {
         expect(mounted?.emitted('restore')).toBeUndefined();
     });
 
-    it('offers only Restore once the session is archived', async () => {
+    it('offers Restore and Delete once the session is archived', async () => {
         const items = await openMenu({ archived: true, editHref: null });
 
         expect(items.map((item) => item.textContent?.trim())).toEqual([
             'Restore',
+            'Delete',
         ]);
         expect(itemWith(items, 'Edit')).toBeUndefined();
 
@@ -92,6 +94,16 @@ describe('the menu on a session', () => {
         await mounted?.vm.$nextTick();
 
         expect(mounted?.emitted('restore')).toHaveLength(1);
+        expect(mounted?.emitted('archive')).toBeUndefined();
+    });
+
+    it('asks to delete the session from the menu', async () => {
+        const items = await openMenu();
+
+        itemWith(items, 'Delete')?.click();
+        await mounted?.vm.$nextTick();
+
+        expect(mounted?.emitted('delete')).toHaveLength(1);
         expect(mounted?.emitted('archive')).toBeUndefined();
     });
 

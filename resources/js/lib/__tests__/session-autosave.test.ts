@@ -134,3 +134,19 @@ describe('saving a session that was archived elsewhere', () => {
         });
     });
 });
+
+describe('saving a session that was deleted elsewhere', () => {
+    it('reports the deleted session when an update no longer exists', async () => {
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(
+                async (_url: string, _options?: RequestInit) =>
+                    new Response(null, { status: 404 }),
+            ),
+        );
+
+        await expect(savePracticeSession(request())).resolves.toEqual({
+            outcome: 'deleted',
+        });
+    });
+});

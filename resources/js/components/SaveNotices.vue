@@ -3,10 +3,13 @@ import {
     ArchiveIcon,
     ArchiveRestoreIcon,
     RefreshCwIcon,
+    Trash2Icon,
     TriangleAlertIcon,
 } from '@lucide/vue';
+import { Link } from '@inertiajs/vue3';
 import { Button } from '@/components/ui/button';
 import type { AutoSaveStatus } from '@/composables/useAutoSave';
+import { index as sessionsIndex } from '@/routes/sessions';
 import type { PracticeSessionData } from '@/types';
 
 const props = defineProps<{
@@ -29,10 +32,33 @@ const emit = defineEmits<{
 </script>
 
 <template>
+    <!-- The session was deleted, so there is nothing left to save into. The
+        learner's text stays on screen while the way back is offered. -->
+    <div
+        v-if="props.status === 'deleted'"
+        role="alert"
+        class="mb-4 rounded-lg border border-border bg-muted/40 px-3 py-3 text-sm"
+    >
+        <p class="flex items-start gap-2 font-medium">
+            <Trash2Icon class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+            This session was deleted.
+        </p>
+        <p class="mt-1 pl-6 text-muted-foreground">
+            It no longer exists, so your latest text could not be saved. Your
+            text is still on this screen. Return to the Library to continue with
+            another session.
+        </p>
+        <div class="mt-3 pl-6">
+            <Button type="button" size="sm" as-child>
+                <Link :href="sessionsIndex.url()">Go to Library</Link>
+            </Button>
+        </div>
+    </div>
+
     <!-- The session was archived elsewhere. The text stays on screen, and
         Restore brings saving back without leaving the editor. -->
     <div
-        v-if="props.status === 'archived'"
+        v-else-if="props.status === 'archived'"
         role="alert"
         class="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-3 text-sm"
     >

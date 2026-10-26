@@ -2,13 +2,24 @@ import { nextTick } from 'vue';
 import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 import { router } from '@inertiajs/vue3';
+import { toast } from 'vue-sonner';
+import SessionMenu from '@/components/SessionMenu.vue';
 import { shortDate } from '@/lib/format';
+import {
+    deleteSessionPermanently,
+    fetchDeletePreview,
+} from '@/lib/session-delete';
 import Show from '@/pages/sessions/Show.vue';
 import {
     edit as sessionsEdit,
     index as sessionsIndex,
 } from '@/routes/sessions';
-import type { PracticeSessionData } from '@/types';
+import type { PracticeSessionData, SessionDeletionPreview } from '@/types';
+
+vi.mock('@/lib/session-delete', () => ({
+    fetchDeletePreview: vi.fn(),
+    deleteSessionPermanently: vi.fn(),
+}));
 
 function session(
     overrides: Partial<PracticeSessionData> = {},
@@ -255,5 +266,113 @@ describe('a session opened from a search result', () => {
         await nextTick();
 
         expect(wrapper.text()).toContain('That item has changed');
+    });
+});
+
+function deletePreview(archived = false): SessionDeletionPreview {
+    return {
+        session: {
+            id: 7,
+            topic: 'Ordering at a restaurant',
+            session_date: '2026-10-12T09:00:00.000000Z',
+            finished: true,
+            archived,
+        },
+        counts: {
+            questions: 1,
+            words: 1,
+            phrases: 0,
+            mistakes: 1,
+            grammar_notes: 0,
+        },
+        progress: {
+            before: {
+                words: 1,
+                phrases: 0,
+                mistakes: 1,
+                grammar_notes: 0,
+                practice_days: 1,
+                current_streak: 1,
+            },
+            after: {
+                words: 0,
+                phrases: 0,
+                mistakes: 0,
+                grammar_notes: 0,
+                practice_days: 0,
+                current_streak: 0,
+            },
+        },
+        token: 'token-1',
+    };
+}
+
+function buttonWith(text: string): HTMLButtonElement | undefined {
+    return [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+        (button) => button.textContent?.includes(text),
+    );
+}
+
+async function confirmDelete(saved = session()): Promise<void> {
+    vi.mocked(fetchDeletePreview).mockResolvedValue({
+        outcome: 'preview',
+        preview: deletePreview(saved.archived_at !== null),
+    });
+    vi.mocked(deleteSessionPermanently).mockResolvedValue({
+        outcome: 'deleted',
+        result: {
+            deleted: true,
+            already_deleted: false,
+            session: { id: saved.id, topic: saved.topic.name },
+            counts: {
+                questions: 1,
+                words: 1,
+                phrases: 0,
+                mistakes: 1,
+                grammar_notes: 0,
+            },
+        },
+    });
+
+    const wrapper = mountShow(saved);
+
+    wrapper.findComponent(SessionMenu).vm.$emit('delete');
+    await flushPromises();
+
+    document.getElementById('delete-understand')?.click();
+    await flushPromises();
+
+    buttonWith('Delete permanently')?.click();
+    await flushPromises();
+}
+
+describe('deleting the session being read', () => {
+    it('says it was deleted and returns to the Library', async () => {
+        const visit = vi.spyOn(router, 'visit').mockImplementation(() => {});
+        const success = vi.spyOn(toast, 'success');
+
+        await confirmDelete();
+
+        expect(deleteSessionPermanently).toHaveBeenCalledWith(
+            7,
+            'token-1',
+            expect.any(String),
+        );
+        expect(success).toHaveBeenCalledWith(
+            'Deleted “Ordering at a restaurant”.',
+        );
+        expect(visit).toHaveBeenCalledWith(sessionsIndex.url());
+    });
+
+    it('returns an archived session to the Archived view', async () => {
+        const visit = vi.spyOn(router, 'visit').mockImplementation(() => {});
+
+        await confirmDelete(
+            session({ archived_at: '2026-10-20T09:00:00.000000Z' }),
+        );
+
+        expect(visit).toHaveBeenCalledWith(
+            sessionsIndex.url({ query: { view: 'archived' } }),
+        );
     });
 });

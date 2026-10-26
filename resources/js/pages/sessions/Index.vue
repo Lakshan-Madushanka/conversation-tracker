@@ -1,5 +1,12 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import {
+    computed,
+    nextTick,
+    onBeforeUnmount,
+    onMounted,
+    ref,
+    watch,
+} from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { PlusIcon } from '@lucide/vue';
 import { toast } from 'vue-sonner';
@@ -7,6 +14,7 @@ import LibraryFilterBar from '@/components/LibraryFilterBar.vue';
 import LibrarySearch from '@/components/LibrarySearch.vue';
 import LibrarySessionList from '@/components/LibrarySessionList.vue';
 import PageHeader from '@/components/PageHeader.vue';
+import SessionDeleteDialog from '@/components/SessionDeleteDialog.vue';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useLibrarySessions } from '@/composables/useLibrarySessions';
@@ -56,6 +64,7 @@ const {
     loadMore,
     refresh,
     restore,
+    removeSession,
     applyFilters,
     retryFilters,
     clearFilters,
@@ -205,6 +214,89 @@ async function restoreFromList(session: SessionCardData): Promise<void> {
     await refresh();
 }
 
+/** The session whose delete warning is open, or null when it is closed. */
+const deleteTarget = ref<SessionCardData | null>(null);
+const deleteOpen = ref(false);
+
+/** Opens the one confirmation every permanent delete goes through. */
+function openDelete(session: SessionCardData): void {
+    deleteTarget.value = session;
+    deleteOpen.value = true;
+}
+
+/**
+ * The session is gone for good. Its card leaves the list at once, the message
+ * has no Undo, focus moves to the next card (or the heading when the list is
+ * now empty), and the server's totals replace the optimistic ones.
+ */
+async function deletedFromList(deleted: {
+    id: number;
+    topic: string;
+}): Promise<void> {
+    const index = sessions.value.findIndex(
+        (session) => session.id === deleted.id,
+    );
+
+    removeSession(deleted.id);
+    deleteOpen.value = false;
+    toast.success(`Deleted “${deleted.topic}”.`);
+
+    await refresh();
+    await nextTick();
+    focusAfterRemoval(index);
+}
+
+/**
+ * The session was already gone when the warning opened. Treat it the same
+ * way, but do not claim a second delete: the learner only needs to know it is
+ * no longer here.
+ */
+async function missingFromList(sessionId: number): Promise<void> {
+    const index = sessions.value.findIndex(
+        (session) => session.id === sessionId,
+    );
+
+    removeSession(sessionId);
+    deleteOpen.value = false;
+    toast.info('This session was already deleted.');
+
+    await refresh();
+    await nextTick();
+    focusAfterRemoval(index);
+}
+
+/** Archive was chosen instead of Delete, so the list and its counts refresh. */
+async function archivedFromDialog(sessionId: number): Promise<void> {
+    deleteOpen.value = false;
+
+    toast.success('Session archived.', {
+        action: {
+            label: 'Undo',
+            onClick: () => {
+                void undoArchive(sessionId);
+            },
+        },
+    });
+
+    await refresh();
+}
+
+/**
+ * Puts focus where the deleted card used to be: the card that took its place,
+ * the one above it, or the Library heading when nothing is left.
+ */
+function focusAfterRemoval(index: number): void {
+    const next = sessions.value[index] ?? sessions.value[index - 1] ?? null;
+
+    if (next !== null) {
+        document.getElementById(`session-link-${next.id}`)?.focus();
+
+        return;
+    }
+
+    document.getElementById('library-heading')?.focus();
+}
+
 /** The last scroll position read, kept for the trip back from a session. */
 let lastScrollY = 0;
 
@@ -291,7 +383,11 @@ onBeforeUnmount(() => {
     <div>
         <Head title="Library" />
 
-        <PageHeader title="Library" :description="description">
+        <PageHeader
+            title="Library"
+            heading-id="library-heading"
+            :description="description"
+        >
             <template #actions>
                 <Button size="lg" as-child>
                     <Link :href="sessionsCreate.url()">
@@ -361,6 +457,19 @@ onBeforeUnmount(() => {
             @retry-filters="retryFilters"
             @archive="archiveFromList"
             @restore="restoreFromList"
+            @delete="openDelete"
+        />
+
+        <SessionDeleteDialog
+            v-if="deleteTarget !== null"
+            :open="deleteOpen"
+            :session-id="deleteTarget.id"
+            :topic="deleteTarget.topic"
+            :session-date="deleteTarget.session_date"
+            @update:open="deleteOpen = $event"
+            @deleted="deletedFromList"
+            @archived="archivedFromDialog"
+            @missing="missingFromList"
         />
     </div>
 </template>

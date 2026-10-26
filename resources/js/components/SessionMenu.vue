@@ -6,19 +6,22 @@ import {
     ArchiveRestoreIcon,
     EllipsisVerticalIcon,
     PencilIcon,
+    Trash2Icon,
 } from '@lucide/vue';
 import { Button } from '@/components/ui/button';
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
+    DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
 /**
- * The small menu every session card and reading page offers: Edit and Archive
- * while the session is in the Library, and Restore once it is archived. An
- * unfinished session shows Archive unavailable with the reason in view.
+ * The small menu every session card and reading page offers: Edit, Archive and
+ * Delete while the session is in the Library, and Restore and Delete once it is
+ * archived. An unfinished session shows Archive unavailable with the reason in
+ * view; Delete is always available, because it suits either status.
  */
 const props = defineProps<{
     /** The session's topic, used to name the menu for screen readers. */
@@ -32,6 +35,7 @@ const props = defineProps<{
 const emit = defineEmits<{
     (event: 'archive'): void;
     (event: 'restore'): void;
+    (event: 'delete'): void;
 }>();
 
 const label = computed(() => `Actions for ${props.topic}`);
@@ -56,6 +60,16 @@ const label = computed(() => `Actions for ${props.topic}`);
                 <DropdownMenuItem @select="emit('restore')">
                     <ArchiveRestoreIcon aria-hidden="true" />
                     Restore
+                </DropdownMenuItem>
+
+                <DropdownMenuSeparator />
+
+                <DropdownMenuItem
+                    variant="destructive"
+                    @select="emit('delete')"
+                >
+                    <Trash2Icon aria-hidden="true" />
+                    Delete
                 </DropdownMenuItem>
             </template>
 
@@ -85,6 +99,16 @@ const label = computed(() => `Actions for ${props.topic}`);
                             Finish this session to archive it.
                         </span>
                     </span>
+                </DropdownMenuItem>
+
+                <DropdownMenuSeparator />
+
+                <DropdownMenuItem
+                    variant="destructive"
+                    @select="emit('delete')"
+                >
+                    <Trash2Icon aria-hidden="true" />
+                    Delete
                 </DropdownMenuItem>
             </template>
         </DropdownMenuContent>

@@ -1,9 +1,11 @@
 import type { SessionCardData, TopicSummary } from '@/types';
 import {
     browserTimezone,
+    filtersToQuery,
     normalizeLibraryFilters,
     type LibraryFilters,
 } from '@/lib/library-filters';
+import { index as sessionsIndex } from '@/routes/sessions';
 
 /** One page of the Library, as the server sends it. */
 export interface LibraryPage {
@@ -185,6 +187,60 @@ export function readLibrarySnapshot(): LibrarySnapshot | null {
 /** Forgets the loaded list, so the next visit starts at the top. */
 export function clearLibrarySnapshot(): void {
     storage()?.removeItem(SNAPSHOT_KEY);
+}
+
+/**
+ * Removes a deleted session from the saved list, so returning to the Library
+ * never shows a card that no longer exists. The next refresh reconciles the
+ * rest of the numbers.
+ */
+export function forgetLibrarySession(sessionId: number): void {
+    const snapshot = readLibrarySnapshot();
+
+    if (snapshot === null) {
+        return;
+    }
+
+    const removed = snapshot.sessions.find(
+        (session) => session.id === sessionId,
+    );
+
+    if (removed === undefined) {
+        return;
+    }
+
+    saveLibrarySnapshot({
+        ...snapshot,
+        sessions: snapshot.sessions.filter(
+            (session) => session.id !== sessionId,
+        ),
+        total: Math.max(0, snapshot.total - 1),
+        allTotal: Math.max(0, snapshot.allTotal - 1),
+        archivedTotal: Math.max(
+            0,
+            snapshot.archivedTotal - (removed.archived_at === null ? 0 : 1),
+        ),
+    });
+}
+
+/**
+ * The address that brings the learner back to the list they came from,
+ * including its filters and the Archived view. Used after a session is deleted
+ * from its reading page.
+ */
+export function libraryReturnUrl(archived = false): string {
+    const snapshot = readLibrarySnapshot();
+    const view = snapshot?.filters.view ?? (archived ? 'archived' : 'library');
+
+    if (snapshot === null) {
+        return view === 'archived'
+            ? sessionsIndex.url({ query: { view: 'archived' } })
+            : sessionsIndex.url();
+    }
+
+    return sessionsIndex.url({
+        query: filtersToQuery(snapshot.filters, snapshot.timezone),
+    });
 }
 
 /** Marks that the next visit to the Library should bring the list back. */

@@ -68,9 +68,13 @@ final readonly class SessionDeletionBatchPreview
         }
 
         $entries = $this->progressSessions->entries();
+
+        // Flipped once so a large selection is not scanned for every entry.
+        $removed = array_flip($removedIds);
+
         $after = array_values(array_filter(
             $entries,
-            fn (ProgressEntry $entry): bool => ! in_array($entry->sessionId, $removedIds, true),
+            fn (ProgressEntry $entry): bool => ! isset($removed[$entry->sessionId]),
         ));
 
         return new SessionDeletionBatchEffect(

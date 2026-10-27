@@ -380,6 +380,88 @@ it('keeps the bulk warning exact for a large library without a query per session
     expect($queries)->toBeLessThan(15);
 });
 
+it('counts content kept in any column of a row', function (): void {
+    Carbon::setTestNow('2026-10-26 12:00:00');
+
+    $session = bulkTestSessionAt('2026-10-26 09:00:00', words: 0);
+
+    $question = PracticeQuestion::factory()->for($session)->create([
+        'question_text' => '',
+        'answer_text' => '',
+    ]);
+
+    // Each row keeps its words in a different column, so a column left out of
+    // the bulk read would silently count the row as empty.
+    PracticeFeedbackEntry::factory()->for($question)->create([
+        'type' => FeedbackType::Vocabulary,
+        'content_text' => '',
+        'content_html' => '',
+        'correction_text' => 'a bowl of soup',
+    ]);
+
+    PracticeFeedbackEntry::factory()->for($question)->create([
+        'type' => FeedbackType::Phrase,
+        'content_text' => '',
+        'content_html' => '',
+        'example' => 'Could I have the bill, please?',
+    ]);
+
+    PracticeFeedbackEntry::factory()->for($question)->create([
+        'type' => FeedbackType::GrammarNote,
+        'content_text' => '',
+        'content_html' => '<p>Use the past tense.</p>',
+    ]);
+
+    $preview = bulkPreviewFor([$session->id]);
+
+    expect($preview['counts'])->toBe([
+        'questions' => 1,
+        'words' => 1,
+        'phrases' => 1,
+        'mistakes' => 0,
+        'grammar_notes' => 1,
+    ])
+        ->and($preview['progress']['before']['words'])->toBe(1)
+        ->and($preview['progress']['before']['phrases'])->toBe(1)
+        ->and($preview['progress']['before']['grammar_notes'])->toBe(1);
+});
+
+it('reads bulk progress in a fixed number of queries when sessions hold content', function (): void {
+    Carbon::setTestNow('2026-10-26 12:00:00');
+
+    $topic = Topic::factory()->create();
+
+    $makeSession = function () use ($topic): PracticeSession {
+        $session = PracticeSession::factory()->finished()->for($topic)->create([
+            'finished_at' => Carbon::parse('2026-10-25 09:00:00'),
+            'created_at' => Carbon::parse('2026-10-25 09:00:00'),
+        ]);
+
+        addBulkTestEntry($session, FeedbackType::Vocabulary, 'soup');
+
+        return $session;
+    };
+
+    $target = $makeSession();
+
+    DB::flushQueryLog();
+    DB::enableQueryLog();
+    bulkPreviewFor([$target->id]);
+    $smallQueries = count(DB::getQueryLog());
+
+    foreach (range(1, 19) as $index) {
+        $makeSession();
+    }
+
+    DB::flushQueryLog();
+    $preview = bulkPreviewFor([$target->id]);
+    $largeQueries = count(DB::getQueryLog());
+    DB::disableQueryLog();
+
+    expect($largeQueries)->toBe($smallQueries)
+        ->and($preview['progress']['before']['words'])->toBe(20);
+});
+
 it('rejects an empty or duplicated selection', function (): void {
     $session = PracticeSession::factory()->finished()->create();
 

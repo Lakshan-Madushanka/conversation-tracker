@@ -24,6 +24,9 @@ final readonly class LibrarySessions
     /** How many sessions the Library loads at a time. */
     public const int PAGE_SIZE = 20;
 
+    /** How many sessions one selection may act on at once. */
+    public const int SELECTION_LIMIT = 1000;
+
     /**
      * One page of the Library, in the chosen order. Sessions created on the
      * same day fall back to the newest row first, and the id keeps the order
@@ -55,6 +58,63 @@ final readonly class LibrarySessions
     public function total(?LibraryFilters $filters = null): int
     {
         return $this->query($filters)->count();
+    }
+
+    /**
+     * Every session matching the current view, filters and search, in the
+     * chosen order, so "Select all" means the whole result and not only the
+     * cards already loaded.
+     *
+     * A list too large for one selection is refused as a whole: the total is
+     * still reported, but no ids are returned, so nothing is ever selected
+     * silently behind the learner's back.
+     *
+     * @return array{
+     *     ids: list<int>,
+     *     finished_ids: list<int>,
+     *     total: int,
+     *     limit: int,
+     *     truncated: bool
+     * }
+     */
+    public function selection(?LibraryFilters $filters = null, int $limit = self::SELECTION_LIMIT): array
+    {
+        $total = $this->total($filters);
+
+        if ($total > $limit) {
+            return [
+                'ids' => [],
+                'finished_ids' => [],
+                'total' => $total,
+                'limit' => $limit,
+                'truncated' => true,
+            ];
+        }
+
+        $query = $this->query($filters);
+
+        $this->applySort($query, $filters?->sort() ?? LibraryFilters::SORT_NEWEST);
+
+        $ids = [];
+        $finishedIds = [];
+
+        foreach ($query->get(['id', 'status']) as $session) {
+            $id = (int) $session->getKey();
+
+            $ids[] = $id;
+
+            if ($session->isFinished()) {
+                $finishedIds[] = $id;
+            }
+        }
+
+        return [
+            'ids' => $ids,
+            'finished_ids' => $finishedIds,
+            'total' => $total,
+            'limit' => $limit,
+            'truncated' => false,
+        ];
     }
 
     /**

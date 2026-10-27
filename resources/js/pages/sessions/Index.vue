@@ -8,16 +8,20 @@ import {
     watch,
 } from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
-import { PlusIcon } from '@lucide/vue';
+import { PlusIcon, Square, SquareCheck } from '@lucide/vue';
 import { toast } from 'vue-sonner';
 import LibraryFilterBar from '@/components/LibraryFilterBar.vue';
 import LibrarySearch from '@/components/LibrarySearch.vue';
+import LibrarySelectionBar from '@/components/LibrarySelectionBar.vue';
 import LibrarySessionList from '@/components/LibrarySessionList.vue';
 import PageHeader from '@/components/PageHeader.vue';
+import SessionBulkDeleteDialog from '@/components/SessionBulkDeleteDialog.vue';
 import SessionDeleteDialog from '@/components/SessionDeleteDialog.vue';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useLibrarySessions } from '@/composables/useLibrarySessions';
+import { useSelectionBar } from '@/composables/useSelectionBar';
+import { useSessionSelection } from '@/composables/useSessionSelection';
 import AppLayout from '@/layouts/AppLayout.vue';
 import {
     consumeLibraryRestore,
@@ -28,6 +32,7 @@ import {
 } from '@/lib/library';
 import {
     activeFilterCount,
+    filtersToQuery,
     hasActiveFilters,
     hasSearch,
     searchFor,
@@ -38,10 +43,25 @@ import {
 } from '@/lib/library-filters';
 import { archiveSession, restoreSession } from '@/lib/session-archive';
 import {
+    archiveSessions,
+    fetchSelection,
+    restoreSessions,
+} from '@/lib/session-bulk';
+import {
+    bulkArchiveMessage,
+    bulkDeletionMessage,
+    bulkRestoreMessage,
+} from '@/lib/session-selection';
+import {
     create as sessionsCreate,
     index as sessionsIndex,
 } from '@/routes/sessions';
-import type { SessionCardData } from '@/types';
+import type {
+    BulkArchiveResult,
+    BulkDeletionResult,
+    BulkRestoreResult,
+    SessionCardData,
+} from '@/types';
 
 defineOptions({ layout: AppLayout });
 
@@ -72,6 +92,273 @@ const {
     setSearch,
     clearSearch,
 } = useLibrarySessions(props);
+
+const {
+    active: selectionActive,
+    ids: selectedIds,
+    count: selectedCount,
+    finishedCount: selectedFinishedCount,
+    announcement: selectionAnnouncement,
+    begin: beginSelection,
+    end: endSelection,
+    clear: clearSelection,
+    toggle: toggleSelection,
+    selectAll: selectAllIds,
+    clearBecauseListChanged,
+    announce: announceSelection,
+} = useSessionSelection();
+
+// On a phone the selection bar takes the place of the bottom navigation.
+useSelectionBar(selectionActive);
+
+/** A calm, persistent explanation, such as a list too large to select. */
+const selectionNotice = ref('');
+
+/** True while "Select all" is asking for every matching session. */
+const selectingAll = ref(false);
+
+/** True while a bulk action is on its way. */
+const bulkBusy = ref(false);
+
+/** The ids the delete warning was opened for. */
+const bulkDeleteIds = ref<number[]>([]);
+const bulkDeleteOpen = ref(false);
+
+/** Switch selection mode on or off from the header. */
+function toggleSelectionMode(): void {
+    selectionNotice.value = '';
+
+    if (selectionActive.value) {
+        endSelection();
+
+        return;
+    }
+
+    beginSelection();
+}
+
+/** One card chosen or unchosen; Shift chooses the range from the last one. */
+function toggleSession(session: SessionCardData, shiftKey: boolean): void {
+    toggleSelection(session, sessions.value, shiftKey);
+}
+
+/**
+ * Every session matching the filters and search, not only the loaded cards.
+ * A list larger than the selection limit is refused as a whole, so the
+ * learner is never given a partial selection that looks complete.
+ */
+async function selectAllMatching(): Promise<void> {
+    if (selectingAll.value || bulkBusy.value) {
+        return;
+    }
+
+    selectingAll.value = true;
+    selectionNotice.value = '';
+
+    const outcome = await fetchSelection(
+        filtersToQuery(filters.value, timezone.value),
+    );
+
+    selectingAll.value = false;
+
+    if (outcome.outcome === 'failed') {
+        selectionNotice.value =
+            'We could not select every session. Check your connection and try again.';
+        announceSelection(selectionNotice.value);
+
+        return;
+    }
+
+    if (outcome.selection.truncated) {
+        clearSelection();
+        selectionNotice.value = `This list has ${outcome.selection.total} sessions, and up to ${outcome.selection.limit} can be selected at once. Nothing was selected. Narrow the filters and try again.`;
+        announceSelection(selectionNotice.value);
+
+        return;
+    }
+
+    selectAllIds(outcome.selection.ids, outcome.selection.finished_ids);
+}
+
+/** Archive every finished session in the selection, then offer one Undo. */
+async function archiveSelection(): Promise<void> {
+    if (bulkBusy.value || selectedCount.value === 0) {
+        return;
+    }
+
+    bulkBusy.value = true;
+    selectionNotice.value = '';
+
+    const result = await archiveSessions(selectedIds.value);
+
+    bulkBusy.value = false;
+
+    if (result === null) {
+        selectionNotice.value =
+            'We could not archive these sessions. Nothing was changed.';
+
+        return;
+    }
+
+    endSelection();
+    await refresh();
+    showArchiveMessage(result);
+}
+
+/** Bring every archived session in the selection back, then offer one Undo. */
+async function restoreSelection(): Promise<void> {
+    if (bulkBusy.value || selectedCount.value === 0) {
+        return;
+    }
+
+    bulkBusy.value = true;
+    selectionNotice.value = '';
+
+    const result = await restoreSessions(selectedIds.value);
+
+    bulkBusy.value = false;
+
+    if (result === null) {
+        selectionNotice.value =
+            'We could not restore these sessions. Nothing was changed.';
+
+        return;
+    }
+
+    endSelection();
+    await refresh();
+    showRestoreMessage(result);
+}
+
+/** One message for a bulk archive, with Undo only for what really changed. */
+function showArchiveMessage(result: BulkArchiveResult): void {
+    const message = bulkArchiveMessage(result);
+
+    if (result.archived_ids.length === 0) {
+        toast.info(message);
+
+        return;
+    }
+
+    toast.success(message, {
+        duration: 8000,
+        action: {
+            label: 'Undo',
+            onClick: () => {
+                void undoBulkArchive(result.archived_ids);
+            },
+        },
+    });
+}
+
+/** One message for a bulk restore, with Undo only for what really changed. */
+function showRestoreMessage(result: BulkRestoreResult): void {
+    const message = bulkRestoreMessage(result);
+
+    if (result.restored_ids.length === 0) {
+        toast.info(message);
+
+        return;
+    }
+
+    toast.success(message, {
+        duration: 8000,
+        action: {
+            label: 'Undo',
+            onClick: () => {
+                void undoBulkRestore(result.restored_ids);
+            },
+        },
+    });
+}
+
+/** Puts every session the archive really changed back where it was. */
+async function undoBulkArchive(ids: number[]): Promise<void> {
+    const result = await restoreSessions(ids);
+
+    if (result === null) {
+        toast.error(
+            'We could not restore these sessions. You can restore them from the Archived view.',
+        );
+
+        return;
+    }
+
+    toast.success(bulkRestoreMessage(result));
+    await refresh();
+}
+
+/** Puts every session the restore really changed back in the Archived view. */
+async function undoBulkRestore(ids: number[]): Promise<void> {
+    const result = await archiveSessions(ids);
+
+    if (result === null) {
+        toast.error(
+            'We could not undo this restore. You can archive them again from the Library.',
+        );
+
+        return;
+    }
+
+    toast.success(bulkArchiveMessage(result));
+    await refresh();
+}
+
+/** The selection the delete warning should describe. */
+function openBulkDelete(): void {
+    if (bulkBusy.value || selectedCount.value === 0) {
+        return;
+    }
+
+    bulkDeleteIds.value = [...selectedIds.value];
+    bulkDeleteOpen.value = true;
+}
+
+/** The selection is gone for good: no Undo, one message, focus kept useful. */
+async function bulkDeleted(result: BulkDeletionResult): Promise<void> {
+    bulkDeleteOpen.value = false;
+    endSelection();
+    toast.success(bulkDeletionMessage(result));
+
+    await refresh();
+    await nextTick();
+    focusAfterBulkRemoval();
+}
+
+/** Everything selected had already been deleted somewhere else. */
+async function bulkWasAlreadyDeleted(): Promise<void> {
+    bulkDeleteOpen.value = false;
+    endSelection();
+    toast.info('These sessions were already deleted.');
+
+    await refresh();
+    await nextTick();
+    focusAfterBulkRemoval();
+}
+
+/** Archive was chosen instead of Delete, so nothing is removed. */
+async function bulkArchivedFromDialog(
+    result: BulkArchiveResult,
+): Promise<void> {
+    bulkDeleteOpen.value = false;
+    endSelection();
+
+    await refresh();
+    showArchiveMessage(result);
+}
+
+/** Puts focus on the first card left, or the heading when the list is empty. */
+function focusAfterBulkRemoval(): void {
+    const next = sessions.value[0] ?? null;
+
+    if (next !== null) {
+        document.getElementById(`session-link-${next.id}`)?.focus();
+
+        return;
+    }
+
+    document.getElementById('library-heading')?.focus();
+}
 
 const filterBar = ref<InstanceType<typeof LibraryFilterBar> | null>(null);
 const searchBox = ref<InstanceType<typeof LibrarySearch> | null>(null);
@@ -126,6 +413,33 @@ function changeFilters(next: LibraryFilters): void {
     applyFilters(next);
 }
 
+/**
+ * The state that changes which sessions the list holds, without the order. A
+ * new filter or search clears the selection and says so; a new sort keeps it,
+ * because it only moves the same sessions around.
+ */
+const filterSignature = computed(() =>
+    JSON.stringify({
+        topics: filters.value.topics,
+        types: filters.value.types,
+        date: filters.value.date,
+        from: filters.value.from,
+        to: filters.value.to,
+        status: filters.value.status,
+        q: filters.value.q,
+        archivedSearch: filters.value.archivedSearch,
+        view: filters.value.view,
+    }),
+);
+
+watch(filterSignature, () => {
+    selectionNotice.value = '';
+
+    if (selectionActive.value) {
+        clearBecauseListChanged();
+    }
+});
+
 function clearFromEmptyState(): void {
     clearFilters();
     filterBar.value?.focusFirstControl();
@@ -148,6 +462,12 @@ function changeView(value: string | number): void {
 
     if (view === filters.value.view) {
         return;
+    }
+
+    // The other list holds different sessions, so a selection made in one
+    // must never travel to the other.
+    if (selectionActive.value) {
+        endSelection();
     }
 
     setView(view);
@@ -389,6 +709,18 @@ onBeforeUnmount(() => {
             :description="description"
         >
             <template #actions>
+                <Button
+                    type="button"
+                    size="lg"
+                    :variant="selectionActive ? 'secondary' : 'outline'"
+                    :aria-pressed="selectionActive"
+                    @click="toggleSelectionMode"
+                >
+                    <SquareCheck v-if="selectionActive" aria-hidden="true" />
+                    <Square v-else aria-hidden="true" />
+                    {{ selectionActive ? 'Done' : 'Select' }}
+                </Button>
+
                 <Button size="lg" as-child>
                     <Link :href="sessionsCreate.url()">
                         <PlusIcon aria-hidden="true" />
@@ -400,6 +732,10 @@ onBeforeUnmount(() => {
 
         <p class="sr-only" aria-live="polite" aria-atomic="true">
             {{ announcement }}
+        </p>
+
+        <p class="sr-only" aria-live="polite" aria-atomic="true">
+            {{ selectionAnnouncement }}
         </p>
 
         <Tabs
@@ -451,6 +787,8 @@ onBeforeUnmount(() => {
             :updating="updating"
             :filter-error="filterError"
             :archived-view="archivedView"
+            :selection-mode="selectionActive"
+            :selected-ids="selectedIds"
             @load-more="loadMore"
             @clear-filters="clearFromEmptyState"
             @clear-search="clearSearchFromEmptyState"
@@ -458,6 +796,22 @@ onBeforeUnmount(() => {
             @archive="archiveFromList"
             @restore="restoreFromList"
             @delete="openDelete"
+            @select="toggleSession"
+        />
+
+        <LibrarySelectionBar
+            v-if="selectionActive"
+            :selected-count="selectedCount"
+            :finished-count="selectedFinishedCount"
+            :archived-view="archivedView"
+            :busy="bulkBusy"
+            :selecting-all="selectingAll"
+            :notice="selectionNotice"
+            @cancel="endSelection"
+            @select-all="selectAllMatching"
+            @archive="archiveSelection"
+            @restore="restoreSelection"
+            @delete="openBulkDelete"
         />
 
         <SessionDeleteDialog
@@ -470,6 +824,16 @@ onBeforeUnmount(() => {
             @deleted="deletedFromList"
             @archived="archivedFromDialog"
             @missing="missingFromList"
+        />
+
+        <SessionBulkDeleteDialog
+            v-if="bulkDeleteOpen"
+            :open="bulkDeleteOpen"
+            :ids="bulkDeleteIds"
+            @update:open="bulkDeleteOpen = $event"
+            @deleted="bulkDeleted"
+            @archived="bulkArchivedFromDialog"
+            @missing="bulkWasAlreadyDeleted"
         />
     </div>
 </template>

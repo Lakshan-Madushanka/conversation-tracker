@@ -8,6 +8,8 @@ import SessionMenu from '@/components/SessionMenu.vue';
 import { Badge, type BadgeVariants } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { isLaterDay, relativeTime, shortDate } from '@/lib/format';
 import {
@@ -27,14 +29,18 @@ const props = withDefaults(
         session: SessionCardData;
         /** Home shows cards without actions; the Library and Archived view offer them. */
         showMenu?: boolean;
+        /** Selection mode turns the card into a chooser instead of a link. */
+        selectionMode?: boolean;
+        selected?: boolean;
     }>(),
-    { showMenu: true },
+    { showMenu: true, selectionMode: false, selected: false },
 );
 
 const emit = defineEmits<{
     (event: 'archive', session: SessionCardData): void;
     (event: 'restore', session: SessionCardData): void;
     (event: 'delete', session: SessionCardData): void;
+    (event: 'select', session: SessionCardData, shiftKey: boolean): void;
 }>();
 
 const isFinished = computed(() => props.session.status === 'finished');
@@ -49,6 +55,31 @@ const statusLabel = computed(() =>
 const badgeLabel = computed(() =>
     isArchived.value ? 'Archived' : statusLabel.value,
 );
+
+/** What choosing this card means, read out with its checkbox. */
+const checkboxLabel = computed(() => {
+    const day = sessionOn.value === '' ? '' : ` from ${sessionOn.value}`;
+
+    return `Select “${props.session.topic}”${day}, ${badgeLabel.value.toLowerCase()}.`;
+});
+
+/** A link to the session, or a button that chooses it in selection mode. */
+const activationAttributes = computed(() =>
+    props.selectionMode ? { type: 'button' as const } : { href: href.value },
+);
+
+function activate(event: MouseEvent): void {
+    if (!props.selectionMode) {
+        return;
+    }
+
+    emit('select', props.session, event.shiftKey);
+}
+
+/** The checkbox chooses the card without following the card's own action. */
+function chooseFromCheckbox(): void {
+    emit('select', props.session, false);
+}
 
 const badgeVariant = computed<BadgeVariants['variant']>(() => {
     if (isArchived.value) {
@@ -141,13 +172,39 @@ watch(
 </script>
 
 <template>
-    <Card :id="`session-card-${props.session.id}`">
+    <Card
+        :id="`session-card-${props.session.id}`"
+        :class="props.selected ? 'border-primary ring-2 ring-primary/40' : ''"
+    >
         <CardContent class="p-4">
             <div class="flex items-start gap-2">
-                <Link
-                    :id="`session-link-${props.session.id}`"
-                    :href="href"
-                    class="group flex min-w-0 flex-1 items-start gap-3 rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                <div v-if="props.selectionMode" class="pt-0.5">
+                    <Checkbox
+                        :id="`session-select-${props.session.id}`"
+                        :model-value="props.selected"
+                        @update:model-value="chooseFromCheckbox"
+                    />
+                    <Label
+                        :for="`session-select-${props.session.id}`"
+                        class="sr-only"
+                    >
+                        {{ checkboxLabel }}
+                    </Label>
+                </div>
+
+                <component
+                    :is="props.selectionMode ? 'button' : Link"
+                    :id="
+                        props.selectionMode
+                            ? `session-select-card-${props.session.id}`
+                            : `session-link-${props.session.id}`
+                    "
+                    v-bind="activationAttributes"
+                    class="group flex min-w-0 flex-1 items-start gap-3 rounded-md text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                    :aria-pressed="
+                        props.selectionMode ? props.selected : undefined
+                    "
+                    @click="activate"
                 >
                     <component
                         :is="isFinished ? CheckIcon : SquarePenIcon"
@@ -204,13 +261,14 @@ watch(
                     </span>
 
                     <ArrowRightIcon
+                        v-if="!props.selectionMode"
                         class="mt-1 size-4 shrink-0 text-muted-foreground"
                         aria-hidden="true"
                     />
-                </Link>
+                </component>
 
                 <SessionMenu
-                    v-if="props.showMenu"
+                    v-if="props.showMenu && !props.selectionMode"
                     :topic="props.session.topic"
                     :edit-href="
                         isArchived ? null : sessionsEdit.url(props.session.id)
@@ -225,8 +283,9 @@ watch(
             </div>
 
             <!-- The matching items sit beside the session link, never inside
-                it, so each one is its own destination. -->
-            <template v-if="matches.length > 0">
+                it, so each one is its own destination. Selection mode chooses
+                whole sessions, so the item links step aside. -->
+            <template v-if="matches.length > 0 && !props.selectionMode">
                 <Separator class="my-3" />
 
                 <ul class="space-y-1">

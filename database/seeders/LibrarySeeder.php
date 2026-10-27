@@ -11,14 +11,16 @@ use App\Models\PracticeSession;
 use App\Models\Topic;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Collection;
 
 /**
  * Fills a fresh development database with enough sessions to exercise the
- * Library: a long list, both statuses, empty sessions, and sessions edited on
- * a later day. The words mix plain English with accents, other languages and
- * punctuation, so search can be tried by hand against real variety. It only
- * runs locally and tops up to the target instead of adding another 500 every
- * time.
+ * Library: a long list, both statuses, empty sessions, sessions edited on
+ * a later day, archived sessions, several finished on the same day, and a
+ * ten-day streak. The words mix plain English with accents, other languages
+ * and punctuation, so search can be tried by hand against real variety. It
+ * only runs locally and tops up to the target instead of adding another 500
+ * every time.
  */
 class LibrarySeeder extends Seeder
 {
@@ -294,19 +296,26 @@ class LibrarySeeder extends Seeder
             return;
         }
 
-        $missing = self::TARGET_SESSIONS - PracticeSession::query()->count();
-
-        if ($missing <= 0) {
-            return;
-        }
-
         $topics = collect(self::TOPICS)
             ->map(fn (string $name): Topic => Topic::firstOrCreate(['name' => $name]))
             ->values();
 
+        $missing = self::TARGET_SESSIONS - PracticeSession::query()->count();
+
         for ($index = 0; $index < $missing; $index++) {
             $this->createSession($topics->random());
         }
+
+        // The extra cases are added once, together. An existing archived
+        // session means an earlier run already added them, so running the
+        // seeder again tops up in silence instead of duplicating the set.
+        if (PracticeSession::query()->whereNotNull('archived_at')->exists()) {
+            return;
+        }
+
+        $this->seedArchivedSessions($topics);
+        $this->seedLongStreak($topics);
+        $this->seedSameDaySessions($topics);
     }
 
     private function createSession(Topic $topic): void
@@ -340,6 +349,104 @@ class LibrarySeeder extends Seeder
             return;
         }
 
+        $this->addContent($session);
+    }
+
+    /**
+     * A dozen finished sessions already put away, so the Archived view has
+     * real sessions to search, restore, and delete together.
+     *
+     * @param  Collection<int, Topic>  $topics
+     */
+    private function seedArchivedSessions(Collection $topics): void
+    {
+        for ($index = 0; $index < 12; $index++) {
+            $finishedAt = now()
+                ->subDays(fake()->numberBetween(1, 240))
+                ->setTime(fake()->numberBetween(7, 21), fake()->numberBetween(0, 59));
+
+            $archivedAt = $finishedAt
+                ->addDays(fake()->numberBetween(0, 14))
+                ->setTime(fake()->numberBetween(8, 22), fake()->numberBetween(0, 59));
+
+            $this->finishedSessionAt($topics->random(), $finishedAt, $archivedAt);
+        }
+    }
+
+    /**
+     * One finished session a day for ten days, ending today, so Progress has
+     * a long current streak to show.
+     *
+     * @param  Collection<int, Topic>  $topics
+     */
+    private function seedLongStreak(Collection $topics): void
+    {
+        for ($daysAgo = 9; $daysAgo >= 0; $daysAgo--) {
+            $this->finishedSessionAt(
+                $topics->random(),
+                now()->subDays($daysAgo)->setTime(19, 0),
+            );
+        }
+    }
+
+    /**
+     * Several finished sessions on the same day, so deleting one leaves the
+     * practice day and the streak intact. The combined delete warning can be
+     * tried against a day that holds more than one session.
+     *
+     * @param  Collection<int, Topic>  $topics
+     */
+    private function seedSameDaySessions(Collection $topics): void
+    {
+        $today = now()->startOfDay();
+
+        foreach ([10, 13, 16] as $hour) {
+            $this->finishedSessionAt(
+                $topics->random(),
+                $this->notInTheFuture($today->addHours($hour)),
+            );
+        }
+
+        $sharedDay = now()->subDays(3)->setTime(18, 30);
+
+        $this->finishedSessionAt($topics->random(), $sharedDay);
+        $this->finishedSessionAt($topics->random(), $sharedDay->addMinutes(40));
+    }
+
+    /**
+     * A finished session at a chosen moment, optionally already archived.
+     */
+    private function finishedSessionAt(
+        Topic $topic,
+        CarbonImmutable $finishedAt,
+        ?CarbonImmutable $archivedAt = null,
+    ): PracticeSession {
+        $finishedAt = $this->notInTheFuture($finishedAt);
+        $createdAt = $this->notInTheFuture(
+            $finishedAt->subMinutes(fake()->numberBetween(20, 120)),
+        );
+        $lastChangedAt = $this->lastChangedAt($createdAt, $finishedAt);
+
+        $session = PracticeSession::factory()
+            ->for($topic)
+            ->create([
+                'status' => PracticeSession::STATUS_FINISHED,
+                'created_at' => $createdAt,
+                'updated_at' => $lastChangedAt,
+                'finished_at' => $finishedAt,
+                'last_changed_at' => $lastChangedAt,
+                'archived_at' => $archivedAt instanceof CarbonImmutable
+                    ? $this->notInTheFuture($archivedAt)
+                    : null,
+            ]);
+
+        $this->addContent($session);
+
+        return $session;
+    }
+
+    private function addContent(PracticeSession $session): void
+    {
         $questionCount = fake()->numberBetween(1, 8);
 
         foreach (range(1, $questionCount) as $position) {

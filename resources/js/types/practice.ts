@@ -194,8 +194,73 @@ export interface SessionDeletionResult {
     counts: SessionCounts;
 }
 
-/** The result of finishing a session: either a summary, or an empty warning. */
-export type FinishSessionResult =
+/** Every session matching the current filters, for "Select all". */
+export interface LibrarySelection {
+    ids: number[];
+    finished_ids: number[];
+    total: number;
+    limit: number;
+    /** True when the list is too large to select as a whole; no ids are sent. */
+    truncated: boolean;
+}
+
+/** The result of archiving a selection. Only changed ids are included. */
+export interface BulkArchiveResult {
+    archived: true;
+    archived_ids: number[];
+    archived_count: number;
+    skipped_unfinished: number;
+    skipped_archived: number;
+    skipped_missing: number;
+}
+
+/** The result of restoring a selection. Only changed ids are included. */
+export interface BulkRestoreResult {
+    restored: true;
+    restored_ids: number[];
+    restored_count: number;
+    skipped_not_archived: number;
+    skipped_missing: number;
+}
+
+/** One of the first few sessions named in a bulk delete warning. */
+export interface BulkDeletionName {
+    topic: string;
+    session_date: string | null;
+}
+
+/**
+ * Everything the bulk delete warning needs: the selection, the combined
+ * content, progress before and after, and the signed token to confirm it.
+ */
+export interface SessionDeletionBatchPreview {
+    requested_count: number;
+    session_count: number;
+    missing_count: number;
+    finished_count: number;
+    unfinished_count: number;
+    archivable_count: number;
+    all_finished_archived: boolean;
+    names: BulkDeletionName[];
+    more_count: number;
+    counts: SessionCounts;
+    progress: {
+        before: ProgressNumbers;
+        after: ProgressNumbers;
+    };
+    token: string;
+}
+
+/** The result of a permanent bulk delete. Repeating it is reported as already deleted. */
+export interface BulkDeletionResult {
+    deleted: true;
+    already_deleted: boolean;
+    deleted_ids: number[];
+    deleted_count: number;
+    skipped_missing: number;
+}
+
+/** The result of finishing a session: either a summary, or an empty warning. */ export type FinishSessionResult =
     | {
           empty: false;
           session: PracticeSessionData;

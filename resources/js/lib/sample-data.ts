@@ -29,21 +29,6 @@ export interface SessionDetail extends SessionSummary {
     entries: QuestionEntry[];
 }
 
-export type CollectionKey = 'vocabulary' | 'phrases' | 'grammar' | 'mistakes';
-
-export type ItemStatus = 'new' | 'learned' | 'difficult';
-
-export interface CollectionItem {
-    id: number;
-    term: string;
-    meaning: string;
-    example?: string;
-    status: ItemStatus;
-    starred: boolean;
-    seen?: number;
-    sessionTopic: string;
-}
-
 export type ReviewType = 'flashcard' | 'fix' | 'say-again' | 'fill-blank';
 
 export interface ReviewItem {
@@ -124,99 +109,6 @@ export const sessionDetail: SessionDetail = {
             grammar: 'Avoiding imperative sentences in requests.',
             natural:
                 'That’s a shame. Never mind — I’ll go with the pasta, please.',
-        },
-    ],
-};
-
-export const collections: Record<CollectionKey, CollectionItem[]> = {
-    vocabulary: [
-        {
-            id: 1,
-            term: 'reluctant',
-            meaning: 'unwilling; not eager',
-            example: 'He was reluctant to speak first in the interview.',
-            status: 'difficult',
-            starred: true,
-            sessionTopic: 'Job interview practice',
-        },
-        {
-            id: 2,
-            term: 'affordable',
-            meaning: 'not too expensive',
-            example: 'We are looking for an affordable place nearby.',
-            status: 'learned',
-            starred: false,
-            sessionTopic: 'Ordering at a restaurant',
-        },
-        {
-            id: 3,
-            term: 'relish',
-            meaning: 'to enjoy something very much',
-            example: 'I relish a quiet evening with a good book.',
-            status: 'new',
-            starred: false,
-            sessionTopic: 'Ordering at a restaurant',
-        },
-    ],
-    phrases: [
-        {
-            id: 1,
-            term: 'catch up',
-            meaning: 'to talk with a friend after a long time',
-            example: "Let's catch up over coffee this week.",
-            status: 'new',
-            starred: false,
-            sessionTopic: 'Small talk about the weather',
-        },
-        {
-            id: 2,
-            term: 'could I have',
-            meaning: 'a polite way to ask for something',
-            example: 'Could I have the menu, please?',
-            status: 'learned',
-            starred: true,
-            sessionTopic: 'Ordering at a restaurant',
-        },
-    ],
-    grammar: [
-        {
-            id: 1,
-            term: "Softening requests with 'I'd like'",
-            meaning:
-                'Use “I’d like …” instead of “I want …” to sound more polite.',
-            example: 'I’d like a coffee, please.',
-            status: 'new',
-            starred: false,
-            sessionTopic: 'Ordering at a restaurant',
-        },
-        {
-            id: 2,
-            term: 'Avoiding imperative sentences',
-            meaning: 'Swap direct orders like “Give me …” for polite requests.',
-            example: 'Could I have the salt, please?',
-            status: 'difficult',
-            starred: false,
-            sessionTopic: 'Ordering at a restaurant',
-        },
-    ],
-    mistakes: [
-        {
-            id: 1,
-            term: 'I want a soup',
-            meaning: 'Better: “I’d like the soup, please.”',
-            status: 'difficult',
-            starred: false,
-            seen: 5,
-            sessionTopic: 'Ordering at a restaurant',
-        },
-        {
-            id: 2,
-            term: 'Give me the pasta',
-            meaning: 'Better: “Could I have the pasta, please?”',
-            status: 'learned',
-            starred: false,
-            seen: 2,
-            sessionTopic: 'Ordering at a restaurant',
         },
     ],
 };

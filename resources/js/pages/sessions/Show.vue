@@ -8,6 +8,7 @@ import {
     PencilIcon,
 } from '@lucide/vue';
 import { toast } from 'vue-sonner';
+import BackToCollections from '@/components/BackToCollections.vue';
 import BackToLibrary from '@/components/BackToLibrary.vue';
 import PageHeader from '@/components/PageHeader.vue';
 import SectionLabel from '@/components/SectionLabel.vue';
@@ -20,6 +21,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { cameFromCollections } from '@/lib/collections';
 import { shortDate } from '@/lib/format';
 import {
     forgetLibrarySession,
@@ -301,7 +303,13 @@ function partsOf(entry: ReadingEntry): ReadingPart[] {
 /** A calm note when a search result no longer points at anything. */
 const targetNotice = ref('');
 
-onMounted(revealTarget);
+/** Whether this session was opened from a collection item. */
+const fromCollection = ref(false);
+
+onMounted(() => {
+    fromCollection.value = cameFromCollections(window.location.href);
+    revealTarget();
+});
 
 /**
  * Take the learner to the item a search result named. The item is found
@@ -441,7 +449,8 @@ function itemHasMoved(): void {
     <div>
         <Head :title="props.session.topic.name" />
 
-        <BackToLibrary :archived="isArchived" />
+        <BackToCollections v-if="fromCollection" />
+        <BackToLibrary v-else :archived="isArchived" />
 
         <PageHeader
             :title="props.session.topic.name"

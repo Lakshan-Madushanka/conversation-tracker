@@ -12,6 +12,7 @@ use App\Models\Topic;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Fills a fresh development database with enough sessions to exercise the
@@ -25,6 +26,35 @@ use Illuminate\Support\Collection;
 class LibrarySeeder extends Seeder
 {
     private const int TARGET_SESSIONS = 500;
+
+    /**
+     * Enough words to fill a few hundred collection pages, so "Load more" and
+     * the endless list can be tried by hand.
+     */
+    private const int TARGET_VOCABULARY = 5000;
+
+    /** One showcase session: eight questions with twelve rows each. */
+    private const int SHOWCASE_QUESTIONS = 8;
+
+    private const int SHOWCASE_ROWS = 12;
+
+    /** A meaning long enough to wrap over several lines on a phone. */
+    private const string LONG_MEANING = 'A feeling of quiet, unhurried contentment that comes from simple things — a warm drink, a familiar chair, a book you have read before, and the knowledge that there is nowhere else you need to be for the next hour.';
+
+    private const string LONG_EXAMPLE = 'When the rain finally stopped, we walked the long way home past the market, the old bookshop and the café where the waiter always remembers our order, and none of us said very much because the evening already felt complete.';
+
+    /**
+     * One word written four ways, so grouping, versions and a row without a
+     * meaning can be tried in the same vocabulary box.
+     *
+     * @var list<array{word: string, meaning: string, example: string}>
+     */
+    private const array SHOWCASE_VARIANTS = [
+        ['word' => 'Café', 'meaning' => 'a place that serves coffee', 'example' => 'We met at the café on the corner.'],
+        ['word' => 'cafe', 'meaning' => 'a coffee shop', 'example' => 'The cafe was busy all morning.'],
+        ['word' => 'CAFÉ', 'meaning' => '', 'example' => ''],
+        ['word' => '  café  ', 'meaning' => 'a small coffee house', 'example' => 'The little café stays open late.'],
+    ];
 
     /** @var list<string> */
     private const array TOPICS = [
@@ -201,6 +231,42 @@ class LibrarySeeder extends Seeder
         ['word' => 'déjà vu', 'meaning' => 'the feeling that this happened before', 'example' => 'I had déjà vu in that street.'],
         ['word' => 'fiancé', 'meaning' => 'the man you are engaged to', 'example' => 'Her fiancé cooks every Sunday.'],
         ['word' => 'résumé', 'meaning' => 'a summary of your work history', 'example' => 'Send your résumé by Friday.'],
+        ['word' => 'relish', 'meaning' => 'to enjoy something greatly', 'example' => 'I relish a quiet evening at home.'],
+        ['word' => 'savour', 'meaning' => 'to enjoy slowly and fully', 'example' => 'She savoured every spoonful of the soup.'],
+        ['word' => 'gemütlich', 'meaning' => 'cosy and comfortable in a German-speaking way', 'example' => 'The little café felt gemütlich on a cold day.'],
+        ['word' => 'hygge', 'meaning' => 'a Danish feeling of cosy contentment', 'example' => 'Candles and blankets are part of hygge.'],
+        ['word' => 'piñata', 'meaning' => 'a decorated container filled with sweets', 'example' => 'The children broke the piñata at the party.'],
+        ['word' => 'jalapeño', 'meaning' => 'a small hot green pepper', 'example' => 'Add one jalapeño, not three.'],
+        ['word' => 'smörgåsbord', 'meaning' => 'a Swedish spread of many small dishes', 'example' => 'The buffet was a proper smörgåsbord.'],
+        ['word' => 'schadenfreude', 'meaning' => 'pleasure taken from another person’s trouble', 'example' => 'He felt a flicker of schadenfreude when the rival team lost.'],
+        ['word' => 'doppelgänger', 'meaning' => 'a person who looks exactly like another', 'example' => 'You are my doppelgänger, surely.'],
+        ['word' => 'zeitgeist', 'meaning' => 'the mood of a particular period', 'example' => 'The film captured the zeitgeist of the decade.'],
+        ['word' => 'wanderlust', 'meaning' => 'a strong desire to travel', 'example' => 'Her wanderlust took her to three continents.'],
+        ['word' => 'entrepreneur', 'meaning' => 'someone who starts a business', 'example' => 'The young entrepreneur opened a bakery.'],
+        ['word' => 'rendezvous', 'meaning' => 'a meeting arranged at a place and time', 'example' => 'We had a rendezvous at the station clock.'],
+        ['word' => 'bouquet', 'meaning' => 'a bunch of flowers', 'example' => 'He brought a bouquet of wild flowers.'],
+        ['word' => 'liaison', 'meaning' => 'communication between groups', 'example' => 'She acts as our liaison with the school.'],
+        ['word' => 'façade', 'meaning' => 'the front of a building', 'example' => 'The façade hides a quiet courtyard.'],
+        ['word' => 'coöperate', 'meaning' => 'to work together', 'example' => 'The two teams coöperate on every project.'],
+        ['word' => 'soufflé', 'meaning' => 'a light baked egg dish', 'example' => 'The cheese soufflé rose beautifully.'],
+        ['word' => 'crêpe', 'meaning' => 'a thin French pancake', 'example' => 'We ordered a lemon crêpe.'],
+        ['word' => 'mêlée', 'meaning' => 'a confused crowd or struggle', 'example' => 'He lost his hat in the mêlée.'],
+        ['word' => 'fiancée', 'meaning' => 'the woman you are engaged to', 'example' => 'His fiancée arrives on Friday.'],
+        ['word' => 'tsunami', 'meaning' => 'a very large ocean wave', 'example' => 'The coast is ready for a tsunami warning.'],
+        ['word' => 'karaoke', 'meaning' => 'singing popular songs over a backing track', 'example' => 'We stayed for one more karaoke song.'],
+        ['word' => 'kindergarten', 'meaning' => 'a school for very young children', 'example' => 'She teaches at a kindergarten.'],
+        ['word' => 'angst', 'meaning' => 'a feeling of deep worry', 'example' => 'The deadline filled him with angst.'],
+        ['word' => 'kitsch', 'meaning' => 'art or objects that are purposely sentimental', 'example' => 'The souvenir shop was full of kitsch.'],
+        ['word' => 'glühwein', 'meaning' => 'warm spiced wine', 'example' => 'A cup of glühwein warmed our hands.'],
+        ['word' => 'smørrebrød', 'meaning' => 'a Danish open sandwich', 'example' => 'Lunch was smørrebrød and strong coffee.'],
+        ['word' => 'avant-garde', 'meaning' => 'new and experimental', 'example' => 'The gallery shows avant-garde work.'],
+        ['word' => 'faux pas', 'meaning' => 'a small social mistake', 'example' => 'Forgetting her name was an awkward faux pas.'],
+        ['word' => 'tour de force', 'meaning' => 'an impressive performance or achievement', 'example' => 'Her final speech was a tour de force.'],
+        ['word' => 'bon appétit', 'meaning' => 'enjoy your meal', 'example' => 'Bon appétit, everyone!'],
+        ['word' => '朝ごはん', 'meaning' => 'breakfast in Japanese', 'example' => '朝ごはん is ready at seven.'],
+        ['word' => '안녕하세요', 'meaning' => 'hello in Korean', 'example' => '안녕하세요, nice to meet you.'],
+        ['word' => 'merhaba', 'meaning' => 'hello in Turkish', 'example' => 'Merhaba, how are you today?'],
+        ['word' => 'gracias', 'meaning' => 'thank you in Spanish', 'example' => 'Gracias for the lovely evening.'],
     ];
 
     /** @var list<array{phrase: string, meaning: string, example: string}> */
@@ -309,13 +375,13 @@ class LibrarySeeder extends Seeder
         // The extra cases are added once, together. An existing archived
         // session means an earlier run already added them, so running the
         // seeder again tops up in silence instead of duplicating the set.
-        if (PracticeSession::query()->whereNotNull('archived_at')->exists()) {
-            return;
+        if (! PracticeSession::query()->whereNotNull('archived_at')->exists()) {
+            $this->seedArchivedSessions($topics);
+            $this->seedLongStreak($topics);
+            $this->seedSameDaySessions($topics);
         }
 
-        $this->seedArchivedSessions($topics);
-        $this->seedLongStreak($topics);
-        $this->seedSameDaySessions($topics);
+        $this->seedVocabularyShowcase($topics);
     }
 
     private function createSession(Topic $topic): void
@@ -411,6 +477,185 @@ class LibrarySeeder extends Seeder
 
         $this->finishedSessionAt($topics->random(), $sharedDay);
         $this->finishedSessionAt($topics->random(), $sharedDay->addMinutes(40));
+    }
+
+    /**
+     * Tops the vocabulary up to a few thousand rows, so the Collection has
+     * enough words to page through by hand.
+     *
+     * The pool mixes unique terms with the cases the page has to handle:
+     * one word written several ways, four copies in the same box, rows with
+     * no meaning, very long meanings and examples, letters from outside
+     * English, and a blank row that must never be gathered. The target is
+     * counted from the database, so a later run continues where the last one
+     * stopped instead of adding another 5,000 every time.
+     *
+     * @param  Collection<int, Topic>  $topics
+     */
+    private function seedVocabularyShowcase(Collection $topics): void
+    {
+        $existing = PracticeFeedbackEntry::query()
+            ->where('type', FeedbackType::Vocabulary->value)
+            ->count();
+
+        if ($existing >= self::TARGET_VOCABULARY) {
+            return;
+        }
+
+        $perSession = self::SHOWCASE_QUESTIONS * self::SHOWCASE_ROWS;
+        $sessions = (int) ceil(
+            (self::TARGET_VOCABULARY - $existing) / $perSession,
+        );
+        $index = 0;
+
+        DB::transaction(function () use ($topics, $sessions, &$index): void {
+            for ($number = 0; $number < $sessions; $number++) {
+                $finishedAt = $this->notInTheFuture(
+                    now()
+                        ->subDays(fake()->numberBetween(0, 240))
+                        ->setTime(
+                            fake()->numberBetween(7, 21),
+                            fake()->numberBetween(0, 59),
+                        ),
+                );
+                $createdAt = $this->notInTheFuture(
+                    $finishedAt->subMinutes(fake()->numberBetween(20, 120)),
+                );
+                $lastChangedAt = $this->lastChangedAt($createdAt, $finishedAt);
+
+                $session = PracticeSession::factory()
+                    ->for($topics->random())
+                    ->create([
+                        'status' => PracticeSession::STATUS_FINISHED,
+                        'created_at' => $createdAt,
+                        'updated_at' => $lastChangedAt,
+                        'finished_at' => $finishedAt,
+                        'last_changed_at' => $lastChangedAt,
+                        // A few showcase words sit in archived sessions, so
+                        // the Collection proves it leaves them out.
+                        'archived_at' => $number % 12 === 0
+                            ? $this->notInTheFuture($finishedAt->copy()->addDays(2))
+                            : null,
+                    ]);
+
+                foreach (range(1, self::SHOWCASE_QUESTIONS) as $position) {
+                    $exchange = fake()->randomElement(self::EXCHANGES);
+
+                    $question = PracticeQuestion::factory()->for($session)->create([
+                        'position' => $position,
+                        'question_text' => $exchange['question'],
+                        'question_html' => '<p>'.e($exchange['question']).'</p>',
+                        'answer_text' => $exchange['answer'],
+                        'answer_html' => '<p>'.e($exchange['answer']).'</p>',
+                    ]);
+
+                    foreach (range(0, self::SHOWCASE_ROWS - 1) as $row) {
+                        $this->createShowcaseRow($question, $position, $row, $index++);
+                    }
+                }
+            }
+        });
+    }
+
+    /**
+     * One row of the showcase vocabulary, with the awkward cases spread
+     * through it rather than kept in a separate corner.
+     */
+    private function createShowcaseRow(
+        PracticeQuestion $question,
+        int $position,
+        int $row,
+        int $index,
+    ): void {
+        $word = $this->showcaseWord($index, $position, $row);
+
+        $meaning = $word['meaning'];
+        $example = $word['example'];
+
+        if (! $word['variant']) {
+            $meaning = ucfirst(fake()->sentence(6));
+            $example = fake()->sentence(10);
+
+            if ($index % 7 === 0) {
+                $meaning = '';
+                $example = '';
+            }
+
+            if ($index % 13 === 0) {
+                $meaning = self::LONG_MEANING;
+            }
+
+            if ($index % 17 === 0) {
+                $example = self::LONG_EXAMPLE;
+            }
+        }
+
+        // A blank row here and there proves it is left out of the collection.
+        if (! $word['variant'] && $index % 41 === 0) {
+            $word['word'] = '   ';
+        }
+
+        $exampleHtml = $example === '' || $index % 4 !== 0
+            ? []
+            : [[
+                'id' => sprintf('example-%05d', $index),
+                'text' => $example,
+                'html' => '<p>'.e($example).'</p>',
+            ]];
+
+        PracticeFeedbackEntry::factory()->for($question)->create([
+            'type' => FeedbackType::Vocabulary,
+            'position' => $row,
+            'client_id' => sprintf('showcase-%05d', $index),
+            'content_text' => $word['word'],
+            'correction_text' => $meaning,
+            'example' => $example,
+            'example_html' => $exampleHtml,
+            'is_split' => true,
+        ]);
+    }
+
+    /**
+     * The word for one showcase row: a four-way variant in the first box, a
+     * word from the curated pool now and then, and a unique two-word term for
+     * the rest so the collection really has thousands of different items.
+     *
+     * @return array{word: string, meaning: string, example: string, variant: bool}
+     */
+    private function showcaseWord(int $index, int $position, int $row): array
+    {
+        if ($position === 1 && $row < count(self::SHOWCASE_VARIANTS)) {
+            return [...self::SHOWCASE_VARIANTS[$row], 'variant' => true];
+        }
+
+        if ($index % 6 === 0) {
+            $entry = self::VOCABULARY[$index % count(self::VOCABULARY)];
+            $word = $entry['word'];
+
+            if ($index % 4 === 0) {
+                $word = ' '.$word.' ';
+            }
+
+            if ($index % 9 === 0) {
+                $word = mb_strtoupper($word);
+            }
+
+            return [
+                'word' => $word,
+                'meaning' => $entry['meaning'],
+                'example' => $entry['example'],
+                'variant' => false,
+            ];
+        }
+
+        $term = rtrim(fake()->unique()->sentence(2, false), '.');
+
+        return [
+            'word' => ucfirst($term),
+            'meaning' => 'a term for “'.$term.'” used in everyday conversation',
+            'example' => 'We talked about '.$term.' on the way home.',
+            'variant' => false,
+        ];
     }
 
     /**

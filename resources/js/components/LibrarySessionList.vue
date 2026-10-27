@@ -103,26 +103,23 @@ const showClearFilters = computed(
 /**
  * What a screen reader hears once a search or filter has settled. It stays
  * empty while a request is on its way, so typing a word announces one result
- * count rather than a stream of them.
+ * count rather than a stream of them. Loading another page keeps the same
+ * words, so scrolling through a long list never announces every page.
  */
 const resultAnnouncement = computed(() => {
     if (props.updating || props.loading) {
         return '';
     }
 
-    if (props.hasFilters && props.total === 0) {
-        return 'No sessions match.';
+    if (props.hasFilters) {
+        if (props.total === 0) {
+            return 'No sessions match.';
+        }
+
+        return `${props.total} ${props.total === 1 ? 'session matches' : 'sessions match'}.`;
     }
 
-    const counted = props.hasFilters
-        ? `${props.total} ${props.total === 1 ? 'session matches' : 'sessions match'}.`
-        : '';
-
-    if (props.hasMore) {
-        return `${counted} Showing ${props.sessions.length} of ${props.total}.`.trim();
-    }
-
-    return counted;
+    return `${props.total} ${props.total === 1 ? 'session' : 'sessions'}.`;
 });
 
 const sentinel = ref<HTMLElement | null>(null);

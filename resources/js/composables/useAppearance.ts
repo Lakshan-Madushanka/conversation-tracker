@@ -9,9 +9,27 @@ function readStoredAppearance(): Appearance | null {
         return null;
     }
 
-    const stored = window.localStorage.getItem(STORAGE_KEY);
+    try {
+        const stored = window.localStorage.getItem(STORAGE_KEY);
 
-    return stored === 'light' || stored === 'dark' ? stored : null;
+        return stored === 'light' || stored === 'dark' ? stored : null;
+    } catch {
+        // Storage can be blocked (private windows, embedded pages, strict
+        // settings). The system preference is a fine fallback.
+        return null;
+    }
+}
+
+function storeAppearance(appearance: Appearance): void {
+    if (typeof window === 'undefined') {
+        return;
+    }
+
+    try {
+        window.localStorage.setItem(STORAGE_KEY, appearance);
+    } catch {
+        // The choice still applies to this page even when it cannot be kept.
+    }
 }
 
 function systemAppearance(): Appearance {
@@ -48,11 +66,7 @@ const appearance = ref<Appearance>(
 export function useAppearance() {
     function setAppearance(value: Appearance): void {
         appearance.value = value;
-
-        if (typeof window !== 'undefined') {
-            window.localStorage.setItem(STORAGE_KEY, value);
-        }
-
+        storeAppearance(value);
         applyAppearance(value);
     }
 

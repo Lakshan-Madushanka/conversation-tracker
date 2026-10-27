@@ -124,8 +124,9 @@ const greeting = computed(() => {
             />
         </div>
 
-        <!-- Recent sessions: only once there is something to show. -->
-        <div v-if="recentSessions && recentSessions.length > 0" class="mt-8">
+        <!-- Recent sessions: the link to the Library is always here, so the
+            full list is one step away even before anything is finished. -->
+        <div class="mt-8">
             <div class="mb-3 flex items-center justify-between">
                 <h2 class="text-sm font-semibold">Recent sessions</h2>
                 <Link
@@ -137,7 +138,10 @@ const greeting = computed(() => {
                 </Link>
             </div>
 
-            <div class="grid gap-3">
+            <div
+                v-if="recentSessions && recentSessions.length > 0"
+                class="grid gap-3"
+            >
                 <SessionCard
                     v-for="session in recentSessions"
                     :key="session.id"
@@ -145,6 +149,10 @@ const greeting = computed(() => {
                     :show-menu="false"
                 />
             </div>
+
+            <p v-else class="text-sm text-muted-foreground">
+                Finished sessions will appear here once you complete one.
+            </p>
         </div>
     </div>
 </template>

@@ -218,6 +218,10 @@ export function useLibrarySessions(initial: LibraryPage) {
         total.value = lastPage.total;
         allTotal.value = lastPage.all_total;
         archivedTotal.value = lastPage.archived_total;
+        // The server quietly drops filters it can no longer honour, such as a
+        // topic whose last session was just deleted. Take its word so the chips
+        // and the list never disagree.
+        filters.value = normalizeLibraryFilters(lastPage.filters);
         topics.value = [...lastPage.topics];
         timezone.value = lastPage.timezone;
     }

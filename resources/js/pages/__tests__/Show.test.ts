@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 import { router } from '@inertiajs/vue3';
 import { toast } from 'vue-sonner';
 import SessionMenu from '@/components/SessionMenu.vue';
+import SessionDeleteDialog from '@/components/SessionDeleteDialog.vue';
 import { shortDate } from '@/lib/format';
 import {
     deleteSessionPermanently,
@@ -27,6 +28,7 @@ function session(
     return {
         id: 7,
         status: 'finished',
+        session_date: '2026-10-12T09:00:00.000000Z',
         finished_at: '2026-10-12T09:00:00.000000Z',
         last_changed_at: '2026-10-12T10:00:00.000000Z',
         archived_at: null,
@@ -219,6 +221,48 @@ describe('a session that was archived', () => {
             '/sessions/7/restore',
         );
         expect(reload).toHaveBeenCalledTimes(1);
+    });
+
+    it('moves focus to the heading after restoring', async () => {
+        const fetch = vi.fn(
+            async (_url: string, _options?: RequestInit) =>
+                new Response(null, { status: 200 }),
+        );
+        vi.stubGlobal('fetch', fetch);
+        vi.spyOn(router, 'reload').mockImplementation((options) => {
+            options?.onSuccess?.({} as never);
+        });
+
+        const wrapper = mount(Show, {
+            props: { session: archived },
+            attachTo: document.body,
+        });
+
+        await wrapper
+            .findAll('button')
+            .find((button) => button.text().includes('Restore session'))
+            ?.trigger('click');
+        await flushPromises();
+        await nextTick();
+
+        expect(document.activeElement?.id).toBe('session-heading');
+
+        wrapper.unmount();
+    });
+});
+
+describe('the delete warning on the reading page', () => {
+    it('names the day the practice happened, not the day it was finished', () => {
+        const wrapper = mountShow(
+            session({
+                session_date: '2026-10-05T09:00:00.000000Z',
+                finished_at: '2026-10-12T09:00:00.000000Z',
+            }),
+        );
+
+        expect(
+            wrapper.findComponent(SessionDeleteDialog).props('sessionDate'),
+        ).toBe('2026-10-05T09:00:00.000000Z');
     });
 });
 

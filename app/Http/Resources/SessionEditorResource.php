@@ -28,6 +28,7 @@ final class SessionEditorResource extends JsonResource
      * @return array{
      *     id: int,
      *     status: string,
+     *     session_date: string|null,
      *     finished_at: string|null,
      *     last_changed_at: string|null,
      *     archived_at: string|null,
@@ -52,6 +53,7 @@ final class SessionEditorResource extends JsonResource
         return [
             'id' => $session->id,
             'status' => $session->status,
+            'session_date' => $session->sessionDate()?->toIso8601String(),
             'finished_at' => $session->finished_at?->toIso8601String(),
             'last_changed_at' => $session->last_changed_at?->toIso8601String(),
             'archived_at' => $session->archived_at?->toIso8601String(),

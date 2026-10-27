@@ -89,7 +89,10 @@ function preview(): SessionDeletionPreview {
 }
 
 /** Answers a list refresh with the page this test wants to show next. */
-function stubPage(sessions: SessionCardData[] = []) {
+function stubPage(
+    sessions: SessionCardData[] = [],
+    filters: LibraryFilters = defaultLibraryFilters(),
+) {
     const fetch = vi.fn(
         async (_url: string, _options?: RequestInit) =>
             new Response(
@@ -100,7 +103,7 @@ function stubPage(sessions: SessionCardData[] = []) {
                     total: sessions.length,
                     all_total: sessions.length,
                     archived_total: 0,
-                    filters: defaultLibraryFilters(),
+                    filters,
                     topics: [],
                     timezone: 'UTC',
                 }),
@@ -250,7 +253,10 @@ describe('deleting from the Library list', () => {
     });
 
     it('deletes from the Archived view and leaves the learner there', async () => {
-        stubPage([]);
+        stubPage([], {
+            ...defaultLibraryFilters(),
+            view: 'archived',
+        });
 
         mountLibrary(
             [

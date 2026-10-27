@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, nextTick, onMounted, ref } from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import {
     ArchiveIcon,
@@ -142,6 +142,20 @@ const archiving = ref(false);
 /** Whether the permanent delete warning is on screen. */
 const deleteOpen = ref(false);
 
+/** The page heading, so focus can land somewhere sensible after a change. */
+const HEADING_ID = 'session-heading';
+
+/**
+ * Archiving or restoring removes the control that was pressed. Move focus to
+ * the heading so a keyboard or screen-reader user hears what the page is now,
+ * instead of being dropped back at the top of the document.
+ */
+function focusHeading(): void {
+    void nextTick(() => {
+        document.getElementById(HEADING_ID)?.focus();
+    });
+}
+
 /**
  * Bring the session back to the Library without leaving the page. The server
  * sends the session again, now editable, so the page switches to its normal
@@ -166,7 +180,7 @@ async function restore(): Promise<void> {
         }
 
         toast.success('Session restored.');
-        router.reload();
+        router.reload({ onSuccess: () => focusHeading() });
     } finally {
         restoring.value = false;
     }
@@ -209,7 +223,7 @@ async function archive(): Promise<void> {
             },
         });
 
-        router.reload();
+        router.reload({ onSuccess: () => focusHeading() });
     } finally {
         archiving.value = false;
     }
@@ -228,7 +242,7 @@ async function undoArchive(): Promise<void> {
     }
 
     toast.success('Session restored.');
-    router.reload();
+    router.reload({ onSuccess: () => focusHeading() });
 }
 
 /**
@@ -266,7 +280,7 @@ function archivedFromDialog(): void {
         },
     });
 
-    router.reload();
+    router.reload({ onSuccess: () => focusHeading() });
 }
 
 const description = computed(() => {
@@ -432,6 +446,7 @@ function itemHasMoved(): void {
         <PageHeader
             :title="props.session.topic.name"
             :description="description"
+            :heading-id="HEADING_ID"
         >
             <template #actions>
                 <Badge
@@ -652,7 +667,7 @@ function itemHasMoved(): void {
             :open="deleteOpen"
             :session-id="props.session.id"
             :topic="props.session.topic.name"
-            :session-date="props.session.finished_at"
+            :session-date="props.session.session_date"
             @update:open="deleteOpen = $event"
             @deleted="deletedFromReadingPage"
             @archived="archivedFromDialog"

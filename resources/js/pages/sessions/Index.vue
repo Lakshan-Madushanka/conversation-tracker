@@ -189,6 +189,7 @@ async function archiveSelection(): Promise<void> {
     bulkBusy.value = true;
     selectionNotice.value = '';
 
+    const firstIndex = indexOfFirst(sessions.value, selectedIds.value);
     const result = await archiveSessions(selectedIds.value);
 
     bulkBusy.value = false;
@@ -203,6 +204,8 @@ async function archiveSelection(): Promise<void> {
     endSelection();
     await refresh();
     showArchiveMessage(result);
+    await nextTick();
+    focusAfterRemoval(firstIndex);
 }
 
 /** Bring every archived session in the selection back, then offer one Undo. */
@@ -214,6 +217,7 @@ async function restoreSelection(): Promise<void> {
     bulkBusy.value = true;
     selectionNotice.value = '';
 
+    const firstIndex = indexOfFirst(sessions.value, selectedIds.value);
     const result = await restoreSessions(selectedIds.value);
 
     bulkBusy.value = false;
@@ -228,6 +232,8 @@ async function restoreSelection(): Promise<void> {
     endSelection();
     await refresh();
     showRestoreMessage(result);
+    await nextTick();
+    focusAfterRemoval(firstIndex);
 }
 
 /** One message for a bulk archive, with Undo only for what really changed. */
@@ -316,48 +322,57 @@ function openBulkDelete(): void {
 
 /** The selection is gone for good: no Undo, one message, focus kept useful. */
 async function bulkDeleted(result: BulkDeletionResult): Promise<void> {
+    const firstIndex = indexOfFirst(sessions.value, result.deleted_ids);
     bulkDeleteOpen.value = false;
     endSelection();
     toast.success(bulkDeletionMessage(result));
 
     await refresh();
     await nextTick();
-    focusAfterBulkRemoval();
+    focusAfterRemoval(firstIndex);
 }
 
 /** Everything selected had already been deleted somewhere else. */
 async function bulkWasAlreadyDeleted(): Promise<void> {
+    const firstIndex = indexOfFirst(sessions.value, bulkDeleteIds.value);
     bulkDeleteOpen.value = false;
     endSelection();
     toast.info('These sessions were already deleted.');
 
     await refresh();
     await nextTick();
-    focusAfterBulkRemoval();
+    focusAfterRemoval(firstIndex);
 }
 
 /** Archive was chosen instead of Delete, so nothing is removed. */
 async function bulkArchivedFromDialog(
     result: BulkArchiveResult,
 ): Promise<void> {
+    const firstIndex = indexOfFirst(sessions.value, result.archived_ids);
     bulkDeleteOpen.value = false;
     endSelection();
 
     await refresh();
     showArchiveMessage(result);
+    await nextTick();
+    focusAfterRemoval(firstIndex);
 }
 
-/** Puts focus on the first card left, or the heading when the list is empty. */
-function focusAfterBulkRemoval(): void {
-    const next = sessions.value[0] ?? null;
+/**
+ * Where the first chosen session sits in the list, so focus can stay near the
+ * work that was just done. A selection made with "Select all" may hold cards
+ * that were never loaded, so an unknown id starts from the top.
+ */
+function indexOfFirst(cards: SessionCardData[], chosenIds: number[]): number {
+    for (const id of chosenIds) {
+        const index = cards.findIndex((card) => card.id === id);
 
-    if (next !== null) {
-        document.getElementById(`session-link-${next.id}`)?.focus();
-
-        return;
+        if (index >= 0) {
+            return index;
+        }
     }
 
-    document.getElementById('library-heading')?.focus();
+    return 0;
 }
 
 const filterBar = ref<InstanceType<typeof LibraryFilterBar> | null>(null);
@@ -396,17 +411,6 @@ const description = computed(() => {
     }
 
     return `${count.value}, ${sortLabel(filters.value.sort)}.`;
-});
-
-/** A quiet announcement after the list has settled, never on every change. */
-const announcement = ref('');
-
-watch(updating, (value, oldValue) => {
-    if (value || !oldValue || filterError.value) {
-        return;
-    }
-
-    announcement.value = `${count.value}.`;
 });
 
 function changeFilters(next: LibraryFilters): void {
@@ -478,6 +482,7 @@ function changeView(value: string | number): void {
  * The list refreshes from the server, so every count and topic stays true.
  */
 async function archiveFromList(session: SessionCardData): Promise<void> {
+    const index = sessions.value.findIndex((card) => card.id === session.id);
     const outcome = await archiveSession(session.id);
 
     if (outcome === 'unfinished') {
@@ -502,6 +507,8 @@ async function archiveFromList(session: SessionCardData): Promise<void> {
     });
 
     await refresh();
+    await nextTick();
+    focusAfterRemoval(index);
 }
 
 /** Undo an archive from the message, putting the session back where it was. */
@@ -522,6 +529,7 @@ async function undoArchive(sessionId: number): Promise<void> {
 
 /** Bring an archived session back to the Library. */
 async function restoreFromList(session: SessionCardData): Promise<void> {
+    const index = sessions.value.findIndex((card) => card.id === session.id);
     const restored = await restoreSession(session.id);
 
     if (!restored) {
@@ -532,6 +540,8 @@ async function restoreFromList(session: SessionCardData): Promise<void> {
 
     toast.success('Session restored.');
     await refresh();
+    await nextTick();
+    focusAfterRemoval(index);
 }
 
 /** The session whose delete warning is open, or null when it is closed. */
@@ -587,6 +597,7 @@ async function missingFromList(sessionId: number): Promise<void> {
 
 /** Archive was chosen instead of Delete, so the list and its counts refresh. */
 async function archivedFromDialog(sessionId: number): Promise<void> {
+    const index = sessions.value.findIndex((card) => card.id === sessionId);
     deleteOpen.value = false;
 
     toast.success('Session archived.', {
@@ -599,14 +610,22 @@ async function archivedFromDialog(sessionId: number): Promise<void> {
     });
 
     await refresh();
+    await nextTick();
+    focusAfterRemoval(index);
 }
 
 /**
- * Puts focus where the deleted card used to be: the card that took its place,
- * the one above it, or the Library heading when nothing is left.
+ * Puts focus where the removed cards used to be: the card that took their
+ * place, the one above, or the Library heading when nothing is left. A bulk
+ * action can remove the whole loaded list, so it also falls back to the last
+ * card that is still there.
  */
 function focusAfterRemoval(index: number): void {
-    const next = sessions.value[index] ?? sessions.value[index - 1] ?? null;
+    const next =
+        sessions.value[index] ??
+        sessions.value[index - 1] ??
+        sessions.value[sessions.value.length - 1] ??
+        null;
 
     if (next !== null) {
         document.getElementById(`session-link-${next.id}`)?.focus();
@@ -729,10 +748,6 @@ onBeforeUnmount(() => {
                 </Button>
             </template>
         </PageHeader>
-
-        <p class="sr-only" aria-live="polite" aria-atomic="true">
-            {{ announcement }}
-        </p>
 
         <p class="sr-only" aria-live="polite" aria-atomic="true">
             {{ selectionAnnouncement }}

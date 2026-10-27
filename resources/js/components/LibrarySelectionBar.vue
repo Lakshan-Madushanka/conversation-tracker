@@ -4,6 +4,7 @@ import { ArchiveIcon, RotateCcwIcon, Trash2Icon } from '@lucide/vue';
 import { Button } from '@/components/ui/button';
 import {
     archiveAvailabilityLabel,
+    restoreAvailabilityLabel,
     selectionCountLabel,
 } from '@/lib/session-selection';
 
@@ -39,7 +40,9 @@ const emit = defineEmits<{
 const countLabel = computed(() => selectionCountLabel(props.selectedCount));
 
 const availability = computed(() =>
-    archiveAvailabilityLabel(props.selectedCount, props.finishedCount),
+    props.archivedView
+        ? restoreAvailabilityLabel(props.selectedCount)
+        : archiveAvailabilityLabel(props.selectedCount, props.finishedCount),
 );
 
 const canAct = computed(() => props.selectedCount > 0 && !props.busy);

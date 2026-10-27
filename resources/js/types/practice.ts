@@ -109,6 +109,11 @@ export interface PracticeSessionData {
     id: number;
     status: string;
     /**
+     * The day the practice happened, as an ISO timestamp. For sessions recorded
+     * in the app this is the day the session was created.
+     */
+    session_date: string | null;
+    /**
      * When the session was finished, or null while it is still unfinished.
      * It is set once and never moved, so re-finishing keeps the same moment.
      */

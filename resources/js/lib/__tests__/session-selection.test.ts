@@ -7,6 +7,7 @@ import {
     bulkDeletionMessage,
     bulkRestoreMessage,
     rangeIds,
+    restoreAvailabilityLabel,
     selectionCountLabel,
 } from '@/lib/session-selection';
 import type {
@@ -101,6 +102,16 @@ describe('the selection count and what can be archived', () => {
             'This finished session can be archived.',
         );
         expect(archiveAvailabilityLabel(3, 1)).toBe('1 of 3 can be archived.');
+    });
+
+    it('says what can be restored in the Archived view', () => {
+        expect(restoreAvailabilityLabel(0)).toBe('Choose sessions to act on.');
+        expect(restoreAvailabilityLabel(1)).toBe(
+            'This session can be restored.',
+        );
+        expect(restoreAvailabilityLabel(3)).toBe(
+            'All of these sessions can be restored.',
+        );
     });
 });
 

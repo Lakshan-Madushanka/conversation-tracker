@@ -24,6 +24,7 @@ function savedSession(
     return {
         id: 7,
         status: 'unfinished',
+        session_date: '2026-10-12T10:00:00.000000Z',
         finished_at: null,
         last_changed_at: '2026-10-12T10:00:00.000000Z',
         archived_at: null,

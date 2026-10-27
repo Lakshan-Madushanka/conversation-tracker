@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\CollectionController;
 use App\Http\Controllers\HomeController;
+use App\Http\Controllers\LibraryBulkController;
 use App\Http\Controllers\LibraryController;
 use App\Http\Controllers\PracticeSessionController;
 use Illuminate\Support\Facades\Route;
@@ -9,6 +10,14 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', HomeController::class)->name('home');
 
 Route::get('/sessions', LibraryController::class)->name('sessions.index');
+
+// Selection routes sit before the parameterised session routes, so "selection"
+// and "bulk" are never mistaken for a session id.
+Route::get('/sessions/selection', [LibraryBulkController::class, 'selection'])->name('sessions.selection');
+Route::post('/sessions/bulk/archive', [LibraryBulkController::class, 'archive'])->name('sessions.bulkArchive');
+Route::post('/sessions/bulk/restore', [LibraryBulkController::class, 'restore'])->name('sessions.bulkRestore');
+Route::post('/sessions/bulk/delete-preview', [LibraryBulkController::class, 'deletePreview'])->name('sessions.bulkDeletePreview');
+Route::delete('/sessions/bulk/delete', [LibraryBulkController::class, 'delete'])->name('sessions.bulkDelete');
 
 Route::get('/sessions/create', [PracticeSessionController::class, 'create'])->name('sessions.create');
 

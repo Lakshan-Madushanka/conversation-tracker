@@ -348,7 +348,7 @@ watch(
 <template>
     <AlertDialog :open="props.open" @update:open="handleOpenChange">
         <AlertDialogContent
-            class="sm:max-w-lg!"
+            class="sm:max-w-xl!"
             @open-auto-focus="focusCancelFirst"
         >
             <AlertDialogHeader>

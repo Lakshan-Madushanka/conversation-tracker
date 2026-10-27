@@ -359,10 +359,10 @@ watch(
 <template>
     <AlertDialog :open="props.open" @update:open="handleOpenChange">
         <AlertDialogContent
-            class="max-h-[85dvh] overflow-y-auto sm:max-w-lg!"
+            class="flex max-h-[85dvh] w-full max-w-[calc(100vw-2rem)]! flex-col gap-0 overflow-hidden p-0 sm:max-w-xl!"
             @open-auto-focus="focusCancelFirst"
         >
-            <AlertDialogHeader>
+            <AlertDialogHeader class="shrink-0 px-4 pt-4 pb-3">
                 <AlertDialogTitle>{{ title }}</AlertDialogTitle>
                 <AlertDialogDescription>
                     <template v-if="preview !== null">
@@ -378,195 +378,208 @@ watch(
                 </AlertDialogDescription>
             </AlertDialogHeader>
 
-            <p v-if="loading" class="flex items-center gap-2 text-sm">
-                <LoaderCircleIcon
-                    class="size-4 animate-spin"
-                    aria-hidden="true"
-                />
-                Checking what will be removed…
-            </p>
-
-            <div v-else-if="failed">
-                <Alert variant="destructive">
-                    <TriangleAlertIcon aria-hidden="true" />
-                    <AlertTitle>We could not check these sessions</AlertTitle>
-                    <AlertDescription>
-                        <p>
-                            Nothing has been deleted. Check your connection and
-                            try again.
-                        </p>
-                    </AlertDescription>
-                </Alert>
-                <Button
-                    type="button"
-                    variant="outline"
-                    class="mt-3"
-                    @click="loadPreview"
-                >
-                    Try again
-                </Button>
-            </div>
-
-            <template v-else-if="preview !== null">
-                <Alert
-                    v-if="staleMessage !== ''"
-                    variant="destructive"
-                    class="mb-3"
-                >
-                    <TriangleAlertIcon aria-hidden="true" />
-                    <AlertTitle>These sessions changed</AlertTitle>
-                    <AlertDescription>
-                        <p>{{ staleMessage }}</p>
-                        <p class="mt-1">
-                            The numbers below are fresh. Check them and confirm
-                            again.
-                        </p>
-                    </AlertDescription>
-                </Alert>
-
-                <Alert v-if="hasFinished" variant="destructive" class="mb-3">
-                    <TriangleAlertIcon aria-hidden="true" />
-                    <AlertTitle>This cannot be undone.</AlertTitle>
-                    <AlertDescription>
-                        <p>
-                            {{ finishedCount }}
-                            {{
-                                finishedCount === 1
-                                    ? 'finished session'
-                                    : 'finished sessions'
-                            }}
-                            will leave the Library, Collections, and Review.
-                            Everything in them will be removed for good.
-                        </p>
-                    </AlertDescription>
-                </Alert>
-
-                <p v-else class="mb-3 text-sm text-muted-foreground">
-                    These sessions are unfinished, so your progress totals,
-                    practice days, and streak will not change.
+            <div
+                class="min-h-0 flex-1 overflow-y-auto px-4 pb-4 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset"
+                tabindex="0"
+            >
+                <p v-if="loading" class="flex items-center gap-2 text-sm">
+                    <LoaderCircleIcon
+                        class="size-4 animate-spin"
+                        aria-hidden="true"
+                    />
+                    Checking what will be removed…
                 </p>
 
-                <section
-                    aria-labelledby="bulk-delete-names-title"
-                    class="rounded-lg border p-3"
-                >
-                    <h3
-                        id="bulk-delete-names-title"
-                        class="text-sm font-medium"
-                    >
-                        What will be removed
-                    </h3>
-
-                    <ul class="mt-2 space-y-1 text-sm">
-                        <li
-                            v-for="(named, index) in namedSessions"
-                            :key="`${named.topic}-${index}`"
+                <div v-else-if="failed">
+                    <Alert variant="destructive">
+                        <TriangleAlertIcon aria-hidden="true" />
+                        <AlertTitle
+                            >We could not check these sessions</AlertTitle
                         >
-                            <span class="font-medium text-foreground">
-                                {{ named.topic }}
-                            </span>
-                            <template v-if="named.day !== ''">
-                                from {{ named.day }}</template
-                            >
-                        </li>
-                    </ul>
-
-                    <p v-if="moreCount > 0" class="mt-1 text-sm">
-                        and {{ moreCount }} more
-                    </p>
-
-                    <p
-                        v-if="preview.missing_count > 0"
-                        class="mt-2 text-sm text-muted-foreground"
+                        <AlertDescription>
+                            <p>
+                                Nothing has been deleted. Check your connection
+                                and try again.
+                            </p>
+                        </AlertDescription>
+                    </Alert>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        class="mt-3"
+                        @click="loadPreview"
                     >
-                        {{ preview.missing_count }}
-                        {{
-                            preview.missing_count === 1
-                                ? 'session was'
-                                : 'sessions were'
-                        }}
-                        already deleted and will be skipped.
-                    </p>
-
-                    <dl
-                        class="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 border-t pt-3 text-sm"
-                    >
-                        <div
-                            v-for="row in countRows"
-                            :key="row.label"
-                            class="flex items-center justify-between gap-2"
-                        >
-                            <dt class="text-muted-foreground">
-                                {{ row.label }}
-                            </dt>
-                            <dd class="font-medium tabular-nums">
-                                {{ row.value }}
-                            </dd>
-                        </div>
-                    </dl>
-                </section>
-
-                <section
-                    v-if="hasFinished"
-                    aria-labelledby="bulk-delete-progress-title"
-                    class="mt-3 rounded-lg border p-3"
-                >
-                    <h3
-                        id="bulk-delete-progress-title"
-                        class="text-sm font-medium"
-                    >
-                        Effect on your progress
-                    </h3>
-
-                    <dl
-                        v-if="progressChanges.length > 0"
-                        class="mt-2 space-y-1 text-sm"
-                    >
-                        <div
-                            v-for="change in progressChanges"
-                            :key="change.key"
-                            class="flex flex-wrap items-center justify-between gap-2"
-                        >
-                            <dt class="text-muted-foreground">
-                                {{ change.label }}
-                            </dt>
-                            <dd class="font-medium tabular-nums">
-                                <span>{{ change.before }}</span>
-                                <span aria-hidden="true"> → </span>
-                                <span class="sr-only">to</span>
-                                <span>{{ change.after }}</span>
-                            </dd>
-                        </div>
-                    </dl>
-
-                    <p v-else class="mt-2 text-sm text-muted-foreground">
-                        Deleting these sessions will not change your totals,
-                        practice days, or streak.
-                    </p>
-                </section>
-
-                <div v-if="hasFinished" class="mt-4 flex items-start gap-3">
-                    <Checkbox
-                        id="bulk-delete-understand"
-                        :model-value="acknowledged"
-                        @update:model-value="acknowledged = $event === true"
-                    />
-                    <Label
-                        for="bulk-delete-understand"
-                        class="text-sm leading-snug font-normal"
-                    >
-                        I understand this cannot be undone.
-                    </Label>
+                        Try again
+                    </Button>
                 </div>
-            </template>
 
-            <AlertDialogFooter class="sticky bottom-0">
+                <template v-else-if="preview !== null">
+                    <Alert
+                        v-if="staleMessage !== ''"
+                        variant="destructive"
+                        class="mb-3"
+                    >
+                        <TriangleAlertIcon aria-hidden="true" />
+                        <AlertTitle>These sessions changed</AlertTitle>
+                        <AlertDescription>
+                            <p>{{ staleMessage }}</p>
+                            <p class="mt-1">
+                                The numbers below are fresh. Check them and
+                                confirm again.
+                            </p>
+                        </AlertDescription>
+                    </Alert>
+
+                    <Alert
+                        v-if="hasFinished"
+                        variant="destructive"
+                        class="mb-3"
+                    >
+                        <TriangleAlertIcon aria-hidden="true" />
+                        <AlertTitle>This cannot be undone.</AlertTitle>
+                        <AlertDescription>
+                            <p>
+                                {{ finishedCount }}
+                                {{
+                                    finishedCount === 1
+                                        ? 'finished session'
+                                        : 'finished sessions'
+                                }}
+                                will leave the Library, Collections, and Review.
+                                Everything in them will be removed for good.
+                            </p>
+                        </AlertDescription>
+                    </Alert>
+
+                    <p v-else class="mb-3 text-sm text-muted-foreground">
+                        These sessions are unfinished, so your progress totals,
+                        practice days, and streak will not change.
+                    </p>
+
+                    <section
+                        aria-labelledby="bulk-delete-names-title"
+                        class="rounded-lg border p-3"
+                    >
+                        <h3
+                            id="bulk-delete-names-title"
+                            class="text-sm font-medium"
+                        >
+                            What will be removed
+                        </h3>
+
+                        <ul class="mt-2 space-y-1 text-sm">
+                            <li
+                                v-for="(named, index) in namedSessions"
+                                :key="`${named.topic}-${index}`"
+                                class="break-words"
+                            >
+                                <span class="font-medium text-foreground">
+                                    {{ named.topic }}
+                                </span>
+                                <template v-if="named.day !== ''">
+                                    from {{ named.day }}</template
+                                >
+                            </li>
+                        </ul>
+
+                        <p v-if="moreCount > 0" class="mt-1 text-sm">
+                            and {{ moreCount }} more
+                        </p>
+
+                        <p
+                            v-if="preview.missing_count > 0"
+                            class="mt-2 text-sm text-muted-foreground"
+                        >
+                            {{ preview.missing_count }}
+                            {{
+                                preview.missing_count === 1
+                                    ? 'session was'
+                                    : 'sessions were'
+                            }}
+                            already deleted and will be skipped.
+                        </p>
+
+                        <dl
+                            class="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 border-t pt-3 text-sm"
+                        >
+                            <div
+                                v-for="row in countRows"
+                                :key="row.label"
+                                class="flex items-center justify-between gap-2"
+                            >
+                                <dt class="text-muted-foreground">
+                                    {{ row.label }}
+                                </dt>
+                                <dd class="font-medium tabular-nums">
+                                    {{ row.value }}
+                                </dd>
+                            </div>
+                        </dl>
+                    </section>
+
+                    <section
+                        v-if="hasFinished"
+                        aria-labelledby="bulk-delete-progress-title"
+                        class="mt-3 rounded-lg border p-3"
+                    >
+                        <h3
+                            id="bulk-delete-progress-title"
+                            class="text-sm font-medium"
+                        >
+                            Effect on your progress
+                        </h3>
+
+                        <dl
+                            v-if="progressChanges.length > 0"
+                            class="mt-2 space-y-1 text-sm"
+                        >
+                            <div
+                                v-for="change in progressChanges"
+                                :key="change.key"
+                                class="flex flex-wrap items-center justify-between gap-2"
+                            >
+                                <dt class="text-muted-foreground">
+                                    {{ change.label }}
+                                </dt>
+                                <dd class="font-medium tabular-nums">
+                                    <span>{{ change.before }}</span>
+                                    <span aria-hidden="true"> → </span>
+                                    <span class="sr-only">to</span>
+                                    <span>{{ change.after }}</span>
+                                </dd>
+                            </div>
+                        </dl>
+
+                        <p v-else class="mt-2 text-sm text-muted-foreground">
+                            Deleting these sessions will not change your totals,
+                            practice days, or streak.
+                        </p>
+                    </section>
+
+                    <div v-if="hasFinished" class="mt-4 flex items-start gap-3">
+                        <Checkbox
+                            id="bulk-delete-understand"
+                            :model-value="acknowledged"
+                            @update:model-value="acknowledged = $event === true"
+                        />
+                        <Label
+                            for="bulk-delete-understand"
+                            class="text-sm leading-snug font-normal"
+                        >
+                            I understand this cannot be undone.
+                        </Label>
+                    </div>
+                </template>
+            </div>
+
+            <AlertDialogFooter class="mx-0 mb-0 shrink-0 bg-muted sm:flex-wrap">
                 <AlertDialogCancel :id="CANCEL_ID"> Cancel </AlertDialogCancel>
 
                 <Button
                     v-if="canArchiveInstead"
                     type="button"
                     variant="outline"
+                    class="h-auto py-1.5 whitespace-normal"
                     :disabled="archiving || deleting"
                     @click="archiveInstead"
                 >

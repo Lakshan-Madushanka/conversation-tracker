@@ -30,6 +30,7 @@ function savedSession(
     return {
         id: 1,
         status: 'unfinished',
+        session_date: '2026-10-12T09:00:00.000000Z',
         finished_at: null,
         last_changed_at: null,
         archived_at: null,

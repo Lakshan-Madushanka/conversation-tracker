@@ -10,6 +10,7 @@ function summary(overrides: Partial<FinishSummary> = {}): FinishSummary {
         session: {
             id: 7,
             status: 'finished',
+            session_date: '2026-10-19T10:00:00Z',
             finished_at: '2026-10-19T10:00:00Z',
             last_changed_at: '2026-10-19T10:00:00Z',
             archived_at: null,

@@ -7,6 +7,7 @@ function conflictSession(): PracticeSessionData {
     return {
         id: 5,
         status: 'unfinished',
+        session_date: '2026-10-12T10:00:00.000000Z',
         finished_at: null,
         last_changed_at: null,
         archived_at: null,

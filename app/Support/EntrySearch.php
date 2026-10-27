@@ -92,7 +92,7 @@ final class EntrySearch
     }
 
     /** The words of a vocabulary or phrase example, whichever way it was saved. */
-    private static function exampleText(PracticeFeedbackEntry $entry): string
+    public static function exampleText(PracticeFeedbackEntry $entry): string
     {
         $example = (string) $entry->example;
 

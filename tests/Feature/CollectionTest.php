@@ -7,193 +7,362 @@ use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeQuestion;
 use App\Models\PracticeSession;
 use App\Models\Topic;
+use Carbon\CarbonImmutable;
 use Inertia\Testing\AssertableInertia as Assert;
 
 /**
- * One entry of the given type inside a fresh session, so every entry owns its
- * own topic and the collection sees it as a separate origin.
+ * A finished session at a known moment, with its own topic.
  *
  * @param  array<string, mixed>  $attributes
  */
-function collectionEntry(FeedbackType $type, string $content, array $attributes = []): PracticeFeedbackEntry
-{
-    $topic = Topic::factory()->create();
-    $session = PracticeSession::factory()->finished()->for($topic)->create();
-    $question = PracticeQuestion::factory()->for($session)->create();
+function collectionSession(
+    CarbonImmutable $at,
+    ?Topic $topic = null,
+    array $attributes = [],
+): PracticeSession {
+    $topic ??= Topic::factory()->create();
 
-    return PracticeFeedbackEntry::factory()->for($question)->create([
-        'type' => $type,
-        'content_text' => $content,
-        'is_split' => true,
-    ] + $attributes);
+    return PracticeSession::factory()
+        ->finished()
+        ->for($topic)
+        ->create(array_merge([
+            'created_at' => $at,
+            'updated_at' => $at,
+            'finished_at' => $at,
+            'last_changed_at' => $at,
+        ], $attributes));
 }
 
-it('lists each feedback type under its own tab, newest first', function (): void {
-    collectionEntry(FeedbackType::Vocabulary, 'older word', ['created_at' => now()->subDays(2)]);
-    collectionEntry(FeedbackType::Vocabulary, 'newer word', ['created_at' => now()->subDay()]);
-    collectionEntry(FeedbackType::Phrase, 'catch up');
-    collectionEntry(FeedbackType::GrammarNote, 'Use the past tense.');
-    collectionEntry(FeedbackType::Mistake, 'I go');
-
-    $this->get(route('collections.index'))
-        ->assertOk()
-        ->assertInertia(fn (Assert $page): Assert => $page
-            ->component('collections/Index')
-            ->count('vocabulary.data', 2)
-            ->where('vocabulary.data.0.content_text', 'newer word')
-            ->where('vocabulary.data.1.content_text', 'older word')
-            ->count('phrases.data', 1)
-            ->where('phrases.data.0.type', FeedbackType::Phrase->value)
-            ->count('grammar.data', 1)
-            ->where('grammar.data.0.type', FeedbackType::GrammarNote->value)
-            ->count('mistakes.data', 1)
-            ->where('mistakes.data.0.type', FeedbackType::Mistake->value));
-});
-
-it('paginates every tab under its own page name', function (): void {
-    foreach (range(1, 5) as $index) {
-        collectionEntry(FeedbackType::Vocabulary, "word {$index}");
-        collectionEntry(FeedbackType::Phrase, "phrase {$index}");
-        collectionEntry(FeedbackType::GrammarNote, "note {$index}");
-        collectionEntry(FeedbackType::Mistake, "mistake {$index}");
-    }
-
-    $this->get(route('collections.index'))
-        ->assertOk()
-        ->assertInertia(fn (Assert $page): Assert => $page
-            ->component('collections/Index')
-            ->where('vocabulary.total', 5)
-            ->where('vocabulary.per_page', 4)
-            ->where('vocabulary.next_page_url', url('/collections?vocabulary=2'))
-            ->where('phrases.next_page_url', url('/collections?phrase=2'))
-            ->where('grammar.next_page_url', url('/collections?grammar_note=2'))
-            ->where('mistakes.next_page_url', url('/collections?mistake=2')));
-});
-
-it('filters only the tab the search belongs to', function (): void {
-    collectionEntry(FeedbackType::Vocabulary, 'soup');
-    collectionEntry(FeedbackType::Vocabulary, 'relish');
-    collectionEntry(FeedbackType::Phrase, 'soup of the day');
-    collectionEntry(FeedbackType::Phrase, 'catch up');
-
-    $this->get(route('collections.index', ['search' => 'soup', 'forPage' => 'vocabulary']))
-        ->assertOk()
-        ->assertInertia(fn (Assert $page): Assert => $page
-            ->component('collections/Index')
-            ->where('vocabulary.total', 1)
-            ->where('vocabulary.data.0.content_text', 'soup')
-            ->where('phrases.total', 2));
-});
-
-it('treats like wildcards in the search term as plain characters', function (): void {
-    collectionEntry(FeedbackType::Vocabulary, 'soup');
-    collectionEntry(FeedbackType::Vocabulary, 'relish');
-    collectionEntry(FeedbackType::Vocabulary, '100% sure');
-
-    $this->get(route('collections.index', ['search' => '%', 'forPage' => 'vocabulary']))
-        ->assertOk()
-        ->assertInertia(fn (Assert $page): Assert => $page
-            ->component('collections/Index')
-            ->where('vocabulary.total', 1)
-            ->where('vocabulary.data.0.content_text', '100% sure'));
-});
-
-it('treats an underscore in the search term as a plain character', function (): void {
-    collectionEntry(FeedbackType::Vocabulary, 'cat');
-    collectionEntry(FeedbackType::Vocabulary, 'car');
-    collectionEntry(FeedbackType::Vocabulary, 'c_t');
-
-    $this->get(route('collections.index', ['search' => '_', 'forPage' => 'vocabulary']))
-        ->assertOk()
-        ->assertInertia(fn (Assert $page): Assert => $page
-            ->component('collections/Index')
-            ->where('vocabulary.total', 1)
-            ->where('vocabulary.data.0.content_text', 'c_t'));
-});
-
-it('finds a word by what it means', function (): void {
-    collectionEntry(FeedbackType::Vocabulary, 'soup', ['correction_text' => 'a liquid food']);
-
-    $this->get(route('collections.index', ['search' => 'liquid', 'forPage' => 'vocabulary']))
-        ->assertOk()
-        ->assertInertia(fn (Assert $page): Assert => $page
-            ->component('collections/Index')
-            ->where('vocabulary.total', 1)
-            ->where('vocabulary.data.0.content_text', 'soup'));
-});
-
-it('finds a phrase by its example', function (): void {
-    collectionEntry(FeedbackType::Phrase, 'of course', ['example' => 'Of course, right away.']);
-
-    $this->get(route('collections.index', ['search' => 'right away', 'forPage' => 'phrases']))
-        ->assertOk()
-        ->assertInertia(fn (Assert $page): Assert => $page
-            ->component('collections/Index')
-            ->where('phrases.total', 1)
-            ->where('phrases.data.0.content_text', 'of course'));
-});
-
-it('never lists an entry that holds nothing', function (): void {
-    collectionEntry(FeedbackType::Vocabulary, 'soup');
-
-    $question = PracticeQuestion::factory()
-        ->for(PracticeSession::factory()->finished())
-        ->create();
-
-    PracticeFeedbackEntry::factory()->for($question)->create([
+/**
+ * One vocabulary row in a question.
+ *
+ * @param  array<string, mixed>  $attributes
+ */
+function vocabularyRow(
+    PracticeQuestion $question,
+    string $word,
+    array $attributes = [],
+): PracticeFeedbackEntry {
+    return PracticeFeedbackEntry::factory()->for($question)->create(array_merge([
         'type' => FeedbackType::Vocabulary,
-        'content_text' => '',
-        'content_html' => '',
+        'content_text' => $word,
+        'correction_text' => '',
+        'example' => '',
+        'example_html' => [],
         'is_split' => true,
+    ], $attributes));
+}
+
+it('gathers one item per word, ignoring capitals, accents and extra spaces', function (): void {
+    $old = collectionSession(CarbonImmutable::now()->subDays(2));
+    vocabularyRow(PracticeQuestion::factory()->for($old)->create(), '  Café  ', [
+        'correction_text' => 'a place for coffee',
+        'example' => 'We met at the café.',
+    ]);
+
+    $middle = collectionSession(CarbonImmutable::now()->subDay());
+    vocabularyRow(PracticeQuestion::factory()->for($middle)->create(), 'CAFE', [
+        'correction_text' => 'a coffee shop',
+    ]);
+
+    $newest = collectionSession(CarbonImmutable::now());
+    vocabularyRow(PracticeQuestion::factory()->for($newest)->create(), 'cafe', [
+        'example' => 'The cafe was busy.',
     ]);
 
     $this->get(route('collections.index'))
         ->assertOk()
         ->assertInertia(fn (Assert $page): Assert => $page
             ->component('collections/Index')
-            ->where('vocabulary.total', 1)
-            ->where('vocabulary.data.0.content_text', 'soup'));
+            ->where('tab', 'vocabulary')
+            ->where('total', 1)
+            ->count('items', 1)
+            ->where('items.0.key', 'cafe')
+            ->where('items.0.word', 'cafe')
+            ->where('items.0.meaning', 'a coffee shop')
+            ->where('items.0.example', 'The cafe was busy.')
+            ->where('items.0.seen_count', 3)
+            ->where('items.0.needs_attention', false));
 });
 
-it('leaves the entries of an unfinished session out', function (): void {
-    $topic = Topic::factory()->create();
-    $draft = PracticeSession::factory()->for($topic)->create([
+it('keeps the newest spelling and the newest meaning and example that hold anything', function (): void {
+    $newest = collectionSession(CarbonImmutable::now());
+    vocabularyRow(PracticeQuestion::factory()->for($newest)->create(), 'RELISH');
+
+    $middle = collectionSession(CarbonImmutable::now()->subDay());
+    vocabularyRow(PracticeQuestion::factory()->for($middle)->create(), 'Relish', [
+        'correction_text' => 'to enjoy',
+        'example' => 'I relish a quiet evening.',
+    ]);
+
+    $oldest = collectionSession(CarbonImmutable::now()->subDays(2));
+    vocabularyRow(PracticeQuestion::factory()->for($oldest)->create(), 'relish', [
+        'correction_text' => 'to savour',
+        'example' => 'She relishes the soup.',
+    ]);
+
+    $this->get(route('collections.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->where('items.0.word', 'RELISH')
+            ->where('items.0.meaning', 'to enjoy')
+            ->where('items.0.example', 'I relish a quiet evening.')
+            ->where('items.0.needs_attention', false));
+});
+
+it('asks for a meaning when no appearance has one', function (): void {
+    $session = collectionSession(CarbonImmutable::now());
+    vocabularyRow(PracticeQuestion::factory()->for($session)->create(), 'relish');
+
+    $this->get(route('collections.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->where('items.0.meaning', '')
+            ->where('items.0.needs_attention', true));
+});
+
+it('counts a repeated row in the same box once but a different question separately', function (): void {
+    $session = collectionSession(CarbonImmutable::now());
+    $first = PracticeQuestion::factory()->for($session)->create(['position' => 1]);
+    $second = PracticeQuestion::factory()->for($session)->create(['position' => 2]);
+
+    vocabularyRow($first, 'soup', ['client_id' => 'soup-1']);
+    vocabularyRow($first, 'Soup', ['client_id' => 'soup-2']);
+    vocabularyRow($second, 'SOUP', ['client_id' => 'soup-3']);
+
+    $this->get(route('collections.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->where('items.0.seen_count', 2)
+            ->count('items.0.appearances', 3));
+});
+
+it('leaves out blank words, unfinished sessions, archived sessions and other boxes', function (): void {
+    $finished = collectionSession(CarbonImmutable::now());
+    vocabularyRow(PracticeQuestion::factory()->for($finished)->create(), 'soup');
+
+    $blank = collectionSession(CarbonImmutable::now());
+    vocabularyRow(PracticeQuestion::factory()->for($blank)->create(), '   ');
+
+    $draft = PracticeSession::factory()->create([
         'status' => PracticeSession::STATUS_UNFINISHED,
     ]);
-    $question = PracticeQuestion::factory()->for($draft)->create();
+    vocabularyRow(PracticeQuestion::factory()->for($draft)->create(), 'draft word');
 
-    PracticeFeedbackEntry::factory()->for($question)->create([
-        'type' => FeedbackType::Vocabulary,
-        'content_text' => 'draft word',
+    $archived = collectionSession(CarbonImmutable::now()->subHour(), null, [
+        'archived_at' => CarbonImmutable::now(),
+    ]);
+    vocabularyRow(PracticeQuestion::factory()->for($archived)->create(), 'archived word');
+
+    $phrase = collectionSession(CarbonImmutable::now());
+    PracticeFeedbackEntry::factory()->for(
+        PracticeQuestion::factory()->for($phrase)->create(),
+    )->create([
+        'type' => FeedbackType::Phrase,
+        'content_text' => 'catch up',
         'is_split' => true,
     ]);
-
-    collectionEntry(FeedbackType::Vocabulary, 'finished word');
 
     $this->get(route('collections.index'))
         ->assertOk()
         ->assertInertia(fn (Assert $page): Assert => $page
-            ->component('collections/Index')
-            ->where('vocabulary.total', 1)
-            ->where('vocabulary.data.0.content_text', 'finished word'));
+            ->where('total', 1)
+            ->where('items.0.word', 'soup'));
 });
 
-it('includes the session and topic every entry came from', function (): void {
-    $topic = Topic::factory()->create(['name' => 'Ordering at a restaurant']);
-    $session = PracticeSession::factory()->finished()->for($topic)->create();
-    $question = PracticeQuestion::factory()->for($session)->create();
+it('orders newest session first and then alphabetically', function (): void {
+    $old = collectionSession(CarbonImmutable::now()->subDay());
+    vocabularyRow(PracticeQuestion::factory()->for($old)->create(), 'banana');
 
-    PracticeFeedbackEntry::factory()->for($question)->create([
-        'type' => FeedbackType::Vocabulary,
-        'content_text' => 'relish',
-        'is_split' => true,
-    ]);
+    $sameMoment = CarbonImmutable::now();
+    $first = collectionSession($sameMoment);
+    $second = collectionSession($sameMoment);
+    vocabularyRow(PracticeQuestion::factory()->for($first)->create(), 'zebra');
+    vocabularyRow(PracticeQuestion::factory()->for($second)->create(), 'apple');
 
     $this->get(route('collections.index'))
         ->assertOk()
         ->assertInertia(fn (Assert $page): Assert => $page
-            ->component('collections/Index')
-            ->where('vocabulary.data.0.practice_question.practice_session.id', $session->id)
-            ->where('vocabulary.data.0.practice_question.practice_session.topic.id', $topic->id)
-            ->where('vocabulary.data.0.practice_question.practice_session.topic.name', 'Ordering at a restaurant'));
+            ->where('items.0.word', 'apple')
+            ->where('items.1.word', 'zebra')
+            ->where('items.2.word', 'banana'));
+});
+
+it('loads the first 30 words and follows a stable cursor for the rest', function (): void {
+    $base = CarbonImmutable::now();
+
+    foreach (range(1, 35) as $index) {
+        $session = collectionSession($base->subMinutes($index));
+        vocabularyRow(
+            PracticeQuestion::factory()->for($session)->create(),
+            sprintf('word %02d', $index),
+        );
+    }
+
+    $first = $this->getJson(route('collections.index'))->assertOk()->json();
+
+    expect($first['items'])->toHaveCount(30)
+        ->and($first['has_more'])->toBeTrue()
+        ->and($first['total'])->toBe(35)
+        ->and($first['next_cursor'])->toBeString();
+
+    $second = $this->getJson(route('collections.index', [
+        'cursor' => $first['next_cursor'],
+    ]))->assertOk()->json();
+
+    expect($second['items'])->toHaveCount(5)
+        ->and($second['has_more'])->toBeFalse()
+        ->and($second['next_cursor'])->toBeNull()
+        ->and($second['total'])->toBe(35);
+
+    $firstKeys = array_column($first['items'], 'key');
+    $secondKeys = array_column($second['items'], 'key');
+
+    expect(array_intersect($firstKeys, $secondKeys))->toBe([])
+        ->and(array_merge($firstKeys, $secondKeys))->toHaveCount(35);
+});
+
+it('opens the word named in the address and says calmly when it is gone', function (): void {
+    $session = collectionSession(CarbonImmutable::now());
+    vocabularyRow(PracticeQuestion::factory()->for($session)->create(), 'Café');
+
+    $this->get(route('collections.index', ['word' => 'cafe']))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->where('open_word.key', 'cafe')
+            ->where('open_word.word', 'Café')
+            ->where('open_word_missing', false));
+
+    $this->get(route('collections.index', ['word' => 'missing']))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->where('open_word', null)
+            ->where('open_word_missing', true));
+});
+
+it('falls back to vocabulary for a tab this page does not know', function (): void {
+    $this->get(route('collections.index', ['tab' => 'banana']))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->where('tab', 'vocabulary')
+            ->where('open_word_missing', false));
+});
+
+it('marks only vocabulary as built and keeps the other tabs calm and empty', function (): void {
+    $session = collectionSession(CarbonImmutable::now());
+    vocabularyRow(PracticeQuestion::factory()->for($session)->create(), 'soup');
+
+    $this->get(route('collections.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->count('tabs', 4)
+            ->where('tabs.0.key', 'vocabulary')
+            ->where('tabs.0.label', 'Vocabulary')
+            ->where('tabs.0.built', true)
+            ->where('tabs.1.key', 'phrases')
+            ->where('tabs.1.built', false)
+            ->where('tabs.2.key', 'grammar')
+            ->where('tabs.3.key', 'mistakes')
+            ->where('tabs.3.label', 'My mistakes'));
+
+    $this->get(route('collections.index', ['tab' => 'phrases']))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->where('tab', 'phrases')
+            ->where('total', 0)
+            ->count('items', 0));
+});
+
+it('names the session, topic, question and row every appearance came from', function (): void {
+    $topic = Topic::factory()->create(['name' => 'Ordering at a restaurant']);
+    $session = collectionSession(CarbonImmutable::now(), $topic);
+
+    $first = PracticeQuestion::factory()->for($session)->create(['position' => 1]);
+    $second = PracticeQuestion::factory()->for($session)->create(['position' => 2]);
+
+    vocabularyRow($first, 'relish', ['client_id' => 'relish-first']);
+    vocabularyRow($first, 'relish', ['client_id' => 'relish-second']);
+    vocabularyRow($second, 'relish', ['client_id' => 'relish-elsewhere']);
+
+    $this->get(route('collections.index', ['word' => 'relish']))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->where('open_word.appearances.0.session_id', $session->id)
+            ->where('open_word.appearances.0.topic', 'Ordering at a restaurant')
+            ->where('open_word.appearances.0.question_position', 2)
+            ->where('open_word.appearances.0.entry_id', 'relish-elsewhere')
+            ->where('open_word.appearances.0.entry_position', 0)
+            ->where('open_word.appearances.1.question_position', 1)
+            ->where('open_word.appearances.1.entry_id', 'relish-second')
+            ->where('open_word.appearances.1.entry_position', 1));
+});
+
+it('says when there is nothing to gather yet and when there are no words yet', function (): void {
+    $this->get(route('collections.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->where('has_finished_sessions', false)
+            ->where('total', 0));
+
+    $session = collectionSession(CarbonImmutable::now());
+
+    $this->get(route('collections.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->where('has_finished_sessions', true)
+            ->where('total', 0)
+            ->count('items', 0));
+});
+
+it('reflects finishing, editing, archiving, restoring and deleting straight away', function (): void {
+    $draft = PracticeSession::factory()->create([
+        'status' => PracticeSession::STATUS_UNFINISHED,
+    ]);
+    $row = vocabularyRow(PracticeQuestion::factory()->for($draft)->create(), 'relish');
+
+    $this->get(route('collections.index'))
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->where('has_finished_sessions', false)
+            ->where('total', 0));
+
+    $draft->update([
+        'status' => PracticeSession::STATUS_FINISHED,
+        'finished_at' => CarbonImmutable::now(),
+    ]);
+
+    $this->get(route('collections.index'))
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->where('has_finished_sessions', true)
+            ->where('total', 1)
+            ->where('items.0.word', 'relish'));
+
+    $row->update(['content_text' => 'savour']);
+
+    $this->get(route('collections.index'))
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->where('total', 1)
+            ->where('items.0.word', 'savour'));
+
+    $draft->archived_at = CarbonImmutable::now();
+    $draft->save();
+
+    $this->get(route('collections.index'))
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->where('has_finished_sessions', false)
+            ->where('total', 0));
+
+    $draft->archived_at = null;
+    $draft->save();
+
+    $this->get(route('collections.index'))
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->where('total', 1)
+            ->where('items.0.word', 'savour'));
+
+    $draft->delete();
+
+    $this->get(route('collections.index'))
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->where('has_finished_sessions', false)
+            ->where('total', 0));
 });

@@ -7,7 +7,7 @@ use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeQuestion;
 use App\Models\PracticeSession;
 use App\Models\Topic;
-use App\Queries\FeedbackCollection;
+use App\Queries\TableCollection;
 use Illuminate\Support\Carbon;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -165,10 +165,10 @@ it('leaves archived entries out of collections but keeps them countable', functi
         ]);
     }
 
-    $entries = app(FeedbackCollection::class)->page(FeedbackType::Vocabulary, null);
+    $entries = app(TableCollection::class)->page(FeedbackType::Vocabulary);
 
-    expect($entries->total())->toBe(1)
-        ->and($entries->items()[0]->practiceQuestion->practiceSession->id)->toBe($visible->id)
+    expect($entries['total'])->toBe(1)
+        ->and($entries['items'][0]['appearances'][0]['session_id'])->toBe($visible->id)
         ->and(PracticeSession::query()->countable()->count())->toBe(2);
 });
 

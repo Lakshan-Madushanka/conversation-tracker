@@ -1,84 +1,171 @@
 <script setup lang="ts">
-import { reactive, ref, watch } from 'vue';
-import { Head, router, usePage } from '@inertiajs/vue3';
-import { InfiniteScroll, Link } from '@inertiajs/vue3';
-import { StarIcon, AlertCircleIcon } from '@lucide/vue';
-import AppLayout from '@/layouts/AppLayout.vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { Head, router } from '@inertiajs/vue3';
+import { InfoIcon, LayersIcon } from '@lucide/vue';
+import CollectionItemPanel from '@/components/CollectionItemPanel.vue';
+import CollectionList from '@/components/CollectionList.vue';
+import EmptyState from '@/components/EmptyState.vue';
 import PageHeader from '@/components/PageHeader.vue';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Spinner } from '@/components/ui/spinner';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { show as sessionsShow } from '@/routes/sessions';
-import { index as collectionIndex } from '@/routes/collections';
-import { create as sessionsCreate } from '@/routes/sessions';
-import type { CollectionKey } from '@/lib/sample-data';
-import { debounce } from '@/lib/debounce';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useCollection } from '@/composables/useCollection';
+import AppLayout from '@/layouts/AppLayout.vue';
 import { readCollectionQuery } from '@/lib/collection-query';
-import { exampleParts, type ExamplePart } from '@/lib/example';
-import { LaravelPaginator, PracticeFeedbackEntry } from '@/types/types';
+import {
+    consumeCollectionRestore,
+    isCollectionPage,
+    readCollectionSnapshot,
+    saveCollectionSnapshot,
+    type CollectionSnapshot,
+} from '@/lib/collections';
+import { index as collectionsIndex } from '@/routes/collections';
+import type { CollectionPage, CollectionTabKey } from '@/types';
 
 defineOptions({ layout: AppLayout });
 
-const props = defineProps<{
-    vocabulary: LaravelPaginator<PracticeFeedbackEntry>;
-    phrases: LaravelPaginator<PracticeFeedbackEntry>;
-    grammar: LaravelPaginator<PracticeFeedbackEntry>;
-    mistakes: LaravelPaginator<PracticeFeedbackEntry>;
-}>();
+const props = defineProps<CollectionPage>();
 
-// A refresh, the back button or a shared link should open the same view the
-// learner left behind, so the tab and its term are read from the url before
-// the watcher is registered — seeding must never trigger a visit of its own.
-const initial = readCollectionQuery(usePage().url ?? '');
+const {
+    tab,
+    items,
+    nextCursor,
+    hasMore,
+    total,
+    hasFinishedSessions,
+    openWord,
+    openWordMissing,
+    loading,
+    error,
+    updating,
+    loadMore,
+    refresh,
+    setTab,
+    openWordPanel,
+    closeWordPanel,
+    dismissMissingWord,
+    rememberForReturn,
+    restore,
+    syncFromPage,
+} = useCollection(props);
 
-const currentTabKey = ref<CollectionKey>(initial.tab);
+/** The tab on screen, with the label and the built flag the page sent. */
+const activeTab = computed(
+    () => props.tabs.find((candidate) => candidate.key === tab.value) ?? null,
+);
 
-const filters = reactive<Record<CollectionKey, { search: string }>>({
-    vocabulary: { search: '' },
-    phrases: { search: '' },
-    grammar: { search: '' },
-    mistakes: { search: '' },
-});
+/** Only vocabulary is gathered so far; the other tabs say they are coming. */
+const isBuilt = computed(() => activeTab.value?.built === true);
 
-filters[initial.tab].search = initial.search;
+const activeLabel = computed(() => activeTab.value?.label ?? 'vocabulary');
 
-const tabs: { key: CollectionKey; label: string }[] = [
-    { key: 'vocabulary', label: 'Vocabulary' },
-    { key: 'phrases', label: 'Phrases' },
-    { key: 'grammar', label: 'Grammar' },
-    { key: 'mistakes', label: 'My mistakes' },
-];
-
-watch(filters, () => {
-    search();
-});
-
-function getCurrentTabLabel() {
-    return tabs.find((tab) => currentTabKey.value === tab.key)?.label;
+function changeTab(value: string | number): void {
+    setTab(value as CollectionTabKey);
 }
 
-const search = debounce(function search() {
-    let term = filters[currentTabKey.value].search;
+/** The last scroll position read, kept for the trip back from a session. */
+let lastScrollY = 0;
 
-    router.visit(collectionIndex.url(), {
-        data: { search: term, forPage: currentTabKey.value },
-        only: [currentTabKey.value],
-        reset: [currentTabKey.value],
-        preserveState: true,
-    });
-}, 300);
+function rememberScroll(): void {
+    lastScrollY = window.scrollY;
+}
 
 /**
- * The examples of one entry, showing the formatting saved with them. An entry
- * saved before examples were a list keeps its single example in `example`.
+ * Puts the saved list back and returns to the same place on the page. An empty
+ * saved list would only hide the fresh page the server sent, so that page is
+ * left to show instead.
  */
-function entryExamples(item: PracticeFeedbackEntry): ExamplePart[] {
-    const parts = exampleParts(item.example_html);
+function restoreSnapshot(
+    snapshot: CollectionSnapshot,
+    openWordKey: string | null = snapshot.openWordKey,
+): void {
+    if (snapshot.items.length === 0) {
+        return;
+    }
 
-    return parts.length > 0 ? parts : exampleParts(item.example);
+    restore(snapshot, openWordKey);
+    void refresh();
+
+    window.setTimeout(() => {
+        window.scrollTo(0, snapshot.scrollY);
+    }, 0);
 }
+
+/** Whether a saved list describes the address the browser just restored. */
+function matchesSnapshot(snapshot: CollectionSnapshot, url: string): boolean {
+    const target = readCollectionQuery(url);
+
+    return (
+        snapshot.tab === target.tab &&
+        snapshot.openWordKey === target.word &&
+        snapshot.items.length > 0
+    );
+}
+
+let stopListeningToHistory: (() => void) | null = null;
+
+onMounted(() => {
+    // "Back to Collections" marks the visit, so the list comes back instantly.
+    if (consumeCollectionRestore()) {
+        const snapshot = readCollectionSnapshot();
+
+        if (snapshot !== null) {
+            restoreSnapshot(
+                snapshot,
+                readCollectionQuery(window.location.href).word,
+            );
+        }
+    }
+
+    // A browser Back within Collections is a history visit: close the panel or
+    // follow the tab the address names without asking the server again.
+    stopListeningToHistory = router.on('navigate', (event) => {
+        if (event.detail.type !== 'history') {
+            return;
+        }
+
+        const url = event.detail.page.url;
+
+        if (
+            new URL(url, window.location.origin).pathname !==
+            collectionsIndex.url()
+        ) {
+            return;
+        }
+
+        const target = readCollectionQuery(url);
+        const snapshot = readCollectionSnapshot();
+
+        if (snapshot !== null && matchesSnapshot(snapshot, url)) {
+            restoreSnapshot(snapshot, target.word);
+
+            return;
+        }
+
+        if (isCollectionPage(event.detail.page.props)) {
+            syncFromPage(event.detail.page.props, target.word);
+        }
+    });
+
+    rememberScroll();
+    window.addEventListener('scroll', rememberScroll, { passive: true });
+});
+
+onBeforeUnmount(() => {
+    saveCollectionSnapshot({
+        tab: tab.value,
+        items: [...items.value],
+        nextCursor: nextCursor.value,
+        hasMore: hasMore.value,
+        total: total.value,
+        openWordKey: openWord.value?.key ?? null,
+        scrollY: lastScrollY,
+        savedAt: Date.now(),
+    });
+
+    stopListeningToHistory?.();
+    window.removeEventListener('scroll', rememberScroll);
+});
 </script>
 
 <template>
@@ -87,182 +174,85 @@ function entryExamples(item: PracticeFeedbackEntry): ExamplePart[] {
 
         <PageHeader
             title="Collections"
-            description="Vocabulary, phrases, grammar notes and your common mistakes, gathered from every session."
+            description="Vocabulary, phrases, grammar notes and your common mistakes, gathered from every finished session."
         />
 
-        <Tabs v-model="currentTabKey">
-            <TabsList class="grid w-full grid-cols-4">
+        <Tabs :model-value="tab" @update:model-value="changeTab">
+            <TabsList class="grid w-full grid-cols-4" aria-label="Collections">
                 <TabsTrigger
+                    v-for="candidate in props.tabs"
+                    :key="candidate.key"
                     class="cursor-pointer"
-                    v-for="tab in tabs"
-                    :key="tab.key"
-                    :value="tab.key"
+                    :value="candidate.key"
                 >
-                    {{ tab.label }}
+                    {{ candidate.label }}
                 </TabsTrigger>
             </TabsList>
 
-            <Input
-                v-model="filters[currentTabKey].search"
-                class="mt-4"
-                type="search"
-                :placeholder="`Search ${getCurrentTabLabel()}`"
-                :aria-label="`Search ${getCurrentTabLabel()}`"
-            />
+            <Alert v-if="openWordMissing" class="mt-4" role="status">
+                <InfoIcon aria-hidden="true" />
+                <AlertTitle>That word is no longer here</AlertTitle>
+                <AlertDescription>
+                    <p>
+                        It may have been edited or removed from its session
+                        since you saved this link. Your other words are still
+                        below.
+                    </p>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        class="mt-3"
+                        @click="dismissMissingWord"
+                    >
+                        Dismiss
+                    </Button>
+                </AlertDescription>
+            </Alert>
 
-            <TabsContent
-                v-for="tab in tabs"
-                :key="tab.key"
-                :value="tab.key"
-                class="mt-4"
-            >
-                <InfiniteScroll
-                    :data="tab.key"
-                    :params="{
-                        data: {
-                            search: filters[tab.key].search,
-                            forPage: tab.key,
-                        },
-                    }"
+            <div class="mt-4">
+                <!-- Vocabulary is the collection built so far. Its empty,
+                    loading and error states live in the list itself. -->
+                <CollectionList
+                    v-if="isBuilt"
+                    :items="items"
+                    :has-more="hasMore"
+                    :loading="loading"
+                    :error="error"
+                    :updating="updating"
+                    :total="total"
+                    :has-finished-sessions="hasFinishedSessions"
+                    @open="openWordPanel"
+                    @load-more="loadMore"
+                />
+
+                <!-- The other collections stay visible and calm, so the page
+                    never looks broken while they are on their way. -->
+                <EmptyState
+                    v-else
+                    :icon="LayersIcon"
+                    :title="`${activeLabel} are on their way`"
+                    description="This collection is not ready yet. Vocabulary is the first one gathered from your finished sessions."
                 >
-                    <div v-if="props[tab.key].total === 0">
-                        <Alert>
-                            <AlertCircleIcon color="var(--warn)" />
-                            <AlertTitle class="text-warn"
-                                >No {{ tab.key }} found!</AlertTitle
-                            >
-                            <AlertDescription>
-                                <span
-                                    >You can add {{ tab.key }} through a new
-                                </span>
-                                <Link
-                                    :href="sessionsCreate.url()"
-                                    class="font-medium text-primary no-underline! hover:text-primary! hover:underline!"
-                                >
-                                    session
-                                </Link>
-                            </AlertDescription>
-                        </Alert>
-                    </div>
-
-                    <div v-else class="grid gap-3">
-                        <div
-                            v-for="item in props[tab.key].data"
-                            :key="item.id"
-                            class="rounded-xl border bg-card p-4"
+                    <template #actions>
+                        <Button
+                            type="button"
+                            size="lg"
+                            variant="outline"
+                            @click="changeTab('vocabulary')"
                         >
-                            <div class="flex items-start gap-3">
-                                <button
-                                    type="button"
-                                    class="relative mt-0.5 shrink-0 rounded after:absolute after:-inset-1 focus-visible:ring-3 focus-visible:ring-ring/50"
-                                    :aria-label="`Star ${item.content_text}`"
-                                    :aria-pressed="true"
-                                >
-                                    <StarIcon
-                                        class="size-4"
-                                        :class="
-                                            1 === 1
-                                                ? 'fill-amber-400 text-amber-400'
-                                                : 'text-muted-foreground'
-                                        "
-                                    />
-                                </button>
-
-                                <div class="min-w-0 flex-1">
-                                    <div
-                                        class="flex flex-wrap items-center gap-2"
-                                    >
-                                        <p
-                                            v-if="
-                                                item.type === 'grammar_note' &&
-                                                item.content_html
-                                            "
-                                            class="font-medium"
-                                            v-html="item.content_html"
-                                        ></p>
-                                        <p v-else class="font-medium">
-                                            {{ item.content_text }}
-                                        </p>
-                                        <Badge variant="secondary">
-                                            difficult
-                                        </Badge>
-                                        <Badge variant="secondary"> 5 </Badge>
-                                    </div>
-
-                                    <!-- A mistake's correction keeps the
-                                        formatting it was saved with; older
-                                        plain-text entries fall back to their
-                                        words. -->
-                                    <p
-                                        v-if="
-                                            item.type === 'mistake' &&
-                                            item.correction_html
-                                        "
-                                        class="mt-1 text-sm text-muted-foreground"
-                                        v-html="item.correction_html"
-                                    ></p>
-                                    <p
-                                        v-else-if="item.correction_text"
-                                        class="mt-1 text-sm text-muted-foreground"
-                                    >
-                                        {{ item.correction_text }}
-                                    </p>
-
-                                    <p
-                                        v-if="item.reason"
-                                        class="mt-1 text-sm text-muted-foreground"
-                                    >
-                                        {{ item.reason }}
-                                    </p>
-
-                                    <p
-                                        v-for="(
-                                            part, partIndex
-                                        ) in entryExamples(item)"
-                                        :key="partIndex"
-                                        class="mt-1 text-sm text-muted-foreground italic"
-                                    >
-                                        “<span v-html="part.html"></span>”
-                                    </p>
-
-                                    <div
-                                        class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground"
-                                    >
-                                        <span>{{
-                                            item?.practice_question
-                                                ?.practice_session?.topic
-                                                ?.name ?? ''
-                                        }}</span>
-                                        <Link
-                                            v-if="
-                                                item?.practice_question
-                                                    ?.practice_session?.id
-                                            "
-                                            :href="
-                                                sessionsShow.url(
-                                                    item.practice_question
-                                                        .practice_session.id,
-                                                )
-                                            "
-                                            class="font-medium text-primary hover:underline"
-                                        >
-                                            See original session
-                                        </Link>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <template #loading>
-                        <div
-                            class="mt-2 flex w-full items-center justify-center"
-                        >
-                            <Spinner class="size-8 text-primary" />
-                        </div>
+                            Browse vocabulary
+                        </Button>
                     </template>
-                </InfiniteScroll>
-            </TabsContent>
+                </EmptyState>
+            </div>
         </Tabs>
+
+        <CollectionItemPanel
+            :item="openWord"
+            :tab="tab"
+            @close="closeWordPanel"
+            @see-session="rememberForReturn"
+        />
     </div>
 </template>

@@ -148,6 +148,29 @@ describe('a session opened to be read', () => {
         expect(back?.attributes('href')).toBe(sessionsIndex.url());
     });
 
+    it('links back to the collection a word was opened from', async () => {
+        window.history.replaceState(
+            null,
+            '',
+            '/sessions/7?from=collections&question=1&field=entry',
+        );
+
+        const wrapper = mountShow();
+        await nextTick();
+
+        const back = wrapper
+            .findAll('a')
+            .find((anchor) => anchor.text().includes('Back to Collections'));
+
+        expect(back?.attributes('href')).toContain('/collections');
+        expect(back?.attributes('href')).toContain('tab=vocabulary');
+        expect(
+            wrapper
+                .findAll('a')
+                .some((anchor) => anchor.text().includes('Back to Library')),
+        ).toBe(false);
+    });
+
     it('says so when nothing has been written yet', () => {
         const wrapper = mountShow(
             session({

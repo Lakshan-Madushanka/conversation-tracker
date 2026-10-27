@@ -224,6 +224,25 @@ describe('refreshing the Library after an edit', () => {
 
         expect(mock).not.toHaveBeenCalled();
     });
+
+    it('takes the server word when a topic filter no longer exists', async () => {
+        stubPages([page({ sessions: [], total: 0 })]);
+
+        const library = useLibrarySessions(
+            page({
+                sessions: [session(1)],
+                total: 1,
+                filters: { ...defaultLibraryFilters(), topics: [9] },
+                topics: [{ id: 9, name: 'Gone' }],
+            }),
+        );
+
+        await library.refresh();
+
+        expect(library.filters.value.topics).toEqual([]);
+        expect(library.topics.value).toEqual([]);
+        expect(library.total.value).toBe(0);
+    });
 });
 
 describe('changing the filters', () => {

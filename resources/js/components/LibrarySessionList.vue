@@ -42,6 +42,10 @@ const props = withDefaults(
         filterError?: boolean;
         /** True when the Archived view is on screen. */
         archivedView?: boolean;
+        /** True when choosing sessions instead of opening them. */
+        selectionMode?: boolean;
+        /** The ids chosen so far. */
+        selectedIds?: number[];
     }>(),
     {
         hasMore: false,
@@ -55,6 +59,8 @@ const props = withDefaults(
         updating: false,
         filterError: false,
         archivedView: false,
+        selectionMode: false,
+        selectedIds: () => [],
     },
 );
 
@@ -66,6 +72,7 @@ const emit = defineEmits<{
     (event: 'archive', session: SessionCardData): void;
     (event: 'restore', session: SessionCardData): void;
     (event: 'delete', session: SessionCardData): void;
+    (event: 'select', session: SessionCardData, shiftKey: boolean): void;
 }>();
 
 /** A short row of placeholders while the next page arrives. */
@@ -194,9 +201,14 @@ onBeforeUnmount(() => observer?.disconnect());
                     v-for="session in props.sessions"
                     :key="session.id"
                     :session="session"
+                    :selection-mode="props.selectionMode"
+                    :selected="props.selectedIds.includes(session.id)"
                     @archive="emit('archive', $event)"
                     @restore="emit('restore', $event)"
                     @delete="emit('delete', $event)"
+                    @select="
+                        (chosen, shiftKey) => emit('select', chosen, shiftKey)
+                    "
                 />
 
                 <SessionCardSkeleton

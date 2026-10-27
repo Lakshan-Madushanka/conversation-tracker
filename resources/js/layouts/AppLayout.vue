@@ -1,9 +1,16 @@
 <script setup lang="ts">
+import { provide, ref } from 'vue';
 import AppBottomNav from '@/components/AppBottomNav.vue';
 import AppLogo from '@/components/AppLogo.vue';
 import AppSidebar from '@/components/AppSidebar.vue';
 import ThemeToggle from '@/components/ThemeToggle.vue';
 import { Toaster } from '@/components/ui/sonner';
+import { bottomNavHiddenKey } from '@/lib/layout';
+
+/** Pages can ask the bottom navigation to step aside for a moment. */
+const bottomNavHidden = ref(false);
+
+provide(bottomNavHiddenKey, bottomNavHidden);
 </script>
 
 <template>
@@ -29,12 +36,15 @@ import { Toaster } from '@/components/ui/sonner';
                 <main
                     id="main-content"
                     tabindex="-1"
-                    class="mx-auto w-full max-w-5xl flex-1 px-4 py-6 pb-24 md:px-8 md:pb-10"
+                    class="mx-auto w-full max-w-5xl flex-1 px-4 py-6 md:px-8 md:pb-10"
+                    :class="
+                        bottomNavHidden ? 'pb-48 md:pb-44' : 'pb-24 md:pb-10'
+                    "
                 >
                     <slot />
                 </main>
 
-                <AppBottomNav />
+                <AppBottomNav v-if="!bottomNavHidden" />
             </div>
         </div>
 

@@ -32,6 +32,17 @@ export function archiveAvailabilityLabel(
     return `${finishedCount} of ${selectedCount} can be archived.`;
 }
 
+/** What the Archived view's selection bar says about restoring. */
+export function restoreAvailabilityLabel(selectedCount: number): string {
+    if (selectedCount === 0) {
+        return 'Choose sessions to act on.';
+    }
+
+    return selectedCount === 1
+        ? 'This session can be restored.'
+        : 'All of these sessions can be restored.';
+}
+
 /**
  * The ids between two loaded cards, both ends included. Shift-clicking with an
  * anchor that is no longer loaded falls back to the one card clicked.

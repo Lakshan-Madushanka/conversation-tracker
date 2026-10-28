@@ -62,7 +62,7 @@ import {
     readGuidedLocation,
 } from '@/lib/guided';
 import type { GuidedView } from '@/lib/guided';
-import { isRichTextBlank } from '@/lib/rich-text';
+import { isRichTextBlank, richTextPreview } from '@/lib/rich-text';
 import {
     editorEntryId,
     readSearchTarget,
@@ -312,12 +312,7 @@ function feedbackCount(question: PracticeQuestionForm): number {
 
 /** The first few words of the tutor's question, for the collapsed card. */
 function questionPreview(question: PracticeQuestionForm): string {
-    const text = question.question_html
-        .replace(/<[^>]*>/gu, ' ')
-        .replace(/\s+/gu, ' ')
-        .trim();
-
-    return text.length > 80 ? `${text.slice(0, 80)}…` : text;
+    return richTextPreview(question.question_html);
 }
 
 const hasTopic = (): boolean => topic.value.trim().length > 0;

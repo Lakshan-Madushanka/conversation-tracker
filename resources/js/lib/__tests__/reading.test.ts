@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { readingSections } from '@/lib/reading';
+import {
+    readingEntryPreview,
+    readingEntrySummary,
+    readingSections,
+} from '@/lib/reading';
 import type { PracticeQuestionData } from '@/types';
 
 function question(
@@ -72,10 +76,20 @@ describe('the sections a question can be read as', () => {
                 text: { value: 'I want a soup', formatted: false },
                 details: [
                     {
-                        value: '<strong>I&#039;d like a soup</strong>',
-                        formatted: true,
+                        label: 'Correction',
+                        parts: [
+                            {
+                                value: '<strong>I&#039;d like a soup</strong>',
+                                formatted: true,
+                            },
+                        ],
                     },
-                    { value: 'Sounds more polite', formatted: false },
+                    {
+                        label: 'Why (optional)',
+                        parts: [
+                            { value: 'Sounds more polite', formatted: false },
+                        ],
+                    },
                 ],
             },
         ]);
@@ -96,7 +110,10 @@ describe('the sections a question can be read as', () => {
         );
 
         expect(vocabulary.entries[0].details).toEqual([
-            { value: 'a liquid food', formatted: false },
+            {
+                label: 'Meaning',
+                parts: [{ value: 'a liquid food', formatted: false }],
+            },
         ]);
     });
 
@@ -126,9 +143,17 @@ describe('the sections a question can be read as', () => {
         );
 
         expect(vocabulary.entries[0].details).toEqual([
-            { value: 'a liquid food', formatted: false },
-            { value: 'A <strong>warm</strong> soup.', formatted: true },
-            { value: 'Soup of the <em>day</em>.', formatted: true },
+            {
+                label: 'Meaning',
+                parts: [{ value: 'a liquid food', formatted: false }],
+            },
+            {
+                label: 'Example (optional)',
+                parts: [
+                    { value: 'A <strong>warm</strong> soup.', formatted: true },
+                    { value: 'Soup of the <em>day</em>.', formatted: true },
+                ],
+            },
         ]);
     });
 
@@ -147,7 +172,15 @@ describe('the sections a question can be read as', () => {
         );
 
         expect(vocabulary.entries[0].details).toEqual([
-            { value: 'I made a <em>reservation</em>.', formatted: true },
+            {
+                label: 'Example (optional)',
+                parts: [
+                    {
+                        value: 'I made a <em>reservation</em>.',
+                        formatted: true,
+                    },
+                ],
+            },
         ]);
     });
 
@@ -183,5 +216,82 @@ describe('the sections a question can be read as', () => {
                 details: [],
             },
         ]);
+    });
+
+    it('previews what an entry leads with, from its first detail', () => {
+        const [vocabulary] = readingSections(
+            question({
+                vocabulary: [
+                    {
+                        id: 'v1',
+                        text: 'soup',
+                        meaning: 'a liquid food',
+                        example_html: '<p>A warm soup.</p>',
+                    },
+                ],
+            }),
+        );
+
+        expect(readingEntryPreview(vocabulary.entries[0])).toBe(
+            'a liquid food',
+        );
+    });
+
+    it('has no preview when nothing explains an entry', () => {
+        const [phrase] = readingSections(
+            question({
+                phrase: [
+                    {
+                        id: 'p1',
+                        text: 'if it is possible',
+                        meaning: '',
+                        example_html: '',
+                    },
+                ],
+            }),
+        );
+
+        expect(readingEntryPreview(phrase.entries[0])).toBe('');
+    });
+
+    it('summarises the entries of a question in the editor order', () => {
+        const sections = readingSections(
+            question({
+                natural_version: '<p>I&#039;d like the soup.</p>',
+                grammar_note: [{ id: 'g1', html: '<p>Use could.</p>' }],
+                phrase: [
+                    {
+                        id: 'p1',
+                        text: 'if it is possible',
+                        meaning: '',
+                        example_html: '',
+                    },
+                ],
+                vocabulary: [
+                    {
+                        id: 'v1',
+                        text: 'soup',
+                        meaning: 'a liquid food',
+                        example_html: '',
+                    },
+                ],
+                mistake: [
+                    {
+                        id: 'm1',
+                        text: 'I want',
+                        correction_html: '<strong>I&#039;d like</strong>',
+                        reason: '',
+                    },
+                ],
+            }),
+        );
+
+        expect(readingEntrySummary(sections)).toBe(
+            '1 mistake · 1 word · 1 phrase · 1 grammar note · 1 natural version',
+        );
+    });
+
+    it('has no summary when every box is empty', () => {
+        expect(readingEntrySummary(readingSections(question()))).toBe('');
     });
 });

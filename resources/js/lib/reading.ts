@@ -17,6 +17,7 @@ import {
     type TableColumn,
     type TableCells,
 } from '@/lib/feedback-table';
+import { richTextPreview } from '@/lib/rich-text';
 import type {
     FeedbackType,
     FeedbackValue,
@@ -33,10 +34,17 @@ export interface ReadingPart {
 
 /** One entry of a feedback box, ready to be read. */
 export interface ReadingEntry {
-    /** What the entry is: what was said, the word, the phrase, or the note. */
+    /** What the entry is: the word, the phrase, or what was said. */
     text: ReadingPart;
-    /** What explains it: the correction, meaning, why or example. */
-    details: ReadingPart[];
+    /** The columns that explain it, as the editor names them. */
+    details: ReadingDetail[];
+}
+
+/** One explained column of an entry: a label and the pieces that fill it. */
+export interface ReadingDetail {
+    /** The column's name, as the editor shows it. */
+    label: string;
+    parts: ReadingPart[];
 }
 
 /** One feedback box of a question, ready to be shown. */
@@ -72,6 +80,49 @@ export function readingSections(
     return sections;
 }
 
+/** What each box calls its entries, one and many. */
+const ENTRY_NOUNS: Record<FeedbackType, readonly [string, string]> = {
+    mistake: ['mistake', 'mistakes'],
+    vocabulary: ['word', 'words'],
+    phrase: ['phrase', 'phrases'],
+    grammar_note: ['grammar note', 'grammar notes'],
+    natural_version: ['natural version', 'natural versions'],
+};
+
+/**
+ * How many entries a question's boxes hold, in the editor's order, as a short
+ * line for a collapsed question: "2 words · 1 mistake".
+ */
+export function readingEntrySummary(sections: ReadingSection[]): string {
+    return sections
+        .map((section) => {
+            const count = section.entries.length;
+            const [one, many] = ENTRY_NOUNS[section.type];
+
+            return `${count} ${count === 1 ? one : many}`;
+        })
+        .join(' · ');
+}
+
+/** A quiet hint of what an entry explains, for its collapsed line. */
+export function readingEntryPreview(entry: ReadingEntry): string {
+    const detail = entry.details.find((candidate) =>
+        candidate.parts.some((part) => part.value.trim() !== ''),
+    );
+
+    if (detail === undefined) {
+        return '';
+    }
+
+    return richTextPreview(
+        detail.parts
+            .map((part) => part.value)
+            .filter((value) => value.trim() !== '')
+            .join(' '),
+        70,
+    );
+}
+
 function readingEntries(
     box: FeedbackBoxConfig,
     value: FeedbackValue,
@@ -95,8 +146,13 @@ function readingEntries(
         return {
             text: partFor(lead, row),
             details: rest
-                .flatMap((column) => partsFor(column, row))
-                .filter((part) => part.value.trim() !== ''),
+                .map((column) => ({
+                    label: column.header,
+                    parts: partsFor(column, row),
+                }))
+                .filter((detail) =>
+                    detail.parts.some((part) => part.value.trim() !== ''),
+                ),
         };
     });
 }

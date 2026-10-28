@@ -17,6 +17,7 @@ import {
     type TableColumn,
     type TableCells,
 } from '@/lib/feedback-table';
+import { richTextPreview } from '@/lib/rich-text';
 import type {
     FeedbackType,
     FeedbackValue,
@@ -33,26 +34,17 @@ export interface ReadingPart {
 
 /** One entry of a feedback box, ready to be read. */
 export interface ReadingEntry {
-    /** What the entry is: what was said, the word, the phrase, or the note. */
+    /** What the entry is: the word, the phrase, or what was said. */
     text: ReadingPart;
-    /** What explains it: the correction, meaning, why or example. */
-    details: ReadingPart[];
+    /** The columns that explain it, as the editor names them. */
+    details: ReadingDetail[];
 }
 
-/** One column of a table box, ready to be a heading. */
-export interface ReadingColumn {
-    header: string;
-}
-
-/** One cell of a table row: the pieces it holds, in order. */
-export interface ReadingCell {
+/** One explained column of an entry: a label and the pieces that fill it. */
+export interface ReadingDetail {
+    /** The column's name, as the editor shows it. */
+    label: string;
     parts: ReadingPart[];
-}
-
-/** A table box, ready to be read: its columns and one entry per row. */
-export interface ReadingTable {
-    columns: ReadingColumn[];
-    rows: ReadingCell[][];
 }
 
 /** One feedback box of a question, ready to be shown. */
@@ -62,8 +54,6 @@ export interface ReadingSection {
     tone: FeedbackTone;
     label: string;
     entries: ReadingEntry[];
-    /** The columns of a table box, so it can be read as the editor shows it. */
-    table?: ReadingTable;
 }
 
 /** The boxes of a question that hold something, in reading order. */
@@ -84,28 +74,10 @@ export function readingSections(
             tone: box.tone,
             label: box.label,
             entries: readingEntries(box, value),
-            ...(box.kind === 'table'
-                ? { table: readingTable(box, value) }
-                : {}),
         });
     }
 
     return sections;
-}
-
-/** The columns and rows of a table box, each row holding its cells. */
-function readingTable(
-    box: FeedbackBoxConfig,
-    value: FeedbackValue,
-): ReadingTable {
-    const columns = box.table?.columns ?? [];
-
-    return {
-        columns: columns.map((column) => ({ header: column.header })),
-        rows: (value as TableCells[]).map((row) =>
-            columns.map((column) => ({ parts: partsFor(column, row) })),
-        ),
-    };
 }
 
 /** What each box calls its entries, one and many. */
@@ -132,6 +104,25 @@ export function readingEntrySummary(sections: ReadingSection[]): string {
         .join(' · ');
 }
 
+/** A quiet hint of what an entry explains, for its collapsed line. */
+export function readingEntryPreview(entry: ReadingEntry): string {
+    const detail = entry.details.find((candidate) =>
+        candidate.parts.some((part) => part.value.trim() !== ''),
+    );
+
+    if (detail === undefined) {
+        return '';
+    }
+
+    return richTextPreview(
+        detail.parts
+            .map((part) => part.value)
+            .filter((value) => value.trim() !== '')
+            .join(' '),
+        70,
+    );
+}
+
 function readingEntries(
     box: FeedbackBoxConfig,
     value: FeedbackValue,
@@ -155,8 +146,13 @@ function readingEntries(
         return {
             text: partFor(lead, row),
             details: rest
-                .flatMap((column) => partsFor(column, row))
-                .filter((part) => part.value.trim() !== ''),
+                .map((column) => ({
+                    label: column.header,
+                    parts: partsFor(column, row),
+                }))
+                .filter((detail) =>
+                    detail.parts.some((part) => part.value.trim() !== ''),
+                ),
         };
     });
 }

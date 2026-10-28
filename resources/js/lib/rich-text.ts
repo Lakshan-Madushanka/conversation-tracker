@@ -29,6 +29,18 @@ export function isRichTextBlank(html: string): boolean {
     return richTextToText(html).length === 0;
 }
 
+/**
+ * The opening words of formatted text, flattened onto one line and cut at a
+ * sensible length. Used where a card is collapsed into a short summary.
+ */
+export function richTextPreview(html: string, max = 80): string {
+    const text = richTextToText(
+        html.replaceAll(/<\/[a-z0-9]+\s*>/giu, (tag) => `${tag} `),
+    );
+
+    return text.length > max ? `${text.slice(0, max)}…` : text;
+}
+
 /** Escapes the characters that would otherwise be read as markup. */
 export function escapeHtml(text: string): string {
     return text

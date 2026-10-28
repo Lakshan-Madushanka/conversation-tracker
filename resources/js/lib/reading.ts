@@ -39,6 +39,22 @@ export interface ReadingEntry {
     details: ReadingPart[];
 }
 
+/** One column of a table box, ready to be a heading. */
+export interface ReadingColumn {
+    header: string;
+}
+
+/** One cell of a table row: the pieces it holds, in order. */
+export interface ReadingCell {
+    parts: ReadingPart[];
+}
+
+/** A table box, ready to be read: its columns and one entry per row. */
+export interface ReadingTable {
+    columns: ReadingColumn[];
+    rows: ReadingCell[][];
+}
+
 /** One feedback box of a question, ready to be shown. */
 export interface ReadingSection {
     /** Which box this is, used to find it from a search result. */
@@ -46,6 +62,8 @@ export interface ReadingSection {
     tone: FeedbackTone;
     label: string;
     entries: ReadingEntry[];
+    /** The columns of a table box, so it can be read as the editor shows it. */
+    table?: ReadingTable;
 }
 
 /** The boxes of a question that hold something, in reading order. */
@@ -66,10 +84,52 @@ export function readingSections(
             tone: box.tone,
             label: box.label,
             entries: readingEntries(box, value),
+            ...(box.kind === 'table'
+                ? { table: readingTable(box, value) }
+                : {}),
         });
     }
 
     return sections;
+}
+
+/** The columns and rows of a table box, each row holding its cells. */
+function readingTable(
+    box: FeedbackBoxConfig,
+    value: FeedbackValue,
+): ReadingTable {
+    const columns = box.table?.columns ?? [];
+
+    return {
+        columns: columns.map((column) => ({ header: column.header })),
+        rows: (value as TableCells[]).map((row) =>
+            columns.map((column) => ({ parts: partsFor(column, row) })),
+        ),
+    };
+}
+
+/** What each box calls its entries, one and many. */
+const ENTRY_NOUNS: Record<FeedbackType, readonly [string, string]> = {
+    mistake: ['mistake', 'mistakes'],
+    vocabulary: ['word', 'words'],
+    phrase: ['phrase', 'phrases'],
+    grammar_note: ['grammar note', 'grammar notes'],
+    natural_version: ['natural version', 'natural versions'],
+};
+
+/**
+ * How many entries a question's boxes hold, in the editor's order, as a short
+ * line for a collapsed question: "2 words · 1 mistake".
+ */
+export function readingEntrySummary(sections: ReadingSection[]): string {
+    return sections
+        .map((section) => {
+            const count = section.entries.length;
+            const [one, many] = ENTRY_NOUNS[section.type];
+
+            return `${count} ${count === 1 ? one : many}`;
+        })
+        .join(' · ');
 }
 
 function readingEntries(

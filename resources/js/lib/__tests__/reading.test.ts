@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { readingSections } from '@/lib/reading';
+import { readingEntrySummary, readingSections } from '@/lib/reading';
 import type { PracticeQuestionData } from '@/types';
 
 function question(
@@ -183,5 +183,72 @@ describe('the sections a question can be read as', () => {
                 details: [],
             },
         ]);
+    });
+
+    it('gives a table box its editor columns and one row per entry', () => {
+        const [vocabulary] = readingSections(
+            question({
+                vocabulary: [
+                    {
+                        id: 'v1',
+                        text: 'soup',
+                        meaning: 'a liquid food',
+                        example_html: '<p>A warm soup.</p>',
+                    },
+                ],
+            }),
+        );
+
+        expect(vocabulary.table?.columns).toEqual([
+            { header: 'Word' },
+            { header: 'Meaning' },
+            { header: 'Example (optional)' },
+        ]);
+        expect(vocabulary.table?.rows[0]?.map((cell) => cell.parts)).toEqual([
+            [{ value: 'soup', formatted: false }],
+            [{ value: 'a liquid food', formatted: false }],
+            [{ value: '<p>A warm soup.</p>', formatted: true }],
+        ]);
+    });
+
+    it('summarises the entries of a question in the editor order', () => {
+        const sections = readingSections(
+            question({
+                natural_version: '<p>I&#039;d like the soup.</p>',
+                grammar_note: [{ id: 'g1', html: '<p>Use could.</p>' }],
+                phrase: [
+                    {
+                        id: 'p1',
+                        text: 'if it is possible',
+                        meaning: '',
+                        example_html: '',
+                    },
+                ],
+                vocabulary: [
+                    {
+                        id: 'v1',
+                        text: 'soup',
+                        meaning: 'a liquid food',
+                        example_html: '',
+                    },
+                ],
+                mistake: [
+                    {
+                        id: 'm1',
+                        text: 'I want',
+                        correction_html: '<strong>I&#039;d like</strong>',
+                        reason: '',
+                    },
+                ],
+            }),
+        );
+
+        expect(readingEntrySummary(sections)).toBe(
+            '1 mistake · 1 word · 1 phrase · 1 grammar note · 1 natural version',
+        );
+    });
+
+    it('has no summary when every box is empty', () => {
+        expect(readingEntrySummary(readingSections(question()))).toBe('');
     });
 });

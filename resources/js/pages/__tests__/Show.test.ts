@@ -15,7 +15,11 @@ import {
     edit as sessionsEdit,
     index as sessionsIndex,
 } from '@/routes/sessions';
-import type { PracticeSessionData, SessionDeletionPreview } from '@/types';
+import type {
+    PracticeQuestionData,
+    PracticeSessionData,
+    SessionDeletionPreview,
+} from '@/types';
 
 vi.mock('@/lib/session-delete', () => ({
     fetchDeletePreview: vi.fn(),
@@ -67,6 +71,82 @@ function session(
 
 function mountShow(saved: PracticeSessionData = session()) {
     return mount(Show, { props: { session: saved } });
+}
+
+/** Run the next animation frame at once, so a reveal can be checked. */
+function runFramesImmediately(): void {
+    vi.stubGlobal('requestAnimationFrame', (callback: () => void) => {
+        callback();
+
+        return 0;
+    });
+}
+
+function questionAt(
+    position: number,
+    overrides: Partial<PracticeQuestionData> = {},
+): PracticeQuestionData {
+    return {
+        id: 100 + position,
+        position,
+        question_html: `<p>Question ${position} text</p>`,
+        answer_html: `<p>Answer ${position}</p>`,
+        feedback: {},
+        ...overrides,
+    };
+}
+
+function twoQuestions(): PracticeSessionData {
+    return session({
+        questions: [
+            questionAt(1, {
+                feedback: {
+                    mistake: [
+                        {
+                            id: 'm1',
+                            text: 'I want a soup',
+                            correction_html:
+                                '<strong>I&#039;d like a soup</strong>',
+                            reason: 'Sounds more polite',
+                        },
+                    ],
+                    vocabulary: [
+                        {
+                            id: 'v1',
+                            text: 'soup',
+                            meaning: 'a liquid food',
+                            example_html: '',
+                        },
+                        {
+                            id: 'v2',
+                            text: 'starter',
+                            meaning: 'a first course',
+                            example_html: '',
+                        },
+                    ],
+                },
+            }),
+            questionAt(2, {
+                feedback: {
+                    vocabulary: [
+                        {
+                            id: 'v3',
+                            text: 'bill',
+                            meaning: 'what you pay',
+                            example_html: '',
+                        },
+                    ],
+                },
+            }),
+        ],
+    });
+}
+
+/** The button whose words include this much. */
+function showButton(wrapper: ReturnType<typeof mountShow>, text: string) {
+    return wrapper
+        .findAll('button')
+        .find((button) => button.text().includes(text));
 }
 
 afterEach(() => {
@@ -184,6 +264,123 @@ describe('a session opened to be read', () => {
         expect(wrapper.text()).toContain(
             'Nothing has been written into this session yet.',
         );
+    });
+});
+
+describe('a session with more than one question', () => {
+    it('opens with every question collapsed into a summary', () => {
+        const wrapper = mountShow(twoQuestions());
+
+        expect(wrapper.find('#reading-1-question').exists()).toBe(false);
+        expect(wrapper.find('#reading-2-question').exists()).toBe(false);
+        expect(showButton(wrapper, 'Expand all')?.exists()).toBe(true);
+        expect(showButton(wrapper, 'Collapse all')?.exists()).toBe(true);
+    });
+
+    it('shows the number, the opening words and the entry summary of a question', () => {
+        const wrapper = mountShow(twoQuestions());
+
+        expect(wrapper.text()).toContain('Question 1');
+        expect(wrapper.text()).toContain('Question 1 text');
+        expect(wrapper.text()).toContain('1 mistake · 2 words');
+    });
+
+    it('opens one question when its summary is pressed', async () => {
+        const wrapper = mountShow(twoQuestions());
+
+        await showButton(wrapper, 'Question 1')?.trigger('click');
+        await nextTick();
+
+        expect(wrapper.find('#reading-1-question').exists()).toBe(true);
+        expect(wrapper.find('#reading-2-question').exists()).toBe(false);
+    });
+
+    it('opens and shrinks every question at once', async () => {
+        const wrapper = mountShow(twoQuestions());
+
+        await showButton(wrapper, 'Expand all')?.trigger('click');
+        await nextTick();
+
+        expect(wrapper.find('#reading-1-question').exists()).toBe(true);
+        expect(wrapper.find('#reading-2-question').exists()).toBe(true);
+
+        await showButton(wrapper, 'Collapse all')?.trigger('click');
+        await nextTick();
+
+        expect(wrapper.find('#reading-1-question').exists()).toBe(false);
+        expect(wrapper.find('#reading-2-question').exists()).toBe(false);
+    });
+
+    it('opens the question a collection item points at, so its word is highlighted', async () => {
+        runFramesImmediately();
+
+        window.history.replaceState(
+            null,
+            '',
+            '/sessions/7?from=collections&question=2&field=entry&type=vocabulary&entry=v3&position=0',
+        );
+
+        const wrapper = mount(Show, {
+            props: { session: twoQuestions() },
+            attachTo: document.body,
+        });
+        await flushPromises();
+        await nextTick();
+
+        const target = document.getElementById('reading-2-entry-v3');
+
+        expect(target).not.toBeNull();
+        expect(target?.classList.contains('search-target')).toBe(true);
+
+        wrapper.unmount();
+    });
+});
+
+describe('reading the boxes as the editor shows them', () => {
+    it('names the columns of mistakes, vocabulary and phrases', () => {
+        const wrapper = mountShow(
+            session({
+                questions: [
+                    questionAt(1, {
+                        feedback: {
+                            mistake: [
+                                {
+                                    id: 'm1',
+                                    text: 'I want',
+                                    correction_html: '<strong>I want</strong>',
+                                    reason: 'More polite',
+                                },
+                            ],
+                            vocabulary: [
+                                {
+                                    id: 'v1',
+                                    text: 'soup',
+                                    meaning: 'a liquid food',
+                                    example_html: '',
+                                },
+                            ],
+                            phrase: [
+                                {
+                                    id: 'p1',
+                                    text: 'a long way',
+                                    meaning: 'far away',
+                                    example_html: '',
+                                },
+                            ],
+                        },
+                    }),
+                ],
+            }),
+        );
+
+        expect(wrapper.text()).toContain('What I said');
+        expect(wrapper.text()).toContain('Correction');
+        expect(wrapper.text()).toContain('Why (optional)');
+        expect(wrapper.text()).toContain('Word');
+        expect(wrapper.text()).toContain('Meaning');
+        expect(wrapper.text()).toContain('Example (optional)');
+        expect(wrapper.text()).toContain('Phrase');
+        expect(wrapper.text()).toContain('Meaning or use');
     });
 });
 

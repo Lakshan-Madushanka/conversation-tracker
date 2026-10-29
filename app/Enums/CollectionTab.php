@@ -60,17 +60,17 @@ enum CollectionTab: string
         return match ($this) {
             self::Vocabulary => 'Vocabulary',
             self::Phrases => 'Phrases',
-            self::Grammar => 'Grammar',
+            self::Grammar => 'Grammar notes',
             self::Mistakes => 'My mistakes',
         };
     }
 
     /**
-     * Whether this collection has been built yet. The other tabs stay visible
-     * and explain that they are on their way, rather than looking broken.
+     * Whether this collection has been built yet. The mistakes tab stays
+     * visible and calm until its step, rather than looking broken.
      */
     public function isBuilt(): bool
     {
-        return $this === self::Vocabulary;
+        return $this !== self::Mistakes;
     }
 }

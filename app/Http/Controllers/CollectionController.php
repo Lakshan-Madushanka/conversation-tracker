@@ -5,10 +5,11 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Enums\CollectionTab;
+use App\Enums\FeedbackType;
 use App\Http\Requests\CollectionRequest;
 use App\Http\Resources\CollectionItemResource;
+use App\Http\Resources\CollectionNoteResource;
 use App\Queries\TableCollection;
-use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -19,7 +20,7 @@ class CollectionController extends Controller
      * The four personal collections, gathered live from finished sessions.
      *
      * A normal visit renders the page; the same address asked for JSON returns
-     * the next page for "Load more". The tab and the opened word travel in the
+     * the next page for "Load more". The tab and the opened item travel in the
      * address, so a refresh, a bookmark or the Back button return to the same
      * view.
      */
@@ -38,15 +39,8 @@ class CollectionController extends Controller
 
         $payload = [
             'tab' => $tab->value,
-            'tabs' => array_map(
-                fn (CollectionTab $candidate): array => [
-                    'key' => $candidate->value,
-                    'label' => $candidate->label(),
-                    'built' => $candidate->isBuilt(),
-                ],
-                CollectionTab::ordered(),
-            ),
-            'items' => $this->items($page['items']),
+            'tabs' => $this->tabs($collection),
+            'items' => $this->items($tab, $page['items']),
             'next_cursor' => $page['next_cursor'],
             'has_more' => $page['has_more'],
             'total' => $page['total'],
@@ -62,36 +56,70 @@ class CollectionController extends Controller
             ]);
         }
 
-        $word = $request->word();
-        $openWord = null;
+        $item = $request->item();
+        $openItem = null;
         $missing = false;
 
-        if ($word !== null) {
-            $found = $collection->find($tab->feedbackType(), $word);
+        if ($item !== null) {
+            $found = $collection->find($tab->feedbackType(), $item);
 
             if ($found === null) {
                 $missing = true;
             } else {
-                $openWord = CollectionItemResource::make($found)->resolve();
+                $openItem = $this->shapeItem($tab, $found);
             }
         }
 
         return Inertia::render('collections/Index', [
             ...$payload,
-            'open_word' => $openWord,
-            'open_word_missing' => $missing,
+            'open_item' => $openItem,
+            'open_item_missing' => $missing,
         ]);
     }
 
     /**
-     * @param  list<array{key: string, word: string, meaning: string, example: string, latest_at: CarbonImmutable, seen_count: int, appearances: list<array{session_id: int, session_date: CarbonImmutable|null, topic: string, question_position: int, entry_id: string|null, entry_position: int, meaning: string, example: string}>}>  $items
+     * The four tabs, with the count of every collection that has been built.
+     * My mistakes stays calm and count-free until its step.
+     *
+     * @return list<array{key: string, label: string, count: int|null, built: bool}>
+     */
+    private function tabs(TableCollection $collection): array
+    {
+        $counts = $collection->counts();
+
+        return array_map(
+            fn (CollectionTab $candidate): array => [
+                'key' => $candidate->value,
+                'label' => $candidate->label(),
+                'count' => $candidate->isBuilt()
+                    ? $counts[$candidate->value]
+                    : null,
+                'built' => $candidate->isBuilt(),
+            ],
+            CollectionTab::ordered(),
+        );
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $items
      * @return list<array<string, mixed>>
      */
-    private function items(array $items): array
+    private function items(CollectionTab $tab, array $items): array
     {
         return array_map(
-            fn (array $item): array => CollectionItemResource::make($item)->resolve(),
+            fn (array $item): array => $this->shapeItem($tab, $item),
             $items,
         );
+    }
+
+    /**
+     * @param  array<string, mixed>  $item
+     * @return array<string, mixed>
+     */
+    private function shapeItem(CollectionTab $tab, array $item): array
+    {
+        return $tab->feedbackType() === FeedbackType::GrammarNote
+            ? CollectionNoteResource::make($item)->resolve()
+            : CollectionItemResource::make($item)->resolve();
     }
 }

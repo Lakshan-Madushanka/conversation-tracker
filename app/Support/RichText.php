@@ -209,6 +209,26 @@ final class RichText
         return $content;
     }
 
+    /**
+     * The safe inline markup of one example column: a list of entries joined
+     * into one line, or a single older piece of markup. Whatever was stored is
+     * reduced again to bold and italic around its words, so the collection
+     * views can show it without trusting the saved text itself.
+     *
+     * @param  string|list<array{id: string, text: string, html: string}>|null  $exampleHtml
+     */
+    public static function inlineExampleHtml(string|array|null $exampleHtml): string
+    {
+        $html = is_array($exampleHtml)
+            ? implode(' ', array_map(
+                fn (array $item): string => (string) $item['html'],
+                array_values(array_filter($exampleHtml, 'is_array')),
+            ))
+            : (string) $exampleHtml;
+
+        return self::cleanInlineWithText($html)['html'];
+    }
+
     private static function collapseInline(string $value): string
     {
         return trim((string) preg_replace('/\s+/u', ' ', $value));

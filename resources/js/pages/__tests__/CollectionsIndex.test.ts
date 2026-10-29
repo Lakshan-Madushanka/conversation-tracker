@@ -19,27 +19,49 @@ import { index as collectionsIndex } from '@/routes/collections';
 import type {
     CollectionItem,
     CollectionItemsPage,
+    CollectionNoteItem,
     CollectionPage,
     CollectionTabData,
 } from '@/types';
 
 const tabs: CollectionTabData[] = [
-    { key: 'vocabulary', label: 'Vocabulary', built: true },
-    { key: 'phrases', label: 'Phrases', built: false },
-    { key: 'grammar', label: 'Grammar', built: false },
-    { key: 'mistakes', label: 'My mistakes', built: false },
+    { key: 'vocabulary', label: 'Vocabulary', count: 1, built: true },
+    { key: 'phrases', label: 'Phrases', count: 4, built: true },
+    { key: 'grammar', label: 'Grammar notes', count: 2, built: true },
+    { key: 'mistakes', label: 'My mistakes', count: null, built: false },
 ];
 
 function item(overrides: Partial<CollectionItem> = {}): CollectionItem {
     return {
         key: 'soup',
-        word: 'soup',
+        title: 'soup',
         meaning: 'a liquid food',
         example: 'I want a soup.',
+        example_html: '',
         latest_session_date: '2026-10-19T10:14:55.000000Z',
         seen_count: 1,
         needs_attention: false,
+        attention_reason: null,
         appearances: [],
+        ...overrides,
+    };
+}
+
+function noteItem(
+    overrides: Partial<CollectionNoteItem> = {},
+): CollectionNoteItem {
+    return {
+        key: 'note-7',
+        text: 'Use the past tense here.',
+        preview: 'Use the past tense here.',
+        html: '<p>Use the <strong>past tense</strong> here.</p>',
+        latest_session_date: '2026-10-19T10:14:55.000000Z',
+        session_id: 1,
+        session_date: '2026-10-19T10:14:55.000000Z',
+        topic: 'Ordering at a restaurant',
+        question_position: 1,
+        entry_id: null,
+        entry_position: 0,
         ...overrides,
     };
 }
@@ -55,8 +77,8 @@ function pageProps(overrides: Partial<CollectionPage> = {}): CollectionPage {
         has_more: false,
         total: items.length,
         has_finished_sessions: true,
-        open_word: null,
-        open_word_missing: false,
+        open_item: null,
+        open_item_missing: false,
         ...overrides,
     };
 }
@@ -112,10 +134,47 @@ describe('the Collections page', () => {
 
         expect(mounted?.text()).toContain('Vocabulary');
         expect(mounted?.text()).toContain('Phrases');
-        expect(mounted?.text()).toContain('Grammar');
+        expect(mounted?.text()).toContain('Grammar notes');
         expect(mounted?.text()).toContain('My mistakes');
         expect(mounted?.text()).toContain('soup');
         expect(mounted?.text()).toContain('a liquid food');
+    });
+
+    it('reads a built collection count on its tab and keeps My mistakes count-free', () => {
+        mountPage();
+
+        const triggers = mounted?.findAll('[role="tab"]') ?? [];
+
+        expect(triggers.find((t) => t.text().includes('Phrases'))?.text()).toBe(
+            'Phrases (4)',
+        );
+        expect(
+            triggers.find((t) => t.text().includes('Vocabulary'))?.text(),
+        ).toBe('Vocabulary (1)');
+        expect(triggers.find((t) => t.text().includes('Grammar'))?.text()).toBe(
+            'Grammar notes (2)',
+        );
+        expect(
+            triggers.find((t) => t.text().includes('My mistakes'))?.text(),
+        ).toBe('My mistakes');
+    });
+
+    it('names a built tab for screen readers with its item count', async () => {
+        vi.spyOn(router, 'get').mockImplementation(() => {});
+        mountPage();
+
+        const phrases = mounted
+            ?.findAll('[role="tab"]')
+            .find((t) => t.text().includes('Phrases'));
+
+        await phrases?.trigger('mouseenter');
+        await phrases?.trigger('focus');
+
+        expect(
+            document
+                .querySelector('[role="tab"][aria-label*="Phrases"]')
+                ?.getAttribute('aria-label'),
+        ).toBe('Phrases, 4 phrases');
     });
 
     it('asks the server for another tab and keeps the page in place', async () => {
@@ -134,16 +193,16 @@ describe('the Collections page', () => {
         );
     });
 
-    it('keeps an unbuilt tab calm and points back to vocabulary', async () => {
+    it('keeps the unbuilt mistakes tab calm and points back to vocabulary', async () => {
         const get = vi.spyOn(router, 'get').mockImplementation(() => {});
         mountPage({
-            tab: 'phrases',
+            tab: 'mistakes',
             items: [],
             total: 0,
             has_finished_sessions: true,
         });
 
-        expect(mounted?.text()).toContain('Phrases are on their way');
+        expect(mounted?.text()).toContain('My mistakes are on their way');
 
         const browse = mounted
             ?.findAll('button')
@@ -178,9 +237,9 @@ describe('the Collections page', () => {
         );
     });
 
-    it('says calmly when a word named in the address is gone', async () => {
+    it('says calmly when an item named in the address is gone', async () => {
         const get = vi.spyOn(router, 'get').mockImplementation(() => {});
-        mountPage({ open_word_missing: true });
+        mountPage({ open_item_missing: true });
 
         expect(mounted?.text()).toContain('That word is no longer here');
 
@@ -199,23 +258,60 @@ describe('the Collections page', () => {
     });
 
     it('shows the opened word in its panel', async () => {
-        mountPage({ open_word: item() });
+        mountPage({ open_item: item() });
         await flushPromises();
 
         expect(document.body.textContent).toContain(
             'Everything you saved for this word',
         );
     });
+
+    it('lists grammar notes as their own items and opens one as a note', async () => {
+        const get = vi.spyOn(router, 'get').mockImplementation(() => {});
+        mountPage({
+            tab: 'grammar',
+            items: [
+                noteItem(),
+                noteItem({ key: 'note-9', preview: 'Second note preview.' }),
+            ],
+            total: 2,
+        });
+        await flushPromises();
+
+        // Every item keeps its own voice: no merging, no "seen N times".
+        expect(mounted?.text()).toContain('Use the past tense here.');
+        expect(mounted?.text()).toContain('Second note preview.');
+        expect(mounted?.text()).not.toContain('Seen');
+
+        const noteRow = mounted
+            ?.findAll('button')
+            .find((button) =>
+                button.element.textContent?.trim().startsWith('Use the'),
+            );
+
+        await noteRow?.trigger('click');
+
+        expect(get.mock.calls[0]?.[0]).toBe(collectionUrl('grammar', 'note-7'));
+
+        await mounted?.setProps(pageProps({ open_item: noteItem() }));
+        await flushPromises();
+
+        expect(document.body.textContent).toContain('Grammar note');
+        expect(document.body.textContent).toContain(
+            'Everything this note says, as you saved it in its session.',
+        );
+        expect(document.body.textContent).toContain('Where it came from');
+    });
 });
 
 describe('coming back to the Collections page', () => {
-    it('puts the remembered list, word and scroll position back', async () => {
-        const saved = item({ key: 'zest', word: 'zest' });
+    it('puts the remembered list, item and scroll position back', async () => {
+        const saved = item({ key: 'zest', title: 'zest' });
 
         window.history.replaceState(
             null,
             '',
-            '/collections?tab=vocabulary&word=zest',
+            '/collections?tab=vocabulary&item=zest',
         );
 
         saveCollectionSnapshot({
@@ -224,7 +320,7 @@ describe('coming back to the Collections page', () => {
             nextCursor: null,
             hasMore: false,
             total: 2,
-            openWordKey: 'zest',
+            openItemKey: 'zest',
             scrollY: 320,
             savedAt: Date.now(),
         });
@@ -290,6 +386,6 @@ describe('coming back to the Collections page', () => {
 
         await nextTick();
 
-        expect(mounted?.text()).toContain('Phrases are on their way');
+        expect(mounted?.text()).toContain('No phrases yet');
     });
 });

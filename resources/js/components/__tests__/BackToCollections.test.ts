@@ -19,12 +19,14 @@ import type { CollectionItem } from '@/types';
 function item(overrides: Partial<CollectionItem> = {}): CollectionItem {
     return {
         key: 'soup',
-        word: 'soup',
+        title: 'soup',
         meaning: 'a liquid food',
         example: 'I want a soup.',
+        example_html: '',
         latest_session_date: '2026-10-19T10:14:55.000000Z',
         seen_count: 1,
         needs_attention: false,
+        attention_reason: null,
         appearances: [],
         ...overrides,
     };
@@ -53,14 +55,14 @@ describe('the way back to Collections', () => {
         );
     });
 
-    it('returns to the tab and word the learner left behind', () => {
+    it('returns to the tab and item the learner left behind', () => {
         saveCollectionSnapshot({
             tab: 'phrases',
             items: [item({ key: 'catch up' })],
             nextCursor: null,
             hasMore: false,
             total: 1,
-            openWordKey: 'catch up',
+            openItemKey: 'catch up',
             scrollY: 120,
             savedAt: Date.now(),
         });

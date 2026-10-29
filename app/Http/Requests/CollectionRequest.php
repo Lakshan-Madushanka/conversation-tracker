@@ -9,11 +9,11 @@ use App\Queries\TableCollection;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
- * What the Collections page reads from its address: the open tab, the word
- * whose panel is open, and the cursor for the next page.
+ * What the Collections page reads from its address: the open tab, the opened
+ * item, and the cursor for the next page.
  *
- * An unknown tab or word is not an error. A stale bookmark still opens the
- * page calmly, on vocabulary and with a note instead of a word panel.
+ * An unknown tab or item is not an error. A stale bookmark still opens the
+ * page calmly, on vocabulary and with a note instead of an item panel.
  */
 final class CollectionRequest extends FormRequest
 {
@@ -40,12 +40,12 @@ final class CollectionRequest extends FormRequest
         return CollectionTab::fromQuery(is_string($tab) ? $tab : null);
     }
 
-    /** The normalised word key whose panel the address asks to open. */
-    public function word(): ?string
+    /** The key of the item whose panel the address asks to open. */
+    public function item(): ?string
     {
-        $word = $this->query('word');
+        $item = $this->query('item');
 
-        return is_string($word) && $word !== '' ? $word : null;
+        return is_string($item) && $item !== '' ? $item : null;
     }
 
     public function cursor(): ?string

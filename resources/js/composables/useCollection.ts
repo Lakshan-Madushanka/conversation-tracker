@@ -2,7 +2,7 @@ import { ref } from 'vue';
 import { router } from '@inertiajs/vue3';
 import { collectionUrl } from '@/lib/collection-query';
 import {
-    isCollectionItem,
+    isCollectionOpenedItem,
     isCollectionItemsPage,
     isCollectionPage,
     markCollectionRestore,
@@ -13,8 +13,8 @@ import {
 import { jsonRequest } from '@/lib/http';
 import { index as collectionsIndex } from '@/routes/collections';
 import type {
-    CollectionItem,
     CollectionItemsPage,
+    CollectionOpenedItem,
     CollectionPage,
     CollectionTabKey,
 } from '@/types';
@@ -30,11 +30,11 @@ const LIST_PROPS = [
     'has_finished_sessions',
 ];
 
-/** The page props that open or close the word panel. */
-const PANEL_PROPS = ['open_word', 'open_word_missing'];
+/** The page props that open or close the item panel. */
+const PANEL_PROPS = ['open_item', 'open_item_missing'];
 
 /**
- * The collection on screen: the words loaded so far, the open tab and the
+ * The collection on screen: the items loaded so far, the open tab and the
  * panel, plus the states the page needs to explain loading and failure.
  *
  * Tab changes and the panel travel through Inertia, so the address bar, the
@@ -43,13 +43,13 @@ const PANEL_PROPS = ['open_word', 'open_word_missing'];
  */
 export function useCollection(initial: CollectionPage) {
     const tab = ref<CollectionTabKey>(initial.tab);
-    const items = ref<CollectionItem[]>([...initial.items]);
+    const items = ref<CollectionOpenedItem[]>([...initial.items]);
     const nextCursor = ref<string | null>(initial.next_cursor);
     const hasMore = ref(initial.has_more);
     const total = ref(initial.total);
     const hasFinishedSessions = ref(initial.has_finished_sessions);
-    const openWord = ref<CollectionItem | null>(initial.open_word);
-    const openWordMissing = ref(initial.open_word_missing);
+    const openItem = ref<CollectionOpenedItem | null>(initial.open_item);
+    const openItemMissing = ref(initial.open_item_missing);
 
     const loading = ref(false);
     const error = ref(false);
@@ -94,7 +94,7 @@ export function useCollection(initial: CollectionPage) {
         }
     }
 
-    /** Loads the next page, keeping every word already shown. */
+    /** Loads the next page, keeping every item already shown. */
     async function loadMore(): Promise<boolean> {
         if (loading.value || !hasMore.value || nextCursor.value === null) {
             return false;
@@ -129,7 +129,7 @@ export function useCollection(initial: CollectionPage) {
     }
 
     /**
-     * Refreshes every word already loaded after a trip to a session, so an
+     * Refreshes every item already loaded after a trip to a session, so an
      * edit, archive or delete made there is reflected on return. If the
      * network drops, the restored list stays exactly as it was.
      */
@@ -173,7 +173,7 @@ export function useCollection(initial: CollectionPage) {
             return;
         }
 
-        let refreshed: CollectionItem[] = [];
+        let refreshed: CollectionOpenedItem[] = [];
 
         for (const page of pages) {
             refreshed = mergeCollectionItems(refreshed, page.items);
@@ -187,7 +187,7 @@ export function useCollection(initial: CollectionPage) {
 
     /**
      * Ask for another tab. The address changes with a push, so the Back button
-     * returns to the previous tab. Any open word belongs to the old tab and
+     * returns to the previous tab. Any open item belongs to the old tab and
      * closes with it.
      */
     function setTab(next: CollectionTabKey): void {
@@ -202,8 +202,8 @@ export function useCollection(initial: CollectionPage) {
         nextCursor.value = null;
         hasMore.value = false;
         total.value = 0;
-        openWord.value = null;
-        openWordMissing.value = false;
+        openItem.value = null;
+        openItemMissing.value = false;
         loading.value = false;
         updating.value = true;
         error.value = false;
@@ -253,16 +253,16 @@ export function useCollection(initial: CollectionPage) {
     }
 
     /**
-     * Open a word's panel. The address gains `word`, with a push, so Back
+     * Open an item's panel. The address gains `item`, with a push, so Back
      * closes the panel and leaves the loaded list untouched.
      */
-    function openWordPanel(item: CollectionItem): void {
-        if (openWord.value?.key === item.key) {
+    function openItemPanel(item: CollectionOpenedItem): void {
+        if (openItem.value?.key === item.key) {
             return;
         }
 
-        openWord.value = item;
-        openWordMissing.value = false;
+        openItem.value = item;
+        openItemMissing.value = false;
 
         router.get(
             collectionUrl(tab.value, item.key),
@@ -273,26 +273,26 @@ export function useCollection(initial: CollectionPage) {
                 only: PANEL_PROPS,
                 onSuccess: (page) => syncPanel(page.props),
                 onError: () => {
-                    openWord.value = null;
+                    openItem.value = null;
                 },
                 onHttpException: () => {
-                    openWord.value = null;
+                    openItem.value = null;
                 },
                 onNetworkError: () => {
-                    openWord.value = null;
+                    openItem.value = null;
                 },
             },
         );
     }
 
     /** Close the panel by replacing the address, so no extra history is left. */
-    function closeWordPanel(): void {
-        if (openWord.value === null && !openWordMissing.value) {
+    function closeItemPanel(): void {
+        if (openItem.value === null && !openItemMissing.value) {
             return;
         }
 
-        openWord.value = null;
-        openWordMissing.value = false;
+        openItem.value = null;
+        openItemMissing.value = false;
 
         router.get(
             collectionUrl(tab.value),
@@ -306,13 +306,13 @@ export function useCollection(initial: CollectionPage) {
         );
     }
 
-    /** Dismiss the calm note about a word that is no longer there. */
-    function dismissMissingWord(): void {
-        closeWordPanel();
+    /** Dismiss the calm note about an item that is no longer there. */
+    function dismissMissingItem(): void {
+        closeItemPanel();
     }
 
     /**
-     * Remember everything on screen just before the learner follows a word
+     * Remember everything on screen just before the learner follows an item
      * back to its session. The marker makes the next visit restore it once.
      */
     function rememberForReturn(): void {
@@ -322,12 +322,12 @@ export function useCollection(initial: CollectionPage) {
 
     /**
      * Put a saved list back, before the quiet refresh that makes it current.
-     * The open word is taken from the address the learner returned to, so the
+     * The open item is taken from the address the learner returned to, so the
      * Back button can close a panel even when the saved list still names it.
      */
     function restore(
         saved: CollectionSnapshot,
-        openWordKey: string | null = saved.openWordKey,
+        openItemKey: string | null = saved.openItemKey,
     ): void {
         generation += 1;
         loading.value = false;
@@ -338,25 +338,25 @@ export function useCollection(initial: CollectionPage) {
         nextCursor.value = saved.nextCursor;
         hasMore.value = saved.hasMore;
         total.value = saved.total;
-        openWordMissing.value = false;
-        openWord.value =
-            openWordKey === null
+        openItemMissing.value = false;
+        openItem.value =
+            openItemKey === null
                 ? null
-                : (saved.items.find((item) => item.key === openWordKey) ??
-                  (initial.open_word?.key === openWordKey
-                      ? initial.open_word
+                : (saved.items.find((item) => item.key === openItemKey) ??
+                  (initial.open_item?.key === openItemKey
+                      ? initial.open_item
                       : null));
     }
 
     /**
      * Adopt a page the browser restored from history, such as the Back button
-     * moving between tabs or closing an open word. The address decides whether
-     * a panel should be open: a partial history entry can still carry the word
-     * from the page it was left on.
+     * moving between tabs or closing an open item. The address decides whether
+     * a panel should be open: a partial history entry can still carry the
+     * item from the page it was left on.
      */
     function syncFromPage(
         page: CollectionPage,
-        openWordKey: string | null = page.open_word?.key ?? null,
+        openItemKey: string | null = page.open_item?.key ?? null,
     ): void {
         generation += 1;
         loading.value = false;
@@ -364,14 +364,14 @@ export function useCollection(initial: CollectionPage) {
         syncPage(page);
 
         const found =
-            openWordKey !== null && page.open_word?.key === openWordKey
-                ? page.open_word
+            openItemKey !== null && page.open_item?.key === openItemKey
+                ? page.open_item
                 : null;
 
-        openWord.value = found;
-        openWordMissing.value =
-            openWordKey !== null && found === null
-                ? page.open_word_missing
+        openItem.value = found;
+        openItemMissing.value =
+            openItemKey !== null && found === null
+                ? page.open_item_missing
                 : false;
     }
 
@@ -382,7 +382,7 @@ export function useCollection(initial: CollectionPage) {
             nextCursor: nextCursor.value,
             hasMore: hasMore.value,
             total: total.value,
-            openWordKey: openWord.value?.key ?? null,
+            openItemKey: openItem.value?.key ?? null,
             scrollY: typeof window === 'undefined' ? 0 : window.scrollY,
             savedAt: Date.now(),
         };
@@ -399,10 +399,10 @@ export function useCollection(initial: CollectionPage) {
     }
 
     function syncPanel(props: Record<string, unknown>): void {
-        openWord.value = isCollectionItem(props.open_word)
-            ? props.open_word
+        openItem.value = isCollectionOpenedItem(props.open_item)
+            ? props.open_item
             : null;
-        openWordMissing.value = props.open_word_missing === true;
+        openItemMissing.value = props.open_item_missing === true;
     }
 
     return {
@@ -412,17 +412,17 @@ export function useCollection(initial: CollectionPage) {
         hasMore,
         total,
         hasFinishedSessions,
-        openWord,
-        openWordMissing,
+        openItem,
+        openItemMissing,
         loading,
         error,
         updating,
         loadMore,
         refresh,
         setTab,
-        openWordPanel,
-        closeWordPanel,
-        dismissMissingWord,
+        openItemPanel,
+        closeItemPanel,
+        dismissMissingItem,
         rememberForReturn,
         restore,
         syncFromPage,

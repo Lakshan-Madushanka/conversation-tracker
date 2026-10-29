@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Support;
 
+use App\Enums\FeedbackType;
+
 /**
  * The mistakes box's view of the shared table rules: named access to how a
  * pasted line splits into what was said and the correction, and why a row
@@ -22,10 +24,10 @@ final class MistakeEntries
     public const int MAX_CELL_LENGTH = FeedbackTable::MAX_CELL_LENGTH;
 
     /** What the column says when a correction is missing. */
-    public const string ATTENTION_ADD_CORRECTION = 'Add the correction.';
+    public const string ATTENTION_ADD_CORRECTION = RowAttention::ADD_CORRECTION;
 
     /** What the column says when the line held more than one separator. */
-    public const string ATTENTION_MORE_THAN_ONE = 'More than one separator found. Please split it yourself.';
+    public const string ATTENTION_MORE_THAN_ONE = RowAttention::MORE_THAN_ONE;
 
     /**
      * Split one pasted line into its parts: what was said, the correction and
@@ -53,19 +55,12 @@ final class MistakeEntries
 
     /**
      * Why a row needs the learner's attention, worked out from its content
-     * rather than stored. A row with a correction is fine.
+     * rather than stored. A row with a correction is fine. The rule itself
+     * lives in `RowAttention`, shared with the vocabulary and phrase rows.
      */
     public static function attention(string $text, string $correctionText): ?string
     {
-        if (trim($correctionText) !== '') {
-            return null;
-        }
-
-        if (self::countSeparators($text) > 1) {
-            return self::ATTENTION_MORE_THAN_ONE;
-        }
-
-        return self::ATTENTION_ADD_CORRECTION;
+        return RowAttention::reason(FeedbackType::Mistake, $text, $correctionText);
     }
 
     private static function escape(string $text): string

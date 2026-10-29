@@ -10,6 +10,7 @@ import {
     feedbackTypeFor,
     isCollectionItem,
     isCollectionItemsPage,
+    isCollectionNoteItem,
     isCollectionPage,
     markCollectionRestore,
     mergeCollectionItems,
@@ -19,7 +20,11 @@ import {
     type CollectionSnapshot,
 } from '@/lib/collections';
 import { collectionUrl } from '@/lib/collection-query';
-import type { CollectionAppearance, CollectionItem } from '@/types';
+import type {
+    CollectionAppearance,
+    CollectionItem,
+    CollectionNoteItem,
+} from '@/types';
 
 function appearance(
     overrides: Partial<CollectionAppearance> = {},
@@ -33,6 +38,7 @@ function appearance(
         entry_position: 0,
         meaning: 'a liquid food',
         example: 'I want a soup.',
+        example_html: '',
         ...overrides,
     };
 }
@@ -40,13 +46,32 @@ function appearance(
 function item(overrides: Partial<CollectionItem> = {}): CollectionItem {
     return {
         key: 'soup',
-        word: 'soup',
+        title: 'soup',
         meaning: 'a liquid food',
         example: 'I want a soup.',
+        example_html: '',
         latest_session_date: '2026-10-19T10:14:55.000000Z',
         seen_count: 1,
         needs_attention: false,
+        attention_reason: null,
         appearances: [appearance()],
+        ...overrides,
+    };
+}
+
+function note(overrides: Partial<CollectionNoteItem> = {}): CollectionNoteItem {
+    return {
+        key: 'note-7',
+        text: 'Use the past tense here.',
+        preview: 'Use the past tense here.',
+        html: '<p>Use the <strong>past tense</strong> here.</p>',
+        latest_session_date: '2026-10-19T10:14:55.000000Z',
+        session_id: 1,
+        session_date: '2026-10-19T10:14:55.000000Z',
+        topic: 'Ordering at a restaurant',
+        question_position: 1,
+        entry_id: 'note-a',
+        entry_position: 0,
         ...overrides,
     };
 }
@@ -60,7 +85,7 @@ function snapshot(
         nextCursor: null,
         hasMore: false,
         total: 1,
-        openWordKey: 'soup',
+        openItemKey: 'soup',
         scrollY: 240,
         savedAt: Date.now(),
         ...overrides,
@@ -71,40 +96,81 @@ afterEach(() => {
     window.sessionStorage.clear();
 });
 
-describe('merging loaded words', () => {
-    it('adds new words after the ones already shown', () => {
+describe('merging loaded items', () => {
+    it('adds new items after the ones already shown', () => {
         const merged = mergeCollectionItems(
-            [item({ key: 'soup', word: 'soup' })],
-            [item({ key: 'relish', word: 'relish' })],
+            [item({ key: 'soup' })],
+            [item({ key: 'relish', title: 'relish' })],
         );
 
-        expect(merged.map((word) => word.key)).toEqual(['soup', 'relish']);
+        expect(merged.map((entry) => entry.key)).toEqual(['soup', 'relish']);
     });
 
-    it('replaces a word in place when it comes back with fresh data', () => {
+    it('replaces an item in place when it comes back with fresh data', () => {
         const merged = mergeCollectionItems(
             [item({ key: 'soup' }), item({ key: 'relish' })],
             [item({ key: 'soup', seen_count: 4 })],
         );
 
-        expect(merged.map((word) => word.key)).toEqual(['soup', 'relish']);
-        expect(merged[0]?.seen_count).toBe(4);
+        const first = merged[0];
+
+        expect(merged.map((entry) => entry.key)).toEqual(['soup', 'relish']);
+        expect(isCollectionItem(first) && first.seen_count).toBe(4);
+    });
+
+    it('keeps two identical notes as their own items', () => {
+        const merged = mergeCollectionItems(
+            [note({ key: 'note-7' })],
+            [note({ key: 'note-9' })],
+        );
+
+        expect(merged.map((entry) => entry.key)).toEqual(['note-7', 'note-9']);
     });
 });
 
 describe('checking payloads', () => {
-    it('accepts a collection page with a word open', () => {
+    it('accepts a collection page with an item open', () => {
         expect(
             isCollectionPage({
                 tab: 'vocabulary',
-                tabs: [{ key: 'vocabulary', label: 'Vocabulary', built: true }],
+                tabs: [
+                    {
+                        key: 'vocabulary',
+                        label: 'Vocabulary',
+                        count: 1,
+                        built: true,
+                    },
+                ],
                 items: [item()],
                 next_cursor: null,
                 has_more: false,
                 total: 1,
                 has_finished_sessions: true,
-                open_word: item(),
-                open_word_missing: false,
+                open_item: item(),
+                open_item_missing: false,
+            }),
+        ).toBe(true);
+    });
+
+    it('accepts a collection page with a note open', () => {
+        expect(
+            isCollectionPage({
+                tab: 'grammar',
+                tabs: [
+                    {
+                        key: 'grammar',
+                        label: 'Grammar notes',
+                        count: 1,
+                        built: true,
+                    },
+                ],
+                items: [note()],
+                next_cursor: null,
+                has_more: false,
+                total: 1,
+                has_finished_sessions: true,
+                open_item: note(),
+                open_item_missing: false,
             }),
         ).toBe(true);
     });
@@ -120,6 +186,17 @@ describe('checking payloads', () => {
                 next_cursor: 'abc',
                 has_more: true,
                 total: 31,
+            }),
+        ).toBe(true);
+    });
+
+    it('accepts a load-more page of notes', () => {
+        expect(
+            isCollectionItemsPage({
+                items: [note()],
+                next_cursor: null,
+                has_more: false,
+                total: 1,
             }),
         ).toBe(true);
     });
@@ -140,6 +217,15 @@ describe('checking payloads', () => {
         expect(isCollectionItem({ ...item(), appearances: 'none' })).toBe(
             false,
         );
+    });
+
+    it('checks every field of a note', () => {
+        expect(isCollectionNoteItem(note())).toBe(true);
+        expect(isCollectionNoteItem({ ...note(), html: undefined })).toBe(
+            false,
+        );
+        expect(isCollectionItem(note())).toBe(false);
+        expect(isCollectionNoteItem(item())).toBe(false);
     });
 });
 
@@ -194,9 +280,9 @@ describe('remembering the list for the trip back', () => {
 });
 
 describe('the way back to Collections', () => {
-    it('returns to the opened word of the remembered tab', () => {
+    it('returns to the opened item of the remembered tab', () => {
         saveCollectionSnapshot(
-            snapshot({ tab: 'phrases', openWordKey: 'catch up' }),
+            snapshot({ tab: 'phrases', openItemKey: 'catch up' }),
         );
 
         expect(collectionReturnUrl()).toBe(

@@ -41,3 +41,25 @@ it('reads a cursor without padding', function (): void {
 
     expect(CollectionCursor::decode($encoded)?->key)->toBe('relish');
 });
+
+it('round-trips the place of a note inside its session', function (): void {
+    $moment = CarbonImmutable::parse('2026-10-27 09:15:00');
+
+    $decoded = CollectionCursor::decode(
+        (new CollectionCursor('note-41', $moment, 2003))->encode(),
+    );
+
+    expect($decoded)->not->toBeNull()
+        ->and($decoded?->position)->toBe(2003);
+});
+
+it('keeps a cursor without a place decodeable', function (): void {
+    $moment = CarbonImmutable::parse('2026-10-27 09:15:00');
+
+    $decoded = CollectionCursor::decode(
+        (new CollectionCursor('soup', $moment))->encode(),
+    );
+
+    expect($decoded)->not->toBeNull()
+        ->and($decoded?->position)->toBeNull();
+});

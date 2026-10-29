@@ -16,6 +16,7 @@ function appearance(
         entry_position: 0,
         meaning: 'a liquid food',
         example: 'I want a soup.',
+        example_html: '',
         ...overrides,
     };
 }
@@ -23,12 +24,14 @@ function appearance(
 function item(overrides: Partial<CollectionItem> = {}): CollectionItem {
     return {
         key: 'soup',
-        word: 'soup',
+        title: 'soup',
         meaning: 'a liquid food',
         example: 'I want a soup.',
+        example_html: '',
         latest_session_date: '2026-10-19T10:14:55.000000Z',
         seen_count: 1,
         needs_attention: false,
+        attention_reason: null,
         appearances: [appearance()],
         ...overrides,
     };
@@ -73,7 +76,7 @@ describe('the opened word panel', () => {
 
         expect(text()).toContain('soup');
         expect(text()).toContain('a liquid food');
-        expect(text()).toContain('“I want a soup.”');
+        expect(text()).toContain('I want a soup.');
     });
 
     it('moves focus to the word and gives it a heading', async () => {
@@ -96,7 +99,7 @@ describe('the opened word panel', () => {
         );
 
         expect(text()).toContain('Add the meaning');
-        expect(text()).toContain('This word has no meaning yet');
+        expect(text()).toContain('Needs attention');
     });
 
     it('shows every different meaning and example with the session it came from', async () => {
@@ -122,8 +125,8 @@ describe('the opened word panel', () => {
         expect(text()).toContain('All meanings and examples');
         expect(text()).toContain('a bowl of soup');
         expect(text()).toContain('a liquid food');
-        expect(text()).toContain('“The soup was hot.”');
-        expect(text()).toContain('“I want a soup.”');
+        expect(text()).toContain('The soup was hot.');
+        expect(text()).toContain('I want a soup.');
         expect(text()).toContain('Ordering at a restaurant');
     });
 

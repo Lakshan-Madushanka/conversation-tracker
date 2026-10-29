@@ -2,18 +2,57 @@ import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vite-plus/test';
 import CollectionList from '@/components/CollectionList.vue';
 import { create as sessionsCreate } from '@/routes/sessions';
-import type { CollectionItem } from '@/types';
+import type {
+    CollectionAppearance,
+    CollectionItem,
+    CollectionNoteItem,
+} from '@/types';
+
+function appearance(): CollectionAppearance {
+    return {
+        session_id: 1,
+        session_date: '2026-10-19T10:14:55.000000Z',
+        topic: 'Ordering at a restaurant',
+        question_position: 1,
+        entry_id: 'entry-1',
+        entry_position: 0,
+        meaning: 'a liquid food',
+        example: 'I want a soup.',
+        example_html: '',
+    };
+}
+
+function noteItem(
+    overrides: Partial<CollectionNoteItem> = {},
+): CollectionNoteItem {
+    return {
+        key: 'note-7',
+        text: 'Use the past tense here.',
+        preview: 'Use the past tense here. && <safe>',
+        html: '<p>Use the <strong>past tense</strong> here.</p>',
+        latest_session_date: '2026-10-19T10:14:55.000000Z',
+        session_id: 1,
+        session_date: '2026-10-19T10:14:55.000000Z',
+        topic: 'Ordering at a restaurant',
+        question_position: 1,
+        entry_id: null,
+        entry_position: 0,
+        ...overrides,
+    };
+}
 
 function item(overrides: Partial<CollectionItem> = {}): CollectionItem {
     return {
         key: 'soup',
-        word: 'soup',
+        title: 'soup',
         meaning: 'a liquid food',
         example: 'I want a soup.',
+        example_html: '',
         latest_session_date: '2026-10-19T10:14:55.000000Z',
         seen_count: 1,
         needs_attention: false,
-        appearances: [],
+        attention_reason: null,
+        appearances: [appearance()],
         ...overrides,
     };
 }
@@ -170,5 +209,66 @@ describe('the collection list', () => {
         expect(startLink(wrapper)?.attributes('href')).toBe(
             sessionsCreate.url(),
         );
+    });
+
+    it('lists grammar notes by their preview, topic and date', () => {
+        const wrapper = mount(CollectionList, {
+            props: { items: [noteItem()], tab: 'grammar', total: 1 },
+        });
+
+        expect(wrapper.text()).toContain('Note');
+        expect(wrapper.text()).toContain('Topic');
+        expect(wrapper.text()).toContain('Date');
+        expect(wrapper.text()).toContain('Use the past tense here. && <safe>');
+        expect(wrapper.text()).toContain('Ordering at a restaurant');
+        // The list never shows the note's markup or a seen counter.
+        expect(wrapper.text()).not.toContain('strong');
+        expect(wrapper.text()).not.toContain('Seen');
+    });
+
+    it('opens the note that was chosen', async () => {
+        const chosen = noteItem();
+        const wrapper = mount(CollectionList, {
+            props: { items: [chosen], tab: 'grammar', total: 1 },
+        });
+
+        const row = wrapper
+            .findAll('button')
+            .find((button) =>
+                button.text().includes('Use the past tense here.'),
+            );
+
+        await row?.trigger('click');
+
+        expect(wrapper.emitted('open')?.[0]).toEqual([chosen]);
+    });
+
+    it('calls grammar notes by their own empty state', () => {
+        const wrapper = mount(CollectionList, {
+            props: {
+                items: [],
+                tab: 'grammar',
+                total: 0,
+                hasFinishedSessions: true,
+            },
+        });
+
+        expect(wrapper.text()).toContain('No grammar notes yet');
+    });
+
+    it('shows a phrase example with its saved bold and italic', () => {
+        const wrapper = mount(CollectionList, {
+            props: {
+                items: [
+                    item({
+                        example_html: 'I <strong>caught</strong> up.',
+                    }),
+                ],
+                tab: 'phrases',
+                total: 1,
+            },
+        });
+
+        expect(wrapper.html()).toContain('I <strong>caught</strong> up.');
     });
 });

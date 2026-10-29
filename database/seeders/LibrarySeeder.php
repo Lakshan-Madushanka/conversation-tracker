@@ -10,6 +10,7 @@ use App\Models\PracticeQuestion;
 use App\Models\PracticeSession;
 use App\Models\Topic;
 use Carbon\CarbonImmutable;
+use Closure;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -19,9 +20,11 @@ use Illuminate\Support\Facades\DB;
  * Library: a long list, both statuses, empty sessions, sessions edited on
  * a later day, archived sessions, several finished on the same day, and a
  * ten-day streak. The words mix plain English with accents, other languages
- * and punctuation, so search can be tried by hand against real variety. It
- * only runs locally and tops up to the target instead of adding another 500
- * every time.
+ * and punctuation, so search can be tried by hand against real variety. The
+ * collections are topped up too: a few thousand words, a few thousand
+ * phrases and a few thousand grammar notes, with the awkward cases each
+ * page has to handle mixed in. It only runs locally and tops up to the
+ * target instead of adding everything again on every run.
  */
 class LibrarySeeder extends Seeder
 {
@@ -33,6 +36,17 @@ class LibrarySeeder extends Seeder
      */
     private const int TARGET_VOCABULARY = 5000;
 
+    /**
+     * Enough phrases to page through the second tab the same way, with the
+     * unsplittable rows and quiet no-meaning rows mixed in.
+     */
+    private const int TARGET_PHRASES = 5000;
+
+    /**
+     * Enough notes to page through while the twice-saved rules stay apart.
+     */
+    private const int TARGET_GRAMMAR_NOTES = 3000;
+
     /** One showcase session: eight questions with twelve rows each. */
     private const int SHOWCASE_QUESTIONS = 8;
 
@@ -42,6 +56,9 @@ class LibrarySeeder extends Seeder
     private const string LONG_MEANING = 'A feeling of quiet, unhurried contentment that comes from simple things — a warm drink, a familiar chair, a book you have read before, and the knowledge that there is nowhere else you need to be for the next hour.';
 
     private const string LONG_EXAMPLE = 'When the rain finally stopped, we walked the long way home past the market, the old bookshop and the café where the waiter always remembers our order, and none of us said very much because the evening already felt complete.';
+
+    /** A note longer than the list preview can hold, so the cut shows. */
+    private const string LONG_NOTE = 'Remember that the present perfect is about a link to now: the action or its result still matters in the present, so it is the natural choice for news, for results you can still see, and for experiences that do not carry a specific finished time.';
 
     /**
      * One word written four ways, so grouping, versions and a row without a
@@ -54,6 +71,19 @@ class LibrarySeeder extends Seeder
         ['word' => 'cafe', 'meaning' => 'a coffee shop', 'example' => 'The cafe was busy all morning.'],
         ['word' => 'CAFÉ', 'meaning' => '', 'example' => ''],
         ['word' => '  café  ', 'meaning' => 'a small coffee house', 'example' => 'The little café stays open late.'],
+    ];
+
+    /**
+     * One phrase written four ways, so phrase grouping and a row without a
+     * meaning can be tried in the same phrases box.
+     *
+     * @var list<array{phrase: string, meaning: string, example: string}>
+     */
+    private const array SHOWCASE_PHRASE_VARIANTS = [
+        ['phrase' => 'Chase up', 'meaning' => 'to hurry someone for an answer', 'example' => 'I will chase them up tomorrow.'],
+        ['phrase' => 'CHASE  UP', 'meaning' => '', 'example' => ''],
+        ['phrase' => '  chase up  ', 'meaning' => 'to follow up until it is done', 'example' => 'She chased up the invoice last week.'],
+        ['phrase' => 'chase up', 'meaning' => 'to ask again because there was no answer', 'example' => 'Chase up the reply this time.'],
     ];
 
     /** @var list<string> */
@@ -382,6 +412,274 @@ class LibrarySeeder extends Seeder
         }
 
         $this->seedVocabularyShowcase($topics);
+        $this->seedPhrasesShowcase($topics);
+        $this->seedGrammarShowcase($topics);
+    }
+
+    /**
+     * Tops the vocabulary up to a few thousand rows, so the Collection has
+     * enough words to page through by hand.
+     *
+     * The pool mixes unique terms with the cases the page has to handle:
+     * one word written several ways, four copies in the same box, rows with
+     * no meaning, very long meanings and examples, letters from outside
+     * English, and a blank row that must never be gathered. The target is
+     * counted from the database, so a later run continues where the last one
+     * stopped instead of adding another 5,000 every time.
+     *
+     * @param  Collection<int, Topic>  $topics
+     */
+    private function seedVocabularyShowcase(Collection $topics): void
+    {
+        $this->seedShowcaseRows(
+            $topics,
+            FeedbackType::Vocabulary,
+            self::TARGET_VOCABULARY,
+            function (PracticeQuestion $question, int $position, int $row, int $index): void {
+                $this->createShowcaseRow($question, $position, $row, $index);
+            },
+        );
+    }
+
+    /**
+     * Tops the phrases tab up to a few thousand rows, so the second
+     * collection pages like the first: rows written several ways, rows that
+     * could not be split, quiet no-meaning rows, and a blank row here and
+     * there that must never be gathered.
+     *
+     * @param  Collection<int, Topic>  $topics
+     */
+    private function seedPhrasesShowcase(Collection $topics): void
+    {
+        $this->seedShowcaseRows(
+            $topics,
+            FeedbackType::Phrase,
+            self::TARGET_PHRASES,
+            function (PracticeQuestion $question, int $position, int $row, int $index): void {
+                $this->createShowcasePhraseRow($question, $position, $row, $index);
+            },
+        );
+    }
+
+    /**
+     * Adds phrase rows to one showcase question.
+     */
+    private function createShowcasePhraseRow(
+        PracticeQuestion $question,
+        int $position,
+        int $row,
+        int $index,
+    ): void {
+        $phrase = $this->showcasePhrase($index, $position, $row);
+
+        $meaning = $phrase['meaning'];
+        $example = $phrase['example'];
+
+        if (! $phrase['variant']) {
+            $meaning = ucfirst(fake()->sentence(6));
+            $example = fake()->sentence(10);
+
+            if ($index % 7 === 0) {
+                $meaning = '';
+                $example = '';
+            }
+
+            if ($index % 13 === 0) {
+                $meaning = self::LONG_MEANING;
+            }
+
+            if ($index % 17 === 0) {
+                $example = self::LONG_EXAMPLE;
+            }
+
+            // A line with more than one separator: half of these keep their
+            // example, so the page proves a phrase with one stays calm, and
+            // the rest ask for help on their own.
+            if ($index % 11 === 0) {
+                $phrase['phrase'] = sprintf(
+                    '%s -> %s -> %s',
+                    rtrim(fake()->sentence(2, false), '.'),
+                    rtrim(fake()->sentence(2, false), '.'),
+                    rtrim(fake()->sentence(2, false), '.'),
+                );
+
+                if ($index % 22 !== 0) {
+                    $meaning = '';
+                    $example = '';
+                }
+            }
+
+            // A blank row here and there proves it is left out.
+            if ($index % 41 === 0) {
+                $phrase['phrase'] = '   ';
+            }
+        }
+
+        $exampleHtml = [];
+
+        if ($example !== '' && $index % 4 === 0) {
+            $html = '<p>'.e($example).'</p>';
+
+            if ($index % 20 === 0) {
+                $html = '<p><em>'.e($example).'</em> <strong>Say it warmly.</strong></p>';
+            }
+
+            $exampleHtml = [[
+                'id' => sprintf('example-%05d', $index),
+                'text' => $example,
+                'html' => $html,
+            ]];
+        }
+
+        PracticeFeedbackEntry::factory()->for($question)->create([
+            'type' => FeedbackType::Phrase,
+            'position' => $row,
+            'client_id' => sprintf('phrase-showcase-%05d', $index),
+            'content_text' => $phrase['phrase'],
+            'correction_text' => $meaning,
+            'example' => $example,
+            'example_html' => $exampleHtml,
+            'is_split' => true,
+        ]);
+    }
+
+    /**
+     * The phrase for one showcase row: a four-way variant in the first box, a
+     * phrase from the curated pool now and then, and a unique sentence-sized
+     * phrase for the rest so the tab really has thousands of items.
+     *
+     * @return array{phrase: string, meaning: string, example: string, variant: bool}
+     */
+    private function showcasePhrase(int $index, int $position, int $row): array
+    {
+        if ($position === 1 && $row < count(self::SHOWCASE_PHRASE_VARIANTS)) {
+            return [...self::SHOWCASE_PHRASE_VARIANTS[$row], 'variant' => true];
+        }
+
+        if ($index % 6 === 0) {
+            $entry = self::PHRASES[$index % count(self::PHRASES)];
+            $phrase = $entry['phrase'];
+
+            if ($index % 4 === 0) {
+                $phrase = ' '.$phrase.' ';
+            }
+
+            if ($index % 9 === 0) {
+                $phrase = mb_strtoupper($phrase);
+            }
+
+            return [
+                'phrase' => $phrase,
+                'meaning' => $entry['meaning'],
+                'example' => $entry['example'],
+                'variant' => false,
+            ];
+        }
+
+        $term = rtrim(fake()->unique()->sentence(3, false), '.');
+
+        return [
+            'phrase' => ucfirst($term),
+            'meaning' => 'a way to say “'.$term.'” in conversation',
+            'example' => 'I heard about '.$term.' at the café.',
+            'variant' => false,
+        ];
+    }
+
+    /**
+     * Tops the grammar notes tab up to a few thousand rows. Notes are never
+     * merged, so the first box of every session says the same rule twice and
+     * the page keeps both entries apart; the rest mix very long rules, rules
+     * saved with formatting, rules with accents and quotes, and blank rows
+     * that must never be gathered.
+     *
+     * @param  Collection<int, Topic>  $topics
+     */
+    private function seedGrammarShowcase(Collection $topics): void
+    {
+        $this->seedShowcaseRows(
+            $topics,
+            FeedbackType::GrammarNote,
+            self::TARGET_GRAMMAR_NOTES,
+            function (PracticeQuestion $question, int $position, int $row, int $index): void {
+                $this->createShowcaseNoteRow($question, $position, $row, $index);
+            },
+        );
+    }
+
+    /**
+     * Adds note rows to one showcase question.
+     */
+    private function createShowcaseNoteRow(
+        PracticeQuestion $question,
+        int $position,
+        int $row,
+        int $index,
+    ): void {
+        $note = $this->showcaseNote($position, $row, $index);
+
+        PracticeFeedbackEntry::factory()->for($question)->create([
+            'type' => FeedbackType::GrammarNote,
+            'position' => $row,
+            'client_id' => sprintf('note-showcase-%05d', $index),
+            'content_text' => $note['text'],
+            'content_html' => $note['html'],
+        ]);
+    }
+
+    /**
+     * The note for one showcase row: twice-saved rules and the long and
+     * formatted cases in the first box, and a unique rule for the rest.
+     *
+     * @return array{text: string, html: string}
+     */
+    private function showcaseNote(int $position, int $row, int $index): array
+    {
+        if ($position === 1) {
+            return match ($row % 4) {
+                // The same rule twice: two entries, never one merged blob.
+                0, 1 => [
+                    'text' => 'Watch the past tense in this answer.',
+                    'html' => '<p>Watch the <strong>past tense</strong> in this answer.</p>',
+                ],
+                // A rule longer than the list preview.
+                2 => [
+                    'text' => self::LONG_NOTE,
+                    'html' => '<p>'.e(self::LONG_NOTE).'</p>',
+                ],
+                // A rule saved with formatting, accents and quotes.
+                default => [
+                    'text' => 'Use “an” before a vowel sound, and put the rules of the article in order as one list.',
+                    'html' => '<p>Use <em>“an”</em> before a vowel sound, and put the rules of the article in order: <ul><li>one</li><li>two</li><li>three</li></ul></p>',
+                ],
+            };
+        }
+
+        // A blank row here and there proves it is left out of the tab.
+        if ($index % 29 === 0) {
+            return ['text' => '   ', 'html' => ''];
+        }
+
+        $rule = rtrim(fake()->unique()->sentence(4, false), '.');
+        $text = ucfirst($rule).'.';
+        $html = '<p>'.e($text).'</p>';
+
+        if ($index % 13 === 0) {
+            $text = self::LONG_NOTE;
+            $html = '<p>'.e(self::LONG_NOTE).'</p>';
+        }
+
+        if ($index % 3 === 0) {
+            $html = '<p>'.e($text).' <strong>Keep this one.</strong></p>';
+        }
+
+        if ($index % 5 === 0) {
+            $accented = 'Réglé in French keeps its accents everywhere.';
+            $text = $accented;
+            $html = '<p>'.e($accented).' <ul><li>so does café</li><li>and façade</li></ul></p>';
+        }
+
+        return ['text' => $text, 'html' => $html];
     }
 
     private function createSession(Topic $topic): void
@@ -480,35 +778,37 @@ class LibrarySeeder extends Seeder
     }
 
     /**
-     * Tops the vocabulary up to a few thousand rows, so the Collection has
-     * enough words to page through by hand.
+     * Tops one collection up to its target in rows of finished sessions,
+     * eight questions with twelve rows in each one.
      *
-     * The pool mixes unique terms with the cases the page has to handle:
-     * one word written several ways, four copies in the same box, rows with
-     * no meaning, very long meanings and examples, letters from outside
-     * English, and a blank row that must never be gathered. The target is
-     * counted from the database, so a later run continues where the last one
-     * stopped instead of adding another 5,000 every time.
+     * The target is counted from the database, so a later run continues
+     * where the last one stopped instead of adding everything again. A few
+     * sessions keep showcase rows while sitting in the Archive, so the page
+     * proves it leaves archived sessions out.
      *
      * @param  Collection<int, Topic>  $topics
      */
-    private function seedVocabularyShowcase(Collection $topics): void
-    {
+    private function seedShowcaseRows(
+        Collection $topics,
+        FeedbackType $type,
+        int $target,
+        Closure $createRow,
+    ): void {
         $existing = PracticeFeedbackEntry::query()
-            ->where('type', FeedbackType::Vocabulary->value)
+            ->where('type', $type->value)
             ->count();
 
-        if ($existing >= self::TARGET_VOCABULARY) {
+        if ($existing >= $target) {
             return;
         }
 
         $perSession = self::SHOWCASE_QUESTIONS * self::SHOWCASE_ROWS;
         $sessions = (int) ceil(
-            (self::TARGET_VOCABULARY - $existing) / $perSession,
+            ($target - $existing) / $perSession,
         );
         $index = 0;
 
-        DB::transaction(function () use ($topics, $sessions, &$index): void {
+        DB::transaction(function () use ($topics, $sessions, $createRow, &$index): void {
             for ($number = 0; $number < $sessions; $number++) {
                 $finishedAt = $this->notInTheFuture(
                     now()
@@ -531,7 +831,7 @@ class LibrarySeeder extends Seeder
                         'updated_at' => $lastChangedAt,
                         'finished_at' => $finishedAt,
                         'last_changed_at' => $lastChangedAt,
-                        // A few showcase words sit in archived sessions, so
+                        // A few showcase rows sit in archived sessions, so
                         // the Collection proves it leaves them out.
                         'archived_at' => $number % 12 === 0
                             ? $this->notInTheFuture($finishedAt->copy()->addDays(2))
@@ -550,7 +850,7 @@ class LibrarySeeder extends Seeder
                     ]);
 
                     foreach (range(0, self::SHOWCASE_ROWS - 1) as $row) {
-                        $this->createShowcaseRow($question, $position, $row, $index++);
+                        $createRow($question, $position, $row, $index++);
                     }
                 }
             }

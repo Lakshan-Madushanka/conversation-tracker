@@ -21,12 +21,22 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
+import { collectionTabConfig } from '@/lib/collection-tabs';
+import { isCollectionItem, isCollectionNoteItem } from '@/lib/collections';
+import { shortDate } from '@/lib/format';
 import { create as sessionsCreate } from '@/routes/sessions';
-import type { CollectionItem } from '@/types';
+import type {
+    CollectionItem,
+    CollectionNoteItem,
+    CollectionOpenedItem,
+    CollectionTabKey,
+} from '@/types';
 
 const props = withDefaults(
     defineProps<{
-        items: CollectionItem[];
+        items: CollectionOpenedItem[];
+        /** Which collection is on screen, so the list speaks its language. */
+        tab?: CollectionTabKey;
         hasMore?: boolean;
         loading?: boolean;
         error?: boolean;
@@ -35,6 +45,7 @@ const props = withDefaults(
         hasFinishedSessions?: boolean;
     }>(),
     {
+        tab: 'vocabulary',
         hasMore: false,
         loading: false,
         error: false,
@@ -45,12 +56,25 @@ const props = withDefaults(
 );
 
 const emit = defineEmits<{
-    (event: 'open', item: CollectionItem): void;
+    (event: 'open', item: CollectionOpenedItem): void;
     (event: 'load-more'): void;
 }>();
 
 /** How many placeholder rows the list shows while it is busy. */
 const skeletonCount = 5;
+
+const config = computed(() => collectionTabConfig(props.tab));
+
+/** Grammar notes list their own pieces: a preview, a topic and a date. */
+const notesMode = computed(() => props.tab === 'grammar');
+
+const groupedItems = computed(
+    () => props.items.filter(isCollectionItem) as CollectionItem[],
+);
+
+const noteItems = computed(
+    () => props.items.filter(isCollectionNoteItem) as CollectionNoteItem[],
+);
 
 const hasItems = computed(() => props.items.length > 0);
 
@@ -66,15 +90,36 @@ const announcement = computed(() => {
 
     if (props.total === 0) {
         return props.hasFinishedSessions
-            ? 'No words yet.'
+            ? `No ${config.value.unitPlural} yet.`
             : 'No finished sessions yet.';
     }
 
-    return `${props.total} ${props.total === 1 ? 'word' : 'words'}.`;
+    const unit =
+        props.total === 1 ? config.value.unit : config.value.unitPlural;
+
+    return `${props.total} ${unit}.`;
 });
+
+function open(item: CollectionOpenedItem): void {
+    emit('open', item);
+}
 
 function seenLabel(item: CollectionItem): string {
     return `Seen ${item.seen_count} times`;
+}
+
+function noteDate(note: CollectionNoteItem): string {
+    return note.session_date === null ? '' : shortDate(note.session_date);
+}
+
+/**
+ * The example's words, with only its safe bold and italic kept. The server
+ * reduces whatever was saved to the formatting the app supports before the
+ * list ever sees it, so the saved text is never put into the page as it was
+ * received.
+ */
+function exampleHtml(item: CollectionItem): string {
+    return props.tab === 'phrases' ? item.example_html : item.example;
 }
 </script>
 
@@ -102,7 +147,7 @@ function seenLabel(item: CollectionItem): string {
                 v-if="!hasItems && props.loading"
                 class="grid gap-3"
                 aria-busy="true"
-                aria-label="Loading words"
+                aria-label="Loading the collection"
             >
                 <Skeleton
                     v-for="skeleton in skeletonCount"
@@ -112,16 +157,66 @@ function seenLabel(item: CollectionItem): string {
             </div>
 
             <template v-if="hasItems">
-                <!-- A table is the easiest way to compare many words on a wide
-                    screen. It never needs sideways scrolling: long meanings and
-                    examples wrap instead. -->
-                <div class="hidden md:block">
+                <!-- Grammar notes: a preview, its topic and its date. -->
+                <div v-if="notesMode" class="hidden md:block">
                     <Table class="table-fixed">
                         <TableHeader>
                             <TableRow>
-                                <TableHead class="w-[22%]">Word</TableHead>
-                                <TableHead class="w-[28%]">Meaning</TableHead>
-                                <TableHead class="w-[38%]">Example</TableHead>
+                                <TableHead class="w-[58%]">Note</TableHead>
+                                <TableHead class="w-[24%]">Topic</TableHead>
+                                <TableHead class="w-[18%]">Date</TableHead>
+                            </TableRow>
+                        </TableHeader>
+
+                        <TableBody>
+                            <TableRow
+                                v-for="note in noteItems"
+                                :key="note.key"
+                                class="cursor-pointer"
+                                @click="open(note)"
+                            >
+                                <TableCell class="whitespace-normal">
+                                    <button
+                                        type="button"
+                                        class="rounded text-left hover:underline focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+                                        @click.stop="open(note)"
+                                    >
+                                        {{ note.preview }}
+                                    </button>
+                                </TableCell>
+
+                                <TableCell
+                                    class="whitespace-normal text-muted-foreground"
+                                >
+                                    {{ note.topic }}
+                                </TableCell>
+
+                                <TableCell
+                                    class="whitespace-nowrap text-muted-foreground"
+                                >
+                                    {{ noteDate(note) }}
+                                </TableCell>
+                            </TableRow>
+                        </TableBody>
+                    </Table>
+                </div>
+
+                <!-- A table is the easiest way to compare many words on a wide
+                    screen. It never needs sideways scrolling: long meanings and
+                    examples wrap instead. -->
+                <div v-else class="hidden md:block">
+                    <Table class="table-fixed">
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead class="w-[22%]">{{
+                                    config.columns[0]
+                                }}</TableHead>
+                                <TableHead class="w-[28%]">{{
+                                    config.columns[1]
+                                }}</TableHead>
+                                <TableHead class="w-[38%]">{{
+                                    config.columns[2]
+                                }}</TableHead>
                                 <TableHead class="w-[12%] text-right">
                                     <span class="sr-only">Times seen</span>
                                 </TableHead>
@@ -130,18 +225,18 @@ function seenLabel(item: CollectionItem): string {
 
                         <TableBody>
                             <TableRow
-                                v-for="item in props.items"
+                                v-for="item in groupedItems"
                                 :key="item.key"
                                 class="cursor-pointer"
-                                @click="emit('open', item)"
+                                @click="open(item)"
                             >
                                 <TableCell class="whitespace-normal">
                                     <button
                                         type="button"
                                         class="rounded text-left font-medium hover:underline focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
-                                        @click.stop="emit('open', item)"
+                                        @click.stop="open(item)"
                                     >
-                                        {{ item.word }}
+                                        {{ item.title }}
                                     </button>
                                     <Badge
                                         v-if="item.needs_attention"
@@ -158,16 +253,34 @@ function seenLabel(item: CollectionItem): string {
                                     <span v-if="item.meaning">{{
                                         item.meaning
                                     }}</span>
-                                    <span v-else class="italic"
-                                        >Add the meaning</span
+                                    <span
+                                        v-else-if="config.missingMeaning"
+                                        class="italic"
+                                        >{{ config.missingMeaning }}</span
                                     >
                                 </TableCell>
 
                                 <TableCell
                                     class="whitespace-normal text-muted-foreground"
                                 >
+                                    <!-- The phrase example keeps its own
+                                        bold and italic, already reduced by
+                                        the server to formatting the app
+                                        supports; a word example stays plain
+                                        text as it always was. -->
                                     <span
-                                        v-if="item.example"
+                                        v-if="
+                                            item.example &&
+                                            props.tab === 'phrases' &&
+                                            item.example_html
+                                        "
+                                        class="line-clamp-2"
+                                    >
+                                        “<span v-html="exampleHtml(item)"></span
+                                        >”
+                                    </span>
+                                    <span
+                                        v-else-if="item.example"
                                         class="line-clamp-2"
                                         >“{{ item.example }}”</span
                                     >
@@ -187,65 +300,100 @@ function seenLabel(item: CollectionItem): string {
                     </Table>
                 </div>
 
-                <!-- On a phone each word becomes a card, so nothing is squeezed
+                <!-- On a phone each item becomes a card, so nothing is squeezed
                     into a narrow table. -->
                 <div class="grid gap-3 md:hidden">
-                    <Card
-                        v-for="item in props.items"
-                        :key="item.key"
-                        class="py-0"
-                    >
-                        <button
-                            type="button"
-                            class="w-full p-4 text-left focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
-                            @click="emit('open', item)"
+                    <template v-if="notesMode">
+                        <Card
+                            v-for="note in noteItems"
+                            :key="note.key"
+                            class="py-0"
                         >
-                            <span class="flex flex-wrap items-center gap-2">
-                                <span class="font-semibold">{{
-                                    item.word
-                                }}</span>
-                                <Badge
-                                    v-if="item.needs_attention"
-                                    variant="secondary"
+                            <button
+                                type="button"
+                                class="w-full p-4 text-left focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+                                @click="open(note)"
+                            >
+                                <span class="block text-sm break-words">
+                                    {{ note.preview }}
+                                </span>
+                                <span
+                                    class="mt-2 block text-xs text-muted-foreground"
                                 >
-                                    Needs attention
-                                </Badge>
-                                <Badge
-                                    v-if="item.seen_count > 1"
-                                    variant="outline"
+                                    {{ note.topic }} · {{ noteDate(note) }}
+                                </span>
+                            </button>
+                        </Card>
+                    </template>
+
+                    <template v-else>
+                        <Card
+                            v-for="item in groupedItems"
+                            :key="item.key"
+                            class="py-0"
+                        >
+                            <button
+                                type="button"
+                                class="w-full p-4 text-left focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+                                @click="open(item)"
+                            >
+                                <span class="flex flex-wrap items-center gap-2">
+                                    <span class="font-semibold">{{
+                                        item.title
+                                    }}</span>
+                                    <Badge
+                                        v-if="item.needs_attention"
+                                        variant="secondary"
+                                    >
+                                        Needs attention
+                                    </Badge>
+                                    <Badge
+                                        v-if="item.seen_count > 1"
+                                        variant="outline"
+                                    >
+                                        {{ seenLabel(item) }}
+                                    </Badge>
+                                </span>
+
+                                <span
+                                    v-if="item.meaning"
+                                    class="mt-1 block text-sm text-muted-foreground"
                                 >
-                                    {{ seenLabel(item) }}
-                                </Badge>
-                            </span>
+                                    {{ item.meaning }}
+                                </span>
+                                <span
+                                    v-else-if="config.missingMeaning"
+                                    class="mt-1 block text-sm text-muted-foreground italic"
+                                >
+                                    {{ config.missingMeaning }}
+                                </span>
 
-                            <span
-                                v-if="item.meaning"
-                                class="mt-1 block text-sm text-muted-foreground"
-                            >
-                                {{ item.meaning }}
-                            </span>
-                            <span
-                                v-else
-                                class="mt-1 block text-sm text-muted-foreground italic"
-                            >
-                                Add the meaning
-                            </span>
-
-                            <span
-                                v-if="item.example"
-                                class="mt-1 block text-sm text-muted-foreground italic"
-                            >
-                                “{{ item.example }}”
-                            </span>
-                        </button>
-                    </Card>
+                                <span
+                                    v-if="
+                                        item.example &&
+                                        props.tab === 'phrases' &&
+                                        item.example_html
+                                    "
+                                    class="mt-1 block text-sm text-muted-foreground italic"
+                                >
+                                    “<span v-html="exampleHtml(item)"></span>”
+                                </span>
+                                <span
+                                    v-else-if="item.example"
+                                    class="mt-1 block text-sm text-muted-foreground italic"
+                                >
+                                    “{{ item.example }}”
+                                </span>
+                            </button>
+                        </Card>
+                    </template>
                 </div>
 
                 <div
                     v-if="props.loading"
                     class="mt-3 grid gap-3"
                     aria-busy="true"
-                    aria-label="Loading more words"
+                    aria-label="Loading more items"
                 >
                     <Skeleton
                         v-for="skeleton in skeletonCount"
@@ -259,7 +407,7 @@ function seenLabel(item: CollectionItem): string {
                 v-else-if="showEmptyState && !props.hasFinishedSessions"
                 :icon="BookOpenIcon"
                 title="Your collections are waiting"
-                description="Finish a practice session and the words you save will be gathered here automatically."
+                description="Finish a practice session and what you save will be gathered here automatically."
             >
                 <template #actions>
                     <Button size="lg" as-child>
@@ -274,8 +422,8 @@ function seenLabel(item: CollectionItem): string {
             <EmptyState
                 v-else-if="showEmptyState"
                 :icon="BookOpenIcon"
-                title="No words yet"
-                description="Words you save while practicing will appear here, with their meanings and examples."
+                :title="config.emptyTitle"
+                :description="config.emptyDescription"
             >
                 <template #actions>
                     <Button size="lg" as-child>
@@ -292,7 +440,7 @@ function seenLabel(item: CollectionItem): string {
                 <AlertTitle>Could not load the collection</AlertTitle>
                 <AlertDescription>
                     <p>
-                        Your saved words are still here. Check your connection
+                        Your saved items are still here. Check your connection
                         and try again.
                     </p>
                     <Button
@@ -324,11 +472,15 @@ function seenLabel(item: CollectionItem): string {
                     class="animate-spin"
                     aria-hidden="true"
                 />
-                {{ props.loading ? 'Loading…' : 'Load more words' }}
+                {{
+                    props.loading
+                        ? 'Loading…'
+                        : `Load more ${config.unitPlural}`
+                }}
             </Button>
 
             <p v-else class="text-xs text-muted-foreground">
-                That is every word — {{ props.total }} in total.
+                That is every {{ config.unit }} — {{ props.total }} in total.
             </p>
 
             <p v-if="props.hasMore" class="text-xs text-muted-foreground">

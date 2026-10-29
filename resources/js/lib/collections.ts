@@ -4,22 +4,25 @@ import type {
     CollectionAppearance,
     CollectionItem,
     CollectionItemsPage,
+    CollectionNoteItem,
+    CollectionOpenedItem,
     CollectionPage,
+    CollectionRow,
     CollectionTabKey,
 } from '@/types';
 
 /**
  * The loaded list and the place the learner had reached, kept while they open
- * the session a word came from. Returning restores the same tab, the words
- * already loaded, the scroll position and the opened word.
+ * the session an item came from. Returning restores the same tab, the items
+ * already loaded, the scroll position and the opened item.
  */
 export interface CollectionSnapshot {
     tab: CollectionTabKey;
-    items: CollectionItem[];
+    items: (CollectionItem | CollectionNoteItem)[];
     nextCursor: string | null;
     hasMore: boolean;
     total: number;
-    openWordKey: string | null;
+    openItemKey: string | null;
     scrollY: number;
     savedAt: number;
 }
@@ -43,15 +46,15 @@ function storage(): Storage | null {
 }
 
 /**
- * Adds newly loaded items without showing one twice. A word that comes back
+ * Adds newly loaded items without showing one twice. An item that comes back
  * with fresh appearances replaces the older copy in place, so its position
  * does not jump.
  */
 export function mergeCollectionItems(
-    existing: CollectionItem[],
-    incoming: CollectionItem[],
-): CollectionItem[] {
-    const byKey = new Map<string, CollectionItem>();
+    existing: (CollectionItem | CollectionNoteItem)[],
+    incoming: (CollectionItem | CollectionNoteItem)[],
+): (CollectionItem | CollectionNoteItem)[] {
+    const byKey = new Map<string, CollectionItem | CollectionNoteItem>();
 
     for (const item of existing) {
         byKey.set(item.key, item);
@@ -74,14 +77,16 @@ export function isCollectionPage(value: unknown): value is CollectionPage {
 
     return (
         Array.isArray(page.items) &&
+        page.items.every(isCollectionOpenedItem) &&
         Array.isArray(page.tabs) &&
         typeof page.tab === 'string' &&
         (typeof page.next_cursor === 'string' || page.next_cursor === null) &&
         typeof page.has_more === 'boolean' &&
         typeof page.total === 'number' &&
         typeof page.has_finished_sessions === 'boolean' &&
-        (page.open_word === null || isCollectionItem(page.open_word)) &&
-        typeof page.open_word_missing === 'boolean'
+        isCollectionTabData(page.tabs) &&
+        (page.open_item === null || isCollectionOpenedItem(page.open_item)) &&
+        typeof page.open_item_missing === 'boolean'
     );
 }
 
@@ -97,7 +102,7 @@ export function isCollectionItemsPage(
 
     return (
         Array.isArray(page.items) &&
-        page.items.every(isCollectionItem) &&
+        page.items.every(isCollectionOpenedItem) &&
         (typeof page.next_cursor === 'string' || page.next_cursor === null) &&
         typeof page.has_more === 'boolean' &&
         typeof page.total === 'number'
@@ -113,14 +118,89 @@ export function isCollectionItem(value: unknown): value is CollectionItem {
 
     return (
         typeof item.key === 'string' &&
-        typeof item.word === 'string' &&
+        typeof item.title === 'string' &&
         typeof item.meaning === 'string' &&
         typeof item.example === 'string' &&
+        typeof item.example_html === 'string' &&
         (typeof item.latest_session_date === 'string' ||
             item.latest_session_date === null) &&
         typeof item.seen_count === 'number' &&
         typeof item.needs_attention === 'boolean' &&
-        Array.isArray(item.appearances)
+        (item.attention_reason === null ||
+            typeof item.attention_reason === 'string') &&
+        Array.isArray(item.appearances) &&
+        item.appearances.every(isAppearance)
+    );
+}
+
+export function isCollectionNoteItem(
+    value: unknown,
+): value is CollectionNoteItem {
+    if (typeof value !== 'object' || value === null) {
+        return false;
+    }
+
+    const item = value as Record<string, unknown>;
+
+    return (
+        typeof item.key === 'string' &&
+        typeof item.text === 'string' &&
+        typeof item.preview === 'string' &&
+        typeof item.html === 'string' &&
+        (typeof item.latest_session_date === 'string' ||
+            item.latest_session_date === null) &&
+        typeof item.session_id === 'number' &&
+        typeof item.topic === 'string' &&
+        (typeof item.session_date === 'string' || item.session_date === null) &&
+        typeof item.question_position === 'number' &&
+        typeof item.entry_position === 'number' &&
+        (item.entry_id === null || typeof item.entry_id === 'string')
+    );
+}
+
+export function isCollectionOpenedItem(
+    value: unknown,
+): value is CollectionOpenedItem {
+    return isCollectionItem(value) || isCollectionNoteItem(value);
+}
+
+/** Whether a value looks like the tabs data the page needs. */
+function isCollectionTabData(tabs: unknown[]): boolean {
+    return tabs.every((tab) => {
+        if (typeof tab !== 'object' || tab === null) {
+            return false;
+        }
+
+        const candidate = tab as Record<string, unknown>;
+
+        return (
+            typeof candidate.key === 'string' &&
+            typeof candidate.label === 'string' &&
+            (candidate.count === null || typeof candidate.count === 'number') &&
+            typeof candidate.built === 'boolean'
+        );
+    });
+}
+
+function isAppearance(value: unknown): value is CollectionAppearance {
+    if (typeof value !== 'object' || value === null) {
+        return false;
+    }
+
+    const appearance = value as Record<string, unknown>;
+
+    return (
+        typeof appearance.session_id === 'number' &&
+        typeof appearance.topic === 'string' &&
+        typeof appearance.question_position === 'number' &&
+        typeof appearance.entry_position === 'number' &&
+        typeof appearance.meaning === 'string' &&
+        typeof appearance.example === 'string' &&
+        typeof appearance.example_html === 'string' &&
+        (appearance.session_date === null ||
+            typeof appearance.session_date === 'string') &&
+        (appearance.entry_id === null ||
+            typeof appearance.entry_id === 'string')
     );
 }
 
@@ -200,15 +280,15 @@ export function consumeCollectionRestore(): boolean {
 
 /**
  * The address that brings the learner back to the collection they came from,
- * including the tab and the word panel that was open. Used by the reading
- * page's "Back to Collections" link.
+ * including the tab and the panel that was open. Used by the reading page's
+ * "Back to Collections" link.
  */
 export function collectionReturnUrl(): string {
     const snapshot = readCollectionSnapshot();
 
     return snapshot === null
         ? collectionUrl('vocabulary')
-        : collectionUrl(snapshot.tab, snapshot.openWordKey);
+        : collectionUrl(snapshot.tab, snapshot.openItemKey);
 }
 
 /** Whether a session address came from a collection item. */
@@ -226,22 +306,35 @@ export function cameFromCollections(url: string): boolean {
  * top with an explanation.
  */
 export function collectionItemHref(
-    appearance: CollectionAppearance,
+    row: CollectionRow,
     type: CollectionTabKey = 'vocabulary',
 ): string {
     const query: Record<string, string> = {
         from: 'collections',
-        question: String(appearance.question_position),
+        question: String(row.question_position),
         field: 'entry',
         type: feedbackTypeFor(type),
-        position: String(appearance.entry_position),
+        position: String(row.entry_position),
     };
 
-    if (appearance.entry_id !== null && appearance.entry_id !== '') {
-        query.entry = appearance.entry_id;
+    if (row.entry_id !== null && row.entry_id !== '') {
+        query.entry = row.entry_id;
     }
 
-    return sessionsShow.url(appearance.session_id, { query });
+    return sessionsShow.url(row.session_id, { query });
+}
+
+/** The link back to a note as a row, so one helper serves both panels. */
+export function collectionNoteHref(note: CollectionNoteItem): string {
+    return collectionItemHref(
+        {
+            session_id: note.session_id,
+            question_position: note.question_position,
+            entry_id: note.entry_id,
+            entry_position: note.entry_position,
+        },
+        'grammar',
+    );
 }
 
 /** The feedback box a collection gathers, as the reading page names it. */
@@ -258,7 +351,7 @@ export function feedbackTypeFor(
 }
 
 /**
- * Every different meaning across a word's appearances, newest first. The same
+ * Every different meaning across an item's appearances, newest first. The same
  * meaning saved in two sessions is shown once.
  */
 export function distinctMeanings(item: CollectionItem): CollectionAppearance[] {
@@ -267,15 +360,21 @@ export function distinctMeanings(item: CollectionItem): CollectionAppearance[] {
     );
 }
 
-/** Every different example across a word's appearances, newest first. */
+/** Every different example across an item's appearances, newest first. */
 export function distinctExamples(item: CollectionItem): CollectionAppearance[] {
-    return uniqueBy(item.appearances, (appearance) =>
-        appearance.example.trim().toLocaleLowerCase(),
+    return uniqueBy(item.appearances, (appearance) => exampleKey(appearance));
+}
+
+/** Two identical examples are one example, however they were saved. */
+function exampleKey(appearance: CollectionAppearance): string {
+    return (
+        appearance.example.trim().toLocaleLowerCase() ||
+        appearance.example_html.trim().toLocaleLowerCase()
     );
 }
 
 /**
- * The sessions the word was seen in, once per question: two rows in the same
+ * The sessions the item was seen in, once per question: two rows in the same
  * box are one sighting, while another question or session is another.
  */
 export function seenIn(item: CollectionItem): CollectionAppearance[] {
@@ -323,13 +422,13 @@ function isStoredSnapshot(value: unknown): value is CollectionSnapshot {
     return (
         typeof snapshot.tab === 'string' &&
         Array.isArray(snapshot.items) &&
-        snapshot.items.every(isCollectionItem) &&
+        snapshot.items.every(isCollectionOpenedItem) &&
         (typeof snapshot.nextCursor === 'string' ||
             snapshot.nextCursor === null) &&
         typeof snapshot.hasMore === 'boolean' &&
         typeof snapshot.total === 'number' &&
-        (typeof snapshot.openWordKey === 'string' ||
-            snapshot.openWordKey === null) &&
+        (typeof snapshot.openItemKey === 'string' ||
+            snapshot.openItemKey === null) &&
         typeof snapshot.scrollY === 'number' &&
         typeof snapshot.savedAt === 'number'
     );

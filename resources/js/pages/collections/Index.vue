@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useCollection } from '@/composables/useCollection';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { collectionTabConfig } from '@/lib/collection-tabs';
 import { readCollectionQuery } from '@/lib/collection-query';
 import {
     consumeCollectionRestore,
@@ -33,31 +34,48 @@ const {
     hasMore,
     total,
     hasFinishedSessions,
-    openWord,
-    openWordMissing,
+    openItem,
+    openItemMissing,
     loading,
     error,
     updating,
     loadMore,
     refresh,
     setTab,
-    openWordPanel,
-    closeWordPanel,
-    dismissMissingWord,
+    openItemPanel,
+    closeItemPanel,
+    dismissMissingItem,
     rememberForReturn,
     restore,
     syncFromPage,
 } = useCollection(props);
 
-/** The tab on screen, with the label and the built flag the page sent. */
+/** The tab on screen, with its label, count and built flag. */
 const activeTab = computed(
     () => props.tabs.find((candidate) => candidate.key === tab.value) ?? null,
 );
 
-/** Only vocabulary is gathered so far; the other tabs say they are coming. */
+/** Only My mistakes is still on its way; the rest are real collections. */
 const isBuilt = computed(() => activeTab.value?.built === true);
 
-const activeLabel = computed(() => activeTab.value?.label ?? 'vocabulary');
+const activeConfig = computed(() => collectionTabConfig(tab.value));
+
+/** The tab's full name, with its count read as part of it. */
+function tabAriaName(
+    label: string,
+    key: CollectionTabKey,
+    count: number | null,
+): string {
+    if (count === null) {
+        return label;
+    }
+
+    const config = collectionTabConfig(key);
+
+    return `${label}, ${count} ${count === 1 ? config.unit : config.unitPlural}`;
+}
+
+const activeLabel = computed(() => activeTab.value?.label ?? null);
 
 function changeTab(value: string | number): void {
     setTab(value as CollectionTabKey);
@@ -77,13 +95,13 @@ function rememberScroll(): void {
  */
 function restoreSnapshot(
     snapshot: CollectionSnapshot,
-    openWordKey: string | null = snapshot.openWordKey,
+    openItemKey: string | null = snapshot.openItemKey,
 ): void {
     if (snapshot.items.length === 0) {
         return;
     }
 
-    restore(snapshot, openWordKey);
+    restore(snapshot, openItemKey);
     void refresh();
 
     window.setTimeout(() => {
@@ -97,7 +115,7 @@ function matchesSnapshot(snapshot: CollectionSnapshot, url: string): boolean {
 
     return (
         snapshot.tab === target.tab &&
-        snapshot.openWordKey === target.word &&
+        snapshot.openItemKey === target.item &&
         snapshot.items.length > 0
     );
 }
@@ -112,7 +130,7 @@ onMounted(() => {
         if (snapshot !== null) {
             restoreSnapshot(
                 snapshot,
-                readCollectionQuery(window.location.href).word,
+                readCollectionQuery(window.location.href).item,
             );
         }
     }
@@ -137,13 +155,13 @@ onMounted(() => {
         const snapshot = readCollectionSnapshot();
 
         if (snapshot !== null && matchesSnapshot(snapshot, url)) {
-            restoreSnapshot(snapshot, target.word);
+            restoreSnapshot(snapshot, target.item);
 
             return;
         }
 
         if (isCollectionPage(event.detail.page.props)) {
-            syncFromPage(event.detail.page.props, target.word);
+            syncFromPage(event.detail.page.props, target.item);
         }
     });
 
@@ -158,7 +176,7 @@ onBeforeUnmount(() => {
         nextCursor: nextCursor.value,
         hasMore: hasMore.value,
         total: total.value,
-        openWordKey: openWord.value?.key ?? null,
+        openItemKey: openItem.value?.key ?? null,
         scrollY: lastScrollY,
         savedAt: Date.now(),
     });
@@ -184,26 +202,34 @@ onBeforeUnmount(() => {
                     :key="candidate.key"
                     class="cursor-pointer"
                     :value="candidate.key"
+                    :aria-label="
+                        tabAriaName(
+                            candidate.label,
+                            candidate.key,
+                            candidate.count,
+                        )
+                    "
                 >
-                    {{ candidate.label }}
+                    <!-- Each count is read as part of the tab's name, so a
+                        screen reader hears "Phrases, 65 phrases". -->
+                    <span v-if="candidate.count !== null" class="truncate">
+                        {{ candidate.label }} ({{ candidate.count }})
+                    </span>
+                    <span v-else>{{ candidate.label }}</span>
                 </TabsTrigger>
             </TabsList>
 
-            <Alert v-if="openWordMissing" class="mt-4" role="status">
+            <Alert v-if="openItemMissing" class="mt-4" role="status">
                 <InfoIcon aria-hidden="true" />
-                <AlertTitle>That word is no longer here</AlertTitle>
+                <AlertTitle>{{ activeConfig.missingTitle }}</AlertTitle>
                 <AlertDescription>
-                    <p>
-                        It may have been edited or removed from its session
-                        since you saved this link. Your other words are still
-                        below.
-                    </p>
+                    <p>{{ activeConfig.missingDescription }}</p>
                     <Button
                         type="button"
                         variant="outline"
                         size="sm"
                         class="mt-3"
-                        @click="dismissMissingWord"
+                        @click="dismissMissingItem"
                     >
                         Dismiss
                     </Button>
@@ -211,28 +237,29 @@ onBeforeUnmount(() => {
             </Alert>
 
             <div class="mt-4">
-                <!-- Vocabulary is the collection built so far. Its empty,
-                    loading and error states live in the list itself. -->
+                <!-- The gathered collections: list, loading, empty and error
+                    states live in the list itself. -->
                 <CollectionList
                     v-if="isBuilt"
                     :items="items"
+                    :tab="tab"
                     :has-more="hasMore"
                     :loading="loading"
                     :error="error"
                     :updating="updating"
                     :total="total"
                     :has-finished-sessions="hasFinishedSessions"
-                    @open="openWordPanel"
+                    @open="openItemPanel"
                     @load-more="loadMore"
                 />
 
-                <!-- The other collections stay visible and calm, so the page
-                    never looks broken while they are on their way. -->
+                <!-- My mistakes stays visible and calm, so the page never
+                    looks broken while its collection is on its way. -->
                 <EmptyState
                     v-else
                     :icon="LayersIcon"
                     :title="`${activeLabel} are on their way`"
-                    description="This collection is not ready yet. Vocabulary is the first one gathered from your finished sessions."
+                    description="This collection is not ready yet. Vocabulary, phrases and grammar notes are gathered from your finished sessions."
                 >
                     <template #actions>
                         <Button
@@ -249,9 +276,9 @@ onBeforeUnmount(() => {
         </Tabs>
 
         <CollectionItemPanel
-            :item="openWord"
+            :item="openItem"
             :tab="tab"
-            @close="closeWordPanel"
+            @close="closeItemPanel"
             @see-session="rememberForReturn"
         />
     </div>

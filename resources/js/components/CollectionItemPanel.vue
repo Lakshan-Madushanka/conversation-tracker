@@ -2,7 +2,7 @@
 import { computed, nextTick, ref, watch } from 'vue';
 import { Link } from '@inertiajs/vue3';
 import { useMediaQuery } from '@vueuse/core';
-import { ArrowUpRightIcon, InfoIcon } from '@lucide/vue';
+import { ArrowUpRightIcon, TriangleAlertIcon } from '@lucide/vue';
 import { Badge } from '@/components/ui/badge';
 import {
     Collapsible,
@@ -18,22 +18,29 @@ import {
     SheetHeader,
     SheetTitle,
 } from '@/components/ui/sheet';
+import { collectionTabConfig } from '@/lib/collection-tabs';
 import {
     collectionItemHref,
+    collectionNoteHref,
     distinctExamples,
     distinctMeanings,
+    isCollectionItem,
+    isCollectionNoteItem,
     seenIn,
 } from '@/lib/collections';
 import { shortDate } from '@/lib/format';
 import type {
     CollectionAppearance,
     CollectionItem,
+    CollectionNoteItem,
+    CollectionOpenedItem,
+    CollectionRow,
     CollectionTabKey,
 } from '@/types';
 
 const props = withDefaults(
     defineProps<{
-        item: CollectionItem | null;
+        item: CollectionOpenedItem | null;
         tab?: CollectionTabKey;
     }>(),
     { tab: 'vocabulary' },
@@ -58,10 +65,23 @@ const contentClass = computed(() =>
         : 'w-full sm:max-w-md md:max-w-lg',
 );
 
+const config = computed(() => collectionTabConfig(props.tab));
+
+/** The opened panel can hold a word, a phrase, or one grammar note. */
+const wordItem = computed(() =>
+    isCollectionItem(props.item) ? (props.item as CollectionItem) : null,
+);
+
+const noteItem = computed(() =>
+    isCollectionNoteItem(props.item)
+        ? (props.item as CollectionNoteItem)
+        : null,
+);
+
 const heading = ref<HTMLElement | null>(null);
 
 /**
- * Move focus to the word itself, so a screen reader hears what was opened.
+ * Move focus to the title itself, so a screen reader hears what was opened.
  * The panel's own auto-focus is prevented below, and this hook runs after the
  * content is mounted, when the heading really exists.
  */
@@ -70,7 +90,7 @@ function focusHeading(event: Event): void {
     heading.value?.focus();
 }
 
-/** A different word opened while the panel is already showing. */
+/** A different item opened while the panel is already showing. */
 watch(
     () => props.item,
     async (item) => {
@@ -84,25 +104,42 @@ watch(
 );
 
 const meanings = computed(() =>
-    props.item === null ? [] : distinctMeanings(props.item),
+    wordItem.value === null ? [] : distinctMeanings(wordItem.value),
 );
 
 const examples = computed(() =>
-    props.item === null ? [] : distinctExamples(props.item),
+    wordItem.value === null ? [] : distinctExamples(wordItem.value),
 );
 
 const sightings = computed(() =>
-    props.item === null ? [] : seenIn(props.item),
+    wordItem.value === null ? [] : seenIn(wordItem.value),
 );
 
 const seenLabel = computed(() => {
-    const count = props.item?.seen_count ?? 0;
+    const count = wordItem.value?.seen_count ?? 0;
 
     return count === 1 ? 'Seen once' : `Seen ${count} times`;
 });
 
 function hrefFor(appearance: CollectionAppearance): string {
-    return collectionItemHref(appearance, props.tab);
+    return collectionItemHref(rowOf(appearance), props.tab);
+}
+
+function hrefForNote(note: CollectionNoteItem): string {
+    return collectionNoteHref(note);
+}
+
+/**
+ * A row of the collection as the reading page reads it: the session, the
+ * question, and the exact entry.
+ */
+function rowOf(appearance: CollectionAppearance): CollectionRow {
+    return {
+        session_id: appearance.session_id,
+        question_position: appearance.question_position,
+        entry_id: appearance.entry_id,
+        entry_position: appearance.entry_position,
+    };
 }
 
 function sessionLabel(appearance: CollectionAppearance): string {
@@ -136,7 +173,7 @@ function seeOriginal(event: MouseEvent): void {
 <template>
     <Sheet
         :open="props.item !== null"
-        @update:open="(open) => (!open ? emit('close') : undefined)"
+        @update:open="(openValue) => (!openValue ? emit('close') : undefined)"
     >
         <SheetContent
             v-if="props.item !== null"
@@ -145,67 +182,157 @@ function seeOriginal(event: MouseEvent): void {
             @open-auto-focus="focusHeading"
         >
             <SheetHeader class="border-b">
-                <span class="flex flex-wrap items-center gap-2">
-                    <SheetTitle as-child>
-                        <h2
-                            ref="heading"
-                            tabindex="-1"
-                            class="text-xl font-semibold outline-none"
-                        >
-                            {{ props.item.word }}
-                        </h2>
-                    </SheetTitle>
+                <template v-if="wordItem !== null">
+                    <span class="flex flex-wrap items-center gap-2">
+                        <SheetTitle as-child>
+                            <h2
+                                ref="heading"
+                                tabindex="-1"
+                                class="text-xl font-semibold outline-none"
+                            >
+                                {{ wordItem.title }}
+                            </h2>
+                        </SheetTitle>
 
-                    <Badge v-if="props.item.seen_count > 1" variant="outline">
-                        {{ seenLabel }}
-                    </Badge>
-                </span>
+                        <Badge v-if="wordItem.seen_count > 1" variant="outline">
+                            {{ seenLabel }}
+                        </Badge>
+                    </span>
 
-                <SheetDescription>
-                    Everything you saved for this word, gathered from your
-                    finished sessions.
-                </SheetDescription>
+                    <SheetDescription>
+                        {{ config.panelDescription }}
+                    </SheetDescription>
+                </template>
+
+                <template v-else-if="noteItem !== null">
+                    <span class="flex flex-wrap items-center gap-2">
+                        <SheetTitle as-child>
+                            <h2
+                                ref="heading"
+                                tabindex="-1"
+                                class="text-xl font-semibold outline-none"
+                            >
+                                Grammar note
+                            </h2>
+                        </SheetTitle>
+                    </span>
+
+                    <SheetDescription>
+                        {{ config.panelDescription }}
+                    </SheetDescription>
+                </template>
             </SheetHeader>
 
             <ScrollArea class="min-h-0 flex-1">
-                <div class="space-y-5 px-4 pb-6">
+                <!-- A note reads as prose, its saved formatting kept. -->
+                <div v-if="noteItem !== null" class="space-y-5 px-4 pb-6">
+                    <div
+                        class="text-sm leading-relaxed [&_li]:marker:text-muted-foreground [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:my-2 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0 [&_ul]:list-disc [&_ul]:pl-6"
+                        v-html="noteItem.html"
+                    ></div>
+
+                    <Separator />
+
+                    <section
+                        aria-labelledby="collection-note-seen-in"
+                        class="space-y-2"
+                    >
+                        <h3
+                            id="collection-note-seen-in"
+                            class="text-sm font-medium"
+                        >
+                            Where it came from
+                        </h3>
+
+                        <p class="text-sm">
+                            <span class="font-medium">{{
+                                noteItem.topic
+                            }}</span>
+                            <span
+                                v-if="noteItem.session_date"
+                                class="text-muted-foreground"
+                            >
+                                · {{ shortDate(noteItem.session_date) }}
+                            </span>
+                        </p>
+
+                        <p class="text-xs text-muted-foreground">
+                            Question {{ noteItem.question_position }}
+                        </p>
+
+                        <Link
+                            :href="hrefForNote(noteItem)"
+                            class="flex min-h-11 items-center justify-between gap-3 rounded-lg border p-3 transition-colors outline-none hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/50"
+                            @click="seeOriginal"
+                        >
+                            <span class="min-w-0 text-sm font-medium">
+                                See original session
+                            </span>
+                            <ArrowUpRightIcon
+                                class="size-4 shrink-0 text-primary"
+                                aria-hidden="true"
+                            />
+                        </Link>
+                    </section>
+                </div>
+
+                <div v-else-if="wordItem !== null" class="space-y-5 px-4 pb-6">
                     <div>
                         <p
                             class="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase"
                         >
                             Meaning
                         </p>
-                        <p v-if="props.item.meaning" class="text-sm">
-                            {{ props.item.meaning }}
+                        <p v-if="wordItem.meaning" class="text-sm">
+                            {{ wordItem.meaning }}
                         </p>
-                        <p v-else class="text-sm text-muted-foreground italic">
-                            Add the meaning
+                        <p
+                            v-else-if="config.missingMeaning"
+                            class="text-sm text-muted-foreground italic"
+                        >
+                            {{ config.missingMeaning }}
                         </p>
                     </div>
 
-                    <div v-if="props.item.example">
+                    <div v-if="wordItem.example">
                         <p
                             class="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase"
                         >
                             Example
                         </p>
-                        <p class="text-sm text-muted-foreground italic">
-                            “{{ props.item.example }}”
+                        <!-- The example's own bold and italic are kept; the
+                            server has already reduced what was saved to the
+                            formatting the app supports. -->
+                        <p
+                            v-if="
+                                props.tab === 'phrases' && wordItem.example_html
+                            "
+                            class="text-sm text-muted-foreground italic"
+                        >
+                            “<span v-html="wordItem.example_html"></span>”
+                        </p>
+                        <p v-else class="text-sm text-muted-foreground italic">
+                            “{{ wordItem.example }}”
                         </p>
                     </div>
 
                     <div
-                        v-if="props.item.needs_attention"
+                        v-if="wordItem.needs_attention"
                         class="rounded-lg border border-dashed bg-muted/40 p-3 text-sm text-muted-foreground"
                     >
                         <span class="flex items-start gap-2">
-                            <InfoIcon
+                            <TriangleAlertIcon
                                 class="mt-0.5 size-4 shrink-0"
                                 aria-hidden="true"
                             />
                             <span>
-                                This word has no meaning yet. Adding one while
-                                reviewing the session will fill it in here.
+                                <span class="font-medium text-foreground">
+                                    Needs attention
+                                </span>
+                                <span class="block">
+                                    {{ wordItem.attention_reason }} Opening the
+                                    original session lets you fix it.
+                                </span>
                             </span>
                         </span>
                     </div>
@@ -234,7 +361,7 @@ function seeOriginal(event: MouseEvent): void {
                                     <p
                                         class="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase"
                                     >
-                                        Meanings
+                                        {{ config.columns[1] }}
                                     </p>
                                     <ul class="space-y-3">
                                         <li
@@ -256,7 +383,7 @@ function seeOriginal(event: MouseEvent): void {
                                     <p
                                         class="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase"
                                     >
-                                        Examples
+                                        {{ config.columns[2] }}
                                     </p>
                                     <ul class="space-y-3">
                                         <li
@@ -264,7 +391,23 @@ function seeOriginal(event: MouseEvent): void {
                                             :key="`example-${example.example}`"
                                             class="text-sm text-muted-foreground italic"
                                         >
-                                            <p>“{{ example.example }}”</p>
+                                            <p>
+                                                “
+                                                <span
+                                                    v-if="
+                                                        props.tab ===
+                                                            'phrases' &&
+                                                        example.example_html
+                                                    "
+                                                    v-html="
+                                                        example.example_html
+                                                    "
+                                                ></span>
+                                                <template v-else>{{
+                                                    example.example
+                                                }}</template>
+                                                ”
+                                            </p>
                                             <p
                                                 class="mt-0.5 text-xs not-italic"
                                             >

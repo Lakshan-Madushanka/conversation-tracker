@@ -149,6 +149,16 @@ function showButton(wrapper: ReturnType<typeof mountShow>, text: string) {
         .find((button) => button.text().includes(text));
 }
 
+/** The card of one entry, opened by pressing the words it leads with. */
+function entryButton(
+    wrapper: ReturnType<typeof mountShow>,
+    lead: string,
+): ReturnType<typeof showButton> {
+    return wrapper
+        .findAll('button')
+        .find((button) => button.text().startsWith(lead));
+}
+
 afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
@@ -166,8 +176,19 @@ describe('a session opened to be read', () => {
         );
     });
 
-    it('shows the question, the answer and every box that holds something', () => {
+    it('keeps every entry closed and scannable in a question that is open', () => {
         const wrapper = mountShow();
+
+        expect(wrapper.text()).toContain('I want a soup');
+        // Only what an entry leads with shows until it is opened.
+        expect(wrapper.text()).not.toContain('Sounds more polite');
+    });
+
+    it('shows the question, the answer and every box that holds something', async () => {
+        const wrapper = mountShow();
+
+        await entryButton(wrapper, 'I want a soup')?.trigger('click');
+        await entryButton(wrapper, 'soup')?.trigger('click');
 
         expect(wrapper.text()).toContain('What would you like to start with?');
         expect(wrapper.text()).toContain('I want a soup.');
@@ -177,13 +198,14 @@ describe('a session opened to be read', () => {
         expect(wrapper.text()).toContain('a liquid food');
     });
 
-    it('shows a correction that was saved as markup', () => {
+    it('opens an entry and shows a correction that was saved as markup', async () => {
         const wrapper = mountShow();
-        const correction = wrapper
-            .findAll('strong')
-            .map((element) => element.text());
 
-        expect(correction).toContain("I'd like a soup");
+        await entryButton(wrapper, 'I want a soup')?.trigger('click');
+
+        expect(
+            wrapper.findAll('strong').map((element) => element.text()),
+        ).toContain("I'd like a soup");
     });
 
     it('shows the count tiles matching the entries shown', () => {
@@ -332,12 +354,18 @@ describe('a session with more than one question', () => {
         expect(target).not.toBeNull();
         expect(target?.classList.contains('search-target')).toBe(true);
 
+        // The entry a collection points at is already opened: its details are
+        // on the page at once, while other questions stay collapsed.
+        expect(target?.querySelector('dd')?.textContent).toContain(
+            'what you pay',
+        );
+
         wrapper.unmount();
     });
 });
 
-describe('reading the boxes as the editor shows them', () => {
-    it('names the columns of mistakes, vocabulary and phrases', () => {
+describe('reading entries as cards with the editor columns', () => {
+    it('opens an entry and shows its details under the names the editor gave them', async () => {
         const wrapper = mountShow(
             session({
                 questions: [
@@ -373,14 +401,20 @@ describe('reading the boxes as the editor shows them', () => {
             }),
         );
 
-        expect(wrapper.text()).toContain('What I said');
+        for (const lead of ['I want', 'soup', 'a long way']) {
+            await entryButton(wrapper, lead)?.trigger('click');
+        }
+
         expect(wrapper.text()).toContain('Correction');
-        expect(wrapper.text()).toContain('Why (optional)');
-        expect(wrapper.text()).toContain('Word');
+        expect(wrapper.text()).toContain('Why');
         expect(wrapper.text()).toContain('Meaning');
-        expect(wrapper.text()).toContain('Example (optional)');
-        expect(wrapper.text()).toContain('Phrase');
         expect(wrapper.text()).toContain('Meaning or use');
+    });
+
+    it('leaves the reading page free of optional-column clutter', () => {
+        const wrapper = mountShow();
+
+        expect(wrapper.text()).not.toContain('optional');
     });
 });
 

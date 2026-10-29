@@ -349,6 +349,13 @@ const description = computed(() => {
 /** A calm note when a search result no longer points at anything. */
 const targetNotice = ref('');
 
+/**
+ * The id of the entry a search result asked to see. It is handed to that
+ * question so the entry is already open when its card appears, and every
+ * other entry keeps its closed, scannable summary.
+ */
+const revealEntryId = ref<string | null>(null);
+
 /** Whether this session was opened from a collection item. */
 const fromCollection = ref(false);
 
@@ -385,34 +392,39 @@ function revealTarget(): void {
         openQuestions.value.add(card.question.id);
     }
 
-    const id = targetElementId(card, target);
+    const place = targetPlace(card, target);
 
-    if (id === null) {
+    if (place === null) {
         itemHasMoved();
 
         return;
     }
 
-    revealSearchTarget(id, (found) => {
+    revealEntryId.value = place.entryId;
+
+    revealSearchTarget(place.id, (found) => {
         if (!found) {
             itemHasMoved();
         }
     });
 }
 
-/** The id of the element a target names, or null when it is gone. */
-function targetElementId(
+/**
+ * The place a target names: the element on the page, and — when the target is
+ * one entry — the id that entry must start out opened by.
+ */
+function targetPlace(
     card: QuestionCard,
     target: SearchTarget,
-): string | null {
+): { id: string; entryId: string | null } | null {
     const position = card.question.position;
 
     if (target.field === 'question') {
-        return `reading-${position}-question`;
+        return { id: `reading-${position}-question`, entryId: null };
     }
 
     if (target.field === 'answer') {
-        return `reading-${position}-answer`;
+        return { id: `reading-${position}-answer`, entryId: null };
     }
 
     if (target.field !== 'entry' || target.type === null) {
@@ -427,9 +439,12 @@ function targetElementId(
         return null;
     }
 
-    // The natural version is one piece of text, so its section is the item.
+    // The natural version is one piece of prose, so its section is the item.
     if (section.type === 'natural_version') {
-        return `reading-${position}-section-natural_version`;
+        return {
+            id: `reading-${position}-section-natural_version`,
+            entryId: null,
+        };
     }
 
     const index = entryIndexFor(card, section.type, target);
@@ -440,9 +455,17 @@ function targetElementId(
 
     const id = entryIds(card, section.type)[index];
 
-    return id === undefined || id === ''
-        ? `reading-${position}-section-${section.type}`
-        : `reading-${position}-entry-${id}`;
+    if (id === undefined || id === '') {
+        return {
+            id: `reading-${position}-section-${section.type}`,
+            entryId: null,
+        };
+    }
+
+    return {
+        id: `reading-${position}-entry-${id}`,
+        entryId: `reading-${position}-entry-${id}`,
+    };
 }
 
 /** The place of a matching entry in its box, by id first and position second. */
@@ -531,159 +554,163 @@ function itemHasMoved(): void {
             </template>
         </PageHeader>
 
-        <Alert v-if="isArchived" class="mb-6">
-            <ArchiveIcon aria-hidden="true" />
-            <AlertTitle>This session is archived</AlertTitle>
-            <AlertDescription>
-                <p>
-                    It is read-only until you restore it. Its content, dates and
-                    totals stay exactly as they are.
-                </p>
-                <Button
-                    type="button"
-                    :disabled="restoring"
-                    class="mt-3"
-                    @click="restore"
-                >
-                    <ArchiveRestoreIcon aria-hidden="true" />
-                    {{ restoring ? 'Restoring…' : 'Restore session' }}
-                </Button>
-            </AlertDescription>
-        </Alert>
+        <div class="mx-auto max-w-3xl">
+            <Alert v-if="isArchived" class="mb-6">
+                <ArchiveIcon aria-hidden="true" />
+                <AlertTitle>This session is archived</AlertTitle>
+                <AlertDescription>
+                    <p>
+                        It is read-only until you restore it. Its content, dates
+                        and totals stay exactly as they are.
+                    </p>
+                    <Button
+                        type="button"
+                        :disabled="restoring"
+                        class="mt-3"
+                        @click="restore"
+                    >
+                        <ArchiveRestoreIcon aria-hidden="true" />
+                        {{ restoring ? 'Restoring…' : 'Restore session' }}
+                    </Button>
+                </AlertDescription>
+            </Alert>
 
-        <Alert v-if="targetNotice !== ''" class="mb-6" role="status">
-            <InfoIcon aria-hidden="true" />
-            <AlertTitle>That item has changed</AlertTitle>
-            <AlertDescription>{{ targetNotice }}</AlertDescription>
-        </Alert>
+            <Alert v-if="targetNotice !== ''" class="mb-6" role="status">
+                <InfoIcon aria-hidden="true" />
+                <AlertTitle>That item has changed</AlertTitle>
+                <AlertDescription>{{ targetNotice }}</AlertDescription>
+            </Alert>
 
-        <!-- Small tiles for what the session holds, matching the counts the
+            <!-- Small tiles for what the session holds, matching the counts the
             editor shows when finishing. -->
-        <div class="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-            <StatTile
-                label="Questions"
-                :value="counts.questions"
-                :hint="counts.questions === 1 ? '1 question' : 'All questions'"
-            />
-            <StatTile
-                label="Words"
-                :value="counts.words"
-                hint="New vocabulary"
-            />
-            <StatTile
-                label="Phrases"
-                :value="counts.phrases"
-                hint="New expressions"
-            />
-            <StatTile
-                label="Mistakes"
-                :value="counts.mistakes"
-                hint="Learning opportunities"
-            />
-            <StatTile
-                label="Grammar notes"
-                :value="counts.grammar_notes"
-                hint="To remember"
-            />
-        </div>
-
-        <div v-if="cards.length > 0" class="grid gap-4">
-            <!-- One control opens or shrinks every question at once, for a
-                session with more than one. -->
             <div
-                v-if="collapsible"
-                class="flex flex-wrap items-center justify-end gap-2"
+                class="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5"
             >
-                <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    @click="expandAll"
-                >
-                    <ChevronsUpDownIcon aria-hidden="true" />
-                    Expand all
-                </Button>
-                <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    @click="collapseAll"
-                >
-                    <ChevronsDownUpIcon aria-hidden="true" />
-                    Collapse all
-                </Button>
+                <StatTile
+                    label="Questions"
+                    :value="counts.questions"
+                    :hint="
+                        counts.questions === 1 ? '1 question' : 'All questions'
+                    "
+                />
+                <StatTile
+                    label="Words"
+                    :value="counts.words"
+                    hint="New vocabulary"
+                />
+                <StatTile
+                    label="Phrases"
+                    :value="counts.phrases"
+                    hint="New expressions"
+                />
+                <StatTile
+                    label="Mistakes"
+                    :value="counts.mistakes"
+                    hint="Learning opportunities"
+                />
+                <StatTile
+                    label="Grammar notes"
+                    :value="counts.grammar_notes"
+                    hint="To remember"
+                />
             </div>
 
-            <Collapsible
-                v-for="(card, index) in cards"
-                :key="card.question.id"
-                :open="isExpanded(card)"
-                @update:open="(open) => setExpanded(card, open)"
-                as-child
-            >
-                <Card class="gap-0 py-0">
-                    <CollapsibleTrigger
-                        class="flex w-full items-start gap-3 rounded-xl px-4 py-3 text-left transition-colors outline-none hover:bg-muted/40 focus-visible:ring-3 focus-visible:ring-ring/50"
+            <div v-if="cards.length > 0" class="grid gap-4">
+                <!-- One control opens or shrinks every question at once, for a
+                session with more than one. -->
+                <div
+                    v-if="collapsible"
+                    class="flex flex-wrap items-center justify-end gap-2"
+                >
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        @click="expandAll"
                     >
-                        <ChevronDownIcon
-                            class="mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform"
-                            :class="{ 'rotate-180': isExpanded(card) }"
-                            aria-hidden="true"
-                        />
+                        <ChevronsUpDownIcon aria-hidden="true" />
+                        Expand all
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        @click="collapseAll"
+                    >
+                        <ChevronsDownUpIcon aria-hidden="true" />
+                        Collapse all
+                    </Button>
+                </div>
 
-                        <span class="min-w-0 flex-1">
-                            <span class="block text-base font-semibold">
-                                Question {{ index + 1 }}
-                            </span>
-                            <span
-                                class="mt-0.5 block truncate text-xs text-muted-foreground"
-                            >
-                                {{
-                                    questionPreview(card.question) ||
-                                    'No question text'
-                                }}
-                            </span>
-                            <span
-                                v-if="entrySummary(card)"
-                                class="mt-1 block text-xs text-muted-foreground sm:hidden"
-                            >
-                                {{ entrySummary(card) }}
-                            </span>
-                        </span>
-
-                        <span
-                            v-if="entrySummary(card)"
-                            class="hidden shrink-0 text-right text-xs text-muted-foreground sm:block"
+                <Collapsible
+                    v-for="(card, index) in cards"
+                    :key="card.question.id"
+                    :open="isExpanded(card)"
+                    @update:open="(open) => setExpanded(card, open)"
+                    as-child
+                >
+                    <Card class="gap-0 py-0">
+                        <CollapsibleTrigger
+                            class="flex w-full items-center gap-3 rounded-xl px-4 py-3.5 text-left transition-colors outline-none hover:bg-muted/40 focus-visible:ring-3 focus-visible:ring-ring/50"
                         >
-                            {{ entrySummary(card) }}
-                        </span>
-                    </CollapsibleTrigger>
+                            <span
+                                class="grid size-7 shrink-0 place-items-center rounded-full bg-primary/10 text-xs font-semibold text-primary tabular-nums"
+                                aria-hidden="true"
+                            >
+                                {{ index + 1 }}
+                            </span>
 
-                    <CollapsibleContent>
-                        <CardContent class="px-4 pb-4">
-                            <ReadingQuestion
-                                :question="card.question"
-                                :sections="card.sections"
+                            <span class="min-w-0 flex-1">
+                                <span
+                                    class="line-clamp-2 text-sm leading-snug font-medium"
+                                >
+                                    {{
+                                        questionPreview(card.question) ||
+                                        `Question ${index + 1}`
+                                    }}
+                                </span>
+                                <span
+                                    v-if="entrySummary(card)"
+                                    class="mt-0.5 block text-xs text-muted-foreground"
+                                >
+                                    {{ entrySummary(card) }}
+                                </span>
+                            </span>
+
+                            <ChevronDownIcon
+                                class="size-4 shrink-0 text-muted-foreground transition-transform"
+                                :class="{ 'rotate-180': isExpanded(card) }"
+                                aria-hidden="true"
                             />
-                        </CardContent>
-                    </CollapsibleContent>
-                </Card>
-            </Collapsible>
-        </div>
+                        </CollapsibleTrigger>
 
-        <p v-else class="text-sm text-muted-foreground">
-            Nothing has been written into this session yet.
-        </p>
+                        <CollapsibleContent>
+                            <CardContent class="px-4 pb-5 sm:px-5">
+                                <ReadingQuestion
+                                    :question="card.question"
+                                    :sections="card.sections"
+                                    :reveal-entry-id="revealEntryId"
+                                />
+                            </CardContent>
+                        </CollapsibleContent>
+                    </Card>
+                </Collapsible>
+            </div>
 
-        <!-- On a phone, the Edit button is repeated at the bottom so it is
+            <p v-else class="text-sm text-muted-foreground">
+                Nothing has been written into this session yet.
+            </p>
+
+            <!-- On a phone, the Edit button is repeated at the bottom so it is
             always within reach after reading a long session. -->
-        <div v-if="!isArchived" class="mt-8 flex justify-center sm:hidden">
-            <Button size="lg" as-child>
-                <Link :href="sessionsEdit.url(props.session.id)">
-                    <PencilIcon aria-hidden="true" />
-                    Edit session
-                </Link>
-            </Button>
+            <div v-if="!isArchived" class="mt-8 flex justify-center sm:hidden">
+                <Button size="lg" as-child>
+                    <Link :href="sessionsEdit.url(props.session.id)">
+                        <PencilIcon aria-hidden="true" />
+                        Edit session
+                    </Link>
+                </Button>
+            </div>
         </div>
 
         <SessionDeleteDialog

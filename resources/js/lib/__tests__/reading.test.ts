@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { readingEntrySummary, readingSections } from '@/lib/reading';
+import {
+    readingEntryPreview,
+    readingEntrySummary,
+    readingSections,
+} from '@/lib/reading';
 import type { PracticeQuestionData } from '@/types';
 
 function question(
@@ -72,10 +76,20 @@ describe('the sections a question can be read as', () => {
                 text: { value: 'I want a soup', formatted: false },
                 details: [
                     {
-                        value: '<strong>I&#039;d like a soup</strong>',
-                        formatted: true,
+                        label: 'Correction',
+                        parts: [
+                            {
+                                value: '<strong>I&#039;d like a soup</strong>',
+                                formatted: true,
+                            },
+                        ],
                     },
-                    { value: 'Sounds more polite', formatted: false },
+                    {
+                        label: 'Why (optional)',
+                        parts: [
+                            { value: 'Sounds more polite', formatted: false },
+                        ],
+                    },
                 ],
             },
         ]);
@@ -96,7 +110,10 @@ describe('the sections a question can be read as', () => {
         );
 
         expect(vocabulary.entries[0].details).toEqual([
-            { value: 'a liquid food', formatted: false },
+            {
+                label: 'Meaning',
+                parts: [{ value: 'a liquid food', formatted: false }],
+            },
         ]);
     });
 
@@ -126,9 +143,17 @@ describe('the sections a question can be read as', () => {
         );
 
         expect(vocabulary.entries[0].details).toEqual([
-            { value: 'a liquid food', formatted: false },
-            { value: 'A <strong>warm</strong> soup.', formatted: true },
-            { value: 'Soup of the <em>day</em>.', formatted: true },
+            {
+                label: 'Meaning',
+                parts: [{ value: 'a liquid food', formatted: false }],
+            },
+            {
+                label: 'Example (optional)',
+                parts: [
+                    { value: 'A <strong>warm</strong> soup.', formatted: true },
+                    { value: 'Soup of the <em>day</em>.', formatted: true },
+                ],
+            },
         ]);
     });
 
@@ -147,7 +172,15 @@ describe('the sections a question can be read as', () => {
         );
 
         expect(vocabulary.entries[0].details).toEqual([
-            { value: 'I made a <em>reservation</em>.', formatted: true },
+            {
+                label: 'Example (optional)',
+                parts: [
+                    {
+                        value: 'I made a <em>reservation</em>.',
+                        formatted: true,
+                    },
+                ],
+            },
         ]);
     });
 
@@ -185,7 +218,7 @@ describe('the sections a question can be read as', () => {
         ]);
     });
 
-    it('gives a table box its editor columns and one row per entry', () => {
+    it('previews what an entry leads with, from its first detail', () => {
         const [vocabulary] = readingSections(
             question({
                 vocabulary: [
@@ -199,16 +232,26 @@ describe('the sections a question can be read as', () => {
             }),
         );
 
-        expect(vocabulary.table?.columns).toEqual([
-            { header: 'Word' },
-            { header: 'Meaning' },
-            { header: 'Example (optional)' },
-        ]);
-        expect(vocabulary.table?.rows[0]?.map((cell) => cell.parts)).toEqual([
-            [{ value: 'soup', formatted: false }],
-            [{ value: 'a liquid food', formatted: false }],
-            [{ value: '<p>A warm soup.</p>', formatted: true }],
-        ]);
+        expect(readingEntryPreview(vocabulary.entries[0])).toBe(
+            'a liquid food',
+        );
+    });
+
+    it('has no preview when nothing explains an entry', () => {
+        const [phrase] = readingSections(
+            question({
+                phrase: [
+                    {
+                        id: 'p1',
+                        text: 'if it is possible',
+                        meaning: '',
+                        example_html: '',
+                    },
+                ],
+            }),
+        );
+
+        expect(readingEntryPreview(phrase.entries[0])).toBe('');
     });
 
     it('summarises the entries of a question in the editor order', () => {

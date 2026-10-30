@@ -44,20 +44,10 @@ function page(overrides: Partial<CollectionPage> = {}): CollectionPage {
     return {
         tab: 'vocabulary',
         tabs: [
-            {
-                key: 'vocabulary',
-                label: 'Vocabulary',
-                count: 1,
-                built: true,
-            },
-            { key: 'phrases', label: 'Phrases', count: 4, built: true },
-            { key: 'grammar', label: 'Grammar notes', count: 2, built: true },
-            {
-                key: 'mistakes',
-                label: 'My mistakes',
-                count: null,
-                built: false,
-            },
+            { key: 'vocabulary', label: 'Vocabulary', count: 1 },
+            { key: 'phrases', label: 'Phrases', count: 4 },
+            { key: 'grammar', label: 'Grammar notes', count: 2 },
+            { key: 'mistakes', label: 'My mistakes', count: 3 },
         ],
         items: [item()],
         next_cursor: 'next-page',

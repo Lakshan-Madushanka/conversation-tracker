@@ -7,22 +7,28 @@ import {
     consumeCollectionRestore,
     distinctExamples,
     distinctMeanings,
+    distinctReasons,
     feedbackTypeFor,
-    isCollectionItem,
     isCollectionItemsPage,
+    isCollectionMistakeItem,
+    isCollectionItem,
     isCollectionNoteItem,
     isCollectionPage,
     markCollectionRestore,
     mergeCollectionItems,
+    mistakeSeenIn,
     readCollectionSnapshot,
     saveCollectionSnapshot,
     seenIn,
+    seenLabel,
     type CollectionSnapshot,
 } from '@/lib/collections';
 import { collectionUrl } from '@/lib/collection-query';
 import type {
     CollectionAppearance,
     CollectionItem,
+    CollectionMistakeAppearance,
+    CollectionMistakeItem,
     CollectionNoteItem,
 } from '@/types';
 
@@ -72,6 +78,43 @@ function note(overrides: Partial<CollectionNoteItem> = {}): CollectionNoteItem {
         question_position: 1,
         entry_id: 'note-a',
         entry_position: 0,
+        ...overrides,
+    };
+}
+
+function mistakeAppearance(
+    overrides: Partial<CollectionMistakeAppearance> = {},
+): CollectionMistakeAppearance {
+    return {
+        session_id: 1,
+        session_date: '2026-10-19T10:14:55.000000Z',
+        topic: 'Ordering at a restaurant',
+        question_position: 1,
+        entry_id: 'entry-1',
+        entry_position: 0,
+        said: 'I am agree',
+        correction: 'I agree',
+        correction_html: '<strong>I agree</strong>',
+        reason: 'verb tense',
+        ...overrides,
+    };
+}
+
+function mistake(
+    overrides: Partial<CollectionMistakeItem> = {},
+): CollectionMistakeItem {
+    return {
+        key: 'mistake-agree',
+        title: 'I am agree',
+        correction: 'I agree',
+        correction_html: '<strong>I agree</strong>',
+        reason: 'verb tense',
+        latest_session_date: '2026-10-19T10:14:55.000000Z',
+        seen_count: 2,
+        worth_practicing: false,
+        needs_attention: false,
+        attention_reason: null,
+        appearances: [mistakeAppearance()],
         ...overrides,
     };
 }
@@ -138,7 +181,6 @@ describe('checking payloads', () => {
                         key: 'vocabulary',
                         label: 'Vocabulary',
                         count: 1,
-                        built: true,
                     },
                 ],
                 items: [item()],
@@ -161,7 +203,6 @@ describe('checking payloads', () => {
                         key: 'grammar',
                         label: 'Grammar notes',
                         count: 1,
-                        built: true,
                     },
                 ],
                 items: [note()],
@@ -226,6 +267,42 @@ describe('checking payloads', () => {
         );
         expect(isCollectionItem(note())).toBe(false);
         expect(isCollectionNoteItem(item())).toBe(false);
+    });
+
+    it('checks every field of a mistake', () => {
+        expect(isCollectionMistakeItem(mistake())).toBe(true);
+        expect(
+            isCollectionMistakeItem({ ...mistake(), reason: undefined }),
+        ).toBe(false);
+        expect(
+            isCollectionMistakeItem({ ...mistake(), worth_practicing: 1 }),
+        ).toBe(false);
+        expect(isCollectionMistakeItem(item())).toBe(false);
+        expect(isCollectionItem(mistake())).toBe(false);
+    });
+
+    it('threads a mistake through the shared opened-item check', () => {
+        const page = isCollectionPage({
+            tab: 'mistakes',
+            tabs: [{ key: 'mistakes', label: 'My mistakes', count: 1 }],
+            items: [mistake()],
+            next_cursor: null,
+            has_more: false,
+            total: 1,
+            has_finished_sessions: true,
+            open_item: mistake(),
+            open_item_missing: false,
+        });
+
+        const loaded = isCollectionItemsPage({
+            items: [mistake()],
+            next_cursor: null,
+            has_more: false,
+            total: 1,
+        });
+
+        expect(page).toBe(true);
+        expect(loaded).toBe(true);
     });
 });
 
@@ -378,5 +455,62 @@ describe('the meanings, examples and sightings of a word', () => {
         });
 
         expect(seenIn(chosen)).toHaveLength(3);
+    });
+});
+
+describe('the reasons, sightings and wording of a mistake', () => {
+    it('shows each different reason once, newest first, with its appearances', () => {
+        const chosen = mistake({
+            appearances: [
+                mistakeAppearance({ reason: 'Verb tense' }),
+                mistakeAppearance({ reason: 'verb tense', entry_position: 1 }),
+                mistakeAppearance({ reason: 'Word choice' }),
+                mistakeAppearance({ reason: '   ' }),
+            ],
+        });
+
+        const reasons = distinctReasons(chosen);
+
+        expect(reasons.map((entry) => entry.reason)).toEqual([
+            'Verb tense',
+            'Word choice',
+        ]);
+        expect(reasons[0]?.appearances).toHaveLength(2);
+        expect(reasons[1]?.appearances).toHaveLength(1);
+    });
+
+    it('counts a mistake sighting once per question, like a word', () => {
+        const chosen = mistake({
+            appearances: [
+                mistakeAppearance({ session_id: 1, question_position: 1 }),
+                mistakeAppearance({
+                    session_id: 1,
+                    question_position: 1,
+                    entry_id: 'another',
+                }),
+                mistakeAppearance({ session_id: 1, question_position: 2 }),
+                mistakeAppearance({ session_id: 2, question_position: 1 }),
+            ],
+        });
+
+        expect(mistakeSeenIn(chosen)).toHaveLength(3);
+    });
+
+    it('keeps the seen wording singular and plural correct', () => {
+        expect(seenLabel(1)).toBe('Seen 1 time');
+        expect(seenLabel(2)).toBe('Seen 2 times');
+        expect(seenLabel(30)).toBe('Seen 30 times');
+    });
+
+    it('keeps a mistake in the merged list when the next page arrives', () => {
+        const merged = mergeCollectionItems(
+            [mistake()],
+            [mistake({ key: 'mistake-said', title: 'I are agree' })],
+        );
+
+        expect(merged.map((entry) => entry.key)).toEqual([
+            'mistake-agree',
+            'mistake-said',
+        ]);
     });
 });

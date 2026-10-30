@@ -22,11 +22,17 @@ import {
     TableRow,
 } from '@/components/ui/table';
 import { collectionTabConfig } from '@/lib/collection-tabs';
-import { isCollectionItem, isCollectionNoteItem } from '@/lib/collections';
+import {
+    isCollectionItem,
+    isCollectionMistakeItem,
+    isCollectionNoteItem,
+    seenLabel,
+} from '@/lib/collections';
 import { shortDate } from '@/lib/format';
 import { create as sessionsCreate } from '@/routes/sessions';
 import type {
     CollectionItem,
+    CollectionMistakeItem,
     CollectionNoteItem,
     CollectionOpenedItem,
     CollectionTabKey,
@@ -68,12 +74,20 @@ const config = computed(() => collectionTabConfig(props.tab));
 /** Grammar notes list their own pieces: a preview, a topic and a date. */
 const notesMode = computed(() => props.tab === 'grammar');
 
+/** Mistakes have their own columns and their own cards with labeled lines. */
+const mistakesMode = computed(() => props.tab === 'mistakes');
+
 const groupedItems = computed(
     () => props.items.filter(isCollectionItem) as CollectionItem[],
 );
 
 const noteItems = computed(
     () => props.items.filter(isCollectionNoteItem) as CollectionNoteItem[],
+);
+
+const mistakeItems = computed(
+    () =>
+        props.items.filter(isCollectionMistakeItem) as CollectionMistakeItem[],
 );
 
 const hasItems = computed(() => props.items.length > 0);
@@ -104,8 +118,16 @@ function open(item: CollectionOpenedItem): void {
     emit('open', item);
 }
 
-function seenLabel(item: CollectionItem): string {
-    return `Seen ${item.seen_count} times`;
+/**
+ * The mistake a screen reader hears in the row's name: what was said and
+ * what to say instead, so the control's name holds the mistake itself.
+ */
+function mistakeName(item: CollectionMistakeItem): string {
+    const said = item.title.trim() === '' ? '(nothing)' : item.title;
+
+    return item.correction.trim() === ''
+        ? `${said}, needs the correction`
+        : `${said}, correction: ${item.correction}`;
 }
 
 function noteDate(note: CollectionNoteItem): string {
@@ -195,6 +217,101 @@ function exampleHtml(item: CollectionItem): string {
                                     class="whitespace-nowrap text-muted-foreground"
                                 >
                                     {{ noteDate(note) }}
+                                </TableCell>
+                            </TableRow>
+                        </TableBody>
+                    </Table>
+                </div>
+
+                <!-- My mistakes on a wide screen: what was said, what to say
+                    instead, why, and how often. The correction keeps its own
+                    bold and italic, already reduced by the server to
+                    formatting the app supports. -->
+                <div v-else-if="mistakesMode" class="hidden md:block">
+                    <Table class="table-fixed">
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead class="w-[30%]">{{
+                                    config.columns[0]
+                                }}</TableHead>
+                                <TableHead class="w-[30%]">{{
+                                    config.columns[1]
+                                }}</TableHead>
+                                <TableHead class="w-[24%]">{{
+                                    config.columns[2]
+                                }}</TableHead>
+                                <TableHead class="w-[16%] text-right">
+                                    <span class="sr-only">Times seen</span>
+                                </TableHead>
+                            </TableRow>
+                        </TableHeader>
+
+                        <TableBody>
+                            <TableRow
+                                v-for="mistake in mistakeItems"
+                                :key="mistake.key"
+                                class="cursor-pointer"
+                                :aria-label="`Mistake: ${mistakeName(mistake)}`"
+                                @click="open(mistake)"
+                            >
+                                <TableCell class="whitespace-normal">
+                                    <button
+                                        type="button"
+                                        class="min-h-11 w-full rounded text-left font-medium hover:underline focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+                                        :aria-label="`Open mistake: ${mistakeName(mistake)}`"
+                                        @click.stop="open(mistake)"
+                                    >
+                                        {{ mistake.title }}
+                                    </button>
+                                    <Badge
+                                        v-if="mistake.worth_practicing"
+                                        variant="outline"
+                                        class="mt-1 align-middle"
+                                    >
+                                        Worth practicing
+                                    </Badge>
+                                    <Badge
+                                        v-if="mistake.needs_attention"
+                                        variant="secondary"
+                                        class="ml-0 align-middle sm:ml-2"
+                                    >
+                                        Needs attention
+                                    </Badge>
+                                </TableCell>
+
+                                <TableCell
+                                    class="whitespace-normal text-muted-foreground"
+                                >
+                                    <span
+                                        v-if="mistake.correction_html"
+                                        class="line-clamp-2 text-foreground"
+                                        v-html="mistake.correction_html"
+                                    ></span>
+                                    <span
+                                        v-else-if="mistake.correction"
+                                        class="line-clamp-2 text-foreground"
+                                        >{{ mistake.correction }}</span
+                                    >
+                                    <span v-else class="italic">{{
+                                        config.missingCorrection
+                                    }}</span>
+                                </TableCell>
+
+                                <TableCell
+                                    class="whitespace-normal text-muted-foreground"
+                                >
+                                    <span v-if="mistake.reason">{{
+                                        mistake.reason
+                                    }}</span>
+                                    <span v-else class="italic">{{
+                                        config.missingReason
+                                    }}</span>
+                                </TableCell>
+
+                                <TableCell class="text-right align-top">
+                                    <Badge variant="outline">
+                                        {{ seenLabel(mistake.seen_count) }}
+                                    </Badge>
                                 </TableCell>
                             </TableRow>
                         </TableBody>
@@ -292,7 +409,7 @@ function exampleHtml(item: CollectionItem): string {
                                         v-if="item.seen_count > 1"
                                         variant="outline"
                                     >
-                                        {{ seenLabel(item) }}
+                                        {{ seenLabel(item.seen_count) }}
                                     </Badge>
                                 </TableCell>
                             </TableRow>
@@ -326,6 +443,92 @@ function exampleHtml(item: CollectionItem): string {
                         </Card>
                     </template>
 
+                    <template v-else-if="mistakesMode">
+                        <!-- Each mistake becomes a card with printed labels:
+                            the words are read as words, not by an arrow. -->
+                        <Card
+                            v-for="mistake in mistakeItems"
+                            :key="mistake.key"
+                            class="py-0"
+                        >
+                            <button
+                                type="button"
+                                class="min-h-11 w-full p-4 text-left focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+                                :aria-label="`Open mistake: ${mistakeName(mistake)}`"
+                                @click="open(mistake)"
+                            >
+                                <span
+                                    class="block text-xs text-muted-foreground"
+                                >
+                                    {{ config.columns[0] }}
+                                </span>
+                                <span
+                                    class="mt-0.5 flex flex-wrap items-center gap-2"
+                                >
+                                    <span class="font-semibold break-words">
+                                        {{ mistake.title }}
+                                    </span>
+                                </span>
+
+                                <span
+                                    class="mt-2 block text-xs text-muted-foreground"
+                                >
+                                    {{ config.columns[1] }}
+                                </span>
+                                <span class="mt-0.5 block text-sm break-words">
+                                    <span
+                                        v-if="mistake.correction_html"
+                                        v-html="mistake.correction_html"
+                                    ></span>
+                                    <span v-else-if="mistake.correction">
+                                        {{ mistake.correction }}
+                                    </span>
+                                    <span v-else class="italic">
+                                        {{ config.missingCorrection }}
+                                    </span>
+                                </span>
+
+                                <span
+                                    class="mt-2 block text-xs text-muted-foreground"
+                                >
+                                    {{ config.columns[2] }}
+                                </span>
+                                <span
+                                    v-if="mistake.reason"
+                                    class="mt-0.5 block text-sm break-words"
+                                >
+                                    {{ mistake.reason }}
+                                </span>
+                                <span
+                                    v-else
+                                    class="mt-0.5 block text-sm italic"
+                                >
+                                    {{ config.missingReason }}
+                                </span>
+
+                                <span
+                                    class="mt-3 flex flex-wrap items-center gap-2"
+                                >
+                                    <Badge variant="outline">
+                                        {{ seenLabel(mistake.seen_count) }}
+                                    </Badge>
+                                    <Badge
+                                        v-if="mistake.worth_practicing"
+                                        variant="outline"
+                                    >
+                                        Worth practicing
+                                    </Badge>
+                                    <Badge
+                                        v-if="mistake.needs_attention"
+                                        variant="secondary"
+                                    >
+                                        Needs attention
+                                    </Badge>
+                                </span>
+                            </button>
+                        </Card>
+                    </template>
+
                     <template v-else>
                         <Card
                             v-for="item in groupedItems"
@@ -351,7 +554,7 @@ function exampleHtml(item: CollectionItem): string {
                                         v-if="item.seen_count > 1"
                                         variant="outline"
                                     >
-                                        {{ seenLabel(item) }}
+                                        {{ seenLabel(item.seen_count) }}
                                     </Badge>
                                 </span>
 

@@ -7,13 +7,12 @@ export type CollectionTabKey =
     | 'grammar'
     | 'mistakes';
 
-/** One tab: its collection, how many items it holds, and whether it is built. */
+/** One tab: which collection it shows and how many items it holds. */
 export interface CollectionTabData {
     key: CollectionTabKey;
     label: string;
-    /** How many items the tab holds; null while the collection is on its way. */
-    count: number | null;
-    built: boolean;
+    /** How many items the tab holds right now. */
+    count: number;
 }
 
 /** One place something was saved, with the row it points back to. */
@@ -82,14 +81,61 @@ export interface CollectionNoteItem {
     entry_position: number;
 }
 
-/** Whatever an opened panel can show: a word, a phrase or one note. */
-export type CollectionOpenedItem = CollectionItem | CollectionNoteItem;
+/**
+ * One place a mistake was saved, with the row it points back to and the
+ * words exactly as they were said there.
+ */
+export interface CollectionMistakeAppearance {
+    session_id: number;
+    session_date: string | null;
+    topic: string;
+    question_position: number;
+    /** The row's id in the editor; null for entries saved before ids existed. */
+    entry_id: string | null;
+    /** The row's place in its box, used when there is no id. */
+    entry_position: number;
+    said: string;
+    correction: string;
+    /** The correction's words, with only its safe bold and italic kept. */
+    correction_html: string;
+    reason: string;
+}
 
+/**
+ * One mistake, grouped across every finished session by the pair of what was
+ * said and the correction. The same mistake with a different reason stays one
+ * group; each appearance keeps the words that were written there.
+ */
+export interface CollectionMistakeItem {
+    /** The key derived from the normalised pair, used in the address. */
+    key: string;
+    title: string;
+    correction: string;
+    /** The correction's words, with only its safe bold and italic kept. */
+    correction_html: string;
+    reason: string;
+    latest_session_date: string | null;
+    /** How many different questions the mistake was seen in. */
+    seen_count: number;
+    /** True once the mistake is worth practicing, by the shared threshold. */
+    worth_practicing: boolean;
+    /** True when one of its appearances asks for the learner's attention. */
+    needs_attention: boolean;
+    /** Why it asks for attention, in the wording shared with the app. */
+    attention_reason: string | null;
+    appearances: CollectionMistakeAppearance[];
+}
+
+/** Whatever an opened panel can show: a word, a phrase, one note or a mistake. */
+export type CollectionOpenedItem =
+    | CollectionItem
+    | CollectionNoteItem
+    | CollectionMistakeItem;
 /** The page props the Collections page receives. */
 export interface CollectionPage {
     tab: CollectionTabKey;
     tabs: CollectionTabData[];
-    items: (CollectionItem | CollectionNoteItem)[];
+    items: CollectionOpenedItem[];
     next_cursor: string | null;
     has_more: boolean;
     total: number;
@@ -103,7 +149,7 @@ export interface CollectionPage {
 
 /** One page returned by the "Load more" request. */
 export interface CollectionItemsPage {
-    items: (CollectionItem | CollectionNoteItem)[];
+    items: CollectionOpenedItem[];
     next_cursor: string | null;
     has_more: boolean;
     total: number;

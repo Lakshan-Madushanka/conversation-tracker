@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
-import { InfoIcon, LayersIcon } from '@lucide/vue';
+import { InfoIcon } from '@lucide/vue';
 import CollectionItemPanel from '@/components/CollectionItemPanel.vue';
 import CollectionList from '@/components/CollectionList.vue';
-import EmptyState from '@/components/EmptyState.vue';
+import CollectionMistakePanel from '@/components/CollectionMistakePanel.vue';
 import PageHeader from '@/components/PageHeader.vue';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -21,7 +21,11 @@ import {
     type CollectionSnapshot,
 } from '@/lib/collections';
 import { index as collectionsIndex } from '@/routes/collections';
-import type { CollectionPage, CollectionTabKey } from '@/types';
+import type {
+    CollectionMistakeItem,
+    CollectionPage,
+    CollectionTabKey,
+} from '@/types';
 
 defineOptions({ layout: AppLayout });
 
@@ -50,23 +54,18 @@ const {
     syncFromPage,
 } = useCollection(props);
 
-/** The tab on screen, with its label, count and built flag. */
-const activeTab = computed(
-    () => props.tabs.find((candidate) => candidate.key === tab.value) ?? null,
-);
-
-/** Only My mistakes is still on its way; the rest are real collections. */
-const isBuilt = computed(() => activeTab.value?.built === true);
-
 const activeConfig = computed(() => collectionTabConfig(tab.value));
+
+/** A short friendly line under the tabs, for the tabs that have one. */
+const intro = computed(() => activeConfig.value.intro);
 
 /** The tab's full name, with its count read as part of it. */
 function tabAriaName(
     label: string,
     key: CollectionTabKey,
-    count: number | null,
+    count: number,
 ): string {
-    if (count === null) {
+    if (count === 0) {
         return label;
     }
 
@@ -74,8 +73,6 @@ function tabAriaName(
 
     return `${label}, ${count} ${count === 1 ? config.unit : config.unitPlural}`;
 }
-
-const activeLabel = computed(() => activeTab.value?.label ?? null);
 
 function changeTab(value: string | number): void {
     setTab(value as CollectionTabKey);
@@ -212,12 +209,15 @@ onBeforeUnmount(() => {
                 >
                     <!-- Each count is read as part of the tab's name, so a
                         screen reader hears "Phrases, 65 phrases". -->
-                    <span v-if="candidate.count !== null" class="truncate">
+                    <span class="truncate">
                         {{ candidate.label }} ({{ candidate.count }})
                     </span>
-                    <span v-else>{{ candidate.label }}</span>
                 </TabsTrigger>
             </TabsList>
+
+            <p v-if="intro" class="mt-4 text-sm text-muted-foreground">
+                {{ intro }}
+            </p>
 
             <Alert v-if="openItemMissing" class="mt-4" role="status">
                 <InfoIcon aria-hidden="true" />
@@ -240,7 +240,6 @@ onBeforeUnmount(() => {
                 <!-- The gathered collections: list, loading, empty and error
                     states live in the list itself. -->
                 <CollectionList
-                    v-if="isBuilt"
                     :items="items"
                     :tab="tab"
                     :has-more="hasMore"
@@ -252,30 +251,19 @@ onBeforeUnmount(() => {
                     @open="openItemPanel"
                     @load-more="loadMore"
                 />
-
-                <!-- My mistakes stays visible and calm, so the page never
-                    looks broken while its collection is on its way. -->
-                <EmptyState
-                    v-else
-                    :icon="LayersIcon"
-                    :title="`${activeLabel} are on their way`"
-                    description="This collection is not ready yet. Vocabulary, phrases and grammar notes are gathered from your finished sessions."
-                >
-                    <template #actions>
-                        <Button
-                            type="button"
-                            size="lg"
-                            variant="outline"
-                            @click="changeTab('vocabulary')"
-                        >
-                            Browse vocabulary
-                        </Button>
-                    </template>
-                </EmptyState>
             </div>
         </Tabs>
 
+        <CollectionMistakePanel
+            v-if="tab === 'mistakes'"
+            :item="openItem as CollectionMistakeItem | null"
+            tab="mistakes"
+            @close="closeItemPanel"
+            @see-session="rememberForReturn"
+        />
+
         <CollectionItemPanel
+            v-else
             :item="openItem"
             :tab="tab"
             @close="closeItemPanel"

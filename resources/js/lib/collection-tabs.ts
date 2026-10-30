@@ -15,6 +15,12 @@ export interface CollectionTabConfig {
     columns: [string, string, string];
     /** The quiet text shown when the meaning column has nothing in it. */
     missingMeaning: string | null;
+    /** The quiet text shown when a mistake's correction has nothing in it. */
+    missingCorrection: string | null;
+    /** The quiet text shown when a mistake has no reason written down. */
+    missingReason: string;
+    /** A short, friendly line the tab introduces itself with, when it has one. */
+    intro: string | null;
     /** What one item of this collection is called, one at a time. */
     unit: string;
     /** What many items of this collection are called. */
@@ -33,6 +39,9 @@ const configs: Record<CollectionTabKey, CollectionTabConfig> = {
     vocabulary: {
         columns: ['Word', 'Meaning', 'Example'],
         missingMeaning: 'Add the meaning',
+        missingCorrection: null,
+        missingReason: 'No reason added',
+        intro: null,
         unit: 'word',
         unitPlural: 'words',
         emptyTitle: 'No words yet',
@@ -48,6 +57,9 @@ const configs: Record<CollectionTabKey, CollectionTabConfig> = {
     phrases: {
         columns: ['Phrase', 'Meaning or use', 'Example'],
         missingMeaning: 'No meaning added',
+        missingCorrection: null,
+        missingReason: 'No reason added',
+        intro: null,
         unit: 'phrase',
         unitPlural: 'phrases',
         emptyTitle: 'No phrases yet',
@@ -63,6 +75,9 @@ const configs: Record<CollectionTabKey, CollectionTabConfig> = {
     grammar: {
         columns: ['Note', 'Topic', 'Date'],
         missingMeaning: null,
+        missingCorrection: null,
+        missingReason: 'No reason added',
+        intro: null,
         unit: 'note',
         unitPlural: 'notes',
         emptyTitle: 'No grammar notes yet',
@@ -75,19 +90,22 @@ const configs: Record<CollectionTabKey, CollectionTabConfig> = {
             'Everything this note says, as you saved it in its session.',
     },
 
-    // The mistakes tab stays calm and unbuilt until its step arrives.
     mistakes: {
-        columns: ['What you said', 'Correction', 'Reason'],
+        columns: ['What I said', 'Correction', 'Why'],
         missingMeaning: null,
+        missingCorrection: 'Add the correction',
+        missingReason: 'No reason added',
+        intro: 'These are the mistakes you see most often. They’re the best things to practice, and spotting them is how you improve.',
         unit: 'mistake',
         unitPlural: 'mistakes',
-        emptyTitle: 'No mistakes gathered yet',
+        emptyTitle: 'Nothing here yet',
         emptyDescription:
-            'Mistakes you save while practicing will appear here when this collection opens.',
+            'Mistakes you save in finished sessions will appear here, with the ones you see most often first. Spotting them is how you improve.',
         missingTitle: 'That mistake is no longer here',
         missingDescription:
-            'It may have been edited or removed from its session since you saved this link.',
-        panelDescription: 'Everything about this mistake.',
+            'It may have been edited or removed from its session since you saved this link. Your other mistakes are still below.',
+        panelDescription:
+            'Everything about this mistake, gathered from your finished sessions.',
     },
 };
 

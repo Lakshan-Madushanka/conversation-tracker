@@ -27,6 +27,7 @@ import {
     isCollectionItem,
     isCollectionNoteItem,
     seenIn,
+    seenLabel,
 } from '@/lib/collections';
 import { shortDate } from '@/lib/format';
 import type {
@@ -115,11 +116,7 @@ const sightings = computed(() =>
     wordItem.value === null ? [] : seenIn(wordItem.value),
 );
 
-const seenLabel = computed(() => {
-    const count = wordItem.value?.seen_count ?? 0;
-
-    return count === 1 ? 'Seen once' : `Seen ${count} times`;
-});
+const seenBadge = computed(() => seenLabel(wordItem.value?.seen_count ?? 0));
 
 function hrefFor(appearance: CollectionAppearance): string {
     return collectionItemHref(rowOf(appearance), props.tab);
@@ -195,7 +192,7 @@ function seeOriginal(event: MouseEvent): void {
                         </SheetTitle>
 
                         <Badge v-if="wordItem.seen_count > 1" variant="outline">
-                            {{ seenLabel }}
+                            {{ seenBadge }}
                         </Badge>
                     </span>
 

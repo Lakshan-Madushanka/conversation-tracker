@@ -8,6 +8,7 @@ use App\Enums\CollectionTab;
 use App\Enums\FeedbackType;
 use App\Http\Requests\CollectionRequest;
 use App\Http\Resources\CollectionItemResource;
+use App\Http\Resources\CollectionMistakeResource;
 use App\Http\Resources\CollectionNoteResource;
 use App\Queries\TableCollection;
 use Illuminate\Http\JsonResponse;
@@ -78,10 +79,9 @@ class CollectionController extends Controller
     }
 
     /**
-     * The four tabs, with the count of every collection that has been built.
-     * My mistakes stays calm and count-free until its step.
+     * The four tabs, with the count of every collection gathered live.
      *
-     * @return list<array{key: string, label: string, count: int|null, built: bool}>
+     * @return list<array{key: string, label: string, count: int}>
      */
     private function tabs(TableCollection $collection): array
     {
@@ -91,10 +91,7 @@ class CollectionController extends Controller
             fn (CollectionTab $candidate): array => [
                 'key' => $candidate->value,
                 'label' => $candidate->label(),
-                'count' => $candidate->isBuilt()
-                    ? $counts[$candidate->value]
-                    : null,
-                'built' => $candidate->isBuilt(),
+                'count' => $counts[$candidate->value],
             ],
             CollectionTab::ordered(),
         );
@@ -118,8 +115,10 @@ class CollectionController extends Controller
      */
     private function shapeItem(CollectionTab $tab, array $item): array
     {
-        return $tab->feedbackType() === FeedbackType::GrammarNote
-            ? CollectionNoteResource::make($item)->resolve()
-            : CollectionItemResource::make($item)->resolve();
+        return match ($tab->feedbackType()) {
+            FeedbackType::GrammarNote => CollectionNoteResource::make($item)->resolve(),
+            FeedbackType::Mistake => CollectionMistakeResource::make($item)->resolve(),
+            default => CollectionItemResource::make($item)->resolve(),
+        };
     }
 }

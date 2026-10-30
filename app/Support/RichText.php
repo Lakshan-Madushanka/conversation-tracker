@@ -222,7 +222,7 @@ final class RichText
         $html = is_array($exampleHtml)
             ? implode(' ', array_map(
                 fn (array $item): string => (string) $item['html'],
-                array_values(array_filter($exampleHtml, 'is_array')),
+                array_values(array_filter($exampleHtml, is_array(...))),
             ))
             : (string) $exampleHtml;
 

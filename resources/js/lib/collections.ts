@@ -4,6 +4,8 @@ import type {
     CollectionAppearance,
     CollectionItem,
     CollectionItemsPage,
+    CollectionMistakeAppearance,
+    CollectionMistakeItem,
     CollectionNoteItem,
     CollectionOpenedItem,
     CollectionPage,
@@ -18,7 +20,7 @@ import type {
  */
 export interface CollectionSnapshot {
     tab: CollectionTabKey;
-    items: (CollectionItem | CollectionNoteItem)[];
+    items: CollectionOpenedItem[];
     nextCursor: string | null;
     hasMore: boolean;
     total: number;
@@ -51,10 +53,10 @@ function storage(): Storage | null {
  * does not jump.
  */
 export function mergeCollectionItems(
-    existing: (CollectionItem | CollectionNoteItem)[],
-    incoming: (CollectionItem | CollectionNoteItem)[],
-): (CollectionItem | CollectionNoteItem)[] {
-    const byKey = new Map<string, CollectionItem | CollectionNoteItem>();
+    existing: CollectionOpenedItem[],
+    incoming: CollectionOpenedItem[],
+): CollectionOpenedItem[] {
+    const byKey = new Map<string, CollectionOpenedItem>();
 
     for (const item of existing) {
         byKey.set(item.key, item);
@@ -158,13 +160,44 @@ export function isCollectionNoteItem(
     );
 }
 
+export function isCollectionMistakeItem(
+    value: unknown,
+): value is CollectionMistakeItem {
+    if (typeof value !== 'object' || value === null) {
+        return false;
+    }
+
+    const item = value as Record<string, unknown>;
+
+    return (
+        typeof item.key === 'string' &&
+        typeof item.title === 'string' &&
+        typeof item.correction === 'string' &&
+        typeof item.correction_html === 'string' &&
+        typeof item.reason === 'string' &&
+        (typeof item.latest_session_date === 'string' ||
+            item.latest_session_date === null) &&
+        typeof item.seen_count === 'number' &&
+        typeof item.worth_practicing === 'boolean' &&
+        typeof item.needs_attention === 'boolean' &&
+        (item.attention_reason === null ||
+            typeof item.attention_reason === 'string') &&
+        Array.isArray(item.appearances) &&
+        item.appearances.every(isMistakeAppearance)
+    );
+}
+
 export function isCollectionOpenedItem(
     value: unknown,
 ): value is CollectionOpenedItem {
-    return isCollectionItem(value) || isCollectionNoteItem(value);
+    return (
+        isCollectionItem(value) ||
+        isCollectionNoteItem(value) ||
+        isCollectionMistakeItem(value)
+    );
 }
 
-/** Whether a value looks like the tabs data the page needs. */
+/** Whether the tabs data the page needs looks right. */
 function isCollectionTabData(tabs: unknown[]): boolean {
     return tabs.every((tab) => {
         if (typeof tab !== 'object' || tab === null) {
@@ -176,8 +209,7 @@ function isCollectionTabData(tabs: unknown[]): boolean {
         return (
             typeof candidate.key === 'string' &&
             typeof candidate.label === 'string' &&
-            (candidate.count === null || typeof candidate.count === 'number') &&
-            typeof candidate.built === 'boolean'
+            typeof candidate.count === 'number'
         );
     });
 }
@@ -197,6 +229,32 @@ function isAppearance(value: unknown): value is CollectionAppearance {
         typeof appearance.meaning === 'string' &&
         typeof appearance.example === 'string' &&
         typeof appearance.example_html === 'string' &&
+        (appearance.session_date === null ||
+            typeof appearance.session_date === 'string') &&
+        (appearance.entry_id === null ||
+            typeof appearance.entry_id === 'string')
+    );
+}
+
+/** Whether one place a mistake was saved looks right. */
+function isMistakeAppearance(
+    value: unknown,
+): value is CollectionMistakeAppearance {
+    if (typeof value !== 'object' || value === null) {
+        return false;
+    }
+
+    const appearance = value as Record<string, unknown>;
+
+    return (
+        typeof appearance.session_id === 'number' &&
+        typeof appearance.topic === 'string' &&
+        typeof appearance.question_position === 'number' &&
+        typeof appearance.entry_position === 'number' &&
+        typeof appearance.said === 'string' &&
+        typeof appearance.correction === 'string' &&
+        typeof appearance.correction_html === 'string' &&
+        typeof appearance.reason === 'string' &&
         (appearance.session_date === null ||
             typeof appearance.session_date === 'string') &&
         (appearance.entry_id === null ||
@@ -378,11 +436,80 @@ function exampleKey(appearance: CollectionAppearance): string {
  * box are one sighting, while another question or session is another.
  */
 export function seenIn(item: CollectionItem): CollectionAppearance[] {
-    return uniqueBy(
-        item.appearances,
-        (appearance) =>
-            `${appearance.session_id}:${appearance.question_position}`,
-    );
+    return sightingsIn(item.appearances);
+}
+
+/**
+ * The places a mistake was seen, once per question, the same way words and
+ * phrases are counted: a repeated row in the same box counts once.
+ */
+export function mistakeSeenIn(
+    item: CollectionMistakeItem,
+): CollectionMistakeAppearance[] {
+    return sightingsIn(item.appearances);
+}
+
+/**
+ * One sighting per question of a list of appearances, whatever their shape.
+ */
+function sightingsIn<
+    T extends { session_id: number; question_position: number },
+>(appearances: T[]): T[] {
+    const seen = new Set<string>();
+    const result: T[] = [];
+
+    for (const appearance of appearances) {
+        const key = `${appearance.session_id}:${appearance.question_position}`;
+
+        if (seen.has(key)) {
+            continue;
+        }
+
+        seen.add(key);
+        result.push(appearance);
+    }
+
+    return result;
+}
+
+/**
+ * Every different reason a mistake carried, newest first. The same reason
+ * written with different capitals is shown once, and each reason keeps the
+ * appearances it came from, so the panel can name its sessions.
+ */
+export function distinctReasons(
+    item: CollectionMistakeItem,
+): { reason: string; appearances: CollectionMistakeAppearance[] }[] {
+    const groups = new Map<string, CollectionMistakeAppearance[]>();
+
+    for (const appearance of item.appearances) {
+        const reason = appearance.reason.trim();
+
+        if (reason === '') {
+            continue;
+        }
+
+        const key = reason.toLocaleLowerCase();
+        const known = groups.get(key);
+
+        if (known === undefined) {
+            groups.set(key, [appearance]);
+        } else {
+            known.push(appearance);
+        }
+    }
+
+    // The appearances arrive newest first, so each group's first reason is
+    // the most recent spelling of it.
+    return [...groups.values()].map((appearances) => ({
+        reason: appearances[0].reason,
+        appearances,
+    }));
+}
+
+/** How a mistake's seen count reads, with the singular kept correct. */
+export function seenLabel(count: number): string {
+    return count === 1 ? 'Seen 1 time' : `Seen ${count} times`;
 }
 
 function uniqueBy(

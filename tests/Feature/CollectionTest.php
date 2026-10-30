@@ -7,6 +7,8 @@ use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeQuestion;
 use App\Models\PracticeSession;
 use App\Models\Topic;
+use App\Queries\TableCollection;
+use App\Support\MistakeIdentity;
 use App\Support\NotePreview;
 use App\Support\RowAttention;
 use Carbon\CarbonImmutable;
@@ -412,7 +414,7 @@ describe('vocabulary', function (): void {
 });
 
 describe('tab counts', function (): void {
-    it('counts each built collection on its tab and keeps My mistakes calm', function (): void {
+    it('counts each collection on its tab, mistakes by their pairs like the list', function (): void {
         $sameMoment = CarbonImmutable::now();
         $wordSession = collectionSession($sameMoment);
         $words = collectionQuestion($wordSession);
@@ -425,32 +427,43 @@ describe('tab counts', function (): void {
         collectionNote($words, 'The past tense is used here.');
         collectionNote($words, 'Never drop the article.', '', ['position' => 1]);
 
+        // Two mistakes in one pair, plus a copy with a different case, plus
+        // one that holds nothing at all.
+        collectionRow($words, 'I am agree', FeedbackType::Mistake, [
+            'correction_text' => 'I agree',
+        ]);
+        collectionRow($wordsAgain, 'I AM AGREE', FeedbackType::Mistake, [
+            'correction_text' => 'I AGREE',
+        ]);
+        collectionRow($words, 'I like soup', FeedbackType::Mistake, [
+            'correction_text' => 'I like soup, really',
+        ]);
+        collectionRow($words, '   ', FeedbackType::Mistake, [
+            'correction_text' => '   ',
+        ]);
+
         $this->get(route('collections.index'))
             ->assertOk()
             ->assertInertia(fn (Assert $page): Assert => $page
                 ->count('tabs', 4)
                 ->where('tabs.0.key', 'vocabulary')
                 ->where('tabs.0.label', 'Vocabulary')
-                ->where('tabs.0.built', true)
                 ->where('tabs.0.count', 2)
                 ->where('tabs.1.key', 'phrases')
-                ->where('tabs.1.built', true)
                 ->where('tabs.1.count', 1)
                 ->where('tabs.2.key', 'grammar')
                 ->where('tabs.2.label', 'Grammar notes')
-                ->where('tabs.2.built', true)
                 ->where('tabs.2.count', 2)
                 ->where('tabs.3.key', 'mistakes')
                 ->where('tabs.3.label', 'My mistakes')
-                ->where('tabs.3.built', false)
-                ->where('tabs.3.count', null));
+                ->where('tabs.3.count', 2));
 
-        // The mistakes page still keeps its own calm state, whatever rows it
-        // would one day gather.
+        // The mistakes page gathers the same groups the tab counts.
         $this->get(route('collections.index', ['tab' => 'mistakes']))
             ->assertOk()
             ->assertInertia(fn (Assert $page): Assert => $page
-                ->where('tab', 'mistakes'));
+                ->where('tab', 'mistakes')
+                ->where('total', 2));
     });
 
     it('counts a word once even when the same session wrote it repeatedly', function (): void {
@@ -464,6 +477,419 @@ describe('tab counts', function (): void {
             ->assertOk()
             ->assertInertia(fn (Assert $page): Assert => $page
                 ->where('tabs.0.count', 1));
+    });
+});
+
+describe('my mistakes', function (): void {
+    /**
+     * One mistake row of a table box, by default with a correction, so a
+     * mistake row only has to say what makes it different.
+     *
+     * @param  array<string, mixed>  $attributes
+     */
+    function collectionMistake(
+        PracticeQuestion $question,
+        string $said,
+        array $attributes = [],
+    ): PracticeFeedbackEntry {
+        return collectionRow($question, $said, FeedbackType::Mistake, $attributes);
+    }
+
+    it('gathers one item per mistake pair, ignoring capitals, accents and extra spaces', function (): void {
+        $oldest = collectionSession(CarbonImmutable::now()->subDays(2));
+        collectionMistake(collectionQuestion($oldest), '  AYÉR I WENT  AL MERCADO  ', [
+            'correction_text' => 'yesterday i went to the market.',
+        ]);
+
+        $middle = collectionSession(CarbonImmutable::now()->subDay());
+        collectionMistake(collectionQuestion($middle), "Ayer I went\nal mercado", [
+            'correction_text' => ' YESTERDAY I WENT TO THE MARKET. ',
+        ]);
+
+        $newest = collectionSession(CarbonImmutable::now());
+        collectionMistake(collectionQuestion($newest), 'Ayer I went al mercado', [
+            'correction_text' => 'Yesterday I went to the market.',
+        ]);
+
+        $this->get(route('collections.index', ['tab' => 'mistakes']))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page): Assert => $page
+                ->where('total', 1)
+                ->count('items', 1)
+                ->where('items.0.key', MistakeIdentity::pairKey(
+                    'Ayer I went al mercado',
+                    'Yesterday I went to the market.',
+                ))
+                ->where('items.0.title', 'Ayer I went al mercado')
+                ->where('items.0.correction', 'Yesterday I went to the market.')
+                ->where('items.0.seen_count', 3));
+    });
+
+    it('counts a repeated row in the same box once but a different question separately', function (): void {
+        $session = collectionSession(CarbonImmutable::now());
+        $first = collectionQuestion($session, 1);
+        $second = collectionQuestion($session, 2);
+
+        collectionMistake($first, 'I am agree', ['client_id' => 'agree-1']);
+        collectionMistake($first, 'I AM agree', ['client_id' => 'agree-2']);
+        collectionMistake($second, 'I am agree', ['client_id' => 'agree-elsewhere']);
+
+        $this->get(route('collections.index', ['tab' => 'mistakes']))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page): Assert => $page
+                ->where('total', 1)
+                ->where('items.0.seen_count', 2)
+                ->count('items.0.appearances', 3));
+    });
+
+    it('stays one group when the same mistake carried different reasons', function (): void {
+        $newest = collectionSession(CarbonImmutable::now());
+        collectionMistake(collectionQuestion($newest), 'I am agree', [
+            'correction_text' => 'I agree',
+            'reason' => 'Word order',
+        ]);
+
+        $older = collectionSession(CarbonImmutable::now()->subDay());
+        $oldBox = collectionQuestion($older);
+        collectionMistake($oldBox, 'i am agree', [
+            'correction_text' => 'I agree',
+            'reason' => 'wrong tense',
+        ]);
+        collectionMistake($oldBox, 'I am agree', [
+            'correction_text' => 'I agree',
+            'reason' => 'Wrong tense. The verb wants its past form.',
+        ]);
+
+        $this->get(route('collections.index', ['tab' => 'mistakes', 'item' => MistakeIdentity::pairKey('I am agree', 'I agree')]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page): Assert => $page
+                ->where('open_item.key', MistakeIdentity::pairKey('I am agree', 'I agree'))
+                ->where('open_item.reason', 'Word order')
+                ->count('open_item.appearances', 3)
+                ->where('open_item.appearances.0.reason', 'Word order')
+                ->where('open_item.appearances.1.reason', 'Wrong tense. The verb wants its past form.')
+                ->where('open_item.appearances.2.reason', 'wrong tense')
+                ->where('open_item.seen_count', 2));
+    });
+
+    it('keeps the same correction on two different mistakes as two groups', function (): void {
+        $session = collectionSession(CarbonImmutable::now());
+        $question = collectionQuestion($session);
+
+        collectionMistake($question, 'I am agree', [
+            'correction_text' => 'I agree',
+        ]);
+        collectionMistake($question, 'I are agree', [
+            'correction_text' => 'I AGREE',
+        ]);
+
+        $this->get(route('collections.index', ['tab' => 'mistakes']))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page): Assert => $page
+                ->where('total', 2)
+                ->count('items', 2)
+                ->where('items.0.key', MistakeIdentity::pairKey('I am agree', 'I agree'))
+                ->where('items.1.key', MistakeIdentity::pairKey('I are agree', 'I agree'))
+                ->where('items.0.title', 'I am agree')
+                ->where('items.1.title', 'I are agree'));
+    });
+
+    it('leaves out pairs that hold nothing but keeps a lone correction', function (): void {
+        $session = collectionSession(CarbonImmutable::now());
+        $question = collectionQuestion($session);
+
+        collectionMistake($question, '   ', ['correction_text' => '   ']);
+        collectionMistake($question, '', ['correction_text' => '   ']);
+        collectionMistake($question, '', ['correction_text' => ' wakeup ']);
+
+        $draft = PracticeSession::factory()->create([
+            'status' => PracticeSession::STATUS_UNFINISHED,
+        ]);
+        collectionMistake(collectionQuestion($draft), 'draft mistake', [
+            'correction_text' => 'real mistake',
+        ]);
+
+        $archived = collectionSession(CarbonImmutable::now()->subHour(), null, [
+            'archived_at' => CarbonImmutable::now(),
+        ]);
+        collectionMistake(collectionQuestion($archived), 'archived mistake', [
+            'correction_text' => 'real mistake 2',
+        ]);
+
+        $vocabulary = collectionSession(CarbonImmutable::now());
+        collectionRow(collectionQuestion($vocabulary), 'soup', FeedbackType::Vocabulary);
+
+        $this->get(route('collections.index', ['tab' => 'mistakes']))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page): Assert => $page
+                ->where('total', 1)
+                ->count('items', 1)
+                ->where('items.0.correction', 'wakeup')
+                ->where('items.0.title', ''));
+    });
+
+    it('names a mistake without a correction and a line that could not be split', function (): void {
+        $session = collectionSession(CarbonImmutable::now());
+        $question = collectionQuestion($session);
+
+        collectionMistake($question, 'I am agree');
+        collectionMistake($question, 'see -> watch -> observe');
+
+        $this->get(route('collections.index', ['tab' => 'mistakes']))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page): Assert => $page
+                ->where('total', 2)
+                ->where('items.0.title', 'see -> watch -> observe')
+                ->where('items.0.needs_attention', true)
+                ->where('items.0.attention_reason', RowAttention::MORE_THAN_ONE)
+                ->where('items.1.title', 'I am agree')
+                ->where('items.1.needs_attention', true)
+                ->where('items.1.attention_reason', RowAttention::ADD_CORRECTION));
+    });
+
+    it('gathers a mistake said with and without its correction as two groups, one of them calm', function (): void {
+        $newest = collectionSession(CarbonImmutable::now());
+        collectionMistake(collectionQuestion($newest), 'I am agree', [
+            'correction_text' => 'I agree',
+        ]);
+
+        $older = collectionSession(CarbonImmutable::now()->subDay());
+        collectionMistake(collectionQuestion($older), 'I AM agree');
+
+        $this->get(route('collections.index', ['tab' => 'mistakes']))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page): Assert => $page
+                ->where('total', 2)
+                ->count('items', 2)
+                ->where('items.0.key', MistakeIdentity::pairKey('I am agree', 'I agree'))
+                ->where('items.0.needs_attention', false)
+                ->where('items.0.attention_reason', null)
+                ->where('items.1.key', MistakeIdentity::pairKey('I am agree', ''))
+                ->where('items.1.needs_attention', true)
+                ->where('items.1.attention_reason', RowAttention::ADD_CORRECTION));
+    });
+
+    it('shows the words of its most recent appearance and the newest reason that holds anything', function (): void {
+        $newest = collectionSession(CarbonImmutable::now());
+        collectionMistake(collectionQuestion($newest), 'I LIKE  SOUP', [
+            'correction_text' => 'i like soup',
+            'reason' => '',
+        ]);
+
+        $middle = collectionSession(CarbonImmutable::now()->subDay());
+        collectionMistake(collectionQuestion($middle), 'i like soup', [
+            'correction_text' => 'I like SOUP',
+            'reason' => 'Capital letters',
+        ]);
+
+        $oldest = collectionSession(CarbonImmutable::now()->subDays(2));
+        collectionMistake(collectionQuestion($oldest), 'I like soup', [
+            'correction_text' => 'I like soup',
+            'reason' => 'Verb form',
+        ]);
+
+        $this->get(route('collections.index', ['tab' => 'mistakes', 'item' => MistakeIdentity::pairKey('i like soup', 'i like soup')]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page): Assert => $page
+                ->where('open_item.title', 'I LIKE  SOUP')
+                ->where('open_item.correction', 'i like soup')
+                ->where('open_item.reason', 'Capital letters')
+                ->where('open_item.appearances.0.said', 'I LIKE  SOUP')
+                ->where('open_item.appearances.0.correction', 'i like soup')
+                ->where('open_item.appearances.0.reason', '')
+                ->where('open_item.appearances.1.said', 'i like soup')
+                ->where('open_item.appearances.2.said', 'I like soup'));
+    });
+
+    it('marks a mistake worth practicing once it has been seen the named number of times', function (): void {
+        $threshold = TableCollection::WORTH_PRACTICING_SEEN_COUNT;
+
+        $firstSession = collectionSession(CarbonImmutable::now()->subMinutes(2));
+        $firstQuestion = collectionQuestion($firstSession);
+        collectionMistake($firstQuestion, 'I am agree');
+
+        $secondSession = collectionSession(CarbonImmutable::now()->subMinute());
+        collectionMistake(collectionQuestion($secondSession), 'I am agree');
+
+        $this->get(route('collections.index', ['tab' => 'mistakes']))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page): Assert => $page
+                ->where('total', 1)
+                ->where('items.0.seen_count', 2)
+                ->where('items.0.worth_practicing', false));
+
+        foreach (range(3, $threshold) as $index) {
+            $session = collectionSession(CarbonImmutable::now()->subMinutes($index + 4));
+            collectionMistake(collectionQuestion($session), 'I am agree');
+        }
+
+        $this->get(route('collections.index', ['tab' => 'mistakes']))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page): Assert => $page
+                ->where('items.0.seen_count', $threshold)
+                ->where('items.0.worth_practicing', true));
+    });
+
+    it('orders by how often each was seen, then its latest session, then its key', function (): void {
+        $sameMoment = CarbonImmutable::now();
+
+        // C was seen three times, B twice, and D and A once each, drawn at
+        // the same moment. D's key comes later, so A goes before it.
+        $seenThrice = collectionSession($sameMoment->subHours(3));
+        $thriceQuestion = collectionQuestion($seenThrice);
+        collectionMistake($thriceQuestion, 'A frequent mistake 3', ['correction_text' => 'Correction 3']);
+        collectionMistake(collectionQuestion($seenThrice, 2), 'A frequent mistake 3', ['correction_text' => 'Correction 3']);
+        collectionMistake(collectionQuestion($seenThrice, 3), 'A frequent mistake 3', ['correction_text' => 'Correction 3']);
+
+        $seenTwice = collectionSession($sameMoment->subHours(2));
+        collectionMistake(collectionQuestion($seenTwice), 'B twice mistake', ['correction_text' => 'Correction']);
+        collectionMistake(collectionQuestion($seenTwice, 2), 'B twice mistake', ['correction_text' => 'Correction']);
+
+        $lateOnce = collectionSession($sameMoment);
+        collectionMistake(collectionQuestion($lateOnce), 'D later mistake', ['correction_text' => 'Correction']);
+
+        $earlyOnce = collectionSession($sameMoment);
+        collectionMistake(collectionQuestion($earlyOnce), 'A earlier mistake', ['correction_text' => 'Correction']);
+
+        $keyOf = fn (string $said): string => MistakeIdentity::pairKey($said, 'Correction');
+
+        $this->get(route('collections.index', ['tab' => 'mistakes']))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page): Assert => $page
+                ->count('items', 4)
+                ->where('items.0.seen_count', 3)
+                ->where('items.1.seen_count', 2)
+                ->where('items.2.key', $keyOf('A earlier mistake'))
+                ->where('items.2.seen_count', 1)
+                ->where('items.3.key', $keyOf('D later mistake'))
+                ->where('items.3.seen_count', 1));
+    });
+
+    it('pages mistakes without repeating or skipping one on a stable cursor', function (): void {
+        $base = CarbonImmutable::now();
+
+        foreach (range(1, 35) as $index) {
+            $session = collectionSession($base->subMinutes($index));
+            collectionMistake(
+                collectionQuestion($session),
+                sprintf('mistake %02d said', $index),
+                ['correction_text' => sprintf('mistake %02d fixed', $index)],
+            );
+        }
+
+        $first = $this->getJson(route('collections.index', ['tab' => 'mistakes']))->assertOk()->json();
+
+        expect($first['items'])->toHaveCount(30)
+            ->and($first['has_more'])->toBeTrue()
+            ->and($first['total'])->toBe(35)
+            ->and($first['next_cursor'])->toBeString();
+
+        $second = $this->getJson(route('collections.index', [
+            'tab' => 'mistakes',
+            'cursor' => $first['next_cursor'],
+        ]))->assertOk()->json();
+
+        expect($second['items'])->toHaveCount(5)
+            ->and($second['has_more'])->toBeFalse()
+            ->and($second['next_cursor'])->toBeNull()
+            ->and($second['total'])->toBe(35);
+
+        $firstKeys = array_column($first['items'], 'key');
+        $secondKeys = array_column($second['items'], 'key');
+
+        expect(array_intersect($firstKeys, $secondKeys))->toBe([])
+            ->and(array_merge($firstKeys, $secondKeys))->toHaveCount(35);
+    });
+
+    it('opens the mistake named in the address and says calmly when it is gone', function (): void {
+        $topic = Topic::factory()->create(['name' => 'Ordering at a restaurant']);
+        $session = collectionSession(CarbonImmutable::now(), $topic);
+        $question = collectionQuestion($session);
+
+        collectionMistake($question, 'I am agree', [
+            'correction_text' => 'I agree',
+            'reason' => 'Verb tense',
+        ]);
+
+        $key = MistakeIdentity::pairKey('I am agree', 'I agree');
+
+        $this->get(route('collections.index', ['tab' => 'mistakes', 'item' => $key]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page): Assert => $page
+                ->where('open_item_missing', false)
+                ->where('open_item.key', $key)
+                ->where('open_item.title', 'I am agree')
+                ->where('open_item.correction', 'I agree')
+                ->where('open_item.latest_session_date', $session->created_at?->toIso8601String())
+                ->where('open_item.appearances.0.session_id', $session->id)
+                ->where('open_item.appearances.0.topic', 'Ordering at a restaurant')
+                ->where('open_item.appearances.0.question_position', 1)
+                ->where('open_item.appearances.0.reason', 'Verb tense'));
+
+        $this->get(route('collections.index', ['tab' => 'mistakes', 'item' => 'mistake-missing']))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page): Assert => $page
+                ->where('open_item', null)
+                ->where('open_item_missing', true));
+    });
+
+    it('cleaned a formatted correction down to bold and italic words', function (): void {
+        $session = collectionSession(CarbonImmutable::now());
+        collectionMistake(collectionQuestion($session), "I'd like a coffee", [
+            'correction_text' => "I'd like a coffee, please",
+            'correction_html' => "I'd like a <script>alert(1)</script><strong>coffee</strong>, <em>please</em>",
+        ]);
+
+        $this->get(route('collections.index', ['tab' => 'mistakes', 'item' => MistakeIdentity::pairKey("I'd like a coffee", "I'd like a coffee, please")]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page): Assert => $page
+                ->where('open_item.correction_html', "I'd like a <strong>coffee</strong>, <em>please</em>")
+                ->where('open_item.correction', "I'd like a coffee, please")
+                ->count('open_item.appearances', 1)
+                ->where('open_item.appearances.0.correction_html', "I'd like a <strong>coffee</strong>, <em>please</em>"));
+    });
+
+    it('reflects finishing, editing, archiving and deleting straight away', function (): void {
+        $draft = PracticeSession::factory()->create([
+            'status' => PracticeSession::STATUS_UNFINISHED,
+        ]);
+        $question = collectionQuestion($draft);
+        $row = collectionMistake($question, 'I am agree', ['correction_text' => 'I agree']);
+
+        $this->get(route('collections.index', ['tab' => 'mistakes']))
+            ->assertInertia(fn (Assert $page): Assert => $page
+                ->where('total', 0));
+
+        $draft->update([
+            'status' => PracticeSession::STATUS_FINISHED,
+            'finished_at' => CarbonImmutable::now(),
+        ]);
+
+        $this->get(route('collections.index', ['tab' => 'mistakes']))
+            ->assertInertia(fn (Assert $page): Assert => $page
+                ->where('total', 1)
+                ->where('items.0.title', 'I am agree'));
+
+        $row->update(['correction_text' => 'I do agree']);
+
+        $this->get(route('collections.index', ['tab' => 'mistakes']))
+            ->assertInertia(fn (Assert $page): Assert => $page
+                ->where('items.0.correction', 'I do agree'));
+
+        $draft->archived_at = CarbonImmutable::now();
+        $draft->save();
+
+        $this->get(route('collections.index', ['tab' => 'mistakes']))
+            ->assertInertia(fn (Assert $page): Assert => $page
+                ->where('total', 0));
+
+        $draft->archived_at = null;
+        $draft->save();
+        $draft->delete();
+
+        $this->get(route('collections.index', ['tab' => 'mistakes']))
+            ->assertInertia(fn (Assert $page): Assert => $page
+                ->where('total', 0));
     });
 });
 
@@ -715,6 +1141,9 @@ describe('live queries', function (): void {
         $startQuestion = collectionQuestion($startSession);
         collectionRow($startQuestion, 'relish');
         collectionNote($startQuestion, 'The first rule.');
+        collectionRow($startQuestion, 'Initial mistake', FeedbackType::Mistake, [
+            'correction_text' => 'Initial mistake, fixed',
+        ]);
 
         $measure = function (): int {
             DB::flushQueryLog();
@@ -722,6 +1151,7 @@ describe('live queries', function (): void {
 
             $this->getJson(route('collections.index', ['tab' => 'vocabulary']))->assertOk();
             $this->getJson(route('collections.index', ['tab' => 'grammar']))->assertOk();
+            $this->getJson(route('collections.index', ['tab' => 'mistakes']))->assertOk();
             $this->get(route('collections.index'))->assertOk();
 
             $count = count(DB::getQueryLog());
@@ -738,6 +1168,9 @@ describe('live queries', function (): void {
             collectionRow($question, sprintf('new word %02d', $index));
             collectionRow($question, sprintf('new phrase %02d', $index), FeedbackType::Phrase);
             collectionNote($question, sprintf('New rule number %02d.', $index));
+            collectionRow($question, sprintf('new mistake %02d', $index), FeedbackType::Mistake, [
+                'correction_text' => sprintf('fixed mistake %02d', $index),
+            ]);
         }
 
         $large = $measure();

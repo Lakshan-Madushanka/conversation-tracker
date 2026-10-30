@@ -64,13 +64,4 @@ enum CollectionTab: string
             self::Mistakes => 'My mistakes',
         };
     }
-
-    /**
-     * Whether this collection has been built yet. The mistakes tab stays
-     * visible and calm until its step, rather than looking broken.
-     */
-    public function isBuilt(): bool
-    {
-        return $this !== self::Mistakes;
-    }
 }

@@ -19,17 +19,37 @@ import { index as collectionsIndex } from '@/routes/collections';
 import type {
     CollectionItem,
     CollectionItemsPage,
+    CollectionMistakeItem,
     CollectionNoteItem,
     CollectionPage,
     CollectionTabData,
 } from '@/types';
 
 const tabs: CollectionTabData[] = [
-    { key: 'vocabulary', label: 'Vocabulary', count: 1, built: true },
-    { key: 'phrases', label: 'Phrases', count: 4, built: true },
-    { key: 'grammar', label: 'Grammar notes', count: 2, built: true },
-    { key: 'mistakes', label: 'My mistakes', count: null, built: false },
+    { key: 'vocabulary', label: 'Vocabulary', count: 1 },
+    { key: 'phrases', label: 'Phrases', count: 4 },
+    { key: 'grammar', label: 'Grammar notes', count: 2 },
+    { key: 'mistakes', label: 'My mistakes', count: 3 },
 ];
+
+function mistakeItem(
+    overrides: Partial<CollectionMistakeItem> = {},
+): CollectionMistakeItem {
+    return {
+        key: 'mistake-agree',
+        title: 'I am agree',
+        correction: 'I agree',
+        correction_html: '',
+        reason: 'Verb tense',
+        latest_session_date: '2026-10-19T10:14:55.000000Z',
+        seen_count: 2,
+        worth_practicing: false,
+        needs_attention: false,
+        attention_reason: null,
+        appearances: [],
+        ...overrides,
+    };
+}
 
 function item(overrides: Partial<CollectionItem> = {}): CollectionItem {
     return {
@@ -140,7 +160,7 @@ describe('the Collections page', () => {
         expect(mounted?.text()).toContain('a liquid food');
     });
 
-    it('reads a built collection count on its tab and keeps My mistakes count-free', () => {
+    it('reads every collection count on its tab', () => {
         mountPage();
 
         const triggers = mounted?.findAll('[role="tab"]') ?? [];
@@ -156,10 +176,10 @@ describe('the Collections page', () => {
         );
         expect(
             triggers.find((t) => t.text().includes('My mistakes'))?.text(),
-        ).toBe('My mistakes');
+        ).toBe('My mistakes (3)');
     });
 
-    it('names a built tab for screen readers with its item count', async () => {
+    it('names a tab for screen readers with its item count', async () => {
         vi.spyOn(router, 'get').mockImplementation(() => {});
         mountPage();
 
@@ -193,8 +213,7 @@ describe('the Collections page', () => {
         );
     });
 
-    it('keeps the unbuilt mistakes tab calm and points back to vocabulary', async () => {
-        const get = vi.spyOn(router, 'get').mockImplementation(() => {});
+    it('welcomes the mistakes tab with its intro and friendly empty state', async () => {
         mountPage({
             tab: 'mistakes',
             items: [],
@@ -202,19 +221,46 @@ describe('the Collections page', () => {
             has_finished_sessions: true,
         });
 
-        expect(mounted?.text()).toContain('My mistakes are on their way');
-
-        const browse = mounted
-            ?.findAll('button')
-            .find((button) => button.text().includes('Browse vocabulary'));
-
-        await browse?.trigger('click');
-
-        expect(get).toHaveBeenCalledWith(
-            collectionUrl('vocabulary'),
-            {},
-            expect.anything(),
+        expect(mounted?.text()).toContain(
+            'These are the mistakes you see most often.',
         );
+        expect(mounted?.text()).toContain('Nothing here yet');
+        expect(mounted?.text()).toContain(
+            'Mistakes you save in finished sessions will appear here',
+        );
+        expect(mounted?.text()).not.toContain('on their way');
+    });
+
+    it('names the mistakes tab for screen readers with its mistake count', async () => {
+        vi.spyOn(router, 'get').mockImplementation(() => {});
+        mountPage();
+
+        await tab('My mistakes')?.trigger('focus');
+        await tab('My mistakes')?.trigger('mouseenter');
+
+        expect(
+            document
+                .querySelector('[role="tab"][aria-label*="My mistakes"]')
+                ?.getAttribute('aria-label'),
+        ).toBe('My mistakes, 3 mistakes');
+    });
+
+    it('opens a mistake in its own panel', async () => {
+        mountPage({
+            tab: 'mistakes',
+            items: [mistakeItem()],
+            total: 1,
+            open_item: mistakeItem(),
+        });
+        await flushPromises();
+        await flushPromises();
+
+        expect(document.body.textContent).toContain(
+            'Everything about this mistake',
+        );
+        expect(document.body.textContent).toContain('What I said');
+        expect(document.body.textContent).toContain('I am agree');
+        expect(document.body.textContent).toContain('I agree');
     });
 
     it('opens a word in the address and asks for its panel', async () => {

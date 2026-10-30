@@ -10,6 +10,7 @@ use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeSession;
 use App\Support\CollectionCursor;
 use App\Support\EntrySearch;
+use App\Support\MistakeIdentity;
 use App\Support\NotePreview;
 use App\Support\RichText;
 use App\Support\RowAttention;
@@ -20,13 +21,16 @@ use Illuminate\Support\Collection;
 
 /**
  * One collection, gathered live from the study sessions: the vocabulary and
- * phrase rows, grouped by the words themselves, and the grammar notes, which
- * are never merged — every note stays its own item.
+ * phrase rows, grouped by the words themselves; the grammar notes, which
+ * are never merged — every note stays its own item; and the mistakes,
+ * grouped by the pair of what was said and the correction.
  *
  * A word or phrase is the same word when it differs only in capitals,
- * accents, extra spaces or formatting. Every row it was saved in is kept as an
- * appearance, but two copies in the same box of the same question count once,
- * because the learner wrote the word once and the editor repeated the row.
+ * accents, extra spaces or formatting. A mistake is the same mistake when
+ * both parts of its pair match that way; the pair's key comes from
+ * `MistakeIdentity`. Every row it was saved in is kept as an appearance, but
+ * two copies in the same box of the same question count once, because the
+ * learner wrote the word once and the editor repeated the row.
  *
  * Nothing is stored or cached: a finished session, an edit, an archive, a
  * restore or a delete changes the next read straight away.
@@ -66,11 +70,42 @@ use Illuminate\Support\Collection;
  *     entry_id: string|null,
  *     entry_position: int
  * }
+ * @phpstan-type MistakeAppearance array{
+ *     session_id: int,
+ *     session_date: CarbonImmutable|null,
+ *     topic: string,
+ *     question_position: int,
+ *     entry_id: string|null,
+ *     entry_position: int,
+ *     said: string,
+ *     correction: string,
+ *     correction_html: string,
+ *     reason: string
+ * }
+ * @phpstan-type MistakeItem array{
+ *     key: string,
+ *     title: string,
+ *     correction: string,
+ *     correction_html: string,
+ *     reason: string,
+ *     latest_at: CarbonImmutable,
+ *     seen_count: int,
+ *     worth_practicing: bool,
+ *     attention: string|null,
+ *     appearances: list<MistakeAppearance>
+ * }
  */
 final class TableCollection
 {
     /** How many items one page of a collection holds. */
     public const int PAGE_SIZE = 30;
+
+    /**
+     * How often a mistake has to be seen before it is worth practicing.
+     * Keeping the threshold here in one named place makes it easy to change:
+     * a mistake seen this many times, or more, carries the label.
+     */
+    public const int WORTH_PRACTICING_SEEN_COUNT = 3;
 
     /** How much of a note's plain text the list shows before it is opened. */
     public const int NOTE_PREVIEW_LENGTH = NotePreview::LENGTH;
@@ -120,7 +155,7 @@ final class TableCollection
         if ($hasMore) {
             $last = $page[count($page) - 1];
 
-            $nextCursor = $this->cursorFor($last)->encode();
+            $nextCursor = $this->cursorFor($last, $type)->encode();
         }
 
         return [
@@ -134,9 +169,10 @@ final class TableCollection
     /**
      * One item by the key the address names, used to open it in its panel.
      * For grammar notes the key is the note's own identity, so two identical
-     * notes still open separately.
+     * notes still open separately; for mistakes it is the one derived from
+     * the normalised pair.
      *
-     * @return GroupItem|NoteItem|null
+     * @return GroupItem|NoteItem|MistakeItem|null
      */
     public function find(FeedbackType $type, string $key): ?array
     {
@@ -165,6 +201,10 @@ final class TableCollection
             return $this->entryQuery($type)->count();
         }
 
+        if ($type === FeedbackType::Mistake) {
+            return $this->mistakeCount();
+        }
+
         /** @var array<string, true> $keys */
         $keys = [];
 
@@ -172,6 +212,31 @@ final class TableCollection
             $key = SearchText::normalize((string) $subject);
 
             if ($key !== '') {
+                $keys[$key] = true;
+            }
+        }
+
+        return count($keys);
+    }
+
+    /**
+     * How many mistakes the tab holds right now: one group per normalised
+     * pair, so a mistake seen in many sessions counts once, and the same
+     * correction for two different mistakes counts twice.
+     */
+    private function mistakeCount(): int
+    {
+        /** @var array<string, true> $keys */
+        $keys = [];
+
+        foreach ($this->entryQuery(FeedbackType::Mistake)
+            ->get(['content_text', 'correction_text']) as $row) {
+            $key = MistakeIdentity::pairKey(
+                (string) $row->content_text,
+                (string) $row->correction_text,
+            );
+
+            if (! MistakeIdentity::isBlank((string) $row->content_text, (string) $row->correction_text)) {
                 $keys[$key] = true;
             }
         }
@@ -190,19 +255,22 @@ final class TableCollection
             CollectionTab::Vocabulary->value => $this->count(FeedbackType::Vocabulary),
             CollectionTab::Phrases->value => $this->count(FeedbackType::Phrase),
             CollectionTab::Grammar->value => $this->count(FeedbackType::GrammarNote),
+            CollectionTab::Mistakes->value => $this->count(FeedbackType::Mistake),
         ];
     }
 
     /**
      * The items of one collection, keyed by the key the address uses.
      *
-     * @return array<string, GroupItem|NoteItem>
+     * @return array<string, GroupItem|NoteItem|MistakeItem>
      */
     private function items(FeedbackType $type): array
     {
         return $type === FeedbackType::GrammarNote
             ? $this->notes()
-            : $this->groups($type);
+            : ($type === FeedbackType::Mistake
+                ? $this->mistakes()
+                : $this->groups($type));
     }
 
     /**
@@ -393,6 +461,138 @@ final class TableCollection
     }
 
     /**
+     * The mistake rows of the study sessions, grouped by the pair of what was
+     * said and the correction. The same mistake with a different reason stays
+     * one group, and the same correction on two different mistakes stays two,
+     * because the pair is what identifies the mistake.
+     *
+     * Rows arrive newest first, so the first row of a group carries the
+     * spelling of its most recent appearance. A row without a correction is
+     * the pair of what was said and an empty column: its own group, marked
+     * "needs attention" by the shared rule, never hidden.
+     *
+     * @return array<string, MistakeItem>
+     */
+    private function mistakes(): array
+    {
+        $entries = $this->entries(FeedbackType::Mistake);
+        $entryPositions = $this->entryPositions($entries);
+
+        /**
+         * One mistake while it is still being built, before it is boiled down
+         * to the shape the list and panel show.
+         *
+         * @var array<string, array{
+         *     key: string,
+         *     title: string,
+         *     correction: string,
+         *     correction_html: string,
+         *     reason: string,
+         *     latest_at: CarbonImmutable,
+         *     seen_questions: array<int, true>,
+         *     attention: string|null,
+         *     appearances: list<MistakeAppearance>
+         * }> $groups
+         */
+        $groups = [];
+
+        foreach ($entries as $entry) {
+            $question = $entry->practiceQuestion;
+            $session = $question->practiceSession;
+
+            $said = trim((string) $entry->content_text);
+            $correction = trim((string) $entry->correction_text);
+
+            if (MistakeIdentity::isBlank($said, $correction)) {
+                continue;
+            }
+
+            $key = MistakeIdentity::pairKey($said, $correction);
+            $correctionHtml = RichText::cleanInlineWithText(
+                (string) $entry->correction_html,
+            )['html'];
+
+            $groups[$key] ??= [
+                'key' => $key,
+                // "Most recent" is the appearance in the latest session, so
+                // the first row of the group carries its words as written.
+                'title' => $said,
+                'correction' => '',
+                'correction_html' => '',
+                'reason' => '',
+                'latest_at' => $session->created_at ?? CarbonImmutable::now(),
+                'seen_questions' => [],
+                'attention' => RowAttention::reason(
+                    FeedbackType::Mistake,
+                    $said,
+                    $correction,
+                ),
+                'appearances' => [],
+            ];
+
+            $group = $groups[$key];
+
+            // Every question the mistake was saved under is one sighting: a
+            // repeated row in the same box counts once, another question or
+            // another session counts again.
+            $group['seen_questions'][$question->id] = true;
+
+            if ($group['correction'] === '' && $correction !== '') {
+                $group['correction'] = $correction;
+            }
+
+            if ($group['correction_html'] === '' && $correctionHtml !== '') {
+                $group['correction_html'] = $correctionHtml;
+            }
+
+            // The reason comes from the most recent appearance that has one;
+            // every distinct reason all the same stays with its appearance.
+            if ($group['reason'] === '') {
+                $group['reason'] = trim((string) $entry->reason);
+            }
+
+            $group['appearances'][] = [
+                'session_id' => (int) $session->id,
+                'session_date' => $session->created_at,
+                'topic' => (string) $session->topic->name,
+                'question_position' => (int) $question->position,
+                'entry_id' => is_string($entry->client_id) && $entry->client_id !== ''
+                    ? $entry->client_id
+                    : null,
+                'entry_position' => $entryPositions[$entry->id] ?? 0,
+                'said' => $said,
+                'correction' => $correction,
+                'correction_html' => $correctionHtml,
+                'reason' => trim((string) $entry->reason),
+            ];
+
+            $groups[$key] = $group;
+        }
+
+        $count = self::WORTH_PRACTICING_SEEN_COUNT;
+        $items = [];
+
+        foreach ($groups as $key => $group) {
+            $seen = count($group['seen_questions']);
+
+            $items[$key] = [
+                'key' => $group['key'],
+                'title' => $group['title'],
+                'correction' => $group['correction'],
+                'correction_html' => $group['correction_html'],
+                'reason' => $group['reason'],
+                'latest_at' => $group['latest_at'],
+                'seen_count' => $seen,
+                'worth_practicing' => $seen >= $count,
+                'attention' => $group['attention'],
+                'appearances' => $group['appearances'],
+            ];
+        }
+
+        return $items;
+    }
+
+    /**
      * The rows of one box, newest session first, with the sessions they came
      * from. Only finished sessions that are not archived are read, and rows
      * that hold no words at all are left out.
@@ -411,7 +611,9 @@ final class TableCollection
     /**
      * The entries one collection gathers, before they are read: only rows of
      * its box, inside finished sessions that are not archived, that hold some
-     * words.
+     * words. A mistake row can be a pair whose what-I-said column alone is
+     * empty as long as a correction is saved, so only rows where both columns
+     * are empty are left out.
      *
      * @return Builder<PracticeFeedbackEntry>
      */
@@ -423,7 +625,15 @@ final class TableCollection
                 'practiceQuestion.practiceSession',
                 fn (Builder $query): Builder => $query->study(),
             )
-            ->whereRaw("TRIM(content_text) <> ''");
+            ->when(
+                $type === FeedbackType::Mistake,
+                fn (Builder $query): Builder => $query->where(
+                    fn (Builder $instead): Builder => $instead
+                        ->whereRaw("TRIM(content_text) <> ''")
+                        ->orWhereRaw("TRIM(correction_text) <> ''"),
+                ),
+                fn (Builder $query): Builder => $query->whereRaw("TRIM(content_text) <> ''"),
+            );
     }
 
     /**
@@ -461,9 +671,11 @@ final class TableCollection
 
     private function comparatorFor(FeedbackType $type): callable
     {
-        return $type === FeedbackType::GrammarNote
-            ? $this->compareNotes(...)
-            : $this->compareGroupedItems(...);
+        return match ($type) {
+            FeedbackType::GrammarNote => $this->compareNotes(...),
+            FeedbackType::Mistake => $this->compareMistakes(...),
+            default => $this->compareGroupedItems(...),
+        };
     }
 
     /**
@@ -476,6 +688,27 @@ final class TableCollection
      */
     private function compareGroupedItems(array $left, array $right): int
     {
+        $byTime = $right['latest_at']->getTimestamp() <=> $left['latest_at']->getTimestamp();
+
+        return $byTime !== 0 ? $byTime : $left['key'] <=> $right['key'];
+    }
+
+    /**
+     * Mistakes, most often seen first. Two mistakes seen as often are ordered
+     * by their latest session, newest first, and fall back to their normalised
+     * key, so the order is stable across pages.
+     *
+     * @param  MistakeItem  $left
+     * @param  MistakeItem  $right
+     */
+    private function compareMistakes(array $left, array $right): int
+    {
+        $bySeen = $right['seen_count'] <=> $left['seen_count'];
+
+        if ($bySeen !== 0) {
+            return $bySeen;
+        }
+
         $byTime = $right['latest_at']->getTimestamp() <=> $left['latest_at']->getTimestamp();
 
         return $byTime !== 0 ? $byTime : $left['key'] <=> $right['key'];
@@ -508,14 +741,26 @@ final class TableCollection
 
     /**
      * Whether an item comes after the cursor's item in the same order.
+     * Mistakes are ordered by how often they were seen, so the cursor names
+     * the last item's seen count, its latest session and its key.
      *
-     * @param  GroupItem|NoteItem  $item
+     * @param  GroupItem|NoteItem|MistakeItem  $item
      */
     private function isAfter(
         array $item,
         CollectionCursor $cursor,
         FeedbackType $type,
     ): bool {
+        if ($type === FeedbackType::Mistake
+            && array_key_exists('seen_count', $item)) {
+            $itemSeen = $item['seen_count'];
+            $cursorSeen = $cursor->position ?? 0;
+
+            if ($itemSeen !== $cursorSeen) {
+                return $itemSeen < $cursorSeen;
+            }
+        }
+
         $itemTime = $item['latest_at']->getTimestamp();
         $cursorTime = $cursor->latestAt->getTimestamp();
 
@@ -536,16 +781,27 @@ final class TableCollection
     }
 
     /**
-     * The cursor that names one item, so the next page starts after it.
+     * The cursor that names one item, so the next page starts after it. The
+     * mistakes carry how often they were seen in the cursor's position slot,
+     * since their order names the seen count first.
      *
-     * @param  GroupItem|NoteItem  $item
+     * @param  GroupItem|NoteItem|MistakeItem  $item
      */
-    private function cursorFor(array $item): CollectionCursor
-    {
+    private function cursorFor(
+        array $item,
+        FeedbackType $type,
+    ): CollectionCursor {
+        $position = $type === FeedbackType::GrammarNote
+            ? $this->noteOrder($item)
+            : ($type === FeedbackType::Mistake
+                && array_key_exists('seen_count', $item)
+                ? $item['seen_count']
+                : null);
+
         return new CollectionCursor(
             $item['key'],
             $item['latest_at'],
-            isset($item['question_position']) ? $this->noteOrder($item) : null,
+            $position,
         );
     }
 
@@ -556,7 +812,7 @@ final class TableCollection
      * that are not notes simply have no place numbers and count as zero.
      * The row numbers stay below `NOTE_ORDER_STEP`, so no two places collide.
      *
-     * @param  GroupItem|NoteItem  $item
+     * @param  GroupItem|NoteItem|MistakeItem  $item
      */
     private function noteOrder(array $item): int
     {

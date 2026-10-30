@@ -47,6 +47,13 @@ class LibrarySeeder extends Seeder
      */
     private const int TARGET_GRAMMAR_NOTES = 3000;
 
+    /**
+     * Enough mistakes to practice My mistakes by hand: several thousand
+     * grouped pairs, with the same mistake seen one, two, three and many
+     * times mixed through the tab.
+     */
+    private const int TARGET_MISTAKES = 5000;
+
     /** One showcase session: eight questions with twelve rows each. */
     private const int SHOWCASE_QUESTIONS = 8;
 
@@ -244,7 +251,59 @@ class LibrarySeeder extends Seeder
             'correction' => 'It depends on the weather.',
             'reason' => '“Depend” takes “on”.',
         ],
+        [
+            'said' => 'Ayer I went al mercado.',
+            'correction' => 'Yesterday I went to the market.',
+            'reason' => 'Say “yesterday” and “to the market” in English.',
+        ],
+        [
+            'said' => 'The food was muy delicious.',
+            'correction' => 'The food was very delicious.',
+            'reason' => 'English uses “very”, not “muy”.',
+        ],
+        [
+            'said' => 'J’adore to cook with my friend.',
+            'correction' => 'I love to cook with my friend.',
+            'reason' => 'Say the sentence in one language at a time.',
+        ],
     ];
+
+    /**
+     * One mistake written four ways, so mistake grouping, counting and the
+     * needs-attention rule can all be tried in the same mistakes box: the
+     * same pair in different capitals and spacing, the same words without a
+     * reason, and the same words with no correction at all.
+     *
+     * @var list<array{said: string, correction: string, reason: string}>
+     */
+    private const array SHOWCASE_MISTAKE_VARIANTS = [
+        [
+            'said' => 'I go to the shop yesterday.',
+            'correction' => 'I went to the shop yesterday.',
+            'reason' => 'Use the past tense for a finished action.',
+        ],
+        [
+            'said' => 'I GO  TO THE SHOP yesterday.',
+            'correction' => 'I went to the  shop yesterday.',
+            'reason' => 'The same rule again: past tense for a finished action.',
+        ],
+        [
+            'said' => '  i go to the shop yesterday  ',
+            'correction' => 'I went to the shop yesterday.',
+            'reason' => '',
+        ],
+        [
+            'said' => 'I go to the shop yesterday.',
+            'correction' => '',
+            'reason' => '',
+        ],
+    ];
+
+    /** A reason longer than the list can show without wrapping over lines. */
+    private const string LONG_REASON = 'The past simple is for actions that started and finished at a known time in the past — such as yesterday, last week or in 2019 — while the present perfect links the action to now, so it is the better choice when the exact moment does not matter or has not been said yet.';
+
+    /** A mistake long enough to be shortened in the list and full when opened. */
+    private const string LONG_SAID = 'I went to the market near my flat yesterday morning because I wanted to buy some fresh vegetables for the soup I was planning to cook for my family that evening while my sister visited us after her long trip.';
 
     /** @var list<array{word: string, meaning: string, example: string}> */
     private const array VOCABULARY = [
@@ -414,6 +473,214 @@ class LibrarySeeder extends Seeder
         $this->seedVocabularyShowcase($topics);
         $this->seedPhrasesShowcase($topics);
         $this->seedGrammarShowcase($topics);
+        $this->seedMistakesShowcase($topics);
+    }
+
+    /**
+     * Tops the My mistakes tab up to several thousand rows: the same pair of
+     * what was said and the correction written several ways, the same mistake
+     * with different reasons, the same correction on two different mistakes,
+     * a repeated row in one box, rows with no correction, lines that could
+     * not be split, very long texts, letters from outside English, and a
+     * blank row here and there that must never be gathered. The target is
+     * counted from the database, so a later run continues where the last one
+     * stopped.
+     *
+     * @param  Collection<int, Topic>  $topics
+     */
+    private function seedMistakesShowcase(Collection $topics): void
+    {
+        $this->seedShowcaseRows(
+            $topics,
+            FeedbackType::Mistake,
+            self::TARGET_MISTAKES,
+            function (PracticeQuestion $question, int $position, int $row, int $index): void {
+                $this->createShowcaseMistakeRow($question, $position, $row, $index);
+            },
+        );
+    }
+
+    /**
+     * Adds mistake rows to one showcase question.
+     */
+    private function createShowcaseMistakeRow(
+        PracticeQuestion $question,
+        int $position,
+        int $row,
+        int $index,
+    ): void {
+        $mistake = $this->showcaseMistake($index, $position, $row);
+
+        $this->createMistakeEntry($question, $row, $index, $mistake);
+
+        // Two copies of one pair in the same box: the page counts them once,
+        // as one appearance in that question.
+        if ($mistake['repeated']) {
+            $this->createMistakeEntry($question, $row, 9000 + $index, [
+                ...$mistake,
+                'said' => ' '.$mistake['said'].' ',
+            ]);
+        }
+    }
+
+    /**
+     * One stored mistake row, as the editor would save it: a bold correction
+     * beside its plain words.
+     *
+     * @param  array{said: string, correction: string, correction_html: string, reason: string, repeated: bool}  $mistake
+     */
+    private function createMistakeEntry(
+        PracticeQuestion $question,
+        int $row,
+        int $index,
+        array $mistake,
+    ): void {
+        PracticeFeedbackEntry::factory()->for($question)->create([
+            'type' => FeedbackType::Mistake,
+            'position' => $row,
+            'client_id' => sprintf('mistake-showcase-%05d', $index),
+            'content_text' => $mistake['said'],
+            'correction_text' => $mistake['correction'],
+            'correction_html' => $mistake['correction_html'],
+            'reason' => $mistake['reason'],
+            'is_split' => true,
+        ]);
+    }
+
+    /**
+     * The mistake for one showcase row: a four-way variant in the first box,
+     * a curated common mistake now and then, and a unique sentence-sized
+     * mistake for the rest so the tab really has thousands of groups.
+     *
+     * @return array{said: string, correction: string, correction_html: string, reason: string, repeated: bool}
+     */
+    private function showcaseMistake(int $index, int $position, int $row): array
+    {
+        if ($position === 1 && $row < count(self::SHOWCASE_MISTAKE_VARIANTS)) {
+            $variant = self::SHOWCASE_MISTAKE_VARIANTS[$row];
+
+            return [
+                ...$variant,
+                'correction_html' => $this->boldCorrection($variant['correction']),
+                'repeated' => false,
+            ];
+        }
+
+        // A blank row here and there proves the tab leaves it out: neither
+        // column holds words, so the row never becomes a group.
+        if ($index % 41 === 0) {
+            return [
+                'said' => '   ',
+                'correction' => '',
+                'correction_html' => '',
+                'reason' => '',
+                'repeated' => false,
+            ];
+        }
+
+        // A line with more than one separator could not be split: the whole
+        // line sits in the what-I-said column with no correction.
+        if ($index % 11 === 0) {
+            return [
+                'said' => sprintf(
+                    '%s, then %s, and finally %s.',
+                    rtrim(fake()->sentence(2, false), '.'),
+                    rtrim(fake()->sentence(2, false), '.'),
+                    rtrim(fake()->sentence(2, false), '.'),
+                ),
+                'correction' => '',
+                'correction_html' => '',
+                'reason' => '',
+                'repeated' => false,
+            ];
+        }
+
+        // The same correction on two different mistakes: two groups, because
+        // the pair is what identifies a mistake.
+        if ($index % 19 === 0) {
+            return [
+                'said' => ucfirst(rtrim(fake()->sentence(6, false), '.')).'.',
+                'correction' => 'I went to the shop yesterday.',
+                'correction_html' => '<strong>I went</strong> to the shop yesterday.',
+                'reason' => '',
+                'repeated' => false,
+            ];
+        }
+
+        // A mistake with a line long enough to be shortened in the list.
+        if ($index % 13 === 0) {
+            return [
+                'said' => self::LONG_SAID,
+                'correction' => self::LONG_REASON,
+                'correction_html' => '<p>'.e(self::LONG_REASON).'</p>',
+                'reason' => 'Keep the two tenses apart.',
+                'repeated' => false,
+            ];
+        }
+
+        // A repeated row in the same box, with the same correction again.
+        if ($index % 15 === 0) {
+            $entry = self::MISTAKES[$index % count(self::MISTAKES)];
+
+            return [
+                'said' => $entry['said'],
+                'correction' => $entry['correction'],
+                'correction_html' => $this->boldCorrection($entry['correction']),
+                'reason' => $entry['reason'],
+                'repeated' => true,
+            ];
+        }
+
+        if ($index % 6 === 0) {
+            $entry = self::MISTAKES[$index % count(self::MISTAKES)];
+            $said = $entry['said'];
+            $correction = $entry['correction'];
+
+            // The same words written with different capitals or spacing are
+            // still the same mistake.
+            if ($index % 4 === 0) {
+                $said = ' '.$said;
+            }
+
+            if ($index % 9 === 0) {
+                $said = mb_strtoupper($said);
+            }
+
+            return [
+                'said' => $said,
+                'correction' => $correction,
+                'correction_html' => $this->boldCorrection($correction),
+                'reason' => $entry['reason'],
+                'repeated' => false,
+            ];
+        }
+
+        // A unique mistake for the rest, so most groups are seen exactly
+        // once, the way a real notebook reads.
+        $said = ucfirst(rtrim(fake()->sentence(8, false), '.')).'.';
+        $correction = ucfirst(rtrim(fake()->sentence(8, false), '.')).'.';
+
+        // Now and then the reason is left out, and now and then it is one the
+        // learner wrote differently the time before.
+        $reason = $index % 7 === 0
+            ? ''
+            : ucfirst(rtrim(fake()->sentence(5, false), '.')).'.';
+
+        return [
+            'said' => $said,
+            'correction' => $correction,
+            'correction_html' => $this->boldCorrection($correction),
+            'reason' => $reason,
+            'repeated' => false,
+        ];
+    }
+
+    /** The correction as the editor saves it: the fixed words in bold. */
+    private function boldCorrection(string $correction): string
+    {
+        return $correction === ''
+            ? ''
+            : '<strong>'.e($correction).'</strong>';
     }
 
     /**

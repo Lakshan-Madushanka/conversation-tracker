@@ -86,7 +86,7 @@ export const savePracticeSession: AutoSaveFunction = async (
 
         return {
             outcome: 'saved',
-            session: body.session,
+            saved: body.session,
             savedAt: body.saved_at,
         };
     }
@@ -110,7 +110,7 @@ export const savePracticeSession: AutoSaveFunction = async (
             session: PracticeSessionData;
         };
 
-        return { outcome: 'conflict', session: body.session };
+        return { outcome: 'conflict', saved: body.session };
     }
 
     if (response.status === 423) {

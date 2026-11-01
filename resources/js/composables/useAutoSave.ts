@@ -38,48 +38,80 @@ export interface AutoSaveSnapshot {
     questions: PracticeQuestionForm[];
 }
 
-/** One save request, built from a snapshot plus the save markers. */
-export interface AutoSaveRequest extends AutoSaveSnapshot {
-    sessionId: number | null;
-    version: number | null;
-    /** Stable id for this editor, so a retried first save cannot create twice. */
-    clientKey: string;
-    /** Changes for every distinct save; retries of one save reuse it. */
-    saveKey: string;
+/**
+ * What identifies one saveable thing on the server: the row it was last saved
+ * as, and the version the screen read. A conflict is detected by sending the
+ * `version` back and comparing it with what the server has now.
+ */
+export interface AutoSaveMarker {
+    id: number;
+    version: number;
 }
 
-/** The outcome of a single save attempt. */
-export type AutoSaveOutcome =
-    | { outcome: 'saved'; session: PracticeSessionData; savedAt: string }
+/**
+ * One save request, built from a snapshot plus the save markers. The session
+ * editor is the original shape; a note's save reuses the markers and adds
+ * nothing the server already knows from the save function itself.
+ */
+export type AutoSaveRequest<TSnapshot extends object = AutoSaveSnapshot> =
+    TSnapshot & {
+        /** The row the thing was last saved as; null before a first save. */
+        sessionId: number | null;
+        version: number | null;
+        /** Stable id for this editor, so a retried first save cannot create twice. */
+        clientKey: string;
+        /** Changes for every distinct save; retries of one save reuse it. */
+        saveKey: string;
+    };
+
+/**
+ * The outcome of a single save attempt. What the server returns is shaped as
+ * the marker of the thing as it now sits on the server, so the screen can
+ * adopt the fresh values whatever it was saving.
+ */
+export type AutoSaveOutcome<
+    TMarker extends AutoSaveMarker = PracticeSessionData,
+> =
+    | { outcome: 'saved'; saved: TMarker; savedAt: string }
     | { outcome: 'invalid'; errors: Record<string, string> }
-    | { outcome: 'conflict'; session: PracticeSessionData }
+    | { outcome: 'conflict'; saved: TMarker }
     | { outcome: 'archived'; message: string }
     | { outcome: 'deleted' }
     | { outcome: 'failed' };
 
-/** Performs one save. Injected so the logic can be tested without a network. */
-export type AutoSaveFunction = (
-    request: AutoSaveRequest,
+/**
+ * Performs one save. Injected so the logic can be tested without a network,
+ * and so a very different save — personal notes on a collection item — can
+ * reuse the same saving rules.
+ */
+export type AutoSaveFunction<
+    TSnapshot extends object = AutoSaveSnapshot,
+    TMarker extends AutoSaveMarker = PracticeSessionData,
+> = (
+    request: AutoSaveRequest<TSnapshot>,
     options?: { keepalive?: boolean },
-) => Promise<AutoSaveOutcome>;
+) => Promise<AutoSaveOutcome<TMarker>>;
 
-export interface UseAutoSaveOptions {
+export interface UseAutoSaveOptions<
+    TSnapshot extends object = AutoSaveSnapshot,
+    TMarker extends AutoSaveMarker = PracticeSessionData,
+> {
     /** Reads the current editor content. */
-    snapshot: () => AutoSaveSnapshot;
+    snapshot: () => TSnapshot;
     /** Sends one save to the server. */
-    save: AutoSaveFunction;
-    /** Whether a topic has been chosen. */
+    save: AutoSaveFunction<TSnapshot, TMarker>;
+    /** Whether saving makes sense yet (the session editor wants a topic). */
     hasTopic: () => boolean;
-    /** Whether any question holds content (used before a session exists). */
+    /** Whether there is content worth a first save at all. */
     hasContent: () => boolean;
     sessionId?: number | null;
     version?: number | null;
-    /** The first save created the session; the page can update its address. */
-    onSessionCreated?: (session: PracticeSessionData) => void;
+    /** The first save created the thing; the page can update its address. */
+    onSessionCreated?: (saved: TMarker) => void;
     /** Called after every successful save. */
-    onSaved?: (session: PracticeSessionData) => void;
-    /** Replace the editor with a newer session after a conflict. */
-    onLoadLatest?: (session: PracticeSessionData) => void;
+    onSaved?: (saved: TMarker) => void;
+    /** Replace the thing with a newer version after a conflict. */
+    onLoadLatest?: (saved: TMarker) => void;
     /** How long to wait after the last change before saving. */
     debounceMs?: number;
     /** Waits between automatic retries, capped at the last entry. */
@@ -110,7 +142,10 @@ function createId(): string {
  * session another tab changed. It never marks changes saved while newer edits
  * are still on screen.
  */
-export function useAutoSave(options: UseAutoSaveOptions) {
+export function useAutoSave<
+    TSnapshot extends object = AutoSaveSnapshot,
+    TMarker extends AutoSaveMarker = PracticeSessionData,
+>(options: UseAutoSaveOptions<TSnapshot, TMarker>) {
     const debounceMs = options.debounceMs ?? 1500;
     const retryDelays = options.retryDelaysMs ?? DEFAULT_RETRY_DELAYS;
     const newId = options.newId ?? createId;
@@ -125,7 +160,7 @@ export function useAutoSave(options: UseAutoSaveOptions) {
             : 'saved',
     );
     const errors = ref<Record<string, string>>({});
-    const conflict = ref<PracticeSessionData | null>(null);
+    const conflict = ref<TMarker | null>(null);
     const archived = ref(false);
     const archivedMessage = ref('');
     const deleted = ref(false);
@@ -259,7 +294,7 @@ export function useAutoSave(options: UseAutoSaveOptions) {
 
         const sentRevision = revision.value;
         const saveKey = pendingSaveKey;
-        const request: AutoSaveRequest = {
+        const request: AutoSaveRequest<TSnapshot> = {
             ...options.snapshot(),
             sessionId: sessionId.value,
             version: version.value,
@@ -270,7 +305,7 @@ export function useAutoSave(options: UseAutoSaveOptions) {
         inFlight = true;
         status.value = 'saving';
 
-        let result: AutoSaveOutcome;
+        let result: AutoSaveOutcome<TMarker>;
 
         try {
             result = await options.save(request);
@@ -287,20 +322,23 @@ export function useAutoSave(options: UseAutoSaveOptions) {
         applyResult(result, sentRevision);
     }
 
-    function applyResult(result: AutoSaveOutcome, sentRevision: number): void {
+    function applyResult(
+        result: AutoSaveOutcome<TMarker>,
+        sentRevision: number,
+    ): void {
         if (result.outcome === 'saved') {
             const created = sessionId.value === null;
-            sessionId.value = result.session.id;
-            version.value = result.session.version;
+            sessionId.value = result.saved.id;
+            version.value = result.saved.version;
             lastSavedAt.value = Date.now();
             retryAttempt = 0;
             errors.value = {};
 
             if (created) {
-                options.onSessionCreated?.(result.session);
+                options.onSessionCreated?.(result.saved);
             }
 
-            options.onSaved?.(result.session);
+            options.onSaved?.(result.saved);
 
             if (sentRevision === revision.value) {
                 savedRevision.value = revision.value;
@@ -323,7 +361,7 @@ export function useAutoSave(options: UseAutoSaveOptions) {
         }
 
         if (result.outcome === 'conflict') {
-            conflict.value = result.session;
+            conflict.value = result.saved;
             status.value = 'conflict';
 
             return;
@@ -415,7 +453,7 @@ export function useAutoSave(options: UseAutoSaveOptions) {
             return;
         }
 
-        const request: AutoSaveRequest = {
+        const request: AutoSaveRequest<TSnapshot> = {
             ...options.snapshot(),
             sessionId: sessionId.value,
             version: version.value,

@@ -67,7 +67,7 @@ function setup(options: HarnessOptions = {}) {
         options.responder ??
         ((request: AutoSaveRequest): AutoSaveOutcome => ({
             outcome: 'saved',
-            session: savedSession({
+            saved: savedSession({
                 id: request.sessionId ?? 1,
                 version: (request.version ?? 0) + 1,
                 topic: { id: 1, name: request.topic },
@@ -263,7 +263,7 @@ describe('one save at a time', () => {
 
         test.resolveNext({
             outcome: 'saved',
-            session: savedSession({ id: 5, version: 2 }),
+            saved: savedSession({ id: 5, version: 2 }),
             savedAt: '2026-10-16T00:00:00Z',
         });
         await flush();
@@ -275,7 +275,7 @@ describe('one save at a time', () => {
 
         test.resolveNext({
             outcome: 'saved',
-            session: savedSession({ id: 5, version: 3 }),
+            saved: savedSession({ id: 5, version: 3 }),
             savedAt: '2026-10-16T00:00:00Z',
         });
         await flush();
@@ -297,7 +297,7 @@ describe('failures', () => {
                     ? { outcome: 'failed' }
                     : {
                           outcome: 'saved',
-                          session: savedSession({ id: 1, version: 1 }),
+                          saved: savedSession({ id: 1, version: 1 }),
                           savedAt: '2026-10-16T00:00:00Z',
                       },
         });
@@ -419,7 +419,7 @@ describe('a session archived elsewhere', () => {
                       }
                     : {
                           outcome: 'saved',
-                          session: savedSession({ id: 5, version: 2 }),
+                          saved: savedSession({ id: 5, version: 2 }),
                           savedAt: '2026-10-16T00:00:00Z',
                       },
         });
@@ -511,7 +511,7 @@ describe('conflicts', () => {
             version: 1,
             responder: () => ({
                 outcome: 'conflict',
-                session: savedSession({ id: 5, version: 3 }),
+                saved: savedSession({ id: 5, version: 3 }),
             }),
         });
 
@@ -541,11 +541,11 @@ describe('conflicts', () => {
                 attempt === 1
                     ? {
                           outcome: 'conflict',
-                          session: savedSession({ id: 5, version: 3 }),
+                          saved: savedSession({ id: 5, version: 3 }),
                       }
                     : {
                           outcome: 'saved',
-                          session: savedSession({ id: 5, version: 4 }),
+                          saved: savedSession({ id: 5, version: 4 }),
                           savedAt: '2026-10-16T00:00:00Z',
                       },
         });
@@ -573,7 +573,7 @@ describe('conflicts', () => {
             version: 1,
             responder: () => ({
                 outcome: 'conflict',
-                session: savedSession({
+                saved: savedSession({
                     id: 5,
                     version: 3,
                     topic: { id: 1, name: 'Travel' },

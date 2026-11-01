@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Resources;
 
+use App\Models\CollectionItemMark;
 use App\Queries\TableCollection;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -18,6 +19,11 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * shared rule in `App\Support\RowAttention`, in one place for vocabulary and
  * phrases.
  *
+ * The learner's own star, status and notes belong to the item's identity, so
+ * every appearance of the same word shows the same marks. When the panel is
+ * being filled the notes come as cleaned formatted text with the version
+ * marker the editor saves with.
+ *
  * @phpstan-import-type GroupItem from TableCollection
  */
 final class CollectionItemResource extends JsonResource
@@ -25,8 +31,11 @@ final class CollectionItemResource extends JsonResource
     /**
      * @param  GroupItem  $item
      */
-    public function __construct(array $item)
-    {
+    public function __construct(
+        array $item,
+        public readonly ?CollectionItemMark $mark = null,
+        public readonly bool $withNotes = false,
+    ) {
         parent::__construct($item);
     }
 
@@ -41,6 +50,11 @@ final class CollectionItemResource extends JsonResource
      *     seen_count: int,
      *     needs_attention: bool,
      *     attention_reason: string|null,
+     *     starred: bool,
+     *     status: string|null,
+     *     has_notes: bool,
+     *     notes_html?: string,
+     *     notes_version?: int,
      *     appearances: list<array{
      *         session_id: int,
      *         session_date: string|null,
@@ -69,6 +83,10 @@ final class CollectionItemResource extends JsonResource
             'seen_count' => $item['seen_count'],
             'needs_attention' => $item['attention'] !== null,
             'attention_reason' => $item['attention'],
+            'starred' => $this->mark->starred ?? false,
+            'status' => $this->mark?->status?->value,
+            'has_notes' => $this->mark?->hasNotes() ?? false,
+            ...($this->withNotes ? $this->notes() : []),
             'appearances' => array_map(
                 fn (array $appearance): array => [
                     'session_id' => $appearance['session_id'],
@@ -83,6 +101,17 @@ final class CollectionItemResource extends JsonResource
                 ],
                 $item['appearances'],
             ),
+        ];
+    }
+
+    /**
+     * @return array{notes_html: string, notes_version: int}
+     */
+    private function notes(): array
+    {
+        return [
+            'notes_html' => $this->mark->notes_html ?? '',
+            'notes_version' => $this->mark?->exists ? $this->mark->notes_version : 0,
         ];
     }
 }

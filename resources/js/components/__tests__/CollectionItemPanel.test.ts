@@ -2,7 +2,19 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 import { router } from '@inertiajs/vue3';
 import CollectionItemPanel from '@/components/CollectionItemPanel.vue';
+import { saveItemMark } from '@/lib/collection-marks';
 import type { CollectionAppearance, CollectionItem } from '@/types';
+
+vi.mock('@/lib/collection-marks', async () => {
+    const actual = await vi.importActual<
+        typeof import('@/lib/collection-marks')
+    >('@/lib/collection-marks');
+
+    return {
+        ...actual,
+        saveItemMark: vi.fn(),
+    };
+});
 
 function appearance(
     overrides: Partial<CollectionAppearance> = {},
@@ -32,6 +44,9 @@ function item(overrides: Partial<CollectionItem> = {}): CollectionItem {
         seen_count: 1,
         needs_attention: false,
         attention_reason: null,
+        starred: false,
+        status: null,
+        has_notes: false,
         appearances: [appearance()],
         ...overrides,
     };
@@ -100,6 +115,56 @@ describe('the opened word panel', () => {
 
         expect(text()).toContain('Add the meaning');
         expect(text()).toContain('Needs attention');
+    });
+
+    it('offers the learner marks, with the star named by the word', async () => {
+        await openPanel(item());
+
+        const star = [...document.querySelectorAll('button')].find(
+            (button) =>
+                button.getAttribute('aria-label') === 'Star the word soup',
+        );
+
+        expect(star).not.toBeNull();
+        expect(text()).toContain('Your notes');
+    });
+
+    it('saves the kind of star that was asked for and passes what the server saved upward', async () => {
+        const chosen = item();
+
+        vi.mocked(saveItemMark).mockResolvedValue({
+            starred: true,
+            status: null,
+            has_notes: false,
+            notes_version: 0,
+            notes_html: '',
+        });
+
+        await openPanel(chosen);
+
+        const star = [...document.querySelectorAll('button')].find(
+            (button) =>
+                button.getAttribute('aria-label') === 'Star the word soup',
+        );
+        star?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await flushPromises();
+
+        expect(vi.mocked(saveItemMark)).toHaveBeenCalledWith(
+            'vocabulary',
+            'soup',
+            true,
+            null,
+        );
+        expect(mounted?.emitted('mark-saved')?.[0]).toEqual([
+            chosen,
+            {
+                starred: true,
+                status: null,
+                has_notes: false,
+                notes_version: 0,
+                notes_html: '',
+            },
+        ]);
     });
 
     it('shows every different meaning and example with the session it came from', async () => {

@@ -29,7 +29,9 @@ import {
     seenIn,
     seenLabel,
 } from '@/lib/collections';
+import { markKindForTab } from '@/lib/collection-marks';
 import { shortDate } from '@/lib/format';
+import CollectionMarksSection from '@/components/CollectionMarksSection.vue';
 import type {
     CollectionAppearance,
     CollectionItem,
@@ -37,6 +39,7 @@ import type {
     CollectionOpenedItem,
     CollectionRow,
     CollectionTabKey,
+    ItemMarkData,
 } from '@/types';
 
 const props = withDefaults(
@@ -51,7 +54,19 @@ const emit = defineEmits<{
     (event: 'close'): void;
     /** The learner is leaving for a session, so the list should be kept. */
     (event: 'see-session'): void;
+    /** A mark was saved; the list keeps the same truth. */
+    (event: 'mark-saved', item: CollectionOpenedItem, mark: ItemMarkData): void;
 }>();
+
+/** Passes a saved mark up only while an item is really open. */
+function markSaved(
+    item: CollectionOpenedItem | null,
+    mark: ItemMarkData,
+): void {
+    if (item !== null) {
+        emit('mark-saved', item, mark);
+    }
+}
 
 /** A phone gets a sheet from the bottom; a larger screen gets a side panel. */
 const isWide = useMediaQuery('(min-width: 768px)');
@@ -271,6 +286,23 @@ function seeOriginal(event: MouseEvent): void {
                             />
                         </Link>
                     </section>
+
+                    <CollectionMarksSection
+                        :key="noteItem.key"
+                        :kind="markKindForTab(props.tab)"
+                        :item-key="noteItem.key"
+                        :name="
+                            noteItem.preview === ''
+                                ? noteItem.key
+                                : noteItem.preview
+                        "
+                        unit="note"
+                        :starred="noteItem.starred"
+                        :status="noteItem.status"
+                        :notes-html="noteItem.notes_html ?? ''"
+                        :notes-version="noteItem.notes_version ?? 0"
+                        @mark-saved="(mark) => markSaved(noteItem, mark)"
+                    />
                 </div>
 
                 <div v-else-if="wordItem !== null" class="space-y-5 px-4 pb-6">
@@ -470,6 +502,19 @@ function seeOriginal(event: MouseEvent): void {
                             </li>
                         </ul>
                     </section>
+
+                    <CollectionMarksSection
+                        :key="wordItem.key"
+                        :kind="markKindForTab(props.tab)"
+                        :item-key="wordItem.key"
+                        :name="wordItem.title"
+                        :unit="config.unit"
+                        :starred="wordItem.starred"
+                        :status="wordItem.status"
+                        :notes-html="wordItem.notes_html ?? ''"
+                        :notes-version="wordItem.notes_version ?? 0"
+                        @mark-saved="(mark) => markSaved(wordItem, mark)"
+                    />
                 </div>
             </ScrollArea>
         </SheetContent>

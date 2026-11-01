@@ -20,12 +20,15 @@ import {
     mistakeSeenIn,
     seenLabel,
 } from '@/lib/collections';
+import { markItemName, markKindForTab } from '@/lib/collection-marks';
 import { shortDate } from '@/lib/format';
+import CollectionMarksSection from '@/components/CollectionMarksSection.vue';
 import type {
     CollectionMistakeAppearance,
     CollectionMistakeItem,
     CollectionRow,
     CollectionTabKey,
+    ItemMarkData,
 } from '@/types';
 
 const props = withDefaults(
@@ -40,7 +43,23 @@ const emit = defineEmits<{
     (event: 'close'): void;
     /** The learner is leaving for a session, so the list should be kept. */
     (event: 'see-session'): void;
+    /** A mark was saved; the list keeps the same truth. */
+    (
+        event: 'mark-saved',
+        item: CollectionMistakeItem,
+        mark: ItemMarkData,
+    ): void;
 }>();
+
+/** Passes a saved mark up only while a mistake is really open. */
+function markSaved(
+    item: CollectionMistakeItem | null,
+    mark: ItemMarkData,
+): void {
+    if (item !== null) {
+        emit('mark-saved', item, mark);
+    }
+}
 
 /** A phone gets a sheet from the bottom; a larger screen gets a side panel. */
 const isWide = useMediaQuery('(min-width: 768px)');
@@ -370,6 +389,19 @@ function seeOriginal(event: MouseEvent): void {
                             </li>
                         </ul>
                     </section>
+
+                    <CollectionMarksSection
+                        :key="props.item.key"
+                        kind="mistake"
+                        :item-key="props.item.key"
+                        :name="markItemName(props.item)"
+                        :unit="config.unit"
+                        :starred="props.item.starred"
+                        :status="props.item.status"
+                        :notes-html="props.item.notes_html ?? ''"
+                        :notes-version="props.item.notes_version ?? 0"
+                        @mark-saved="(mark) => markSaved(props.item, mark)"
+                    />
                 </div>
             </ScrollArea>
         </SheetContent>

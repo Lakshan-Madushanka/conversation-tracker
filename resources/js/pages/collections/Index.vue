@@ -12,6 +12,8 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useCollection } from '@/composables/useCollection';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { collectionTabConfig } from '@/lib/collection-tabs';
+import { toast } from 'vue-sonner';
+import { markKindForTab, saveItemMark } from '@/lib/collection-marks';
 import { readCollectionQuery } from '@/lib/collection-query';
 import {
     consumeCollectionRestore,
@@ -22,9 +24,12 @@ import {
 } from '@/lib/collections';
 import { index as collectionsIndex } from '@/routes/collections';
 import type {
+    CollectionItemStatusValue,
     CollectionMistakeItem,
+    CollectionOpenedItem,
     CollectionPage,
     CollectionTabKey,
+    ItemMarkData,
 } from '@/types';
 
 defineOptions({ layout: AppLayout });
@@ -55,6 +60,92 @@ const {
 } = useCollection(props);
 
 const activeConfig = computed(() => collectionTabConfig(tab.value));
+
+/**
+ * A saved mark reaches every copy of the item on screen: the list and the
+ * open panel use the same truth, however the mark was saved.
+ */
+function applyMark(itemKey: string, mark: Partial<ItemMarkData>): void {
+    items.value = items.value.map((listed) =>
+        listed.key === itemKey ? { ...listed, ...mark } : listed,
+    );
+
+    const open = openItem.value;
+
+    if (open !== null && open.key === itemKey) {
+        openItem.value = { ...open, ...mark };
+    }
+}
+
+/** A screen reader hears this even when stillness hides the failure. */
+const markNotice = ref('');
+
+function markFailed(message: string): void {
+    markNotice.value = message;
+    toast.error(message);
+}
+
+/** Saves the state the learner asked for, and puts the old state back when the server refuses. */
+async function changeStar(
+    item: CollectionOpenedItem,
+    starred: boolean,
+): Promise<void> {
+    if (item.starred === starred) {
+        return;
+    }
+
+    applyMark(item.key, { starred });
+
+    try {
+        const mark = await saveItemMark(
+            markKindForTab(tab.value),
+            item.key,
+            starred,
+            item.status,
+        );
+
+        applyMark(item.key, mark);
+    } catch {
+        applyMark(item.key, { starred: item.starred });
+        markFailed(
+            'The star was not saved. Nothing changed; check your connection and try again.',
+        );
+    }
+}
+
+/** Saves the status the learner asked for, and puts the old one back when the server refuses. */
+async function changeStatus(
+    item: CollectionOpenedItem,
+    status: CollectionItemStatusValue | null,
+): Promise<void> {
+    if (item.status === status) {
+        return;
+    }
+
+    const starred = item.starred;
+    applyMark(item.key, { status });
+
+    try {
+        const mark = await saveItemMark(
+            markKindForTab(tab.value),
+            item.key,
+            starred,
+            status,
+        );
+
+        applyMark(item.key, mark);
+    } catch {
+        applyMark(item.key, { status: item.status });
+        markFailed(
+            'The status was not saved. Nothing changed; check your connection and try again.',
+        );
+    }
+}
+
+/** A mark saved from the open panel updates the list as well. */
+function onMarkSaved(item: CollectionOpenedItem, mark: ItemMarkData): void {
+    applyMark(item.key, mark);
+}
 
 /** A short friendly line under the tabs, for the tabs that have one. */
 const intro = computed(() => activeConfig.value.intro);
@@ -187,6 +278,10 @@ onBeforeUnmount(() => {
     <div>
         <Head title="Collections" />
 
+        <p class="sr-only" role="status" aria-live="polite" aria-atomic="true">
+            {{ markNotice }}
+        </p>
+
         <PageHeader
             title="Collections"
             description="Vocabulary, phrases, grammar notes and your common mistakes, gathered from every finished session."
@@ -250,6 +345,8 @@ onBeforeUnmount(() => {
                     :has-finished-sessions="hasFinishedSessions"
                     @open="openItemPanel"
                     @load-more="loadMore"
+                    @star="changeStar"
+                    @status="changeStatus"
                 />
             </div>
         </Tabs>
@@ -260,6 +357,7 @@ onBeforeUnmount(() => {
             tab="mistakes"
             @close="closeItemPanel"
             @see-session="rememberForReturn"
+            @mark-saved="onMarkSaved"
         />
 
         <CollectionItemPanel
@@ -268,6 +366,7 @@ onBeforeUnmount(() => {
             :tab="tab"
             @close="closeItemPanel"
             @see-session="rememberForReturn"
+            @mark-saved="onMarkSaved"
         />
     </div>
 </template>

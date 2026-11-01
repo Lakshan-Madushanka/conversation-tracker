@@ -60,6 +60,9 @@ function item(overrides: Partial<CollectionItem> = {}): CollectionItem {
         seen_count: 1,
         needs_attention: false,
         attention_reason: null,
+        starred: false,
+        status: null,
+        has_notes: false,
         appearances: [appearance()],
         ...overrides,
     };
@@ -78,6 +81,9 @@ function note(overrides: Partial<CollectionNoteItem> = {}): CollectionNoteItem {
         question_position: 1,
         entry_id: 'note-a',
         entry_position: 0,
+        starred: false,
+        status: null,
+        has_notes: false,
         ...overrides,
     };
 }
@@ -114,6 +120,9 @@ function mistake(
         worth_practicing: false,
         needs_attention: false,
         attention_reason: null,
+        starred: false,
+        status: null,
+        has_notes: false,
         appearances: [mistakeAppearance()],
         ...overrides,
     };

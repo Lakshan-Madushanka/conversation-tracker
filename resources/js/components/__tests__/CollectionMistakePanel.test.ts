@@ -39,6 +39,9 @@ function item(
         worth_practicing: false,
         needs_attention: false,
         attention_reason: null,
+        starred: false,
+        status: null,
+        has_notes: false,
         appearances: [appearance()],
         ...overrides,
     };
@@ -109,6 +112,27 @@ describe('the opened mistake panel', () => {
         expect(text()).toContain('Add the correction');
         expect(text()).toContain('Needs attention');
         expect(text()).toContain('Open the original session to fix it');
+    });
+
+    it('offers the marks, with the star named by the mistake', async () => {
+        await openPanel(item());
+
+        const star = [...document.querySelectorAll('button')].find(
+            (button) =>
+                button.getAttribute('aria-label') ===
+                'Star the mistake I am agree',
+        );
+
+        expect(star).not.toBeNull();
+
+        const status = [...document.querySelectorAll('button')].find(
+            (button) =>
+                button.getAttribute('aria-label') ===
+                'Change the status of the mistake I am agree',
+        );
+
+        expect(status).not.toBeNull();
+        expect(text()).toContain('Your notes');
     });
 
     it("keeps the correction's bold and italic, never its markup as words", async () => {

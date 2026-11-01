@@ -39,6 +39,9 @@ function noteItem(
         question_position: 1,
         entry_id: null,
         entry_position: 0,
+        starred: false,
+        status: null,
+        has_notes: false,
         ...overrides,
     };
 }
@@ -54,6 +57,9 @@ function item(overrides: Partial<CollectionItem> = {}): CollectionItem {
         seen_count: 1,
         needs_attention: false,
         attention_reason: null,
+        starred: false,
+        status: null,
+        has_notes: false,
         appearances: [appearance()],
         ...overrides,
     };
@@ -91,6 +97,9 @@ function mistakeItem(
         worth_practicing: false,
         needs_attention: false,
         attention_reason: null,
+        starred: false,
+        status: null,
+        has_notes: false,
         appearances: [mistakeAppearance()],
         ...overrides,
     };
@@ -453,5 +462,132 @@ describe('the mistakes list', () => {
         });
 
         expect(wrapper.text()).toContain('Nothing here yet');
+    });
+});
+
+describe('the marks beside an item', () => {
+    it('names the star with the item and its collection', () => {
+        const wrapper = mount(CollectionList, {
+            props: { items: [item()], total: 1 },
+        });
+
+        const star = wrapper
+            .findAll('button')
+            .find((button) =>
+                button.attributes('aria-label')?.startsWith('Star the'),
+            );
+
+        expect(star?.attributes('aria-label')).toBe('Star the word soup');
+    });
+
+    it('names a set star as one the learner can take off', () => {
+        const wrapper = mount(CollectionList, {
+            props: { items: [item({ starred: true })], total: 1 },
+        });
+
+        const star = wrapper
+            .findAll('button')
+            .find((button) =>
+                button.attributes('aria-label')?.startsWith('Unstar the'),
+            );
+
+        expect(star?.attributes('aria-label')).toBe('Unstar the word soup');
+    });
+
+    it('stars from the list without opening the item', async () => {
+        const chosen = item();
+
+        const wrapper = mount(CollectionList, {
+            props: { items: [chosen], total: 1 },
+        });
+
+        const star = wrapper
+            .findAll('button')
+            .find((button) =>
+                button.attributes('aria-label')?.startsWith('Star the'),
+            );
+
+        await star?.trigger('click');
+
+        expect(wrapper.emitted('star')?.[0]).toEqual([chosen, true]);
+        expect(wrapper.emitted('open')).toBeUndefined();
+    });
+
+    it('shows the chosen status and the note sign when they exist', () => {
+        const wrapper = mount(CollectionList, {
+            props: {
+                items: [
+                    item({
+                        status: 'learned',
+                        has_notes: true,
+                    }),
+                ],
+                total: 1,
+            },
+        });
+
+        expect(wrapper.text()).toContain('Learned');
+        expect(wrapper.text()).toContain('Has notes');
+    });
+
+    it('shows no status while none was chosen', () => {
+        const wrapper = mount(CollectionList, {
+            props: { items: [item()], total: 1 },
+        });
+
+        expect(wrapper.text()).not.toContain('Learned');
+        expect(wrapper.text()).not.toContain('Still difficult');
+    });
+
+    it('names the status switcher with the item', () => {
+        const wrapper = mount(CollectionList, {
+            props: { items: [item()], total: 1 },
+        });
+
+        const switcher = wrapper
+            .findAll('button')
+            .find((button) =>
+                button
+                    .attributes('aria-label')
+                    ?.startsWith('Change the status of the'),
+            );
+
+        expect(switcher?.attributes('aria-label')).toBe(
+            'Change the status of the word soup',
+        );
+    });
+
+    it("names a mistake's marks with the mistake", () => {
+        const wrapper = mount(CollectionList, {
+            props: { items: [mistakeItem()], tab: 'mistakes', total: 1 },
+        });
+
+        const star = wrapper
+            .findAll('button')
+            .find((button) =>
+                button.attributes('aria-label')?.startsWith('Star the'),
+            );
+
+        expect(star?.attributes('aria-label')).toBe(
+            'Star the mistake I am agree',
+        );
+    });
+
+    it("names a note's marks with the note", () => {
+        const wrapper = mount(CollectionList, {
+            props: { items: [noteItem()], tab: 'grammar', total: 1 },
+        });
+
+        const star = wrapper
+            .findAll('button')
+            .find((button) =>
+                button.attributes('aria-label')?.startsWith('Star the'),
+            );
+
+        const starLabel = star?.attributes('aria-label') ?? '';
+
+        expect(starLabel.startsWith('Star the note Use the past tense')).toBe(
+            true,
+        );
     });
 });

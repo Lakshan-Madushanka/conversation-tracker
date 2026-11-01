@@ -4,11 +4,17 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
+use App\Actions\Collections\SaveItemMark;
+use App\Actions\Collections\SaveItemNotes;
+use App\Enums\CollectionItemStatus;
 use App\Enums\FeedbackType;
+use App\Models\CollectionItemMark;
 use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeQuestion;
 use App\Models\PracticeSession;
 use App\Models\Topic;
+use App\Support\MistakeIdentity;
+use App\Support\SearchText;
 use Carbon\CarbonImmutable;
 use Closure;
 use Illuminate\Database\Seeder;
@@ -474,6 +480,164 @@ class LibrarySeeder extends Seeder
         $this->seedPhrasesShowcase($topics);
         $this->seedGrammarShowcase($topics);
         $this->seedMistakesShowcase($topics);
+        $this->seedMarks();
+    }
+
+    /**
+     * Gives a bite-sized corner of each collection the learner's marks: a
+     * set star, a chosen status, stars with notes behind them, notes of
+     * words and lists, and items with nothing at all. Marks are counted from
+     * the database, so a later run adds none again.
+     */
+    private function seedMarks(): void
+    {
+        if (CollectionItemMark::query()->exists()) {
+            return;
+        }
+
+        $this->seedTableMarks(FeedbackType::Vocabulary);
+        $this->seedTableMarks(FeedbackType::Phrase);
+        $this->seedNoteMarks();
+        $this->seedMistakeMarks();
+    }
+
+    /**
+     * Marks the words or phrases of one table box, cycling through the
+     * combinations the page has to show.
+     *
+     * @param  FeedbackType  $kind  the box being marked, Vocabulary or Phrase
+     */
+    private function seedTableMarks(FeedbackType $kind): void
+    {
+        $saveMark = app(SaveItemMark::class);
+        $saveNotes = app(SaveItemNotes::class);
+
+        PracticeFeedbackEntry::query()
+            ->where('type', $kind)
+            ->whereRaw('trim(content_text) <> ? and content_text is not null', [''])
+            ->inRandomOrder()
+            ->limit(40)
+            ->get(['content_text'])
+            ->unique(fn (PracticeFeedbackEntry $entry): string => SearchText::normalize((string) $entry->content_text))
+            ->take(40)
+            ->values()
+            ->each(function (PracticeFeedbackEntry $entry, int $n) use ($saveMark, $saveNotes, $kind): void {
+                $itemKey = SearchText::normalize((string) $entry->content_text);
+                $addNote = function () use ($saveNotes, $kind, $itemKey, $n): void {
+                    $saveNotes->handle(
+                        $kind,
+                        $itemKey,
+                        $n % 10 === 0
+                            ? $this->listNote('Long notes wrap over lines.')
+                            : '<p>Word family: <strong>varieties</strong> and <em>various</em> appear once a page.</p>',
+                        0,
+                    );
+                };
+
+                match ($n % 4) {
+                    // The star is on and the item is learned.
+                    0 => $saveMark->handle($kind, $itemKey, true, CollectionItemStatus::Learned),
+                    // The star is on and the item is still difficult.
+                    1 => $saveMark->handle($kind, $itemKey, true, CollectionItemStatus::StillDifficult),
+                    // A difficult one a learner keeps writing down, with notes.
+                    2 => (function () use ($saveMark, $addNote, $kind, $itemKey): void {
+                        $saveMark->handle($kind, $itemKey, false, CollectionItemStatus::StillDifficult);
+                        $addNote();
+                    })(),
+                    // The rest stay untouched, so most rows on a page are plain.
+                    default => null,
+                };
+            });
+    }
+
+    /**
+     * Marks a sample of the grammar notes. Notes are never merged, so two
+     * identical rules arriving with their own marks stay two separate marks
+     * — the same wording twice keeps its marks apart.
+     */
+    private function seedNoteMarks(): void
+    {
+        $saveMark = app(SaveItemMark::class);
+        $saveNotes = app(SaveItemNotes::class);
+
+        PracticeFeedbackEntry::query()
+            ->where('type', FeedbackType::GrammarNote)
+            ->whereRaw('trim(content_text) <> ? and content_text is not null', [''])
+            ->inRandomOrder()
+            ->limit(60)
+            ->get(['id', 'content_text'])
+            ->each(function (PracticeFeedbackEntry $entry, int $n) use ($saveMark, $saveNotes): void {
+                $itemKey = 'note-'.$entry->id;
+
+                match ($n % 4) {
+                    0 => $saveMark->handle(FeedbackType::GrammarNote, $itemKey, true, CollectionItemStatus::Learned),
+                    1 => $saveMark->handle(FeedbackType::GrammarNote, $itemKey, true, null),
+                    2 => $saveMark->handle(FeedbackType::GrammarNote, $itemKey, false, CollectionItemStatus::StillDifficult),
+                    default => null,
+                };
+
+                if ($n % 2 === 0) {
+                    $saveNotes->handle(
+                        FeedbackType::GrammarNote,
+                        $itemKey,
+                        $n % 6 === 0
+                            ? $this->listNote('Read this again on Friday.')
+                            : '<p>My own reminder: check these <em>before</em> the exam.</p>',
+                        0,
+                    );
+                }
+            });
+    }
+
+    private function seedMistakeMarks(): void
+    {
+        $saveMark = app(SaveItemMark::class);
+        $saveNotes = app(SaveItemNotes::class);
+
+        PracticeFeedbackEntry::query()
+            ->where('type', FeedbackType::Mistake)
+            ->whereRaw('trim(content_text) <> ? and trim(correction_text) <> ? and content_text is not null and correction_text is not null', ['', ''])
+            ->inRandomOrder()
+            ->limit(60)
+            ->get(['content_text', 'correction_text'])
+            ->unique(fn (PracticeFeedbackEntry $entry): string => MistakeIdentity::pairKey(
+                (string) $entry->content_text,
+                (string) $entry->correction_text,
+            ))
+            ->take(60)
+            ->values()
+            ->each(function (PracticeFeedbackEntry $entry, int $n) use ($saveMark, $saveNotes): void {
+                $itemKey = MistakeIdentity::pairKey(
+                    (string) $entry->content_text,
+                    (string) $entry->correction_text,
+                );
+
+                match ($n % 4) {
+                    0 => $saveMark->handle(FeedbackType::Mistake, $itemKey, true, CollectionItemStatus::StillDifficult),
+                    1 => $saveMark->handle(FeedbackType::Mistake, $itemKey, true, null),
+                    2 => $saveMark->handle(FeedbackType::Mistake, $itemKey, false, CollectionItemStatus::Learned),
+                    default => null,
+                };
+
+                if ($n % 3 === 0) {
+                    $saveNotes->handle(
+                        FeedbackType::Mistake,
+                        $itemKey,
+                        '<p>Say it out loud on Monday: <strong>'.e((string) $entry->correction_text).'</strong></p>',
+                        0,
+                    );
+                }
+            });
+    }
+
+    /** One of the long, list-shaped notes the page has to hold. */
+    private function listNote(string $firstLine): string
+    {
+        return '<p>'.e($firstLine).' The word family grows on paper: write the parts down one at a time, check them later, and keep the ones that stay difficult.</p>'
+            .'<ul><li>'.e('The word on its own, spelt the way you meant it.').'</li>'
+            .'<li>'.e('The phrase where it belongs, in a sentence you said.').'</li>'
+            .'<li>'.e('The familiar friend nearby — one term, three words.').'</li>'
+            .'<li>'.e('A last case long enough that the saved note is later than the first page can show.').'</li></ul>';
     }
 
     /**

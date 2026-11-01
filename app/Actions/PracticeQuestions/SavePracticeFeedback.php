@@ -4,12 +4,16 @@ declare(strict_types=1);
 
 namespace App\Actions\PracticeQuestions;
 
+use App\Actions\Collections\MoveMarkAfterEdit;
 use App\Enums\FeedbackType;
 use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeQuestion;
+use App\Models\PracticeSession;
 use App\Support\FeedbackTable;
 use App\Support\ListEntries;
+use App\Support\MistakeIdentity;
 use App\Support\RichText;
+use App\Support\SearchText;
 use Illuminate\Support\Str;
 
 /**
@@ -19,16 +23,27 @@ use Illuminate\Support\Str;
  * grammar note box one row per note, so every entry keeps the id the editor
  * gave it. A retry with the same payload matches those ids and updates the
  * same rows instead of storing them again.
+ *
+ * After an edit to a finished, non-archived session, the typo rule in
+ * `MoveMarkAfterEdit` moves the learner's marks with an entry whose identity
+ * changed, inside the same save. Grammar notes need nothing: their marks
+ * belong to the note itself, however its text is edited.
  */
-final class SavePracticeFeedback
+final readonly class SavePracticeFeedback
 {
+    public function __construct(
+        private MoveMarkAfterEdit $moveMarkAfterEdit,
+    ) {}
+
     /**
      * @param  array<string, mixed>  $feedback
      */
-    public function handle(PracticeQuestion $question, array $feedback): void
+    public function handle(PracticeQuestion $question, PracticeSession $session, array $feedback): void
     {
+        $followsMarks = $session->isFinished() && ! $session->isArchived();
+
         foreach (FeedbackType::ordered() as $type) {
-            $this->saveBox($question, $type, $feedback[$type->value] ?? null);
+            $this->saveBox($question, $type, $feedback[$type->value] ?? null, $followsMarks);
         }
     }
 
@@ -37,12 +52,18 @@ final class SavePracticeFeedback
      *
      * @param  mixed  $submitted  the box as the editor sent it
      */
-    private function saveBox(PracticeQuestion $question, FeedbackType $type, mixed $submitted): void
-    {
+    private function saveBox(
+        PracticeQuestion $question,
+        FeedbackType $type,
+        mixed $submitted,
+        bool $followsMarks,
+    ): void {
         $rows = $question->feedbackEntries()->where('type', $type->value)->get()->all();
         $claimed = [];
         $stored = [];
         $seenIds = [];
+        /** @var list<array{from: string, to: string, entry_id: int}> $marksToMove */
+        $marksToMove = [];
 
         foreach ($this->entriesToStore($type, $submitted) as $entry) {
             // The same id twice in one box is one entry, not two rows.
@@ -55,6 +76,9 @@ final class SavePracticeFeedback
             }
 
             $row = $this->claimRow($question, $type, $rows, $claimed, $entry['client_id']);
+            $move = $followsMarks && $type->isTable() && $row->exists
+                ? $this->identityChange($type, $row, $entry)
+                : null;
 
             $row->position = count($stored);
             $row->content_html = $entry['content_html'];
@@ -67,6 +91,10 @@ final class SavePracticeFeedback
             $row->is_split = $entry['is_split'];
             $row->save();
 
+            if ($move !== null) {
+                $marksToMove[] = ['from' => $move[0], 'to' => $move[1], 'entry_id' => $row->id];
+            }
+
             $claimed[spl_object_id($row)] = true;
             $stored[] = $row;
         }
@@ -76,6 +104,56 @@ final class SavePracticeFeedback
                 $row->delete();
             }
         }
+
+        // Run after the box is in its new shape, so "appears elsewhere" reads
+        // the entries as they are from now on.
+        foreach ($marksToMove as $move) {
+            $this->moveMarkAfterEdit->handle(
+                $type,
+                $move['from'],
+                $move['to'],
+                $move['entry_id'],
+            );
+        }
+    }
+
+    /**
+     * The identity an edited row loses and gains, when they genuinely differ:
+     * the pair for mistakes, the normalised subject for the other table rows.
+     * Anything else — a new row, grammar notes, or a change that only touched
+     * capitals, accents or spacing — moves no marks.
+     *
+     * @param  array<string, mixed>  $entry
+     * @return array{0: string, 1: string}|null
+     */
+    private function identityChange(FeedbackType $type, PracticeFeedbackEntry $row, array $entry): ?array
+    {
+        $from = $this->identityOf($type, (string) $row->getOriginal('content_text'), (string) $row->getOriginal('correction_text'));
+        $to = $this->identityOf($type, (string) $entry['content_text'], (string) $entry['correction_text']);
+
+        if ($from === null || $to === null || $from === $to) {
+            return null;
+        }
+
+        return [$from, $to];
+    }
+
+    /**
+     * The item identity an entry's words make, by the same shared pieces the
+     * collections group with — or null when the words are too empty to name
+     * an item at all.
+     */
+    private function identityOf(FeedbackType $type, string $content, string $correction): ?string
+    {
+        if ($type === FeedbackType::Mistake) {
+            return MistakeIdentity::isBlank($content, $correction)
+                ? null
+                : MistakeIdentity::pairKey($content, $correction);
+        }
+
+        $identity = SearchText::normalize($content);
+
+        return $identity === '' ? null : $identity;
     }
 
     /**

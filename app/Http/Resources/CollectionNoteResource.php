@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Resources;
 
+use App\Models\CollectionItemMark;
 use App\Queries\TableCollection;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -16,6 +17,9 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * again to the formatting the app supports, so the saved text is never put
  * into the page as it was received.
  *
+ * The note's own identity carries the learner's marks, so identical notes
+ * never share a star, status or personal note.
+ *
  * @phpstan-import-type NoteItem from TableCollection
  */
 final class CollectionNoteResource extends JsonResource
@@ -23,8 +27,11 @@ final class CollectionNoteResource extends JsonResource
     /**
      * @param  NoteItem  $item
      */
-    public function __construct(array $item)
-    {
+    public function __construct(
+        array $item,
+        public readonly ?CollectionItemMark $mark = null,
+        public readonly bool $withNotes = false,
+    ) {
         parent::__construct($item);
     }
 
@@ -40,7 +47,12 @@ final class CollectionNoteResource extends JsonResource
      *     topic: string,
      *     question_position: int,
      *     entry_id: string|null,
-     *     entry_position: int
+     *     entry_position: int,
+     *     starred: bool,
+     *     status: string|null,
+     *     has_notes: bool,
+     *     notes_html?: string,
+     *     notes_version?: int
      * }
      */
     public function toArray(Request $request): array
@@ -60,6 +72,21 @@ final class CollectionNoteResource extends JsonResource
             'question_position' => $item['question_position'],
             'entry_id' => $item['entry_id'],
             'entry_position' => $item['entry_position'],
+            'starred' => $this->mark->starred ?? false,
+            'status' => $this->mark?->status?->value,
+            'has_notes' => $this->mark?->hasNotes() ?? false,
+            ...($this->withNotes ? $this->learnerNotes() : []),
+        ];
+    }
+
+    /**
+     * @return array{notes_html: string, notes_version: int}
+     */
+    private function learnerNotes(): array
+    {
+        return [
+            'notes_html' => $this->mark->notes_html ?? '',
+            'notes_version' => $this->mark?->exists ? $this->mark->notes_version : 0,
         ];
     }
 }

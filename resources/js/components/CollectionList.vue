@@ -8,6 +8,7 @@ import {
     TriangleAlertIcon,
 } from '@lucide/vue';
 import EmptyState from '@/components/EmptyState.vue';
+import CollectionMarksCluster from '@/components/CollectionMarksCluster.vue';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -22,6 +23,7 @@ import {
     TableRow,
 } from '@/components/ui/table';
 import { collectionTabConfig } from '@/lib/collection-tabs';
+import { markItemName } from '@/lib/collection-marks';
 import {
     isCollectionItem,
     isCollectionMistakeItem,
@@ -32,6 +34,7 @@ import { shortDate } from '@/lib/format';
 import { create as sessionsCreate } from '@/routes/sessions';
 import type {
     CollectionItem,
+    CollectionItemStatusValue,
     CollectionMistakeItem,
     CollectionNoteItem,
     CollectionOpenedItem,
@@ -64,6 +67,12 @@ const props = withDefaults(
 const emit = defineEmits<{
     (event: 'open', item: CollectionOpenedItem): void;
     (event: 'load-more'): void;
+    (event: 'star', item: CollectionOpenedItem, starred: boolean): void;
+    (
+        event: 'status',
+        item: CollectionOpenedItem,
+        status: CollectionItemStatusValue | null,
+    ): void;
 }>();
 
 /** How many placeholder rows the list shows while it is busy. */
@@ -116,6 +125,14 @@ const announcement = computed(() => {
 
 function open(item: CollectionOpenedItem): void {
     emit('open', item);
+}
+
+/**
+ * The name a mark's accessible label uses for a note: the preview the
+ * server already cut, never the whole note.
+ */
+function noteMarkName(note: CollectionNoteItem): string {
+    return note.preview === '' ? note.key : note.preview;
 }
 
 /**
@@ -184,9 +201,12 @@ function exampleHtml(item: CollectionItem): string {
                     <Table class="table-fixed">
                         <TableHeader>
                             <TableRow>
-                                <TableHead class="w-[58%]">Note</TableHead>
-                                <TableHead class="w-[24%]">Topic</TableHead>
-                                <TableHead class="w-[18%]">Date</TableHead>
+                                <TableHead class="w-[44%]">Note</TableHead>
+                                <TableHead class="w-[20%]">Topic</TableHead>
+                                <TableHead class="w-[16%]">Date</TableHead>
+                                <TableHead class="w-[20%] text-right">
+                                    <span class="sr-only">Star and status</span>
+                                </TableHead>
                             </TableRow>
                         </TableHeader>
 
@@ -218,6 +238,16 @@ function exampleHtml(item: CollectionItem): string {
                                 >
                                     {{ noteDate(note) }}
                                 </TableCell>
+
+                                <TableCell class="text-right align-top">
+                                    <CollectionMarksCluster
+                                        :item="note"
+                                        :name="noteMarkName(note)"
+                                        :unit="config.unit"
+                                        @star="emit('star', note, $event)"
+                                        @status="emit('status', note, $event)"
+                                    />
+                                </TableCell>
                             </TableRow>
                         </TableBody>
                     </Table>
@@ -231,17 +261,20 @@ function exampleHtml(item: CollectionItem): string {
                     <Table class="table-fixed">
                         <TableHeader>
                             <TableRow>
-                                <TableHead class="w-[30%]">{{
+                                <TableHead class="w-[26%]">{{
                                     config.columns[0]
                                 }}</TableHead>
-                                <TableHead class="w-[30%]">{{
+                                <TableHead class="w-[26%]">{{
                                     config.columns[1]
                                 }}</TableHead>
-                                <TableHead class="w-[24%]">{{
+                                <TableHead class="w-[20%]">{{
                                     config.columns[2]
                                 }}</TableHead>
-                                <TableHead class="w-[16%] text-right">
+                                <TableHead class="w-[12%] text-right">
                                     <span class="sr-only">Times seen</span>
+                                </TableHead>
+                                <TableHead class="w-[16%] text-right">
+                                    <span class="sr-only">Star and status</span>
                                 </TableHead>
                             </TableRow>
                         </TableHeader>
@@ -313,6 +346,18 @@ function exampleHtml(item: CollectionItem): string {
                                         {{ seenLabel(mistake.seen_count) }}
                                     </Badge>
                                 </TableCell>
+
+                                <TableCell class="text-right align-top">
+                                    <CollectionMarksCluster
+                                        :item="mistake"
+                                        :name="markItemName(mistake)"
+                                        :unit="config.unit"
+                                        @star="emit('star', mistake, $event)"
+                                        @status="
+                                            emit('status', mistake, $event)
+                                        "
+                                    />
+                                </TableCell>
                             </TableRow>
                         </TableBody>
                     </Table>
@@ -325,17 +370,20 @@ function exampleHtml(item: CollectionItem): string {
                     <Table class="table-fixed">
                         <TableHeader>
                             <TableRow>
-                                <TableHead class="w-[22%]">{{
+                                <TableHead class="w-[18%]">{{
                                     config.columns[0]
                                 }}</TableHead>
-                                <TableHead class="w-[28%]">{{
+                                <TableHead class="w-[24%]">{{
                                     config.columns[1]
                                 }}</TableHead>
-                                <TableHead class="w-[38%]">{{
+                                <TableHead class="w-[30%]">{{
                                     config.columns[2]
                                 }}</TableHead>
                                 <TableHead class="w-[12%] text-right">
                                     <span class="sr-only">Times seen</span>
+                                </TableHead>
+                                <TableHead class="w-[16%] text-right">
+                                    <span class="sr-only">Star and status</span>
                                 </TableHead>
                             </TableRow>
                         </TableHeader>
@@ -412,6 +460,16 @@ function exampleHtml(item: CollectionItem): string {
                                         {{ seenLabel(item.seen_count) }}
                                     </Badge>
                                 </TableCell>
+
+                                <TableCell class="text-right align-top">
+                                    <CollectionMarksCluster
+                                        :item="item"
+                                        :name="markItemName(item)"
+                                        :unit="config.unit"
+                                        @star="emit('star', item, $event)"
+                                        @status="emit('status', item, $event)"
+                                    />
+                                </TableCell>
                             </TableRow>
                         </TableBody>
                     </Table>
@@ -424,11 +482,11 @@ function exampleHtml(item: CollectionItem): string {
                         <Card
                             v-for="note in noteItems"
                             :key="note.key"
-                            class="py-0"
+                            class="relative py-0"
                         >
                             <button
                                 type="button"
-                                class="w-full p-4 text-left focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+                                class="w-full p-4 pr-28 text-left focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
                                 @click="open(note)"
                             >
                                 <span class="block text-sm break-words">
@@ -440,6 +498,15 @@ function exampleHtml(item: CollectionItem): string {
                                     {{ note.topic }} · {{ noteDate(note) }}
                                 </span>
                             </button>
+                            <div class="absolute top-2 right-2">
+                                <CollectionMarksCluster
+                                    :item="note"
+                                    :name="noteMarkName(note)"
+                                    :unit="config.unit"
+                                    @star="emit('star', note, $event)"
+                                    @status="emit('status', note, $event)"
+                                />
+                            </div>
                         </Card>
                     </template>
 
@@ -449,11 +516,11 @@ function exampleHtml(item: CollectionItem): string {
                         <Card
                             v-for="mistake in mistakeItems"
                             :key="mistake.key"
-                            class="py-0"
+                            class="relative py-0"
                         >
                             <button
                                 type="button"
-                                class="min-h-11 w-full p-4 text-left focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+                                class="min-h-11 w-full p-4 pr-28 text-left focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
                                 :aria-label="`Open mistake: ${mistakeName(mistake)}`"
                                 @click="open(mistake)"
                             >
@@ -526,6 +593,15 @@ function exampleHtml(item: CollectionItem): string {
                                     </Badge>
                                 </span>
                             </button>
+                            <div class="absolute top-2 right-2">
+                                <CollectionMarksCluster
+                                    :item="mistake"
+                                    :name="markItemName(mistake)"
+                                    :unit="config.unit"
+                                    @star="emit('star', mistake, $event)"
+                                    @status="emit('status', mistake, $event)"
+                                />
+                            </div>
                         </Card>
                     </template>
 
@@ -533,11 +609,11 @@ function exampleHtml(item: CollectionItem): string {
                         <Card
                             v-for="item in groupedItems"
                             :key="item.key"
-                            class="py-0"
+                            class="relative py-0"
                         >
                             <button
                                 type="button"
-                                class="w-full p-4 text-left focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+                                class="w-full p-4 pr-28 text-left focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
                                 @click="open(item)"
                             >
                                 <span class="flex flex-wrap items-center gap-2">
@@ -588,6 +664,15 @@ function exampleHtml(item: CollectionItem): string {
                                     “{{ item.example }}”
                                 </span>
                             </button>
+                            <div class="absolute top-2 right-2">
+                                <CollectionMarksCluster
+                                    :item="item"
+                                    :name="markItemName(item)"
+                                    :unit="config.unit"
+                                    @star="emit('star', item, $event)"
+                                    @status="emit('status', item, $event)"
+                                />
+                            </div>
                         </Card>
                     </template>
                 </div>

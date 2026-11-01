@@ -8,6 +8,7 @@ use App\Http\Resources\SessionEditorResource;
 use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeQuestion;
 use App\Models\PracticeSession;
+use App\Models\Topic;
 use App\Models\User;
 
 /**
@@ -379,6 +380,7 @@ test('feedback must be an array when provided', function (): void {
 
 test('feedback examples can be stored', function (): void {
     $question = PracticeQuestion::factory()->create();
+    $session = PracticeSession::factory()->for(Topic::factory()->create())->create();
 
     $action = app(SavePracticeFeedback::class);
 
@@ -399,7 +401,7 @@ test('feedback examples can be stored', function (): void {
         ],
     ];
 
-    $action->handle($question, $feedback);
+    $action->handle($question, $session, $feedback);
 
     $record = PracticeFeedbackEntry::query()->where(['client_id' => $id])->first();
 

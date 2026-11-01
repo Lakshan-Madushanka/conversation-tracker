@@ -35,7 +35,7 @@ final readonly class SavePracticeQuestion
         $question->save();
 
         $feedback = $data['feedback'] ?? [];
-        $this->savePracticeFeedback->handle($question, is_array($feedback) ? $feedback : []);
+        $this->savePracticeFeedback->handle($question, $session, is_array($feedback) ? $feedback : []);
 
         return $question;
     }

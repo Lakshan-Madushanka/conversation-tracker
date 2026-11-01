@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Resources;
 
+use App\Models\CollectionItemMark;
 use App\Queries\TableCollection;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -20,6 +21,9 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * and which calm reason it gives — is decided by the shared rule in
  * `App\Support\RowAttention`.
  *
+ * The learner's star, status and notes belong to the normalised pair, so every
+ * place the mistake was seen shows the same marks.
+ *
  * @phpstan-import-type MistakeItem from TableCollection
  */
 final class CollectionMistakeResource extends JsonResource
@@ -27,8 +31,11 @@ final class CollectionMistakeResource extends JsonResource
     /**
      * @param  MistakeItem  $item
      */
-    public function __construct(array $item)
-    {
+    public function __construct(
+        array $item,
+        public readonly ?CollectionItemMark $mark = null,
+        public readonly bool $withNotes = false,
+    ) {
         parent::__construct($item);
     }
 
@@ -44,6 +51,11 @@ final class CollectionMistakeResource extends JsonResource
      *     worth_practicing: bool,
      *     needs_attention: bool,
      *     attention_reason: string|null,
+     *     starred: bool,
+     *     status: string|null,
+     *     has_notes: bool,
+     *     notes_html?: string,
+     *     notes_version?: int,
      *     appearances: list<array{
      *         session_id: int,
      *         session_date: string|null,
@@ -74,6 +86,10 @@ final class CollectionMistakeResource extends JsonResource
             'worth_practicing' => $item['worth_practicing'],
             'needs_attention' => $item['attention'] !== null,
             'attention_reason' => $item['attention'],
+            'starred' => $this->mark->starred ?? false,
+            'status' => $this->mark?->status?->value,
+            'has_notes' => $this->mark?->hasNotes() ?? false,
+            ...($this->withNotes ? $this->learnerNotes() : []),
             'appearances' => array_map(
                 fn (array $appearance): array => [
                     'session_id' => $appearance['session_id'],
@@ -89,6 +105,17 @@ final class CollectionMistakeResource extends JsonResource
                 ],
                 $item['appearances'],
             ),
+        ];
+    }
+
+    /**
+     * @return array{notes_html: string, notes_version: int}
+     */
+    private function learnerNotes(): array
+    {
+        return [
+            'notes_html' => $this->mark->notes_html ?? '',
+            'notes_version' => $this->mark?->exists ? $this->mark->notes_version : 0,
         ];
     }
 }

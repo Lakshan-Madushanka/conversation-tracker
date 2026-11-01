@@ -27,6 +27,9 @@ function item(overrides: Partial<CollectionItem> = {}): CollectionItem {
         seen_count: 1,
         needs_attention: false,
         attention_reason: null,
+        starred: false,
+        status: null,
+        has_notes: false,
         appearances: [],
         ...overrides,
     };

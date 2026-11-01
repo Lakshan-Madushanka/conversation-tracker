@@ -58,6 +58,13 @@ export interface CollectionItem {
     needs_attention: boolean;
     /** Why it asks for attention, in the wording shared with the app. */
     attention_reason: string | null;
+    /** The learner's own marks on this word. */
+    starred: boolean;
+    status: CollectionItemStatusValue | null;
+    has_notes: boolean;
+    /** The open panel receives these; the list does not need them. */
+    notes_html?: string;
+    notes_version?: number;
     appearances: CollectionAppearance[];
 }
 
@@ -79,6 +86,12 @@ export interface CollectionNoteItem {
     question_position: number;
     entry_id: string | null;
     entry_position: number;
+    /** The note's own marks; its identity is the note itself. */
+    starred: boolean;
+    status: CollectionItemStatusValue | null;
+    has_notes: boolean;
+    notes_html?: string;
+    notes_version?: number;
 }
 
 /**
@@ -123,6 +136,12 @@ export interface CollectionMistakeItem {
     needs_attention: boolean;
     /** Why it asks for attention, in the wording shared with the app. */
     attention_reason: string | null;
+    /** The learner's own marks on this mistake. */
+    starred: boolean;
+    status: CollectionItemStatusValue | null;
+    has_notes: boolean;
+    notes_html?: string;
+    notes_version?: number;
     appearances: CollectionMistakeAppearance[];
 }
 
@@ -153,4 +172,38 @@ export interface CollectionItemsPage {
     next_cursor: string | null;
     has_more: boolean;
     total: number;
+}
+
+/**
+ * The learner's own label for an item. The string values match the backend
+ * enum; there is no stored "none" case, only the request value used to clear.
+ */
+export type CollectionItemStatusValue = 'learned' | 'still_difficult';
+
+/**
+ * The kind of item a mark belongs to, as the backend names the feedback
+ * types that make up Collections.
+ */
+export type CollectionKindValue =
+    | 'vocabulary'
+    | 'phrase'
+    | 'grammar_note'
+    | 'mistake';
+
+/**
+ * The star, status and personal note the learner keeps for one item. These
+ * fields ride along on every item, so one shape serves the list and the
+ * answer the server returns after a change.
+ */
+export interface ItemMarkData {
+    /** Whether the star is on right now. */
+    starred: boolean;
+    /** The chosen label, or null while none is set. */
+    status: CollectionItemStatusValue | null;
+    /** Whether a personal note holds anything. */
+    has_notes: boolean;
+    /** Which version of the note the screen holds, for conflict checks. */
+    notes_version: number;
+    /** The saved note as cleaned formatted text. */
+    notes_html: string;
 }

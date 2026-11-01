@@ -10,6 +10,8 @@ use App\Http\Requests\CollectionRequest;
 use App\Http\Resources\CollectionItemResource;
 use App\Http\Resources\CollectionMistakeResource;
 use App\Http\Resources\CollectionNoteResource;
+use App\Models\CollectionItemMark;
+use App\Queries\CollectionMarks;
 use App\Queries\TableCollection;
 use Illuminate\Http\JsonResponse;
 use Inertia\Inertia;
@@ -17,6 +19,8 @@ use Inertia\Response;
 
 class CollectionController extends Controller
 {
+    public function __construct(private readonly CollectionMarks $marks) {}
+
     /**
      * The four personal collections, gathered live from finished sessions.
      *
@@ -67,7 +71,12 @@ class CollectionController extends Controller
             if ($found === null) {
                 $missing = true;
             } else {
-                $openItem = $this->shapeItem($tab, $found);
+                $openItem = $this->shapeItem(
+                    $tab,
+                    $found,
+                    $this->marks->forItem($tab->feedbackType(), $item),
+                    true,
+                );
             }
         }
 
@@ -103,8 +112,20 @@ class CollectionController extends Controller
      */
     private function items(CollectionTab $tab, array $items): array
     {
+        // Every mark on the page is looked up in one request, so the number
+        // of database queries never grows with the number of items.
+        $pageMarks = $this->marks->forItems(
+            $tab->feedbackType(),
+            array_column($items, 'key'),
+        );
+
         return array_map(
-            fn (array $item): array => $this->shapeItem($tab, $item),
+            fn (array $item): array => $this->shapeItem(
+                $tab,
+                $item,
+                $pageMarks[$item['key']] ?? null,
+                false,
+            ),
             $items,
         );
     }
@@ -113,12 +134,16 @@ class CollectionController extends Controller
      * @param  array<string, mixed>  $item
      * @return array<string, mixed>
      */
-    private function shapeItem(CollectionTab $tab, array $item): array
-    {
+    private function shapeItem(
+        CollectionTab $tab,
+        array $item,
+        ?CollectionItemMark $mark,
+        bool $withNotes,
+    ): array {
         return match ($tab->feedbackType()) {
-            FeedbackType::GrammarNote => CollectionNoteResource::make($item)->resolve(),
-            FeedbackType::Mistake => CollectionMistakeResource::make($item)->resolve(),
-            default => CollectionItemResource::make($item)->resolve(),
+            FeedbackType::GrammarNote => CollectionNoteResource::make($item, $mark, $withNotes)->resolve(),
+            FeedbackType::Mistake => CollectionMistakeResource::make($item, $mark, $withNotes)->resolve(),
+            default => CollectionItemResource::make($item, $mark, $withNotes)->resolve(),
         };
     }
 }

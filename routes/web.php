@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\CollectionController;
+use App\Http\Controllers\CollectionMarkController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\LibraryBulkController;
 use App\Http\Controllers\LibraryController;
@@ -37,6 +38,11 @@ Route::delete('/sessions/{session}', [PracticeSessionController::class, 'destroy
 Route::get('/sessions/{session}', [PracticeSessionController::class, 'show'])->name('sessions.show');
 
 Route::get('/collections', [CollectionController::class, 'index'])->name('collections.index');
+
+// The learner's own marks on collection items: a star and status, and the
+// personal notes with the version marker that catches another tab's change.
+Route::put('/collections/marks', [CollectionMarkController::class, 'store'])->name('collections.marks.store');
+Route::put('/collections/notes', [CollectionMarkController::class, 'storeNotes'])->name('collections.notes.store');
 
 Route::inertia('/review', 'review/Index')->name('review.index');
 Route::inertia('/review/session', 'review/Session')->name('review.session');

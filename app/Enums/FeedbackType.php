@@ -52,6 +52,23 @@ enum FeedbackType: string
     }
 
     /**
+     * The boxes whose entries become collection items. The natural version is
+     * not part of Collections, so it cannot carry marks.
+     *
+     * @return list<self>
+     */
+    public static function collectable(): array
+    {
+        return [self::Vocabulary, self::Phrase, self::GrammarNote, self::Mistake];
+    }
+
+    /** Whether the learner can star, label and annotate this kind of item. */
+    public function isCollectable(): bool
+    {
+        return in_array($this, self::collectable(), true);
+    }
+
+    /**
      * @return list<string>
      */
     public static function values(): array

@@ -6,6 +6,7 @@ namespace App\Http\Requests;
 
 use App\Enums\CollectionTab;
 use App\Queries\TableCollection;
+use App\Support\CollectionFilters;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
@@ -62,5 +63,22 @@ final class CollectionRequest extends FormRequest
         return $perPage >= 1 && $perPage <= 100
             ? $perPage
             : TableCollection::PAGE_SIZE;
+    }
+
+    /**
+     * Everything that searches, narrows or orders the collection on screen.
+     * An unknown value falls back to the tab's quiet default, so a stale
+     * bookmark still opens a useful list.
+     */
+    public function filters(): CollectionFilters
+    {
+        return CollectionFilters::fromArray([
+            'q' => $this->query('q'),
+            'starred' => $this->query('starred'),
+            'status' => $this->query('status'),
+            'attention' => $this->query('attention'),
+            'topics' => $this->query('topics'),
+            'sort' => $this->query('sort'),
+        ], $this->tab()->feedbackType());
     }
 }

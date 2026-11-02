@@ -34,39 +34,53 @@ class CollectionController extends Controller
         TableCollection $collection,
     ): Response|JsonResponse {
         $tab = $request->tab();
+        $type = $tab->feedbackType();
+        $filters = $request->filters();
+        $topicOptions = $collection->topicOptions($type);
+        $filters = $filters->restrictTopics(array_column($topicOptions, 'id'));
+
         $page = $collection->page(
-            type: $tab->feedbackType(),
+            type: $type,
             cursor: $request->cursor(),
             perPage: $request->wantsJson()
                 ? $request->perPage()
                 : TableCollection::PAGE_SIZE,
+            filters: $filters,
         );
 
-        $payload = [
-            'tab' => $tab->value,
-            'tabs' => $this->tabs($collection),
-            'items' => $this->items($tab, $page['items']),
-            'next_cursor' => $page['next_cursor'],
-            'has_more' => $page['has_more'],
-            'total' => $page['total'],
-            'has_finished_sessions' => $collection->hasFinishedSessions(),
-        ];
+        $items = $this->items($tab, $page['items'], $filters->terms());
 
         if ($request->wantsJson()) {
             return response()->json([
-                'items' => $payload['items'],
-                'next_cursor' => $payload['next_cursor'],
-                'has_more' => $payload['has_more'],
-                'total' => $payload['total'],
+                'items' => $items,
+                'next_cursor' => $page['next_cursor'],
+                'has_more' => $page['has_more'],
+                'total' => $page['total'],
             ]);
         }
+
+        $counts = $collection->counts();
+
+        $payload = [
+            'tab' => $tab->value,
+            'tabs' => $this->tabs($counts),
+            'items' => $items,
+            'next_cursor' => $page['next_cursor'],
+            'has_more' => $page['has_more'],
+            'total' => $page['total'],
+            'all_total' => $counts[$tab->value],
+            'attention_count' => $collection->attentionCount($type),
+            'topic_options' => $topicOptions,
+            'filters' => $filters->toArray(),
+            'has_finished_sessions' => $collection->hasFinishedSessions(),
+        ];
 
         $item = $request->item();
         $openItem = null;
         $missing = false;
 
         if ($item !== null) {
-            $found = $collection->find($tab->feedbackType(), $item);
+            $found = $collection->find($type, $item);
 
             if ($found === null) {
                 $missing = true;
@@ -74,8 +88,9 @@ class CollectionController extends Controller
                 $openItem = $this->shapeItem(
                     $tab,
                     $found,
-                    $this->marks->forItem($tab->feedbackType(), $item),
+                    $this->marks->forItem($type, $item),
                     true,
+                    $filters->terms(),
                 );
             }
         }
@@ -90,12 +105,11 @@ class CollectionController extends Controller
     /**
      * The four tabs, with the count of every collection gathered live.
      *
+     * @param  array<string, int>  $counts
      * @return list<array{key: string, label: string, count: int}>
      */
-    private function tabs(TableCollection $collection): array
+    private function tabs(array $counts): array
     {
-        $counts = $collection->counts();
-
         return array_map(
             fn (CollectionTab $candidate): array => [
                 'key' => $candidate->value,
@@ -108,9 +122,10 @@ class CollectionController extends Controller
 
     /**
      * @param  list<array<string, mixed>>  $items
+     * @param  list<string>  $terms
      * @return list<array<string, mixed>>
      */
-    private function items(CollectionTab $tab, array $items): array
+    private function items(CollectionTab $tab, array $items, array $terms = []): array
     {
         // Every mark on the page is looked up in one request, so the number
         // of database queries never grows with the number of items.
@@ -125,6 +140,7 @@ class CollectionController extends Controller
                 $item,
                 $pageMarks[$item['key']] ?? null,
                 false,
+                $terms,
             ),
             $items,
         );
@@ -132,6 +148,7 @@ class CollectionController extends Controller
 
     /**
      * @param  array<string, mixed>  $item
+     * @param  list<string>  $terms
      * @return array<string, mixed>
      */
     private function shapeItem(
@@ -139,11 +156,18 @@ class CollectionController extends Controller
         array $item,
         ?CollectionItemMark $mark,
         bool $withNotes,
+        array $terms = [],
     ): array {
         return match ($tab->feedbackType()) {
-            FeedbackType::GrammarNote => CollectionNoteResource::make($item, $mark, $withNotes)->resolve(),
-            FeedbackType::Mistake => CollectionMistakeResource::make($item, $mark, $withNotes)->resolve(),
-            default => CollectionItemResource::make($item, $mark, $withNotes)->resolve(),
+            FeedbackType::GrammarNote => CollectionNoteResource::make($item, $mark, $withNotes, $terms)->resolve(),
+            FeedbackType::Mistake => CollectionMistakeResource::make($item, $mark, $withNotes, $terms)->resolve(),
+            default => CollectionItemResource::make(
+                $item,
+                $mark,
+                $withNotes,
+                $terms,
+                $tab->feedbackType(),
+            )->resolve(),
         };
     }
 }

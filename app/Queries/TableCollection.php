@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace App\Queries;
 
+use App\Enums\CollectionSort;
+use App\Enums\CollectionStatusFilter;
 use App\Enums\CollectionTab;
 use App\Enums\FeedbackType;
 use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeSession;
 use App\Support\CollectionCursor;
+use App\Support\CollectionFilters;
 use App\Support\EntrySearch;
 use App\Support\MistakeIdentity;
 use App\Support\NotePreview;
@@ -17,7 +20,10 @@ use App\Support\RowAttention;
 use App\Support\SearchText;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Query\Builder as QueryBuilder;
+use Illuminate\Database\Query\JoinClause;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * One collection, gathered live from the study sessions: the vocabulary and
@@ -122,6 +128,10 @@ final class TableCollection
      * names the last item shown, so a row saved while the list is open can
      * never make a later page repeat or skip one.
      *
+     * Grouping, filtering, searching, ordering and the total are worked out by
+     * the database. Only the items of one page are read in full, so the page
+     * stays fast however many rows the collection gathers.
+     *
      * @return array{
      *     items: list<array<string, mixed>>,
      *     next_cursor: string|null,
@@ -133,37 +143,634 @@ final class TableCollection
         FeedbackType $type,
         ?string $cursor = null,
         int $perPage = self::PAGE_SIZE,
+        ?CollectionFilters $filters = null,
     ): array {
-        $items = array_values($this->items($type));
+        $filters ??= CollectionFilters::for($type);
+        $perPage = max(1, $perPage);
 
-        usort($items, $this->comparatorFor($type));
+        return $type === FeedbackType::GrammarNote
+            ? $this->notesPage($type, $filters, $cursor, $perPage)
+            : $this->groupedPage($type, $filters, $cursor, $perPage);
+    }
 
-        $total = count($items);
-        $from = CollectionCursor::decode($cursor);
+    /**
+     * A page of grouped words, phrases or mistakes, read from the database as
+     * one group per item and then filled in from the rows of that page alone.
+     *
+     * @return array{items: list<array<string, mixed>>, next_cursor: string|null, has_more: bool, total: int}
+     */
+    private function groupedPage(
+        FeedbackType $type,
+        CollectionFilters $filters,
+        ?string $cursor,
+        int $perPage,
+    ): array {
+        $grouped = $this->groupedQuery($type, $filters);
+        $page = DB::query()->fromSub($grouped, 'g');
 
-        if ($from instanceof CollectionCursor) {
-            $items = array_values(array_filter(
-                $items,
-                fn (array $item): bool => $this->isAfter($item, $from, $type),
-            ));
-        }
+        $total = (clone $page)->count();
+        $this->applyGroupedCursor($page, $filters->sort(), $this->cursorForSort($cursor, $filters->sort()));
 
-        $hasMore = count($items) > $perPage;
-        $page = array_slice($items, 0, $perPage);
+        $this->orderGrouped($page, $filters->sort());
+
+        $rows = $page->limit($perPage + 1)->get();
+        $hasMore = $rows->count() > $perPage;
+        $shown = $rows->take($perPage)->values();
+
         $nextCursor = null;
 
-        if ($hasMore) {
-            $last = $page[count($page) - 1];
+        if ($hasMore && $shown->isNotEmpty()) {
+            $last = $shown->last();
 
-            $nextCursor = $this->cursorFor($last, $type)->encode();
+            $nextCursor = $this->groupedCursor(
+                (string) $last->group_key,
+                (string) $last->latest_at,
+                (int) $last->seen_count,
+                $last->sort_text === null ? null : (string) $last->sort_text,
+                $filters->sort(),
+            )->encode();
         }
 
+        /** @var list<string> $keys */
+        $keys = $shown
+            ->pluck('group_key')
+            ->map(fn (mixed $key): string => (string) $key)
+            ->all();
+
         return [
-            'items' => $page,
+            'items' => $this->buildForKeys($type, $keys),
             'next_cursor' => $nextCursor,
             'has_more' => $hasMore,
             'total' => $total,
         ];
+    }
+
+    /**
+     * A page of grammar notes. Every note is its own item, so the rows are the
+     * items and only their ordering, filtering and search need the database.
+     *
+     * @return array{items: list<array<string, mixed>>, next_cursor: string|null, has_more: bool, total: int}
+     */
+    private function notesPage(
+        FeedbackType $type,
+        CollectionFilters $filters,
+        ?string $cursor,
+        int $perPage,
+    ): array {
+        $base = $this->notesQuery($filters);
+        $total = (clone $base)->count();
+
+        // The cursor and the order both read the moment and the note's place
+        // after they are worked out, so the rows are paged as a subquery.
+        $notes = DB::query()->fromSub($base, 'n');
+
+        $from = $this->cursorForSort($cursor, $filters->sort());
+        $this->applyNotesCursor($notes, $filters->sort(), $from);
+        $this->orderNotes($notes, $filters->sort());
+
+        $rows = $notes->limit($perPage + 1)->get();
+        $hasMore = $rows->count() > $perPage;
+        $shown = $rows->take($perPage)->values();
+
+        $nextCursor = null;
+
+        if ($hasMore && $shown->isNotEmpty()) {
+            $last = $shown->last();
+
+            $nextCursor = $this->noteCursor(
+                (int) $last->id,
+                (string) $last->latest_at,
+                (int) $last->note_order,
+                $last->sort_text === null ? null : (string) $last->sort_text,
+                $filters->sort(),
+            )->encode();
+        }
+
+        /** @var list<string> $keys */
+        $keys = $shown
+            ->pluck('id')
+            ->map(fn (mixed $id): string => 'note-'.(int) $id)
+            ->all();
+
+        return [
+            'items' => $this->buildForKeys($type, $keys),
+            'next_cursor' => $nextCursor,
+            'has_more' => $hasMore,
+            'total' => $total,
+        ];
+    }
+
+    /**
+     * The grouped rows of one collection, narrowed by every filter and search
+     * term before anything is counted or ordered.
+     */
+    private function groupedQuery(FeedbackType $type, CollectionFilters $filters): QueryBuilder
+    {
+        $query = DB::table('practice_feedback_entries as e')
+            ->join('practice_questions as q', 'q.id', '=', 'e.practice_question_id')
+            ->join('practice_sessions as s', 's.id', '=', 'q.practice_session_id')
+            ->where('e.type', $type->value)
+            ->where('s.status', PracticeSession::STATUS_FINISHED)
+            ->whereNull('s.archived_at');
+
+        $this->applyNonBlank($query, $type);
+        $this->applyMarkJoin($query);
+        $this->applyMarkFilters($query, $filters);
+        $this->applyTopicFilter($query, $type, $filters);
+
+        if ($filters->onlyNeedsAttention()) {
+            $query->whereRaw($this->attentionSql($type));
+        }
+
+        $this->applyGroupSearch($query, $type, $filters);
+
+        $seconds = $this->secondsExpression('s.created_at');
+
+        return $query
+            ->groupBy('e.collection_key')
+            ->select([
+                'e.collection_key as group_key',
+                DB::raw('MAX(s.created_at) as latest_at'),
+                DB::raw($seconds.' as latest_seconds'),
+                DB::raw('COUNT(DISTINCT e.practice_question_id) as seen_count'),
+                DB::raw('MIN(e.sort_text) as sort_text'),
+            ]);
+    }
+
+    /**
+     * The grammar notes, narrowed by every filter and search term.
+     */
+    private function notesQuery(CollectionFilters $filters): QueryBuilder
+    {
+        $query = DB::table('practice_feedback_entries as e')
+            ->join('practice_questions as q', 'q.id', '=', 'e.practice_question_id')
+            ->join('practice_sessions as s', 's.id', '=', 'q.practice_session_id')
+            ->where('e.type', FeedbackType::GrammarNote->value)
+            ->where('s.status', PracticeSession::STATUS_FINISHED)
+            ->whereNull('s.archived_at')
+            ->whereRaw("TRIM(e.content_text) <> ''");
+
+        $this->applyMarkJoin($query);
+        $this->applyMarkFilters($query, $filters);
+
+        $topics = $filters->topics();
+
+        if ($topics !== []) {
+            $query->whereIn('s.topic_id', $topics);
+        }
+
+        $this->applyNoteSearch($query, $filters);
+
+        $seconds = $this->secondsExpression('s.created_at');
+
+        return $query->select([
+            'e.id',
+            'e.collection_key as group_key',
+            'e.sort_text',
+            's.created_at as latest_at',
+            DB::raw($seconds.' as latest_seconds'),
+            DB::raw('(q.position * '.self::NOTE_ORDER_STEP.' + e.position) as note_order'),
+        ]);
+    }
+
+    private function applyNonBlank(QueryBuilder $query, FeedbackType $type): void
+    {
+        if ($type === FeedbackType::Mistake) {
+            $query->where(function (QueryBuilder $instead): void {
+                $instead
+                    ->whereRaw("TRIM(e.content_text) <> ''")
+                    ->orWhereRaw("TRIM(e.correction_text) <> ''");
+            });
+
+            return;
+        }
+
+        $query->whereRaw("TRIM(e.content_text) <> ''");
+    }
+
+    private function applyMarkJoin(QueryBuilder $query): void
+    {
+        $query->leftJoin('collection_item_marks as m', function (JoinClause $join): void {
+            $join->on('m.group_key', '=', 'e.collection_key')
+                ->on('m.kind', '=', 'e.type');
+        });
+    }
+
+    private function applyMarkFilters(QueryBuilder $query, CollectionFilters $filters): void
+    {
+        if ($filters->starred()) {
+            $query->where('m.starred', true);
+        }
+
+        $status = $filters->status();
+
+        if ($status === CollectionStatusFilter::NotMarked) {
+            $query->whereNull('m.status');
+
+            return;
+        }
+
+        if ($status->statusValue() !== null) {
+            $query->where('m.status', $status->statusValue());
+        }
+    }
+
+    /**
+     * Items that appeared in any of the chosen topics. The group keeps every
+     * appearance it has, so its meaning, example and seen count stay whole.
+     */
+    private function applyTopicFilter(
+        QueryBuilder $query,
+        FeedbackType $type,
+        CollectionFilters $filters,
+    ): void {
+        $topics = $filters->topics();
+
+        if ($topics === []) {
+            return;
+        }
+
+        $query->whereExists(function (QueryBuilder $exists) use ($type, $topics): void {
+            $exists->selectRaw('1')
+                ->from('practice_feedback_entries as te')
+                ->join('practice_questions as tq', 'tq.id', '=', 'te.practice_question_id')
+                ->join('practice_sessions as ts', 'ts.id', '=', 'tq.practice_session_id')
+                ->whereColumn('te.collection_key', 'e.collection_key')
+                ->where('te.type', $type->value)
+                ->where('ts.status', PracticeSession::STATUS_FINISHED)
+                ->whereNull('ts.archived_at')
+                ->whereIn('ts.topic_id', $topics);
+        });
+    }
+
+    /**
+     * Why one grouped item asks for attention, by the same rules the item
+     * shape uses: a word with no meaning anywhere, a phrase whose line could
+     * not be split, or a mistake whose newest row still needs a correction.
+     *
+     * @return literal-string
+     */
+    private function attentionSql(FeedbackType $type): string
+    {
+        return match ($type) {
+            FeedbackType::Vocabulary => 'NOT EXISTS (
+                SELECT 1 FROM practice_feedback_entries a
+                INNER JOIN practice_questions as aq ON aq.id = a.practice_question_id
+                INNER JOIN practice_sessions as ss ON ss.id = aq.practice_session_id
+                WHERE a.collection_key = e.collection_key
+                    AND a.type = \'vocabulary\'
+                    AND ss.status = \'finished\'
+                    AND ss.archived_at IS NULL
+                    AND TRIM(a.correction_text) <> \'\'
+            )',
+            FeedbackType::Phrase => 'EXISTS (
+                SELECT 1 FROM practice_feedback_entries a
+                INNER JOIN practice_questions as aq ON aq.id = a.practice_question_id
+                INNER JOIN practice_sessions as ss ON ss.id = aq.practice_session_id
+                WHERE a.collection_key = e.collection_key
+                    AND a.type = \'phrase\'
+                    AND ss.status = \'finished\'
+                    AND ss.archived_at IS NULL
+                    AND a.split_broke = 1
+            )',
+            FeedbackType::Mistake => '(SELECT a.attention_reason
+                FROM practice_feedback_entries a
+                INNER JOIN practice_questions as aq ON aq.id = a.practice_question_id
+                INNER JOIN practice_sessions as ss ON ss.id = aq.practice_session_id
+                WHERE a.collection_key = e.collection_key
+                    AND a.type = \'mistake\'
+                    AND ss.status = \'finished\'
+                    AND ss.archived_at IS NULL
+                ORDER BY ss.created_at DESC, a.created_at DESC, a.id DESC
+                LIMIT 1) IS NOT NULL',
+            default => '1 = 1',
+        };
+    }
+
+    private function applyGroupSearch(
+        QueryBuilder $query,
+        FeedbackType $type,
+        CollectionFilters $filters,
+    ): void {
+        foreach ($filters->terms() as $term) {
+            $pattern = SearchText::likePattern($term);
+
+            $query->where(function (QueryBuilder $match) use ($pattern, $type): void {
+                $match->whereExists(function (QueryBuilder $exists) use ($pattern, $type): void {
+                    $exists->selectRaw('1')
+                        ->from('practice_feedback_entries as se')
+                        ->join('practice_questions as sq', 'sq.id', '=', 'se.practice_question_id')
+                        ->join('practice_sessions as ss', 'ss.id', '=', 'sq.practice_session_id')
+                        ->whereColumn('se.collection_key', 'e.collection_key')
+                        ->where('se.type', $type->value)
+                        ->where('ss.status', PracticeSession::STATUS_FINISHED)
+                        ->whereNull('ss.archived_at')
+                        ->whereRaw("se.search_text LIKE ? ESCAPE '!'", [$pattern]);
+                })->orWhereRaw("m.notes_search_text LIKE ? ESCAPE '!'", [$pattern]);
+            });
+        }
+    }
+
+    private function applyNoteSearch(QueryBuilder $query, CollectionFilters $filters): void
+    {
+        foreach ($filters->terms() as $term) {
+            $pattern = SearchText::likePattern($term);
+
+            $query->where(function (QueryBuilder $match) use ($pattern): void {
+                $match
+                    ->whereRaw("e.search_text LIKE ? ESCAPE '!'", [$pattern])
+                    ->orWhereRaw("m.notes_search_text LIKE ? ESCAPE '!'", [$pattern]);
+            });
+        }
+    }
+
+    /**
+     * A cursor only means something for the order it was made for. Anything
+     * else is quietly ignored and the list starts at the top.
+     */
+    private function cursorForSort(?string $value, CollectionSort $sort): ?CollectionCursor
+    {
+        $cursor = CollectionCursor::decode($value);
+
+        if (! $cursor instanceof CollectionCursor) {
+            return null;
+        }
+
+        return match ($sort) {
+            CollectionSort::Alphabetical => $cursor->sortText === null ? null : $cursor,
+            CollectionSort::MostSeen => $cursor->position === null ? null : $cursor,
+            CollectionSort::Newest => $cursor,
+        };
+    }
+
+    private function applyGroupedCursor(
+        QueryBuilder $query,
+        CollectionSort $sort,
+        ?CollectionCursor $cursor,
+    ): void {
+        if (! $cursor instanceof CollectionCursor) {
+            return;
+        }
+
+        $time = $cursor->latestAt->getTimestamp();
+
+        if ($sort === CollectionSort::Alphabetical) {
+            $query->where(function (QueryBuilder $ordered) use ($cursor): void {
+                $ordered
+                    ->whereRaw("COALESCE(g.sort_text, '') > ?", [$cursor->sortText])
+                    ->orWhere(function (QueryBuilder $tie) use ($cursor): void {
+                        $tie->whereRaw("COALESCE(g.sort_text, '') = ?", [$cursor->sortText])
+                            ->where('g.group_key', '>', $cursor->key);
+                    });
+            });
+
+            return;
+        }
+
+        if ($sort === CollectionSort::MostSeen) {
+            $seen = (int) $cursor->position;
+
+            $query->where(function (QueryBuilder $ordered) use ($seen, $time, $cursor): void {
+                $ordered
+                    ->where('g.seen_count', '<', $seen)
+                    ->orWhere(function (QueryBuilder $tie) use ($seen, $time, $cursor): void {
+                        $tie->where('g.seen_count', '=', $seen)
+                            ->where(function (QueryBuilder $later) use ($time, $cursor): void {
+                                $later
+                                    ->where('g.latest_seconds', '<', $time)
+                                    ->orWhere(function (QueryBuilder $same) use ($time, $cursor): void {
+                                        $same->where('g.latest_seconds', '=', $time)
+                                            ->where('g.group_key', '>', $cursor->key);
+                                    });
+                            });
+                    });
+            });
+
+            return;
+        }
+
+        $query->where(function (QueryBuilder $ordered) use ($time, $cursor): void {
+            $ordered
+                ->where('g.latest_seconds', '<', $time)
+                ->orWhere(function (QueryBuilder $tie) use ($time, $cursor): void {
+                    $tie->where('g.latest_seconds', '=', $time)
+                        ->where('g.group_key', '>', $cursor->key);
+                });
+        });
+    }
+
+    private function orderGrouped(QueryBuilder $query, CollectionSort $sort): void
+    {
+        match ($sort) {
+            CollectionSort::Alphabetical => $query
+                ->orderByRaw("COALESCE(g.sort_text, '') asc")
+                ->orderBy('g.group_key'),
+            CollectionSort::MostSeen => $query
+                ->orderByDesc('g.seen_count')
+                ->orderByDesc('g.latest_seconds')
+                ->orderBy('g.group_key'),
+            CollectionSort::Newest => $query
+                ->orderByDesc('g.latest_seconds')
+                ->orderBy('g.group_key'),
+        };
+    }
+
+    private function groupedCursor(
+        string $key,
+        string $latestAt,
+        int $seenCount,
+        ?string $sortText,
+        CollectionSort $sort,
+    ): CollectionCursor {
+        return new CollectionCursor(
+            $key,
+            CarbonImmutable::parse($latestAt),
+            $sort === CollectionSort::MostSeen ? $seenCount : null,
+            $sort === CollectionSort::Alphabetical
+                ? ($sortText ?? $key)
+                : null,
+        );
+    }
+
+    private function applyNotesCursor(
+        QueryBuilder $query,
+        CollectionSort $sort,
+        ?CollectionCursor $cursor,
+    ): void {
+        if (! $cursor instanceof CollectionCursor) {
+            return;
+        }
+
+        $id = $this->noteId($cursor->key);
+
+        if ($id === null) {
+            return;
+        }
+
+        if ($sort === CollectionSort::Alphabetical) {
+            $query->where(function (QueryBuilder $ordered) use ($cursor, $id): void {
+                $ordered
+                    ->whereRaw("COALESCE(n.sort_text, '') > ?", [$cursor->sortText])
+                    ->orWhere(function (QueryBuilder $tie) use ($cursor, $id): void {
+                        $tie->whereRaw("COALESCE(n.sort_text, '') = ?", [$cursor->sortText])
+                            ->where('n.id', '>', $id);
+                    });
+            });
+
+            return;
+        }
+
+        if ($cursor->position === null) {
+            return;
+        }
+
+        $time = $cursor->latestAt->getTimestamp();
+        $place = $cursor->position;
+
+        $query->where(function (QueryBuilder $ordered) use ($time, $place, $id): void {
+            $ordered
+                ->where('n.latest_seconds', '<', $time)
+                ->orWhere(function (QueryBuilder $tie) use ($time, $place, $id): void {
+                    $tie->where('n.latest_seconds', '=', $time)
+                        ->where(function (QueryBuilder $later) use ($place, $id): void {
+                            $later
+                                ->where('n.note_order', '>', $place)
+                                ->orWhere(function (QueryBuilder $same) use ($place, $id): void {
+                                    $same->where('n.note_order', '=', $place)
+                                        ->where('n.id', '>', $id);
+                                });
+                        });
+                });
+        });
+    }
+
+    private function orderNotes(QueryBuilder $query, CollectionSort $sort): void
+    {
+        if ($sort === CollectionSort::Alphabetical) {
+            $query
+                ->orderByRaw("COALESCE(n.sort_text, '') asc")
+                ->orderBy('n.id');
+
+            return;
+        }
+
+        $query
+            ->orderByDesc('n.latest_seconds')
+            ->orderBy('n.note_order')
+            ->orderBy('n.id');
+    }
+
+    private function noteCursor(
+        int $id,
+        string $latestAt,
+        int $noteOrder,
+        ?string $sortText,
+        CollectionSort $sort,
+    ): CollectionCursor {
+        return new CollectionCursor(
+            'note-'.$id,
+            CarbonImmutable::parse($latestAt),
+            $sort === CollectionSort::Alphabetical ? null : $noteOrder,
+            $sort === CollectionSort::Alphabetical ? ($sortText ?? '') : null,
+        );
+    }
+
+    private function noteId(string $key): ?int
+    {
+        return preg_match('/^note-(\d+)$/', $key, $matches) === 1
+            ? (int) $matches[1]
+            : null;
+    }
+
+    /**
+     * A timestamp cut to whole seconds, the resolution the cursor carries. One
+     * expression keeps SQLite and MySQL agreeing about what "the same moment"
+     * means.
+     *
+     * @param  literal-string  $column
+     * @return literal-string
+     */
+    private function secondsExpression(string $column): string
+    {
+        return DB::connection()->getDriverName() === 'sqlite'
+            ? "CAST(strftime('%s', {$column}) AS INTEGER)"
+            : "CAST(UNIX_TIMESTAMP({$column}) AS SIGNED)";
+    }
+
+    /**
+     * The items named by one page's keys, in the order the page chose. Only
+     * the questions those items appear in are read, so the work stays bounded
+     * by the page rather than by the whole collection.
+     *
+     * @param  list<string>  $keys
+     * @return list<GroupItem|NoteItem|MistakeItem>
+     */
+    private function buildForKeys(FeedbackType $type, array $keys): array
+    {
+        $keys = array_values(array_filter(
+            $keys,
+            fn (string $key): bool => $key !== '',
+        ));
+
+        if ($keys === []) {
+            return [];
+        }
+
+        $matching = $this->entryQuery($type);
+
+        if ($type === FeedbackType::GrammarNote) {
+            $ids = [];
+
+            foreach ($keys as $key) {
+                $id = $this->noteId($key);
+
+                if ($id !== null) {
+                    $ids[] = $id;
+                }
+            }
+
+            if ($ids === []) {
+                return [];
+            }
+
+            $matching->whereIn('id', $ids);
+        } else {
+            $matching->whereIn('collection_key', $keys);
+        }
+
+        /** @var list<int> $questionIds */
+        $questionIds = (clone $matching)
+            ->distinct()
+            ->pluck('practice_question_id')
+            ->map(fn (mixed $id): int => (int) $id)
+            ->all();
+
+        if ($questionIds === []) {
+            return [];
+        }
+
+        $entries = $this->entryQuery($type)
+            ->whereIn('practice_question_id', $questionIds)
+            ->with(['practiceQuestion.practiceSession.topic'])
+            ->get()
+            ->sort($this->compareEntries(...))
+            ->values();
+
+        $items = match ($type) {
+            FeedbackType::GrammarNote => $this->notesFromEntries($entries),
+            FeedbackType::Mistake => $this->mistakesFromEntries($entries),
+            default => $this->groupsFromEntries($type, $entries),
+        };
+
+        $ordered = [];
+
+        foreach ($keys as $key) {
+            if (isset($items[$key])) {
+                $ordered[] = $items[$key];
+            }
+        }
+
+        return $ordered;
     }
 
     /**
@@ -176,7 +783,7 @@ final class TableCollection
      */
     public function find(FeedbackType $type, string $key): ?array
     {
-        return $this->items($type)[$key] ?? null;
+        return $this->buildForKeys($type, [$key])[0] ?? null;
     }
 
     /**
@@ -201,47 +808,69 @@ final class TableCollection
             return $this->entryQuery($type)->count();
         }
 
-        if ($type === FeedbackType::Mistake) {
-            return $this->mistakeCount();
-        }
-
-        /** @var array<string, true> $keys */
-        $keys = [];
-
-        foreach ($this->entryQuery($type)->pluck('content_text') as $subject) {
-            $key = SearchText::normalize((string) $subject);
-
-            if ($key !== '') {
-                $keys[$key] = true;
-            }
-        }
-
-        return count($keys);
+        return (int) $this->entryQuery($type)
+            ->whereNotNull('collection_key')
+            ->distinct()
+            ->count('collection_key');
     }
 
     /**
-     * How many mistakes the tab holds right now: one group per normalised
-     * pair, so a mistake seen in many sessions counts once, and the same
-     * correction for two different mistakes counts twice.
+     * How many items of one collection currently ask for the learner's
+     * attention, by the same rule the list uses. Grammar notes never do, so
+     * their count is always zero.
      */
-    private function mistakeCount(): int
+    public function attentionCount(FeedbackType $type): int
     {
-        /** @var array<string, true> $keys */
-        $keys = [];
-
-        foreach ($this->entryQuery(FeedbackType::Mistake)
-            ->get(['content_text', 'correction_text']) as $row) {
-            $key = MistakeIdentity::pairKey(
-                (string) $row->content_text,
-                (string) $row->correction_text,
-            );
-
-            if (! MistakeIdentity::isBlank((string) $row->content_text, (string) $row->correction_text)) {
-                $keys[$key] = true;
-            }
+        if ($type === FeedbackType::GrammarNote) {
+            return 0;
         }
 
-        return count($keys);
+        return (int) DB::query()
+            ->fromSub(
+                $this->groupedQuery(
+                    $type,
+                    CollectionFilters::for($type)->withOnlyNeedsAttention(),
+                ),
+                'g',
+            )
+            ->count();
+    }
+
+    /**
+     * The topics that currently feed one collection, alphabetically, each with
+     * how many items of that collection appeared in it. A topic that no item
+     * comes from is left out, so the picker never offers a dead end.
+     *
+     * @return list<array{id: int, name: string, count: int}>
+     */
+    public function topicOptions(FeedbackType $type): array
+    {
+        $query = DB::table('practice_feedback_entries as e')
+            ->join('practice_questions as q', 'q.id', '=', 'e.practice_question_id')
+            ->join('practice_sessions as s', 's.id', '=', 'q.practice_session_id')
+            ->join('topics as t', 't.id', '=', 's.topic_id')
+            ->where('e.type', $type->value)
+            ->where('s.status', PracticeSession::STATUS_FINISHED)
+            ->whereNull('s.archived_at')
+            ->whereNotNull('e.collection_key');
+
+        $this->applyNonBlank($query, $type);
+
+        return array_values($query
+            ->select([
+                't.id',
+                't.name',
+                DB::raw('COUNT(DISTINCT e.collection_key) as count'),
+            ])
+            ->groupBy('t.id', 't.name')
+            ->orderBy('t.name')
+            ->get()
+            ->map(fn (object $row): array => [
+                'id' => (int) $row->id,
+                'name' => (string) $row->name,
+                'count' => (int) $row->count,
+            ])
+            ->all());
     }
 
     /**
@@ -260,28 +889,14 @@ final class TableCollection
     }
 
     /**
-     * The items of one collection, keyed by the key the address uses.
-     *
-     * @return array<string, GroupItem|NoteItem|MistakeItem>
-     */
-    private function items(FeedbackType $type): array
-    {
-        return $type === FeedbackType::GrammarNote
-            ? $this->notes()
-            : ($type === FeedbackType::Mistake
-                ? $this->mistakes()
-                : $this->groups($type));
-    }
-
-    /**
      * The rows of one box, newest session first, grouped by their normalised
      * subject. The first row of a group is its newest appearance.
      *
+     * @param  Collection<int, PracticeFeedbackEntry>  $entries
      * @return array<string, GroupItem>
      */
-    private function groups(FeedbackType $type): array
+    private function groupsFromEntries(FeedbackType $type, Collection $entries): array
     {
-        $entries = $this->entries($type);
         $entryPositions = $this->entryPositions($entries);
 
         /**
@@ -418,11 +1033,11 @@ final class TableCollection
      * with identical text never become one: each keeps the identity the
      * editor gave it.
      *
+     * @param  Collection<int, PracticeFeedbackEntry>  $entries
      * @return array<string, NoteItem>
      */
-    private function notes(): array
+    private function notesFromEntries(Collection $entries): array
     {
-        $entries = $this->entries(FeedbackType::GrammarNote);
         $entryPositions = $this->entryPositions($entries);
         $items = [];
 
@@ -471,11 +1086,11 @@ final class TableCollection
      * the pair of what was said and an empty column: its own group, marked
      * "needs attention" by the shared rule, never hidden.
      *
+     * @param  Collection<int, PracticeFeedbackEntry>  $entries
      * @return array<string, MistakeItem>
      */
-    private function mistakes(): array
+    private function mistakesFromEntries(Collection $entries): array
     {
-        $entries = $this->entries(FeedbackType::Mistake);
         $entryPositions = $this->entryPositions($entries);
 
         /**
@@ -593,22 +1208,6 @@ final class TableCollection
     }
 
     /**
-     * The rows of one box, newest session first, with the sessions they came
-     * from. Only finished sessions that are not archived are read, and rows
-     * that hold no words at all are left out.
-     *
-     * @return Collection<int, PracticeFeedbackEntry>
-     */
-    private function entries(FeedbackType $type): Collection
-    {
-        return $this->entryQuery($type)
-            ->with(['practiceQuestion.practiceSession.topic'])
-            ->get()
-            ->sort($this->compareEntries(...))
-            ->values();
-    }
-
-    /**
      * The entries one collection gathers, before they are read: only rows of
      * its box, inside finished sessions that are not archived, that hold some
      * words. A mistake row can be a pair whose what-I-said column alone is
@@ -667,163 +1266,6 @@ final class TableCollection
         }
 
         return $positions;
-    }
-
-    private function comparatorFor(FeedbackType $type): callable
-    {
-        return match ($type) {
-            FeedbackType::GrammarNote => $this->compareNotes(...),
-            FeedbackType::Mistake => $this->compareMistakes(...),
-            default => $this->compareGroupedItems(...),
-        };
-    }
-
-    /**
-     * Grouped items, newest session first. Two items whose latest session
-     * shares a moment fall back to their normalised key, so the order is
-     * stable across pages.
-     *
-     * @param  GroupItem  $left
-     * @param  GroupItem  $right
-     */
-    private function compareGroupedItems(array $left, array $right): int
-    {
-        $byTime = $right['latest_at']->getTimestamp() <=> $left['latest_at']->getTimestamp();
-
-        return $byTime !== 0 ? $byTime : $left['key'] <=> $right['key'];
-    }
-
-    /**
-     * Mistakes, most often seen first. Two mistakes seen as often are ordered
-     * by their latest session, newest first, and fall back to their normalised
-     * key, so the order is stable across pages.
-     *
-     * @param  MistakeItem  $left
-     * @param  MistakeItem  $right
-     */
-    private function compareMistakes(array $left, array $right): int
-    {
-        $bySeen = $right['seen_count'] <=> $left['seen_count'];
-
-        if ($bySeen !== 0) {
-            return $bySeen;
-        }
-
-        $byTime = $right['latest_at']->getTimestamp() <=> $left['latest_at']->getTimestamp();
-
-        return $byTime !== 0 ? $byTime : $left['key'] <=> $right['key'];
-    }
-
-    /**
-     * Notes, newest session first. Ties fall back to where the note sits in
-     * the session — question order, then note order — and finally to the
-     * note's identity, so the order never shuffles between pages.
-     *
-     * @param  NoteItem  $left
-     * @param  NoteItem  $right
-     */
-    private function compareNotes(array $left, array $right): int
-    {
-        $byTime = $right['latest_at']->getTimestamp() <=> $left['latest_at']->getTimestamp();
-
-        if ($byTime !== 0) {
-            return $byTime;
-        }
-
-        $byPlace = $this->noteOrder($left) <=> $this->noteOrder($right);
-
-        if ($byPlace !== 0) {
-            return $byPlace;
-        }
-
-        return $left['key'] <=> $right['key'];
-    }
-
-    /**
-     * Whether an item comes after the cursor's item in the same order.
-     * Mistakes are ordered by how often they were seen, so the cursor names
-     * the last item's seen count, its latest session and its key.
-     *
-     * @param  GroupItem|NoteItem|MistakeItem  $item
-     */
-    private function isAfter(
-        array $item,
-        CollectionCursor $cursor,
-        FeedbackType $type,
-    ): bool {
-        if ($type === FeedbackType::Mistake
-            && array_key_exists('seen_count', $item)) {
-            $itemSeen = $item['seen_count'];
-            $cursorSeen = $cursor->position ?? 0;
-
-            if ($itemSeen !== $cursorSeen) {
-                return $itemSeen < $cursorSeen;
-            }
-        }
-
-        $itemTime = $item['latest_at']->getTimestamp();
-        $cursorTime = $cursor->latestAt->getTimestamp();
-
-        if ($itemTime !== $cursorTime) {
-            return $itemTime < $cursorTime;
-        }
-
-        if ($type === FeedbackType::GrammarNote) {
-            $itemPlace = $this->noteOrder($item);
-            $cursorPlace = $cursor->position ?? -1;
-
-            if ($itemPlace !== $cursorPlace) {
-                return $itemPlace > $cursorPlace;
-            }
-        }
-
-        return $item['key'] > $cursor->key;
-    }
-
-    /**
-     * The cursor that names one item, so the next page starts after it. The
-     * mistakes carry how often they were seen in the cursor's position slot,
-     * since their order names the seen count first.
-     *
-     * @param  GroupItem|NoteItem|MistakeItem  $item
-     */
-    private function cursorFor(
-        array $item,
-        FeedbackType $type,
-    ): CollectionCursor {
-        $position = $type === FeedbackType::GrammarNote
-            ? $this->noteOrder($item)
-            : ($type === FeedbackType::Mistake
-                && array_key_exists('seen_count', $item)
-                ? $item['seen_count']
-                : null);
-
-        return new CollectionCursor(
-            $item['key'],
-            $item['latest_at'],
-            $position,
-        );
-    }
-
-    /**
-     * The place of a note in its session as one comparable number: the
-     * question it was saved under, then the note's row in that box. Just
-     * being handed an item of any shape keeps the cursor code simple: rows
-     * that are not notes simply have no place numbers and count as zero.
-     * The row numbers stay below `NOTE_ORDER_STEP`, so no two places collide.
-     *
-     * @param  GroupItem|NoteItem|MistakeItem  $item
-     */
-    private function noteOrder(array $item): int
-    {
-        $question = array_key_exists('question_position', $item)
-            ? $item['question_position']
-            : 0;
-        $row = array_key_exists('entry_position', $item)
-            ? $item['entry_position']
-            : 0;
-
-        return ((int) $question) * self::NOTE_ORDER_STEP + (int) $row;
     }
 
     /** Rows newest first, so the first row of a group is its latest appearance. */

@@ -6,6 +6,7 @@ namespace App\Http\Resources;
 
 use App\Models\CollectionItemMark;
 use App\Queries\TableCollection;
+use App\Support\CollectionMatch;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -30,11 +31,13 @@ final class CollectionMistakeResource extends JsonResource
 {
     /**
      * @param  MistakeItem  $item
+     * @param  list<string>  $terms
      */
     public function __construct(
         array $item,
         public readonly ?CollectionItemMark $mark = null,
         public readonly bool $withNotes = false,
+        public readonly array $terms = [],
     ) {
         parent::__construct($item);
     }
@@ -56,6 +59,7 @@ final class CollectionMistakeResource extends JsonResource
      *     has_notes: bool,
      *     notes_html?: string,
      *     notes_version?: int,
+     *     match: array{label: string, segments: list<array{text: string, match: bool}>}|null,
      *     appearances: list<array{
      *         session_id: int,
      *         session_date: string|null,
@@ -90,6 +94,7 @@ final class CollectionMistakeResource extends JsonResource
             'status' => $this->mark?->status?->value,
             'has_notes' => $this->mark?->hasNotes() ?? false,
             ...($this->withNotes ? $this->learnerNotes() : []),
+            'match' => CollectionMatch::forMistake($item, $this->mark, $this->terms),
             'appearances' => array_map(
                 fn (array $appearance): array => [
                     'session_id' => $appearance['session_id'],

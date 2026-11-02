@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Http\Resources;
 
+use App\Enums\FeedbackType;
 use App\Models\CollectionItemMark;
 use App\Queries\TableCollection;
+use App\Support\CollectionMatch;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -30,11 +32,14 @@ final class CollectionItemResource extends JsonResource
 {
     /**
      * @param  GroupItem  $item
+     * @param  list<string>  $terms
      */
     public function __construct(
         array $item,
         public readonly ?CollectionItemMark $mark = null,
         public readonly bool $withNotes = false,
+        public readonly array $terms = [],
+        public readonly FeedbackType $type = FeedbackType::Vocabulary,
     ) {
         parent::__construct($item);
     }
@@ -55,6 +60,7 @@ final class CollectionItemResource extends JsonResource
      *     has_notes: bool,
      *     notes_html?: string,
      *     notes_version?: int,
+     *     match: array{label: string, segments: list<array{text: string, match: bool}>}|null,
      *     appearances: list<array{
      *         session_id: int,
      *         session_date: string|null,
@@ -87,6 +93,12 @@ final class CollectionItemResource extends JsonResource
             'status' => $this->mark?->status?->value,
             'has_notes' => $this->mark?->hasNotes() ?? false,
             ...($this->withNotes ? $this->notes() : []),
+            'match' => CollectionMatch::forItem(
+                $item,
+                $this->mark,
+                $this->terms,
+                $this->type,
+            ),
             'appearances' => array_map(
                 fn (array $appearance): array => [
                     'session_id' => $appearance['session_id'],

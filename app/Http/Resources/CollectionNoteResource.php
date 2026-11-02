@@ -6,6 +6,7 @@ namespace App\Http\Resources;
 
 use App\Models\CollectionItemMark;
 use App\Queries\TableCollection;
+use App\Support\CollectionMatch;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -26,11 +27,13 @@ final class CollectionNoteResource extends JsonResource
 {
     /**
      * @param  NoteItem  $item
+     * @param  list<string>  $terms
      */
     public function __construct(
         array $item,
         public readonly ?CollectionItemMark $mark = null,
         public readonly bool $withNotes = false,
+        public readonly array $terms = [],
     ) {
         parent::__construct($item);
     }
@@ -52,7 +55,8 @@ final class CollectionNoteResource extends JsonResource
      *     status: string|null,
      *     has_notes: bool,
      *     notes_html?: string,
-     *     notes_version?: int
+     *     notes_version?: int,
+     *     match: array{label: string, segments: list<array{text: string, match: bool}>}|null
      * }
      */
     public function toArray(Request $request): array
@@ -76,6 +80,7 @@ final class CollectionNoteResource extends JsonResource
             'status' => $this->mark?->status?->value,
             'has_notes' => $this->mark?->hasNotes() ?? false,
             ...($this->withNotes ? $this->learnerNotes() : []),
+            'match' => CollectionMatch::forNote($item, $this->mark, $this->terms),
         ];
     }
 

@@ -18,6 +18,9 @@ Collections fill themselves. The learner does nothing extra after recording a se
 - **Words, phrases, and mistakes** are the same item when their main text matches, ignoring capitalization, accents, extra spaces, and formatting. For vocabulary this is the word, for phrases the phrase, and for mistakes the pair of "what I said" and "the correction". **Grammar notes are never merged.** Every grammar note is its own item, even if two notes have identical text.
 - **Star, status, and personal notes belong to the item**, not to one session, so they stay the same wherever a word, phrase, or mistake appears. For a grammar note, they belong to **that note itself**.
 - **"Learned" and "Still difficult" are the learner's own labels, and only the learner ever sets them.** The app never changes a status automatically. They do not change Progress totals, and Progress totals do not change them.
+- An item's **most recent appearance** is the one in the session with the latest session date, ties broken by the one created last, and the list shows text from it.
+- The learner's marks are stored as **one record per item**, with a plain-text copy of notes for searching. Marks for items that disappear are kept and never deleted automatically.
+- **Collections hide archived sessions, while Progress totals still count them.** The learner is told this wherever archiving happens.
 - Collections need an internet connection (offline use is an open question in the spec).
 
 ### Dependencies
@@ -53,73 +56,83 @@ Collections fill themselves. The learner does nothing extra after recording a se
 ### The Collections page
 
 1. Collections is reachable from the main navigation.
-2. It has four collections, shown as tabs in this order: **Vocabulary**, **Phrases**, **Grammar notes**, and **My mistakes**. Each tab shows how many items it contains.
-3. The learner's last chosen tab is kept in the page address, so a refresh or a bookmark opens the same collection.
+2. It has four collections, shown as tabs in this order: **Vocabulary**, **Phrases**, **Grammar notes**, and **My mistakes**. Each tab shows its **total number of items** (for example "Vocabulary (180)"). The total never changes with search or filters. Vocabulary is the default tab, and the tabs work with the keyboard (arrow keys).
+3. The chosen tab, search, filters, sort, and opened item are kept in the **page address**, so a refresh or a bookmark opens the same view (details under "Finding and focusing" and "Opening an item").
 4. Collections are built **automatically** from the finished sessions that are not archived. The learner never adds items by hand and never has to refresh.
-5. If the learner has no finished sessions yet, a friendly empty state explains that collections fill up automatically once a session is finished, and offers a button to start a session. If one collection is empty, it shows its own friendly message.
+5. There are three different empty situations, each with its own friendly message: **no finished sessions at all** (a page-level message with a button to start a session), **a collection with no items** (its own message, for example "No words yet. Words you save in finished sessions will appear here."), and **no results** for the current search or filters.
 6. Items from unfinished sessions never appear.
 
 ### Items in a collection
 
-7. Each **word, phrase, and mistake** is shown once, even if it appears in several sessions, and is identified by its main text (the word, the phrase, or the pair of what was said and the correction), ignoring capitalization, accents, extra spaces, and formatting. **Grammar notes are never merged**: each note is shown as its own item.
-8. A **vocabulary** item shows the **word**, its **meaning**, and its **example**, if there is one.
-9. A **phrase** item shows the **phrase**, its **meaning or use**, and its **example**, if there are any.
-10. A **grammar note** item shows its formatted text, shown as a short preview in the list and in full when opened. Each note is its own item, and notes with identical text stay separate items.
-11. A **mistake** item shows **what I said**, **the correction**, and **the reason** when there is one.
-12. Every item shows a **star**, a clear **status label** ("Learned" or "Still difficult", shown as text, not by color alone, and nothing shown when no status is set), and, when the item appears in more than one session, how many times it was seen.
-13. Items whose meaning, correction, or similar needed part is missing are still listed, with a clear **"Needs attention"** marker and a short reason (the same wording and look used elsewhere in the app) and a way to open the original session to fix them. They are never hidden.
-14. When the same word or phrase has **different meanings or examples** in different sessions, the list shows the most recent one, and the opened item shows all of them, each with the session it came from.
-15. When an item appears more than once in the **same box of the same session** (a repeated row that was flagged as a duplicate), it counts as one appearance in that session.
+7. Each **word, phrase, and mistake** is shown once, even if it appears in several sessions, and is identified by its main text (the word, the phrase, or the pair of what was said and the correction), ignoring capitalization, accents, extra spaces, and formatting. **Grammar notes are never merged**: each note is shown as its own item, even when two notes have identical text.
+8. An item's **most recent appearance** is the one in the session with the **latest session date**, ties broken by the one created last. The list shows the spelling, meaning, example, and reason from the most recent appearance that has them. The opened item shows all distinct ones.
+9. A **vocabulary** item shows the **word**, its **meaning**, and its **example**. On wide screens the list is a table (Word, Meaning, Example), and on phones a card.
+10. A **phrase** item shows the **phrase**, its **meaning or use**, and its **example**. A phrase **without a meaning** shows a quiet text such as "No meaning added" and is **not** marked "Needs attention", because that is normal for phrases.
+11. A **grammar note** item shows a short **plain-text preview** in the list (about 160 characters, formatting removed, with an ellipsis when cut), the session's **topic**, and the session's **date**. On wide screens the list is a table (Note, Topic, Date). The **full formatted text** is shown when the note is opened.
+12. A **mistake** item shows **what I said**, **the correction** (with its light formatting shown safely), and **the reason**, or quiet text such as "No reason added" when there is none. On wide screens the list is a table (What I said, Correction, Why, Seen).
+13. Every item shows a **star**, a clear **status label** ("Learned" or "Still difficult", as text, and nothing when no status is set), a **"Has notes"** indicator when the learner has written notes, and a **"Seen N times"** label. For words and phrases the label appears **only when the item has more than one appearance**. For mistakes it is **always shown**, with correct singular wording ("Seen 1 time").
+14. The **"Needs attention"** marker always comes from the **one shared rule used across the app**, with the same wording and look as elsewhere. A word is marked when **none** of its appearances has a meaning ("Add the meaning") or when its row had more than one separator ("More than one separator found. Please split it yourself."). A phrase is marked **only** when its row had more than one separator. A mistake is marked when it has no correction ("Add the correction") or its row had more than one separator. Grammar notes are never marked. Marked items are **never hidden** and offer a way to open the original session to fix them.
+15. When the same word or phrase has **different meanings or examples** in different sessions, the list shows the most recent, and the opened item shows all of them, each with the sessions it came from.
+16. An item that appears more than once in the **same box of the same question** (a repeated row flagged as a duplicate) counts as **one appearance**. The same item in two different questions or sessions counts as **two**.
+17. Long meanings, examples, reasons, and notes are shortened in the list and complete when opened.
+18. Lists load **30 items at a time**, with a **Load more** button always available and more loading as the learner reaches the end. The order is stable, so loading more never repeats or skips an item. The default order is **newest first** (the most recent session date in which the item appeared, with consistent tie-breaks, and for grammar notes the note's position in its session), and for **My mistakes** it is **most often seen**.
 
 ### My common mistakes
 
-16. **My mistakes** groups the learner's mistakes by what they said and the correction, so the same mistake across sessions appears as one item.
-17. Each group shows how often it was seen, for example **"Seen 5 times"**, counting each appearance in a finished session that is not archived (a repeated row in the same box counts once).
-18. By default the most frequent mistakes are listed first, with ties ordered by the most recent.
-19. Opening a group shows the correction, the reason, and **each place it appeared**, with the session's topic and date.
-20. Mistakes without a correction are grouped by what was said alone and carry the "Needs attention" marker.
-21. The tone is encouraging. The wording presents frequent mistakes as the best things to practice, never as failures.
+19. **My mistakes** groups the learner's mistakes by the **pair** of what they said and the correction, so the same mistake across sessions appears as one item.
+20. **The same mistake with different reasons is one group**, and the opened item lists every distinct reason with its sessions. **The same correction for different mistakes is separate groups.** A row **without a correction** is grouped by what was said alone, and is a **separate group** from the same text that has a correction elsewhere.
+21. "Seen N times" counts each appearance in a finished session that is not archived, with a repeated row in the same box of the same question counted once.
+22. By default the most frequent mistakes come first, with ties ordered by the most recent session date, then alphabetically by what was said.
+23. Groups seen **three or more times** carry a quiet, friendly **"Worth practicing"** label, shown in the list and in the opened item. It is text, never color alone, and the threshold lives in one clearly named setting.
+24. On phones each mistake is a card with clearly labeled lines ("What I said", "Correction", "Why"), never relying on an arrow alone.
+25. The tone is **encouraging**. The tab introduces itself in friendly words (for example "These are the mistakes you see most often. They're the best things to practice, and spotting them is how you improve."), the empty state is positive, and nothing on the tab calls a mistake a failure.
 
 ### Opening an item
 
-22. Opening an item shows it in full: all its text, all meanings or examples, the reason (for mistakes), the learner's star, status, and personal notes, and the list of sessions where it appeared.
-23. **"See original session"** opens the session's reading page **at that item**, scrolled to it and briefly highlighted, as when opening a search result in the Library. When the item appears in several sessions, each session is listed with its topic and date, and each opens at its own occurrence.
-24. Only sessions that currently feed Collections are listed. Archived sessions and deleted sessions never appear as places an item came from.
-25. Returning from a session brings the learner back to the same collection, with the same sorting, filters, search, scroll position, and opened item.
+26. An item opens in a **panel** (a side panel on larger screens, a bottom panel or full screen on phones). The panel focuses its heading, traps focus, closes with Escape or a close button, and returns focus to the item.
+27. The opened item shows all its text, all distinct meanings, examples, or reasons (each with the sessions where it appeared), the "Seen N times" and "Worth practicing" labels where they apply, the learner's star, status, and personal notes, the "Needs attention" marker when it applies, and a **"Seen in"** list with one line per appearance: the session's **topic and date**, the **question number**, and a **"See original session"** link.
+28. **"See original session"** opens the session's reading page **at that item**, scrolled to it and briefly highlighted, using the same "open at item" behavior as the Library's search results. When the item appears in several sessions, each opens at its own occurrence.
+29. The "Seen in" list shows **only sessions that currently feed Collections**. Archived and deleted sessions never appear as places an item came from.
+30. The opened item is part of the page address. **Opening it adds a history entry**, so the browser's **Back button closes the panel**. If the item no longer exists when the address is opened, the page opens normally with a calm note and no error.
+31. **Returning** from a session brings the learner back to the same tab, search, filters, sort, loaded items, scroll position, and opened item.
 
 ### Star, status, and personal notes
 
-26. The learner can **star** and **unstar** any item, from the list and from the opened item.
-27. The learner can mark an item **Learned** or **Still difficult**, or clear the mark. An item has at most one status. The status can be changed from the list and from the opened item. **Only the learner sets the status.** The app never changes it automatically.
-28. The learner can write **personal notes** on any item, with simple formatting (bold, italic, bulleted and numbered lists) and the same safe handling of pasted text as elsewhere in the app. Notes are saved automatically, with a visible saved indicator, and are never lost.
-29. Star, status, and notes belong to the **item**, so they are the same wherever a word, phrase, or mistake appears. For a **grammar note**, they belong to **that note itself**.
-30. **Fixing a typo in the session keeps the learner's star, status, and notes.** When the text of a word, phrase, or mistake is edited so that it becomes a different item, the learner's marks and notes follow it when it was the only appearance of the old item. When the old item still appears elsewhere, it keeps its marks, and the edited text is treated as its own item. A **grammar note** keeps its star, status, and notes whenever its text is edited, because they belong to the note itself.
-31. If an item disappears (for example every session it appeared in is deleted or archived), the learner's star, status, and notes for it are **kept quietly**, and **return** if the item appears again. For a grammar note in an archived session, they return when the session is restored.
-32. Changing a star or status never changes any session, and never changes any Progress total.
+32. **Star:** every item has a star control in the list and in the opened item. In the list it is a **separate control from the row's open action**, so starring never opens the item and opening never stars it. It has an accessible name that includes the item, and its state is announced. It updates immediately, and the request carries the **desired state** (never "toggle"), so retries and two tabs cannot flip it. If saving fails, it returns to its previous state with a calm message.
+33. **Status:** the learner can mark an item **Learned** or **Still difficult**, or clear it. An item has at most one status. In the list, a small quick menu on each row changes it. In the opened item, a two-option group does, and choosing the active option again clears it. It updates immediately, carries the desired state, and returns to its previous state with a calm message if saving fails. **Only the learner ever sets the status.** The app never changes it automatically.
+34. **Personal notes:** the opened item has a notes area with simple formatting (bold, italic, bulleted and numbered lists, and line breaks) and the same safe handling of pasted text as elsewhere in the app. The server cleans the formatted text itself and stores a plain-text copy for searching. Notes **save automatically** with a visible indicator ("Saving…", "Saved", "Not saved. Retrying…"), retries, and a quiet Retry action. A failed save keeps the text on screen. Leaving the page makes a best effort to save first and warns only when something could not be saved. If the same notes are changed in another tab, a calm message offers **load the latest version** or **keep what I have**, and nothing is lost until the learner chooses. A note with only blank space counts as no note. Notes allow a generous length (about 10,000 characters), and beyond it the learner is told clearly.
+35. Items with notes show a small **"Has notes"** indicator in the list.
+36. **Marks belong to the item.** For words, phrases, and mistakes, star, status, and notes belong to the item's identity, so they are the same wherever it appears. For a **grammar note** they belong to **that note itself**.
+37. **Fixing a typo in a session keeps the item's marks.** The rule applies when an entry in a **finished, non-archived session** is edited so that its identity changes. If the **old item has no other appearance**, the marks **move** to the new identity. If the **old item still appears elsewhere**, it **keeps** its marks and the edited text is its own item with none. If the **new identity already has marks**, the existing marks are **kept**, nothing is overwritten, and the old marks stay quietly stored under the old identity. Changes only to capitalization, accents, spacing, or formatting move nothing. Edits in **unfinished** sessions move nothing. The rule runs in the **same save** as the session edit and is safe to repeat. A **grammar note** keeps its marks whenever its text is edited.
+38. When an item **disappears** (its only session is archived or deleted, or the entry is removed), the learner's marks are **kept quietly** and **return** when the item appears again, for example when an archived session is restored. For a grammar note in an archived session, they return when the session is restored. Marks for a permanently deleted note simply stay stored and unused.
+39. Changing a mark **never changes any session, tab count, or Progress total.** There is at most **one record per item**, even if requests repeat or arrive together, and a learner can reach only their own marks and notes.
+40. Changing a star or status in one tab shows correctly in another tab after its next load, with no flipping.
 
 ### Finding and focusing
 
-33. Each collection has a **search box** that finds items by their text (including meanings, examples, reasons, and the learner's notes), ignoring capitalization, accents, extra spaces, and formatting, and matching parts of words. When several words are typed, all must appear in the same item.
-34. The learner can show **starred items only**, and can filter by **status**: all, not marked, learned, or still difficult.
-35. The learner can show **only the items that need attention**, in Vocabulary, Phrases, and My mistakes. The collection shows how many items need attention (for example "3 need attention"), and the count disappears when none do. The filter appears as a removable chip like the others.
-36. The learner can filter by **topic** of the sessions an item appeared in.
-37. The learner can sort by **newest** (the most recent session an item appeared in), **A to Z**, and **most often seen**. The default is newest, and for My mistakes it is most often seen.
-38. Active filters are shown as removable chips with a **Clear all**, and the list shows how many items match (for example "12 of 180 words"). When nothing matches, a friendly message offers to clear the filters.
-39. The chosen collection, search, filters, and sorting are kept in the page address, and a refresh or a return from a session keeps them.
-40. Long collections load progressively and stay quick with thousands of items.
+41. Each collection has a **search box**. Results appear **as the learner types, after a short pause**, once at least **two characters** have been entered (with fewer, a gentle hint appears). Very long queries are limited and the learner is told. **Escape** clears the box. Only the **latest** search updates the screen. Search works **within the active collection** only.
+42. Search covers **all the text of an item**: for words the word and **every** meaning and example, for phrases the phrase and every meaning or use and example, for mistakes what I said, the correction, and **every** reason, for grammar notes the note's text, and, for every item, the **learner's own notes**. It ignores capitalization, accents, extra spaces, and formatting, matches parts of words, and treats symbols and punctuation as ordinary text. When several words are typed, **all must appear in the same item**.
+43. Matching text is **highlighted** in the list and the opened item, in a way that does not rely on color alone and is built safely from plain text. When an item matches only in text that is not visible in its row (another meaning, another example, another reason, or the learner's notes), the row shows a quiet **"Matched in …"** line saying where.
+44. **Filters:** **Starred only**; **Status** (all, not marked, learned, still difficult); **Needs attention only**, in Vocabulary, Phrases, and My mistakes, with a **"N need attention"** count (for example "3 need attention") that covers the **whole collection**, ignores other filters and search, and disappears when none do; and **Topic**, where the learner can choose **one or several topics** and an item matches when **any of its appearances** is in a session with any chosen topic. The topic list contains only topics of sessions that currently feed Collections **and** have items in the active collection, each with its number of items, alphabetically and searchable.
+45. Filters **combine**: an item must match every kind of filter that is set and the search, and within topics it matches any chosen topic.
+46. Active filters appear as **removable chips** (one for starred only, one for a status other than all, one for needs attention only, and one for each chosen topic). **Clear all** removes only the filters, and the search box's own clear button removes only the search. Focus moves sensibly after either.
+47. The learner can **sort** by **newest**, **A to Z** (by the item's main text, ignoring capitalization and accents), and **most often seen**. The defaults are newest for Vocabulary, Phrases, and Grammar notes, and most often seen for My mistakes. **Grammar notes do not offer "most often seen"**, because they are never merged. Equal values are ordered consistently, and sorting creates no chip.
+48. The **result count** above the list reads like "12 of 180 words" with filters or search active and "180 words" without, using the right noun for each collection (words, phrases, notes, mistakes) and correct singular wording. It is always correct and announced calmly once. When **nothing matches**, a friendly message offers **Clear all** (when filters are active) and **Clear search** (when there is a search). Loading shows skeletons with no layout jump, and a failure shows a calm message with Try again.
+49. When a star or status change **in the list** makes an item stop matching the active filters, it **leaves the list immediately**, the count updates, and focus moves to the next row. Changes made **inside the opened item** update the list when the panel closes.
+50. **Address behavior:** search, filters, and sort **replace** the current address instead of adding history entries. **Switching tabs** starts the new tab with its own defaults. Changing the search, a filter, or the sort starts a fresh list from the top. Unknown, outdated, or invalid values in the address are ignored quietly, with no error page.
+51. On phones, the search box stays at the top, and the filters and sort open in a **panel** from a **Filters** button that shows how many filters are active, with Done and Clear all.
 
 ### Staying up to date
 
-41. Collections update **straight away** when a session is finished, edited, archived, restored, or deleted. New items appear, edited items change, archived or deleted items disappear, and restored items return, without a refresh.
-42. Counts on the tabs and in the lists are always correct.
-43. A session that is edited **after** it is finished is reflected. An item added later appears. An item removed from a session no longer appears, unless it also appears elsewhere.
-44. Archiving never affects Progress totals, but it does remove items from Collections. The learner should understand this difference. The archived banner and archive messages can mention that archived sessions are hidden from Collections.
+52. Collections update **straight away** when a session is finished, edited, archived, restored, or deleted, one at a time or in bulk. New items appear, edited items change (including an item moving to a different item or group when its text changes), archived or deleted items disappear, and restored items return, without a refresh. No part of Collections keeps a copy that can go out of date.
+53. Counts on the tabs, in the lists, and on the labels are always correct.
+54. Archiving never affects Progress totals, but it does hide items from Collections, and the learner is told so. The archive confirmation messages (for one or several sessions), the "This session is archived" banner, and the Archived view say, calmly and reassuringly, that archived sessions are **hidden from the Library and Collections** and can be restored any time. The delete warning says that the session will leave the Library, Collections, and Review.
 
 ### Experience
 
-45. Collections work comfortably on a phone, tablet, and computer. On a phone, items appear as easy-to-tap cards, the tabs scroll sideways if needed, and an opened item takes the whole screen or a bottom panel.
-46. Everything works with the keyboard and a screen reader, with visible focus, clear names for stars and status buttons that include the item, and calm announcements for changes (starring, status, saved notes, result counts).
-47. Wording is friendly and encouraging. Nothing about Collections makes the learner feel judged by the number of mistakes or difficult items.
+55. Collections work comfortably on a phone, tablet, and computer. On a phone, items appear as easy-to-tap cards, the tabs scroll sideways if needed, and an opened item takes a bottom panel or the whole screen. Nothing scrolls sideways, and the bottom navigation never covers the end of a list.
+56. Everything works with the keyboard and a screen reader, with visible focus, names for stars and status controls that include the item, "What I said" and "Correction" read as words, and calm announcements for changes (starring, status, saved notes, result counts, items leaving the list).
+57. Wording is friendly and encouraging. Nothing about Collections makes the learner feel judged by the number of mistakes or difficult items.
 
 ### Edge cases
 
@@ -141,6 +154,19 @@ Collections fill themselves. The learner does nothing extra after recording a se
 - **Unfinished session finished later:** its items appear in Collections when it is finished.
 - **No finished sessions at all:** the friendly empty state is shown.
 - **Opening a session for an item whose session was changed or removed:** the session opens normally with a calm note, or a friendly "couldn't find that session" page if it no longer exists.
+- **A phrase without a meaning:** shown with quiet "No meaning added" text and no marker.
+- **A word or phrase whose row had more than one separator:** marked "Needs attention" with the reason "More than one separator found", using the one shared rule.
+- **The same mistake text with and without a correction:** two separate groups, only the one without a correction marked.
+- **The typo rule when the new identity already has marks:** the existing marks are kept, nothing is overwritten, and the old marks stay stored under the old identity.
+- **An edit in an unfinished session:** moves no marks.
+- **Unstarring while "Starred only" is on:** the item leaves the list immediately, and the count and focus update.
+- **Changing a mark inside the opened item:** the list updates when the panel closes.
+- **Search matching only hidden text** (another meaning, example, reason, or the learner's notes): the row shows a quiet "Matched in …" line.
+- **Switching tabs:** the new tab starts with its own defaults, so a filter for one collection never hides items in another.
+- **Invalid values in the address** (a missing topic, a misspelled sort, "Needs attention only" on Grammar notes, a too-short search): ignored quietly, with no error page.
+- **Marks for a permanently deleted grammar note:** stay stored and unused, with no errors.
+- **Two tabs editing the same notes:** a calm conflict message with "load the latest version" or "keep what I have", and nothing lost.
+- **Archiving a session:** items leave Collections but still count in Progress totals, and the archive messages say so.
 - **Slow or failed loading:** a clear loading state, and on failure a calm message with a way to try again.
 
 ## Technical
@@ -150,38 +176,39 @@ This describes the intended approach at a high level, using the agreed stack (La
 1. **Build on what exists.** Use the entries saved by Practice sessions, the "study sessions" rule from the Library (finished and not archived), the shared text matching from the Library's search, the reading page with its "open at item" behavior, the shared labels and color tags, and the "Needs attention" marker.
 2. **Define what an item is.** Decide, in one place, how entries are identified as the same item: the normalized main text for words and phrases, and the pair for mistakes, with a repeated row in one box counting once. **Grammar notes are never merged**, so each note keeps its own identity. Keep this identification separate from the screens so every part of Collections, and later Review, uses the same definition.
 3. **Gather items from sessions.** Build each collection from the entries of the study sessions, grouping them into items with how often they were seen, their meanings, examples, reasons, and the places they came from. Work this out efficiently in bulk, with a bounded number of database queries however many items there are, and keep it correct as sessions change.
-4. **Store the learner's own marks.** Add a place to keep the learner's star, status, and notes. For words, phrases, and mistakes, tie them to the item's identity, keep them when an item disappears (so they return with it), and let them follow an item when its text is edited under the typo rule. For grammar notes, tie them to the note itself. Status is only ever set by the learner.
+4. **Store the learner's own marks.** Add a place to keep the learner's star, status, and notes, with **one record per learner and item**. For words, phrases, and mistakes, tie them to the item's identity, keep them when an item disappears (so they return with it), and let them follow an item when its text is edited under the typo rule, which runs **inside the same save** as the session edit. For grammar notes, tie them to the note itself. Store notes as cleaned formatted text plus a normalized plain-text copy for searching. Status is only ever set by the learner. Star and status requests carry the desired state, so they are safe to repeat.
 5. **Create the Collections page.** A Vue page in the main app layout with a page header, four tabs with counts, and a list area per collection. Use shadcn-vue components wherever possible (see "UI components" below).
 6. **Create the item list.** Build one reusable list that adapts to each collection (vocabulary, phrases, grammar notes, mistakes), showing the item, its meaning or correction, the star, the status label, and the seen count, with loading, empty, no-results, and error states.
 7. **Create the opened item.** A panel or screen with the full details, the sessions the item came from with "See original session" links, the star, the status buttons, and a personal notes editor reusing the app's rich text editor and saving behavior.
 8. **Group mistakes.** Add the grouping, frequency counts, default ordering by most seen, and the occurrences view for My mistakes.
-9. **Add search, filters, and sorting.** Reuse the Library's text matching and filter patterns for search, starred only, status, topic, and sorting, and keep the choices in the page address.
+9. **Add search, filters, and sorting.** Reuse the Library's text matching and filter patterns for search (over all of an item's text and the learner's notes, with safe highlighting and "Matched in" hints), starred only, status, needs attention only, topic (through each item's appearances), and sorting. Keep all choices in one filter state per collection, in the page address, and put the rules for which items match in one place on the server, shared by the list and the result count.
 10. **Keep Collections in step.** Make sure finishing, editing, archiving, restoring, and deleting a session update Collections straight away, and that counts are always correct, without keeping separate copies that can go out of date.
-11. **Connect to other features.** Expose the items, stars, and statuses in a stable form for Review, include the learner's marks and notes in future exports, and keep Progress separate from the learner's "Learned" label.
-12. **Make it work everywhere.** Test on phone, tablet, and computer, in light and dark mode, with the keyboard and a screen reader, and with large numbers of items.
+11. **Share the "Needs attention" rule and keep the wording right.** Use the one shared needs-attention rule for words, phrases, and mistakes, and update the archive messages, the archived banner, and the Archived view to say that archived sessions are hidden from Collections.
+12. **Connect to other features.** Expose the items, stars, and statuses in a stable form for Review, include the learner's marks and notes in future exports, and keep Progress separate from the learner's "Learned" label.
+13. **Make it work everywhere.** Test on phone, tablet, and computer, in light and dark mode, with the keyboard and a screen reader, and with large numbers of items.
 
 ### UI components: use shadcn-vue wherever possible
 
 All interface pieces in Collections should come from **shadcn-vue**, the component library already chosen for the app. Only build a custom piece when shadcn-vue has nothing suitable, and then build it by **composing shadcn-vue parts with Tailwind**. Do not add any other component library.
 
-| Collections need                                | shadcn-vue component to use                                                      |
-| ----------------------------------------------- | -------------------------------------------------------------------------------- |
-| The four collection tabs with counts            | Tabs                                                                             |
-| Item rows and cards                             | Card, or Table for wider screens with stacked cards on phones                    |
-| Star button                                     | Toggle (with an accessible label naming the item)                                |
-| Status label and "Needs attention" marker       | Badge (text, never color alone)                                                  |
-| Status choice (Learned, Still difficult, clear) | Toggle Group, or Dropdown Menu in the list                                       |
-| Opened item                                     | Sheet (side panel on larger screens, bottom or full-screen on phones), or Dialog |
-| Search box                                      | Input with a clear button                                                        |
-| Starred only, status, and topic filters         | Toggle, Toggle Group, Select, and Combobox                                       |
-| "Needs attention only" filter and its count     | Toggle, with Badge for the count                                                 |
-| Sort control                                    | Select                                                                           |
-| Active filter chips                             | Badge with a small Button to remove each                                         |
-| Personal notes                                  | The app's existing rich text editor, with Button for formatting                  |
-| Saved indicator and messages                    | Badge or text with Sonner (toast)                                                |
-| "Show more" for long text or sessions list      | Collapsible                                                                      |
-| Loading, empty, and error states                | Skeleton, Alert, and the existing empty-state piece                              |
-| Dividers and layout details                     | Separator, Scroll Area                                                           |
+| Collections need | shadcn-vue component to use |
+|---|---|
+| The four collection tabs with counts | Tabs |
+| Item rows and cards | Card, or Table for wider screens with stacked cards on phones |
+| Star button | Toggle (with an accessible label naming the item) |
+| Status label and "Needs attention" marker | Badge (text, never color alone) |
+| Status choice (Learned, Still difficult, clear) | Toggle Group, or Dropdown Menu in the list |
+| Opened item | Sheet (side panel on larger screens, bottom or full-screen on phones), or Dialog |
+| Search box | Input with a clear button |
+| Starred only, status, and topic filters | Toggle, Toggle Group, Select, and Combobox |
+| "Needs attention only" filter and its count | Toggle, with Badge for the count |
+| Sort control | Select |
+| Active filter chips | Badge with a small Button to remove each |
+| Personal notes | The app's existing rich text editor, with Button for formatting |
+| Saved indicator and messages | Badge or text with Sonner (toast) |
+| "Show more" for long text or sessions list | Collapsible |
+| Loading, empty, and error states | Skeleton, Alert, and the existing empty-state piece |
+| Dividers and layout details | Separator, Scroll Area |
 
 Where a shadcn-vue component needs small changes, change its **variants and Tailwind classes** instead of replacing it, so Collections stays visually consistent with the rest of the app, in light and dark mode, and keeps the accessibility built into the components.
 
@@ -194,8 +221,10 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 **What it delivers:** A Collections page with the four tabs and counts, the automatic gathering of items from finished, non-archived sessions, and the Vocabulary collection as a read-only list with an opened item view and "See original session" links. The other three tabs show a friendly "coming soon in the next step" state only if needed during development, and are completed in the next steps.
 
 **Tests**
-
 - The Collections link in the main navigation opens the page, and the tab choice is kept in the address and survives a refresh.
+- The four tabs appear in order, arrow keys move between them, and the tabs not built yet show a calm "on its way" message with no count and no fake data.
+- The first 30 words load, more load when reaching the end and with Load more, with no duplicates or gaps.
+- The opened word is kept in the address, Back closes the panel, and an address for a word that no longer exists opens the page with a calm note and no error.
 - Vocabulary items come only from finished sessions that are not archived. Unfinished sessions and archived sessions never contribute.
 - Each word appears once, even when it appears in several sessions, ignoring capitalization, accents, and spaces ("Café" and "cafe" are one item).
 - Each item shows the word, meaning, and example, and the seen count when it appears in more than one session.
@@ -215,9 +244,10 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 **What it delivers:** The Phrases collection (phrase, meaning or use, example) and the Grammar notes collection (each note as its own item, with a short preview in the list and the full formatted text when opened), using the same list, item view, and links as Vocabulary.
 
 **Tests**
-
 - Phrases come only from finished, non-archived sessions, each phrase appears once with its meaning or use and example, and the seen count when it appears more than once.
 - A phrase without a meaning or use is shown normally and is **not** marked "Needs attention", because that is normal for phrases.
+- A phrase without a meaning shows the quiet "No meaning added" text, and a phrase whose row had more than one separator is marked "Needs attention" by the shared rule.
+- Vocabulary uses the same shared needs-attention rule, so a word whose row had more than one separator shows the right reason.
 - Grammar notes appear as separate items with a short plain preview in the list and the full formatted text (bold, italic, lists) when opened.
 - Two grammar notes with identical text stay as two separate items.
 - Very long grammar notes are shortened in the list and complete when opened.
@@ -233,9 +263,11 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 **What it delivers:** The My mistakes collection, grouping repeated mistakes, showing how often each was seen, ordering the most frequent first, and an opened view with every place the mistake appeared.
 
 **Tests**
-
 - The same mistake in several finished, non-archived sessions appears once, as one group, identified by the pair of what was said and the correction, ignoring capitalization, accents, and spaces.
 - Each group shows "Seen N times", counting each appearance, with a repeated row in the same box of the same session counted once.
+- The "Seen N times" label is always shown for mistakes, with correct singular wording ("Seen 1 time").
+- Groups seen three or more times show the "Worth practicing" label as text, and the threshold is one named setting.
+- The same mistake text without a correction in one session and with a correction in another gives two separate groups.
 - The default order is most frequent first, with ties ordered by the most recent session.
 - The same mistake with different reasons is one group, and the opened view lists each reason with its session.
 - The same correction for different mistakes gives separate groups.
@@ -253,17 +285,26 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 **What it delivers:** The learner's own marks on items: a star, a status (Learned or Still difficult), and personal notes with simple formatting, saved automatically and kept safely, including the rules for edited text and disappearing items.
 
 **Tests**
-
 - A star can be added and removed from the list and from the opened item, and shows correctly everywhere the item appears.
+- The star in a list row is a separate control from the row's open action, and its accessible name includes the item.
+- Star and status requests carry the desired state, so repeated or simultaneous requests never flip them, and a failed save returns them to the previous state with a calm message.
+- The list's quick status menu and the opened item's status group both work, and choosing the active option in the opened item clears it.
 - An item can be marked Learned or Still difficult, or cleared, from the list and from the opened item, and has at most one status at a time. The status label is text, not color alone.
 - Starring or changing status never changes any session and never changes Progress totals.
 - Personal notes can be written with bold, italic, bulleted lists, and numbered lists, and pasted text is cleaned in the same safe way as elsewhere in the app. Unsafe content is never saved or shown.
 - Notes save automatically, a saved indicator is shown, a failed save keeps the text on screen with a calm message, and a refresh shows everything that was saved.
+- Two tabs editing the same notes show a calm message with "load the latest version" and "keep what I have", and nothing is lost until the learner chooses.
+- The server cleans pasted notes itself, a plain-text copy is stored, notes with only blank space count as no note, and the notes length limit is enforced with a clear message.
+- Items with notes show a "Has notes" indicator in the list.
 - Star, status, and notes are the same for an item wherever it appears.
 - Fixing a typo in a word in a session keeps the item's star, status, and notes when it was the only appearance.
 - A grammar note keeps its star, status, and notes when its text is edited, even a lot, and two grammar notes with identical text have separate marks.
 - The status is only ever changed by the learner, and never changes automatically.
 - Editing an entry so it becomes a different item, when the old item still appears elsewhere, leaves the old item with its marks and treats the edited text as its own item.
+- When the new identity already has marks, the existing marks are kept, nothing is overwritten, and the old marks stay stored.
+- Changing only capitalization, accents, spacing, or formatting moves nothing, and editing an entry in an unfinished session moves nothing.
+- The typo rule runs in the same save as the session edit, and running it twice changes nothing more.
+- There is at most one record per learner and item, even with repeated or simultaneous requests.
 - When an item disappears (its only session is archived or deleted), the star, status, and notes are kept quietly and return when the item appears again.
 - Two tabs changing the same star or status show correctly after the next load, and two tabs editing the same notes show a calm message with nothing lost.
 - Marks and notes work on items marked "Needs attention" and on every collection.
@@ -275,17 +316,24 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 **What it delivers:** Search within each collection, "starred only," status and topic filters, sorting, removable filter chips, result counts, and the whole state kept in the page address.
 
 **Tests**
-
 - Search finds items by their text, meanings, examples, reasons, and the learner's notes, ignoring capitalization, accents, extra spaces, and formatting, and matching parts of words.
 - Typing several words finds only items where all of them appear together.
+- Search covers every meaning, example, and reason of an item and the learner's own notes, and an item that matches only in hidden text shows the correct "Matched in …" line.
+- Matching text is highlighted without relying on color alone, and saved text can never inject markup.
 - Special characters, very long text, and non-English letters never cause errors or odd results.
 - "Starred only" shows only starred items.
 - The status filter shows all, not marked, learned, or still difficult items.
 - The topic filter shows items that appeared in sessions with the chosen topic, and lists only topics that currently feed Collections.
+- The topic list contains only topics of sessions that currently feed Collections and have items in the active collection, with item counts, alphabetically and searchable, and an item matches when any of its appearances is in any chosen topic.
+- The "N need attention" count covers the whole collection, ignores other filters and search, and "Needs attention only" is not shown for Grammar notes.
 - "Needs attention only" shows only items marked with "Needs attention" in Vocabulary, Phrases, and My mistakes, and the header shows how many (for example "3 need attention"), disappearing when none do.
 - Adding the missing meaning or correction in the session removes the item from the "Needs attention only" list straight away.
 - Newest, A to Z, and most often seen each give the correct order, with a consistent order for ties. My mistakes defaults to most often seen, and the other collections default to newest.
 - Filters combine correctly, appear as removable chips, and Clear all removes them all.
+- Clear all removes only the filters, and the search box's clear button removes only the search.
+- "Most often seen" is not offered for Grammar notes, and sorting creates no chip.
+- Unstarring in the list while "Starred only" is on removes the item immediately with sensible focus, and changes made in the opened item update the list when the panel closes.
+- Switching tabs starts the new tab with its own defaults.
 - The result count is correct (for example "12 of 180 words") and is announced calmly.
 - When nothing matches, a friendly message with Clear all appears, never a blank page.
 - The collection, search, filters, and sorting are kept in the page address, survive a refresh, and are restored when returning from a session. Invalid values in the address are ignored quietly.
@@ -297,7 +345,6 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 **What it delivers:** Collections that always follow the learner's sessions, plus a full check of speed, wording, accessibility, and consistency.
 
 **Tests**
-
 - Finishing a session makes its items appear straight away, and an unfinished session never contributes.
 - Editing a finished session updates the affected items, and adding or removing entries is reflected.
 - Archiving a session removes its items from Collections (unless they appear elsewhere), restoring brings them back with the learner's marks, and deleting removes them.
@@ -305,6 +352,10 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 - Counts on the tabs and in the lists are always correct after every kind of change.
 - Collections are never stale and never mix in an out-of-date result, and only the latest search or filter updates the screen.
 - Progress totals are unaffected by archiving, while Collections hide archived items, and the archive messages make that clear.
+- The archive messages (for one and for several sessions), the "This session is archived" banner, and the Archived view all say, calmly, that archived sessions are hidden from the Library and Collections and can be restored.
+- The delete warning says the session will leave the Library, Collections, and Review.
+- Every kind of session change, including bulk actions, gives the same Collections result as doing each one by one.
+- Library search and Collections search find the same text the same way.
 - A full journey works: finish a session, find its words in Vocabulary, star one, mark one as still difficult, write a note, open the original session, edit the word's typo, return, see the star, status, and note kept, then archive the session and see the item leave and return on restore.
 - Wording is friendly and consistent with the rest of the app, and nothing makes the learner feel judged.
 - All screens work on a phone, tablet, and computer, with no sideways scrolling, and at 200 percent zoom.
@@ -322,6 +373,17 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 - **Only the learner sets "Learned" and "Still difficult."** The app never changes a status automatically. Review may later suggest a change, and the learner confirms it.
 - **There is a "Needs attention only" filter**, with a count, in Vocabulary, Phrases, and My mistakes.
 - **No bulk starring or marking for now.** A one-tap star and a quick status choice on each row are enough. This can be reconsidered after Review is built.
+- **Items are identified by normalized text.** Words and phrases by their text, mistakes by the pair of what was said and the correction, and each grammar note by itself. The list shows the most recent appearance, and the opened item shows everything.
+- **"Seen N times" counts appearances.** A repeated row in the same box of the same question counts once. Mistakes always show the count, and words and phrases only when seen more than once.
+- **"Worth practicing"** is a quiet text label for mistakes seen three or more times, with the threshold in one named setting.
+- **"Needs attention" comes from one shared rule.** A phrase without a meaning is not flagged. A word is flagged when none of its appearances has a meaning.
+- **Star and status requests carry the desired state**, and the star and status controls are separate from a row's open action.
+- **The typo rule** moves marks only when the old item has no other appearance, never overwrites existing marks, ignores unfinished sessions, and runs in the same save as the session edit.
+- **Search covers every meaning, example, reason, and the learner's notes**, requires all words in the same item, highlights matches safely, and shows "Matched in …" for hidden matches. It works within one collection.
+- **The topic filter** lists only topics with items in the active collection. The **"N need attention" count** covers the whole collection.
+- **Address behavior:** search, filters, and sort replace the address. Opening an item adds a history entry so Back closes the panel. Switching tabs resets to that tab's defaults.
+- **Marks changed in the list** make a no-longer-matching item leave the list immediately. Changes in the opened item apply when the panel closes.
+- **Archived sessions are hidden from Collections but still count in Progress**, and the archive messages, banner, and Archived view say so.
 
 ## Open Questions
 

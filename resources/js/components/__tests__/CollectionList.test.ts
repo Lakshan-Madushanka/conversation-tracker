@@ -465,6 +465,149 @@ describe('the mistakes list', () => {
     });
 });
 
+describe('search and filters in the collection list', () => {
+    it('shows where a search matched, as plain words with a highlight', () => {
+        const wrapper = mount(CollectionList, {
+            props: {
+                items: [
+                    item({
+                        match: {
+                            label: 'Meaning',
+                            segments: [
+                                { text: 'a ', match: false },
+                                { text: 'liquid', match: true },
+                                { text: ' food', match: false },
+                            ],
+                        },
+                    }),
+                ],
+                total: 1,
+                allTotal: 3,
+                hasSearch: true,
+            },
+        });
+
+        expect(wrapper.text()).toContain('Matched in Meaning');
+        expect(wrapper.text()).toContain('liquid');
+        expect(wrapper.find('[class*="bg-primary/15"]').text()).toBe('liquid');
+        expect(wrapper.find('[role="status"]').text()).toBe('1 of 3 words.');
+    });
+
+    it('says how many words match out of the whole collection', () => {
+        const wrapper = mount(CollectionList, {
+            props: {
+                items: [item()],
+                total: 2,
+                allTotal: 5,
+                hasFilters: true,
+            },
+        });
+
+        expect(wrapper.find('[role="status"]').text()).toBe('2 of 5 words.');
+    });
+
+    it('tells an empty search result apart from an empty collection', () => {
+        const searched = mount(CollectionList, {
+            props: {
+                items: [],
+                total: 0,
+                allTotal: 3,
+                hasSearch: true,
+                hasFinishedSessions: true,
+            },
+        });
+
+        expect(searched.text()).toContain('No matches for this search');
+        expect(searched.text()).not.toContain('No words yet');
+        expect(
+            searched
+                .findAll('button')
+                .some((button) => button.text().includes('Clear search')),
+        ).toBe(true);
+
+        const filtered = mount(CollectionList, {
+            props: {
+                items: [],
+                total: 0,
+                allTotal: 3,
+                hasFilters: true,
+                hasFinishedSessions: true,
+            },
+        });
+
+        expect(filtered.text()).toContain('No words match these filters');
+        expect(
+            filtered
+                .findAll('button')
+                .some((button) => button.text().includes('Clear filters')),
+        ).toBe(true);
+    });
+
+    it('offers to clear the search and the filters separately', async () => {
+        const wrapper = mount(CollectionList, {
+            props: {
+                items: [],
+                total: 0,
+                allTotal: 3,
+                hasSearch: true,
+                hasFilters: true,
+                hasFinishedSessions: true,
+            },
+        });
+
+        expect(wrapper.text()).toContain(
+            'No matches for this search and these filters',
+        );
+
+        const clearSearch = wrapper
+            .findAll('button')
+            .find((button) => button.text().includes('Clear search'));
+        const clearFilters = wrapper
+            .findAll('button')
+            .find((button) => button.text().includes('Clear filters'));
+
+        await clearSearch?.trigger('click');
+        await clearFilters?.trigger('click');
+
+        expect(wrapper.emitted('clear-search')).toHaveLength(1);
+        expect(wrapper.emitted('clear-filters')).toHaveLength(1);
+    });
+
+    it('still invites a first session when a search is typed before any session is finished', () => {
+        const wrapper = mount(CollectionList, {
+            props: {
+                items: [],
+                total: 0,
+                hasSearch: true,
+                hasFinishedSessions: false,
+            },
+        });
+
+        expect(wrapper.text()).toContain('Your collections are waiting');
+        expect(wrapper.text()).not.toContain('No matches for this search');
+    });
+
+    it('explains a failed filter and offers to try again', async () => {
+        const wrapper = mount(CollectionList, {
+            props: {
+                items: [item()],
+                total: 1,
+                filterError: true,
+            },
+        });
+
+        expect(wrapper.text()).toContain('Could not apply those filters');
+
+        const retry = wrapper
+            .findAll('button')
+            .find((button) => button.text().includes('Try again'));
+
+        await retry?.trigger('click');
+
+        expect(wrapper.emitted('retry-filters')).toHaveLength(1);
+    });
+});
+
 describe('the marks beside an item', () => {
     it('names the star with the item and its collection', () => {
         const wrapper = mount(CollectionList, {

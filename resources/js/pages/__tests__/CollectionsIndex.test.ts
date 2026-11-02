@@ -9,7 +9,9 @@ import {
     vi,
 } from 'vite-plus/test';
 import { router } from '@inertiajs/vue3';
+import CollectionItemPanel from '@/components/CollectionItemPanel.vue';
 import Index from '@/pages/collections/Index.vue';
+import { defaultCollectionFilters } from '@/lib/collection-filters';
 import { collectionUrl } from '@/lib/collection-query';
 import {
     markCollectionRestore,
@@ -17,6 +19,7 @@ import {
 } from '@/lib/collections';
 import { index as collectionsIndex } from '@/routes/collections';
 import type {
+    CollectionFilters,
     CollectionItem,
     CollectionItemsPage,
     CollectionMistakeItem,
@@ -95,8 +98,18 @@ function noteItem(
     };
 }
 
+function filters(
+    overrides: Partial<CollectionFilters> = {},
+): CollectionFilters {
+    return {
+        ...defaultCollectionFilters('vocabulary'),
+        ...overrides,
+    };
+}
+
 function pageProps(overrides: Partial<CollectionPage> = {}): CollectionPage {
     const items = overrides.items ?? [item()];
+    const allTotal = overrides.all_total ?? items.length;
 
     return {
         tab: 'vocabulary',
@@ -105,6 +118,10 @@ function pageProps(overrides: Partial<CollectionPage> = {}): CollectionPage {
         next_cursor: null,
         has_more: false,
         total: items.length,
+        all_total: allTotal,
+        attention_count: 0,
+        topic_options: [],
+        filters: filters(),
         has_finished_sessions: true,
         open_item: null,
         open_item_missing: false,
@@ -356,6 +373,205 @@ describe('the Collections page', () => {
             'Everything this note says, as you saved it in its session.',
         );
         expect(document.body.textContent).toContain('Where it came from');
+    });
+
+    it('puts search first and says how many match out of the whole collection', () => {
+        mountPage({
+            items: [item()],
+            total: 1,
+            all_total: 3,
+            filters: filters({ q: 'soup' }),
+        });
+
+        expect(
+            mounted?.find('#collection-search').attributes('placeholder'),
+        ).toBe('Search this collection');
+        expect(mounted?.text()).toContain('1 of 3 words');
+        expect(mounted?.text()).toContain('Filters');
+    });
+
+    it('searches with a replace so the Back button keeps the list address', async () => {
+        const get = vi.spyOn(router, 'get').mockImplementation(() => {});
+        mountPage();
+
+        const input = mounted?.find('#collection-search');
+
+        await input?.setValue('soup');
+        await input?.trigger('keydown.enter');
+
+        expect(get).toHaveBeenCalledWith(
+            collectionUrl('vocabulary', null, filters({ q: 'soup' })),
+            {},
+            expect.objectContaining({ replace: true }),
+        );
+    });
+
+    it('does not ask the server for a search too short to find anything', async () => {
+        const get = vi.spyOn(router, 'get').mockImplementation(() => {});
+        mountPage();
+
+        const input = mounted?.find('#collection-search');
+
+        await input?.setValue('s');
+        await input?.trigger('keydown.enter');
+
+        expect(get).not.toHaveBeenCalled();
+    });
+
+    it('clears an earlier search when only one letter is left', async () => {
+        const get = vi.spyOn(router, 'get').mockImplementation(() => {});
+        mountPage({ filters: filters({ q: 'coffee' }) });
+
+        const input = mounted?.find('#collection-search');
+
+        await input?.setValue('s');
+        await input?.trigger('keydown.enter');
+
+        expect(get.mock.calls[0]?.[0]).toBe(
+            collectionUrl('vocabulary', null, filters({ q: '' })),
+        );
+    });
+
+    it('clears the search without clearing the filters', async () => {
+        const get = vi.spyOn(router, 'get').mockImplementation(() => {});
+        mountPage({
+            items: [],
+            total: 0,
+            all_total: 3,
+            filters: filters({ q: 'soup', starred: true }),
+        });
+
+        const clearSearch = mounted
+            ?.findAll('button')
+            .find((button) => button.text().includes('Clear search'));
+
+        await clearSearch?.trigger('click');
+
+        expect(get.mock.calls[0]?.[0]).toBe(
+            collectionUrl('vocabulary', null, filters({ starred: true })),
+        );
+    });
+
+    it('clears the filters without clearing the search', async () => {
+        const get = vi.spyOn(router, 'get').mockImplementation(() => {});
+        mountPage({
+            items: [],
+            total: 0,
+            all_total: 3,
+            filters: filters({ q: 'soup', starred: true }),
+        });
+
+        const clearFilters = mounted
+            ?.findAll('button')
+            .find((button) => button.text().includes('Clear filters'));
+
+        await clearFilters?.trigger('click');
+
+        expect(get.mock.calls[0]?.[0]).toBe(
+            collectionUrl('vocabulary', null, filters({ q: 'soup' })),
+        );
+    });
+
+    it('shows how many need attention and narrows to them', async () => {
+        const get = vi.spyOn(router, 'get').mockImplementation(() => {});
+        mountPage({
+            attention_count: 2,
+            all_total: 5,
+            total: 5,
+        });
+
+        const attention = mounted
+            ?.findAll('button')
+            .find((button) => button.text().includes('2 need attention'));
+
+        expect(attention?.attributes('aria-pressed')).toBe('false');
+
+        await attention?.trigger('click');
+
+        expect(get.mock.calls[0]?.[0]).toBe(
+            collectionUrl('vocabulary', null, filters({ attention: true })),
+        );
+    });
+
+    it('takes an unstarred item out of a starred filter at once and says so', async () => {
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(
+                async () =>
+                    new Response(
+                        JSON.stringify({
+                            mark: {
+                                starred: false,
+                                status: null,
+                                has_notes: false,
+                                notes_version: 0,
+                                notes_html: '',
+                            },
+                        }),
+                        {
+                            status: 200,
+                            headers: { 'Content-Type': 'application/json' },
+                        },
+                    ),
+            ),
+        );
+
+        mountPage({
+            items: [item({ starred: true })],
+            total: 1,
+            all_total: 1,
+            filters: filters({ starred: true }),
+        });
+
+        const star = mounted
+            ?.findAll('button')
+            .find((button) =>
+                button.attributes('aria-label')?.startsWith('Unstar the'),
+            );
+
+        await star?.trigger('click');
+        await flushPromises();
+
+        expect(mounted?.findAll('[data-collection-open]')).toHaveLength(0);
+        expect(mounted?.text()).toContain('0 of 1 word');
+        expect(mounted?.find('p[aria-live="polite"]').text()).toContain(
+            'no longer matches the filters',
+        );
+        expect(document.activeElement?.id).toBe('collection-search');
+    });
+
+    it('waits for the panel to close before taking its mark into the list', async () => {
+        vi.spyOn(router, 'get').mockImplementation(() => {});
+
+        mountPage({
+            items: [item({ starred: true })],
+            total: 1,
+            all_total: 1,
+            filters: filters({ starred: true }),
+            open_item: item({ starred: true }),
+        });
+
+        const panel = mounted?.findComponent(CollectionItemPanel);
+
+        panel?.vm.$emit('mark-saved', item({ starred: true }), {
+            starred: false,
+            status: null,
+            has_notes: false,
+            notes_version: 0,
+            notes_html: '',
+        });
+        await nextTick();
+
+        // The panel is still open, so the list has not moved underneath it.
+        expect(mounted?.text()).toContain('soup');
+
+        panel?.vm.$emit('close');
+        await flushPromises();
+
+        expect(mounted?.findAll('[data-collection-open]')).toHaveLength(0);
+        expect(mounted?.find('p[aria-live="polite"]').text()).toContain(
+            'no longer matches the filters',
+        );
     });
 });
 

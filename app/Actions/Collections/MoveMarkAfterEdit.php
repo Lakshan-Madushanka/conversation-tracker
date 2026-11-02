@@ -49,7 +49,7 @@ final readonly class MoveMarkAfterEdit
             return;
         }
 
-        DB::transaction(function () use ($kind, $fromKey, $toKey, $fromIdentity, $editedEntryId): void {
+        DB::transaction(function () use ($kind, $fromKey, $toKey, $fromIdentity, $toIdentity, $editedEntryId): void {
             /** @var CollectionItemMark|null $mark */
             $mark = CollectionItemMark::query()
                 ->where('kind', $kind->value)
@@ -81,6 +81,7 @@ final readonly class MoveMarkAfterEdit
             }
 
             $mark->item_key = $toKey;
+            $mark->group_key = $toIdentity;
             $mark->save();
         });
     }

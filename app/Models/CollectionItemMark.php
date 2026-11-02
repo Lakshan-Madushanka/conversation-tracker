@@ -6,6 +6,7 @@ namespace App\Models;
 
 use App\Enums\CollectionItemStatus;
 use App\Enums\FeedbackType;
+use App\Support\SearchText;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
@@ -22,13 +23,19 @@ use Illuminate\Support\Carbon;
  * and return with it. Nothing but the learner ever writes the star, status or
  * notes.
  *
+ * `group_key` repeats the item's public key so Collections can join a mark to
+ * its item in the database, and `notes_search_text` is the plain note in the
+ * same normalised form search reads.
+ *
  * @property int $id
  * @property FeedbackType $kind
  * @property string $item_key
+ * @property string|null $group_key
  * @property bool $starred
  * @property CollectionItemStatus|null $status
  * @property string $notes_html
  * @property string $notes_text
+ * @property string|null $notes_search_text
  * @property int $notes_version
  * @property Carbon|null $last_changed_at
  * @property Carbon|null $created_at
@@ -37,10 +44,12 @@ use Illuminate\Support\Carbon;
 #[Fillable([
     'kind',
     'item_key',
+    'group_key',
     'starred',
     'status',
     'notes_html',
     'notes_text',
+    'notes_search_text',
     'notes_version',
     'last_changed_at',
 ])]
@@ -56,6 +65,17 @@ final class CollectionItemMark extends Model
             'notes_version' => 'integer',
             'last_changed_at' => 'immutable_datetime',
         ];
+    }
+
+    /**
+     * Keep the searchable copy of the learner's note in step with its words,
+     * so a change in one tab is found by the next search everywhere.
+     */
+    protected static function booted(): void
+    {
+        self::saving(function (self $mark): void {
+            $mark->notes_search_text = SearchText::normalize((string) $mark->notes_text);
+        });
     }
 
     /**

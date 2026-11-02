@@ -5,10 +5,12 @@ import {
     BookOpenIcon,
     LoaderCircleIcon,
     PlusIcon,
+    SearchIcon,
     TriangleAlertIcon,
 } from '@lucide/vue';
 import EmptyState from '@/components/EmptyState.vue';
 import CollectionMarksCluster from '@/components/CollectionMarksCluster.vue';
+import CollectionMatchHint from '@/components/CollectionMatchHint.vue';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -23,6 +25,7 @@ import {
     TableRow,
 } from '@/components/ui/table';
 import { collectionTabConfig } from '@/lib/collection-tabs';
+import { collectionCountLabel } from '@/lib/collection-filters';
 import { markItemName } from '@/lib/collection-marks';
 import {
     isCollectionItem,
@@ -51,6 +54,13 @@ const props = withDefaults(
         error?: boolean;
         updating?: boolean;
         total?: number;
+        /** How many items the whole collection holds, before filters. */
+        allTotal?: number;
+        /** Whether a chip or the search narrows the list. */
+        hasFilters?: boolean;
+        hasSearch?: boolean;
+        /** True when applying a search or filter failed and can be tried again. */
+        filterError?: boolean;
         hasFinishedSessions?: boolean;
     }>(),
     {
@@ -60,6 +70,10 @@ const props = withDefaults(
         error: false,
         updating: false,
         total: 0,
+        allTotal: undefined,
+        hasFilters: false,
+        hasSearch: false,
+        filterError: false,
         hasFinishedSessions: false,
     },
 );
@@ -73,6 +87,9 @@ const emit = defineEmits<{
         item: CollectionOpenedItem,
         status: CollectionItemStatusValue | null,
     ): void;
+    (event: 'clear-search'): void;
+    (event: 'clear-filters'): void;
+    (event: 'retry-filters'): void;
 }>();
 
 /** How many placeholder rows the list shows while it is busy. */
@@ -101,9 +118,57 @@ const mistakeItems = computed(
 
 const hasItems = computed(() => props.items.length > 0);
 
-const showEmptyState = computed(
-    () => !hasItems.value && !props.loading && !props.updating && !props.error,
+/** Whether a search or a chip narrows the list. The order never counts. */
+const filtered = computed(() => props.hasFilters || props.hasSearch);
+
+const settled = computed(
+    () => !props.loading && !props.updating && !props.error,
 );
+
+const showEmptyState = computed(
+    () => !hasItems.value && settled.value && !filtered.value,
+);
+
+/** Nothing to search yet: no session has been finished at all. */
+const showNoSessions = computed(
+    () => !hasItems.value && settled.value && !props.hasFinishedSessions,
+);
+
+/** Nothing matched, which is different from a collection with nothing in it. */
+const showNoResults = computed(
+    () =>
+        !hasItems.value &&
+        settled.value &&
+        filtered.value &&
+        props.total === 0 &&
+        props.hasFinishedSessions,
+);
+
+const allTotal = computed(() => props.allTotal ?? props.total);
+
+const noResultsTitle = computed(() => {
+    if (props.hasSearch && props.hasFilters) {
+        return 'No matches for this search and these filters';
+    }
+
+    if (props.hasSearch) {
+        return 'No matches for this search';
+    }
+
+    return `No ${config.value.unitPlural} match these filters`;
+});
+
+const noResultsDescription = computed(() => {
+    if (props.hasSearch && props.hasFilters) {
+        return 'Try fewer words, another filter, or clear one of them.';
+    }
+
+    if (props.hasSearch) {
+        return 'Try another word, or clear the search to see everything again.';
+    }
+
+    return 'Try removing a filter to see more of this collection.';
+});
 
 /** A screen reader hears the count once the list has settled. */
 const announcement = computed(() => {
@@ -112,15 +177,22 @@ const announcement = computed(() => {
     }
 
     if (props.total === 0) {
-        return props.hasFinishedSessions
-            ? `No ${config.value.unitPlural} yet.`
-            : 'No finished sessions yet.';
+        if (!props.hasFinishedSessions) {
+            return 'No finished sessions yet.';
+        }
+
+        return filtered.value
+            ? `No ${config.value.unitPlural} match.`
+            : `No ${config.value.unitPlural} yet.`;
     }
 
-    const unit =
-        props.total === 1 ? config.value.unit : config.value.unitPlural;
-
-    return `${props.total} ${unit}.`;
+    return `${collectionCountLabel(
+        props.total,
+        allTotal.value,
+        config.value.unit,
+        config.value.unitPlural,
+        filtered.value,
+    )}.`;
 });
 
 function open(item: CollectionOpenedItem): void {
@@ -221,10 +293,15 @@ function exampleHtml(item: CollectionItem): string {
                                     <button
                                         type="button"
                                         class="rounded text-left hover:underline focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+                                        :data-collection-open="note.key"
                                         @click.stop="open(note)"
                                     >
                                         {{ note.preview }}
                                     </button>
+                                    <CollectionMatchHint
+                                        v-if="note.match"
+                                        :match="note.match"
+                                    />
                                 </TableCell>
 
                                 <TableCell
@@ -292,6 +369,7 @@ function exampleHtml(item: CollectionItem): string {
                                         type="button"
                                         class="min-h-11 w-full rounded text-left font-medium hover:underline focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
                                         :aria-label="`Open mistake: ${mistakeName(mistake)}`"
+                                        :data-collection-open="mistake.key"
                                         @click.stop="open(mistake)"
                                     >
                                         {{ mistake.title }}
@@ -310,6 +388,10 @@ function exampleHtml(item: CollectionItem): string {
                                     >
                                         Needs attention
                                     </Badge>
+                                    <CollectionMatchHint
+                                        v-if="mistake.match"
+                                        :match="mistake.match"
+                                    />
                                 </TableCell>
 
                                 <TableCell
@@ -399,6 +481,7 @@ function exampleHtml(item: CollectionItem): string {
                                     <button
                                         type="button"
                                         class="rounded text-left font-medium hover:underline focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+                                        :data-collection-open="item.key"
                                         @click.stop="open(item)"
                                     >
                                         {{ item.title }}
@@ -410,6 +493,10 @@ function exampleHtml(item: CollectionItem): string {
                                     >
                                         Needs attention
                                     </Badge>
+                                    <CollectionMatchHint
+                                        v-if="item.match"
+                                        :match="item.match"
+                                    />
                                 </TableCell>
 
                                 <TableCell
@@ -487,6 +574,7 @@ function exampleHtml(item: CollectionItem): string {
                             <button
                                 type="button"
                                 class="w-full p-4 pr-28 text-left focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+                                :data-collection-open="note.key"
                                 @click="open(note)"
                             >
                                 <span class="block text-sm break-words">
@@ -497,6 +585,10 @@ function exampleHtml(item: CollectionItem): string {
                                 >
                                     {{ note.topic }} · {{ noteDate(note) }}
                                 </span>
+                                <CollectionMatchHint
+                                    v-if="note.match"
+                                    :match="note.match"
+                                />
                             </button>
                             <div class="absolute top-2 right-2">
                                 <CollectionMarksCluster
@@ -522,6 +614,7 @@ function exampleHtml(item: CollectionItem): string {
                                 type="button"
                                 class="min-h-11 w-full p-4 pr-28 text-left focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
                                 :aria-label="`Open mistake: ${mistakeName(mistake)}`"
+                                :data-collection-open="mistake.key"
                                 @click="open(mistake)"
                             >
                                 <span
@@ -592,6 +685,11 @@ function exampleHtml(item: CollectionItem): string {
                                         Needs attention
                                     </Badge>
                                 </span>
+
+                                <CollectionMatchHint
+                                    v-if="mistake.match"
+                                    :match="mistake.match"
+                                />
                             </button>
                             <div class="absolute top-2 right-2">
                                 <CollectionMarksCluster
@@ -614,6 +712,7 @@ function exampleHtml(item: CollectionItem): string {
                             <button
                                 type="button"
                                 class="w-full p-4 pr-28 text-left focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+                                :data-collection-open="item.key"
                                 @click="open(item)"
                             >
                                 <span class="flex flex-wrap items-center gap-2">
@@ -663,6 +762,11 @@ function exampleHtml(item: CollectionItem): string {
                                 >
                                     “{{ item.example }}”
                                 </span>
+
+                                <CollectionMatchHint
+                                    v-if="item.match"
+                                    :match="item.match"
+                                />
                             </button>
                             <div class="absolute top-2 right-2">
                                 <CollectionMarksCluster
@@ -692,7 +796,34 @@ function exampleHtml(item: CollectionItem): string {
             </template>
 
             <EmptyState
-                v-else-if="showEmptyState && !props.hasFinishedSessions"
+                v-else-if="showNoResults"
+                :icon="SearchIcon"
+                :title="noResultsTitle"
+                :description="noResultsDescription"
+            >
+                <template #actions>
+                    <Button
+                        v-if="props.hasSearch"
+                        type="button"
+                        size="lg"
+                        @click="emit('clear-search')"
+                    >
+                        Clear search
+                    </Button>
+                    <Button
+                        v-if="props.hasFilters"
+                        type="button"
+                        variant="outline"
+                        size="lg"
+                        @click="emit('clear-filters')"
+                    >
+                        Clear filters
+                    </Button>
+                </template>
+            </EmptyState>
+
+            <EmptyState
+                v-else-if="showNoSessions"
                 :icon="BookOpenIcon"
                 title="Your collections are waiting"
                 description="Finish a practice session and what you save will be gathered here automatically."
@@ -742,6 +873,26 @@ function exampleHtml(item: CollectionItem): string {
                     </Button>
                 </AlertDescription>
             </Alert>
+
+            <Alert v-if="props.filterError" variant="destructive" class="mt-4">
+                <TriangleAlertIcon aria-hidden="true" />
+                <AlertTitle>Could not apply those filters</AlertTitle>
+                <AlertDescription>
+                    <p>
+                        Your list is still here. Check your connection and try
+                        again.
+                    </p>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        class="mt-3"
+                        @click="emit('retry-filters')"
+                    >
+                        Try again
+                    </Button>
+                </AlertDescription>
+            </Alert>
         </template>
 
         <div
@@ -768,7 +919,14 @@ function exampleHtml(item: CollectionItem): string {
             </Button>
 
             <p v-else class="text-xs text-muted-foreground">
-                That is every {{ config.unit }} — {{ props.total }} in total.
+                <template v-if="filtered">
+                    That is every matching {{ config.unit }} —
+                    {{ props.total }} in total.
+                </template>
+                <template v-else>
+                    That is every {{ config.unit }} — {{ props.total }} in
+                    total.
+                </template>
             </p>
 
             <p v-if="props.hasMore" class="text-xs text-muted-foreground">

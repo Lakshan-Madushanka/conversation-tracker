@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
-import { InfoIcon } from '@lucide/vue';
+import { InfoIcon, TriangleAlertIcon } from '@lucide/vue';
+import CollectionFilterBar from '@/components/CollectionFilterBar.vue';
 import CollectionItemPanel from '@/components/CollectionItemPanel.vue';
 import CollectionList from '@/components/CollectionList.vue';
 import CollectionMistakePanel from '@/components/CollectionMistakePanel.vue';
+import CollectionSearch from '@/components/CollectionSearch.vue';
 import PageHeader from '@/components/PageHeader.vue';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -13,8 +15,23 @@ import { useCollection } from '@/composables/useCollection';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { collectionTabConfig } from '@/lib/collection-tabs';
 import { toast } from 'vue-sonner';
-import { markKindForTab, saveItemMark } from '@/lib/collection-marks';
-import { readCollectionQuery } from '@/lib/collection-query';
+import {
+    attentionCountLabel,
+    collectionActiveFilterCount,
+    collectionCountLabel,
+    hasCollectionFilters,
+    hasCollectionSearch,
+    normalizeCollectionFilters,
+} from '@/lib/collection-filters';
+import {
+    markItemName,
+    markKindForTab,
+    saveItemMark,
+} from '@/lib/collection-marks';
+import {
+    readCollectionFilters,
+    readCollectionQuery,
+} from '@/lib/collection-query';
 import {
     consumeCollectionRestore,
     isCollectionPage,
@@ -42,15 +59,25 @@ const {
     nextCursor,
     hasMore,
     total,
+    allTotal,
+    attentionCount,
+    filters,
+    topicOptions,
     hasFinishedSessions,
     openItem,
     openItemMissing,
     loading,
     error,
+    filterError,
     updating,
     loadMore,
     refresh,
     setTab,
+    applyFilters,
+    retryFilters,
+    setSearch,
+    clearSearch,
+    clearFilters,
     openItemPanel,
     closeItemPanel,
     dismissMissingItem,
@@ -60,6 +87,31 @@ const {
 } = useCollection(props);
 
 const activeConfig = computed(() => collectionTabConfig(tab.value));
+
+/** How much is shown, in the collection's own words. */
+const countLabel = computed(() =>
+    collectionCountLabel(
+        total.value,
+        allTotal.value,
+        activeConfig.value.unit,
+        activeConfig.value.unitPlural,
+        hasCollectionFilters(filters.value),
+    ),
+);
+
+const attentionLabel = computed(() =>
+    attentionCountLabel(attentionCount.value),
+);
+
+const showAttention = computed(
+    () => tab.value !== 'grammar' && attentionCount.value > 0,
+);
+
+/** A screen reader hears this even when stillness hides the failure. */
+const markNotice = ref('');
+
+/** A mark saved from the open panel waits here until the panel closes. */
+const pendingPanelMark = ref<{ key: string; mark: ItemMarkData } | null>(null);
 
 /**
  * A saved mark reaches every copy of the item on screen: the list and the
@@ -77,12 +129,96 @@ function applyMark(itemKey: string, mark: Partial<ItemMarkData>): void {
     }
 }
 
-/** A screen reader hears this even when stillness hides the failure. */
-const markNotice = ref('');
-
 function markFailed(message: string): void {
     markNotice.value = message;
     toast.error(message);
+}
+
+/** Whether an item still belongs in the list under the current filters. */
+function itemMatchesFilters(item: CollectionOpenedItem): boolean {
+    const active = filters.value;
+
+    if (active.starred && !item.starred) {
+        return false;
+    }
+
+    if (active.status === 'none' && item.status !== null) {
+        return false;
+    }
+
+    if (active.status === 'learned' && item.status !== 'learned') {
+        return false;
+    }
+
+    if (
+        active.status === 'still_difficult' &&
+        item.status !== 'still_difficult'
+    ) {
+        return false;
+    }
+
+    // Grammar notes never ask for attention, so they stay when the choice is
+    // on, exactly as the server keeps them.
+    return !(
+        active.attention &&
+        'needs_attention' in item &&
+        !item.needs_attention
+    );
+}
+
+/**
+ * Puts focus on the item that took the removed one's place, then the one
+ * before it, and finally the search box, so the learner is never dropped at
+ * the top of the page.
+ */
+function focusAfterRemoval(preferredKey: string | null): void {
+    void nextTick(() => {
+        const candidates = Array.from(
+            document.querySelectorAll<HTMLElement>('[data-collection-open]'),
+        );
+
+        if (preferredKey !== null) {
+            const matches = candidates.filter(
+                (button) => button.dataset.collectionOpen === preferredKey,
+            );
+            const target =
+                matches.find((button) => button.offsetParent !== null) ??
+                matches[0];
+
+            if (target) {
+                target.focus();
+
+                return;
+            }
+        }
+
+        document.getElementById('collection-search')?.focus();
+    });
+}
+
+/**
+ * Takes an item out of the list when a mark means it no longer matches the
+ * filter it was found under, and says so.
+ */
+function reconcileItem(itemKey: string): void {
+    const index = items.value.findIndex((item) => item.key === itemKey);
+    const updated = items.value[index];
+
+    if (index === -1 || updated === undefined) {
+        return;
+    }
+
+    if (itemMatchesFilters(updated)) {
+        return;
+    }
+
+    const neighbourKey =
+        items.value[index + 1]?.key ?? items.value[index - 1]?.key ?? null;
+
+    items.value = items.value.filter((item) => item.key !== itemKey);
+    total.value = Math.max(0, total.value - 1);
+    markNotice.value = `“${markItemName(updated)}” no longer matches the filters, so it was removed.`;
+    focusAfterRemoval(neighbourKey);
 }
 
 /** Saves the state the learner asked for, and puts the old state back when the server refuses. */
@@ -105,6 +241,7 @@ async function changeStar(
         );
 
         applyMark(item.key, mark);
+        reconcileItem(item.key);
     } catch {
         applyMark(item.key, { starred: item.starred });
         markFailed(
@@ -134,6 +271,7 @@ async function changeStatus(
         );
 
         applyMark(item.key, mark);
+        reconcileItem(item.key);
     } catch {
         applyMark(item.key, { status: item.status });
         markFailed(
@@ -142,9 +280,54 @@ async function changeStatus(
     }
 }
 
-/** A mark saved from the open panel updates the list as well. */
+/**
+ * A mark saved from the open panel updates the panel at once, but the list
+ * only when the panel closes, so the learner is not moved out from under a
+ * panel they are still using.
+ */
 function onMarkSaved(item: CollectionOpenedItem, mark: ItemMarkData): void {
-    applyMark(item.key, mark);
+    const open = openItem.value;
+
+    if (open !== null && open.key === item.key) {
+        openItem.value = { ...open, ...mark };
+    }
+
+    pendingPanelMark.value = { key: item.key, mark };
+}
+
+/** Apply a mark the open panel left behind, if any. */
+function flushPendingPanelMark(): void {
+    const pending = pendingPanelMark.value;
+    pendingPanelMark.value = null;
+
+    if (pending === null) {
+        return;
+    }
+
+    applyMark(pending.key, pending.mark);
+    reconcileItem(pending.key);
+}
+
+/** Close the panel, then let its saved mark reach the list. */
+function closePanel(): void {
+    closeItemPanel();
+    flushPendingPanelMark();
+}
+
+/** Dismiss the calm note about an item that is no longer there. */
+function dismissMissing(): void {
+    dismissMissingItem();
+    flushPendingPanelMark();
+}
+
+/** Show only the items that need attention, or the whole collection again. */
+function toggleAttention(): void {
+    applyFilters(
+        normalizeCollectionFilters(
+            { ...filters.value, attention: !filters.value.attention },
+            tab.value,
+        ),
+    );
 }
 
 /** A short friendly line under the tabs, for the tabs that have one. */
@@ -200,10 +383,16 @@ function restoreSnapshot(
 /** Whether a saved list describes the address the browser just restored. */
 function matchesSnapshot(snapshot: CollectionSnapshot, url: string): boolean {
     const target = readCollectionQuery(url);
+    const savedFilters = normalizeCollectionFilters(
+        snapshot.filters,
+        snapshot.tab,
+    );
+    const targetFilters = readCollectionFilters(url, target.tab);
 
     return (
         snapshot.tab === target.tab &&
         snapshot.openItemKey === target.item &&
+        JSON.stringify(savedFilters) === JSON.stringify(targetFilters) &&
         snapshot.items.length > 0
     );
 }
@@ -242,6 +431,10 @@ onMounted(() => {
         const target = readCollectionQuery(url);
         const snapshot = readCollectionSnapshot();
 
+        // Leaving the panel through history is still closing it, so a mark
+        // saved there reaches the list now.
+        flushPendingPanelMark();
+
         if (snapshot !== null && matchesSnapshot(snapshot, url)) {
             restoreSnapshot(snapshot, target.item);
 
@@ -258,6 +451,8 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+    flushPendingPanelMark();
+
     saveCollectionSnapshot({
         tab: tab.value,
         items: [...items.value],
@@ -267,6 +462,10 @@ onBeforeUnmount(() => {
         openItemKey: openItem.value?.key ?? null,
         scrollY: lastScrollY,
         savedAt: Date.now(),
+        filters: { ...filters.value, topics: [...filters.value.topics] },
+        topicOptions: [...topicOptions.value],
+        allTotal: allTotal.value,
+        attentionCount: attentionCount.value,
     });
 
     stopListeningToHistory?.();
@@ -324,7 +523,7 @@ onBeforeUnmount(() => {
                         variant="outline"
                         size="sm"
                         class="mt-3"
-                        @click="dismissMissingItem"
+                        @click="dismissMissing"
                     >
                         Dismiss
                     </Button>
@@ -332,6 +531,45 @@ onBeforeUnmount(() => {
             </Alert>
 
             <div class="mt-4">
+                <!-- Search sits first, then the chips and controls that
+                    narrow the same collection. -->
+                <CollectionSearch
+                    :model-value="filters.q"
+                    :updating="updating"
+                    @search="setSearch"
+                />
+
+                <CollectionFilterBar
+                    :filters="filters"
+                    :topics="topicOptions"
+                    :tab="tab"
+                    :attention-count="attentionCount"
+                    :updating="updating"
+                    @change="applyFilters"
+                    @clear="clearFilters"
+                />
+
+                <div
+                    class="mb-3 flex flex-wrap items-center justify-between gap-2"
+                >
+                    <p class="text-sm text-muted-foreground">
+                        {{ countLabel }}
+                    </p>
+
+                    <Button
+                        v-if="showAttention"
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        class="min-h-11 md:min-h-8"
+                        :aria-pressed="filters.attention"
+                        @click="toggleAttention"
+                    >
+                        <TriangleAlertIcon aria-hidden="true" />
+                        {{ attentionLabel }}
+                    </Button>
+                </div>
+
                 <!-- The gathered collections: list, loading, empty and error
                     states live in the list itself. -->
                 <CollectionList
@@ -342,11 +580,18 @@ onBeforeUnmount(() => {
                     :error="error"
                     :updating="updating"
                     :total="total"
+                    :all-total="allTotal"
+                    :has-filters="collectionActiveFilterCount(filters) > 0"
+                    :has-search="hasCollectionSearch(filters)"
+                    :filter-error="filterError"
                     :has-finished-sessions="hasFinishedSessions"
                     @open="openItemPanel"
                     @load-more="loadMore"
                     @star="changeStar"
                     @status="changeStatus"
+                    @clear-search="clearSearch"
+                    @clear-filters="clearFilters"
+                    @retry-filters="retryFilters"
                 />
             </div>
         </Tabs>
@@ -355,7 +600,7 @@ onBeforeUnmount(() => {
             v-if="tab === 'mistakes'"
             :item="openItem as CollectionMistakeItem | null"
             tab="mistakes"
-            @close="closeItemPanel"
+            @close="closePanel"
             @see-session="rememberForReturn"
             @mark-saved="onMarkSaved"
         />
@@ -364,7 +609,7 @@ onBeforeUnmount(() => {
             v-else
             :item="openItem"
             :tab="tab"
-            @close="closeItemPanel"
+            @close="closePanel"
             @see-session="rememberForReturn"
             @mark-saved="onMarkSaved"
         />

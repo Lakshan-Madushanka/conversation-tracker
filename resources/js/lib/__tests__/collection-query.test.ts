@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { collectionUrl, readCollectionQuery } from '@/lib/collection-query';
+import {
+    collectionUrl,
+    readCollectionFilters,
+    readCollectionQuery,
+} from '@/lib/collection-query';
 
 describe('readCollectionQuery', () => {
     it('opens on vocabulary with no item when the url has no query', () => {
@@ -57,5 +61,67 @@ describe('collectionUrl', () => {
         expect(collectionUrl('phrases', 'catch up')).toBe(
             '/collections?tab=phrases&item=catch+up',
         );
+    });
+
+    it('keeps the search, filters and order beside the tab', () => {
+        expect(
+            collectionUrl('vocabulary', 'soup', {
+                q: 'cafe',
+                starred: true,
+                status: 'learned',
+                attention: true,
+                topics: [2, 5],
+                sort: 'az',
+            }),
+        ).toBe(
+            '/collections?tab=vocabulary&q=cafe&starred=1&status=learned&attention=1&topics=2%2C5&sort=az&item=soup',
+        );
+    });
+});
+
+describe('readCollectionFilters', () => {
+    it('opens a tab with its quiet defaults when the url says nothing', () => {
+        expect(
+            readCollectionFilters('/collections?tab=mistakes', 'mistakes'),
+        ).toEqual({
+            q: '',
+            starred: false,
+            status: 'all',
+            attention: false,
+            topics: [],
+            sort: 'most_seen',
+        });
+    });
+
+    it('reads every choice back', () => {
+        expect(
+            readCollectionFilters(
+                '/collections?tab=phrases&q=catch&starred=1&status=learned&attention=1&topics=2%2C5&sort=az',
+                'phrases',
+            ),
+        ).toEqual({
+            q: 'catch',
+            starred: true,
+            status: 'learned',
+            attention: true,
+            topics: [2, 5],
+            sort: 'az',
+        });
+    });
+
+    it('ignores values it cannot honour', () => {
+        expect(
+            readCollectionFilters(
+                '/collections?tab=grammar&q=a&status=banana&starred=maybe&attention=sometimes&topics=2,nope,-1&sort=most_seen',
+                'grammar',
+            ),
+        ).toEqual({
+            q: '',
+            starred: false,
+            status: 'all',
+            attention: false,
+            topics: [2],
+            sort: 'newest',
+        });
     });
 });

@@ -2,6 +2,7 @@ import { collectionUrl } from '@/lib/collection-query';
 import { show as sessionsShow } from '@/routes/sessions';
 import type {
     CollectionAppearance,
+    CollectionFilters,
     CollectionItem,
     CollectionItemsPage,
     CollectionMistakeAppearance,
@@ -11,6 +12,7 @@ import type {
     CollectionPage,
     CollectionRow,
     CollectionTabKey,
+    CollectionTopicOption,
 } from '@/types';
 
 /**
@@ -27,6 +29,12 @@ export interface CollectionSnapshot {
     openItemKey: string | null;
     scrollY: number;
     savedAt: number;
+    /** The search, filters and order the saved list was showing. */
+    filters?: CollectionFilters;
+    /** The topic picker, whole-collection counts and attention count. */
+    topicOptions?: CollectionTopicOption[];
+    allTotal?: number;
+    attentionCount?: number;
 }
 
 const SNAPSHOT_KEY = 'collections:snapshot';
@@ -346,7 +354,11 @@ export function collectionReturnUrl(): string {
 
     return snapshot === null
         ? collectionUrl('vocabulary')
-        : collectionUrl(snapshot.tab, snapshot.openItemKey);
+        : collectionUrl(
+              snapshot.tab,
+              snapshot.openItemKey,
+              snapshot.filters ?? null,
+          );
 }
 
 /** Whether a session address came from a collection item. */
@@ -557,6 +569,15 @@ function isStoredSnapshot(value: unknown): value is CollectionSnapshot {
         (typeof snapshot.openItemKey === 'string' ||
             snapshot.openItemKey === null) &&
         typeof snapshot.scrollY === 'number' &&
-        typeof snapshot.savedAt === 'number'
+        typeof snapshot.savedAt === 'number' &&
+        (snapshot.filters === undefined ||
+            (typeof snapshot.filters === 'object' &&
+                snapshot.filters !== null)) &&
+        (snapshot.topicOptions === undefined ||
+            Array.isArray(snapshot.topicOptions)) &&
+        (snapshot.allTotal === undefined ||
+            typeof snapshot.allTotal === 'number') &&
+        (snapshot.attentionCount === undefined ||
+            typeof snapshot.attentionCount === 'number')
     );
 }

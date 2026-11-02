@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Actions\Search;
 
+use App\Enums\FeedbackType;
+use App\Models\CollectionItemMark;
 use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeQuestion;
 use App\Models\Topic;
@@ -25,11 +27,17 @@ final readonly class BackfillSearchText
      */
     public function handle(): array
     {
-        return [
+        $result = [
             'topics' => $this->topics(),
             'questions' => $this->questions(),
             'entries' => $this->entries(),
         ];
+
+        // Marks are repaired in place but are not part of the command's
+        // long-standing count, which names only the rows search reads.
+        $this->marks();
+
+        return $result;
     }
 
     private function topics(): int
@@ -96,19 +104,102 @@ final readonly class BackfillSearchText
             ->chunkById(200, function ($entries) use (&$changed): void {
                 foreach ($entries as $entry) {
                     $search = EntrySearch::text($entry);
+                    $collectionKey = EntrySearch::collectionKey($entry);
+                    $sortText = EntrySearch::sortText($entry);
+                    $attention = EntrySearch::attentionReason($entry);
+                    $splitBroke = EntrySearch::splitBroke($entry);
 
-                    if ($entry->search_text === $search) {
+                    $values = [];
+
+                    if ($entry->search_text !== $search) {
+                        $values['search_text'] = $search;
+                    }
+
+                    if ($entry->collection_key !== $collectionKey) {
+                        $values['collection_key'] = $collectionKey;
+                    }
+
+                    if ($entry->sort_text !== $sortText) {
+                        $values['sort_text'] = $sortText;
+                    }
+
+                    if ($entry->attention_reason !== $attention) {
+                        $values['attention_reason'] = $attention;
+                    }
+
+                    if ((bool) $entry->split_broke !== $splitBroke) {
+                        $values['split_broke'] = $splitBroke;
+                    }
+
+                    if ($values === []) {
                         continue;
                     }
 
                     DB::table('practice_feedback_entries')
                         ->where('id', $entry->id)
-                        ->update(['search_text' => $search]);
+                        ->update($values);
 
                     $changed += 1;
                 }
             });
 
         return $changed;
+    }
+
+    /**
+     * Give older marks their public group key and the normalised copy of their
+     * note. A mark whose item no longer appears cannot be named from its opaque
+     * storage key, so it keeps a null group key until the item returns and the
+     * mark is saved again.
+     */
+    private function marks(): void
+    {
+        /** @var array<string, string> $groupKeyByStorageKey */
+        $groupKeyByStorageKey = [];
+
+        DB::table('practice_feedback_entries')
+            ->select(['type', 'collection_key'])
+            ->whereNotNull('collection_key')
+            ->orderBy('id')
+            ->chunk(500, function ($entries) use (&$groupKeyByStorageKey): void {
+                foreach ($entries as $entry) {
+                    $type = FeedbackType::tryFrom((string) $entry->type);
+
+                    if ($type === null) {
+                        continue;
+                    }
+
+                    $groupKey = (string) $entry->collection_key;
+
+                    $groupKeyByStorageKey[CollectionItemMark::keyFor($type, $groupKey)] = $groupKey;
+                }
+            });
+
+        CollectionItemMark::query()
+            ->orderBy('id')
+            ->chunkById(200, function ($marks) use ($groupKeyByStorageKey): void {
+                foreach ($marks as $mark) {
+                    $notes = SearchText::normalize((string) $mark->notes_text);
+                    $groupKey = $groupKeyByStorageKey[$mark->item_key] ?? null;
+
+                    $values = [];
+
+                    if ($mark->notes_search_text !== $notes) {
+                        $values['notes_search_text'] = $notes;
+                    }
+
+                    if ($groupKey !== null && $mark->group_key !== $groupKey) {
+                        $values['group_key'] = $groupKey;
+                    }
+
+                    if ($values === []) {
+                        continue;
+                    }
+
+                    DB::table('collection_item_marks')
+                        ->where('id', $mark->id)
+                        ->update($values);
+                }
+            });
     }
 }

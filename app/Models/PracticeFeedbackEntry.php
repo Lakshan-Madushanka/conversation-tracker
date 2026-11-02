@@ -43,6 +43,10 @@ use Illuminate\Support\Carbon;
  * @property string|list<array{id: string, text: string, html: string}> $example_html
  * @property bool $is_split
  * @property string|null $search_text
+ * @property string|null $collection_key
+ * @property string|null $sort_text
+ * @property string|null $attention_reason
+ * @property bool $split_broke
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
@@ -66,13 +70,40 @@ class PracticeFeedbackEntry extends Model
     use HasFactory;
 
     /**
-     * Keep the searchable copy in step with the words, so an edited row stops
-     * matching its old wording and a new one is found straight away.
+     * Keep the searchable copy and the Collections projection in step with
+     * the words, so an edited row stops matching its old wording and moves to
+     * the right group, filter and order straight away.
      */
     protected static function booted(): void
     {
         static::saving(function (self $entry): void {
             $entry->search_text = EntrySearch::text($entry);
+            $entry->collection_key = EntrySearch::collectionKey($entry);
+            $entry->sort_text = EntrySearch::sortText($entry);
+            $entry->attention_reason = EntrySearch::attentionReason($entry);
+            $entry->split_broke = EntrySearch::splitBroke($entry);
+        });
+
+        static::saved(function (self $entry): void {
+            // A grammar note's public key is its own row id, so it can only be
+            // filled once the row exists. The row itself never changes, so this
+            // quiet follow-up save happens on the first save only.
+            if ($entry->type !== FeedbackType::GrammarNote) {
+                return;
+            }
+
+            $key = EntrySearch::collectionKey($entry);
+
+            if ($key === null || $entry->collection_key === $key) {
+                return;
+            }
+
+            $entry->timestamps = false;
+            $entry->forceFill([
+                'collection_key' => $key,
+                'sort_text' => EntrySearch::sortText($entry),
+            ])->saveQuietly();
+            $entry->timestamps = true;
         });
     }
 

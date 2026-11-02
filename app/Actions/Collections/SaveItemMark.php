@@ -29,7 +29,7 @@ final class SaveItemMark
     ): CollectionItemMark {
         $storageKey = CollectionItemMark::keyFor($kind, $itemKey);
 
-        return DB::transaction(function () use ($kind, $storageKey, $starred, $status): CollectionItemMark {
+        return DB::transaction(function () use ($kind, $itemKey, $storageKey, $starred, $status): CollectionItemMark {
             /** @var CollectionItemMark|null $mark */
             $mark = CollectionItemMark::query()
                 ->where('kind', $kind->value)
@@ -38,7 +38,14 @@ final class SaveItemMark
                 ->first();
 
             if ($mark === null) {
-                return $this->create($kind, $storageKey, $starred, $status);
+                return $this->create($kind, $itemKey, $storageKey, $starred, $status);
+            }
+
+            // Older marks can have been saved before the public key was kept
+            // beside the opaque storage key. Filling it here keeps the item
+            // joinable by every later Collections read.
+            if ($mark->group_key !== $itemKey) {
+                $mark->group_key = $itemKey;
             }
 
             if ($starred !== null && $mark->starred !== $starred) {
@@ -66,6 +73,7 @@ final class SaveItemMark
      */
     private function create(
         FeedbackType $kind,
+        string $itemKey,
         string $storageKey,
         ?bool $starred,
         ?CollectionItemStatus $status,
@@ -74,6 +82,7 @@ final class SaveItemMark
             $mark = CollectionItemMark::query()->make([
                 'kind' => $kind,
                 'item_key' => $storageKey,
+                'group_key' => $itemKey,
                 'starred' => $starred ?? false,
                 'status' => $status,
                 // A first mark starts with no note at all.
@@ -93,6 +102,7 @@ final class SaveItemMark
 
             // The row exists; someone else created it a moment ago. Apply the
             // same desired state once more instead of writing a second row.
+            $mark->group_key = $itemKey;
             $mark->starred = $starred ?? $mark->starred;
             $mark->status = $status;
 

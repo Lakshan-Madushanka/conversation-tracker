@@ -7,8 +7,17 @@
  * tested without an app.
  */
 
+import {
+    collectionFiltersToQuery,
+    normalizeCollectionFilters,
+} from '@/lib/collection-filters';
 import { index as collectionsIndex } from '@/routes/collections';
-import type { CollectionTabKey } from '@/types';
+import type {
+    CollectionFilters,
+    CollectionSort,
+    CollectionStatusFilter,
+    CollectionTabKey,
+} from '@/types';
 
 /** The tab shown when the url asks for one this page does not have. */
 const FALLBACK_TAB: CollectionTabKey = 'vocabulary';
@@ -45,18 +54,70 @@ export function readCollectionQuery(url: string): {
 }
 
 /**
- * The address for one tab, optionally with an opened panel. The item is left
- * out when there is none, so closing the panel has no empty `item=`.
+ * The search, filters and order a Collections url asks for. Unknown values
+ * are ignored quietly, so a stale bookmark opens a useful list.
+ */
+export function readCollectionFilters(
+    url: string,
+    tab: CollectionTabKey,
+): CollectionFilters {
+    const [, query = ''] = url.split('?');
+    const parsed = new URLSearchParams(query.split('#')[0]);
+
+    return normalizeCollectionFilters(
+        {
+            q: parsed.get('q') ?? '',
+            starred: isTruthy(parsed.get('starred')),
+            status:
+                (parsed.get('status') as CollectionStatusFilter | null) ??
+                undefined,
+            attention: isTruthy(parsed.get('attention')),
+            topics: topicIds(parsed.get('topics')),
+            sort: (parsed.get('sort') as CollectionSort | null) ?? undefined,
+        },
+        tab,
+    );
+}
+
+/**
+ * The address for one tab, optionally with an opened panel and its search and
+ * filters. The item is left out when there is none, so closing the panel has
+ * no empty `item=`. Defaults are left out too, so an untouched collection
+ * keeps the short address it always had.
  */
 export function collectionUrl(
     tab: CollectionTabKey,
     item: string | null = null,
+    filters: CollectionFilters | null = null,
 ): string {
-    return collectionsIndex.url({
-        query: item === null ? { tab } : { tab, item },
-    });
+    const query: Record<string, string> = {
+        tab,
+        ...(filters === null ? {} : collectionFiltersToQuery(filters, tab)),
+    };
+
+    if (item !== null) {
+        query.item = item;
+    }
+
+    return collectionsIndex.url({ query });
 }
 
 function isTabKey(value: string | null): value is CollectionTabKey {
     return value !== null && (TAB_KEYS as string[]).includes(value);
+}
+
+function isTruthy(value: string | null): boolean {
+    return value === '1' || value === 'true' || value === 'on';
+}
+
+/** `1,2` from the address, with anything a topic id cannot be left out. */
+function topicIds(value: string | null): number[] {
+    if (value === null || value === '') {
+        return [];
+    }
+
+    return value
+        .split(',')
+        .map((piece) => Number(piece.trim()))
+        .filter((id) => Number.isInteger(id) && id > 0);
 }

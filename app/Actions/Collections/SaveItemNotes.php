@@ -49,7 +49,7 @@ final class SaveItemNotes
 
         $storageKey = CollectionItemMark::keyFor($kind, $itemKey);
 
-        return DB::transaction(function () use ($kind, $storageKey, $clean, $version): CollectionItemMark {
+        return DB::transaction(function () use ($kind, $itemKey, $storageKey, $clean, $version): CollectionItemMark {
             /** @var CollectionItemMark|null $mark */
             $mark = CollectionItemMark::query()
                 ->where('kind', $kind->value)
@@ -68,6 +68,7 @@ final class SaveItemNotes
                 return new CollectionItemMark([
                     'kind' => $kind,
                     'item_key' => $storageKey,
+                    'group_key' => $itemKey,
                     'starred' => false,
                     'status' => null,
                     'notes_html' => '',
@@ -83,16 +84,23 @@ final class SaveItemNotes
                 && $mark->notes_html === $clean['html']
                 && $mark->notes_text === $clean['text']
             ) {
+                if ($mark->group_key !== $itemKey) {
+                    $mark->group_key = $itemKey;
+                    $mark->save();
+                }
+
                 return $mark;
             }
 
             $mark ??= new CollectionItemMark([
                 'kind' => $kind,
                 'item_key' => $storageKey,
+                'group_key' => $itemKey,
                 'starred' => false,
                 'notes_version' => 0,
             ]);
 
+            $mark->group_key = $itemKey;
             $mark->notes_html = $clean['html'];
             $mark->notes_text = $clean['text'];
             $mark->notes_version += 1;

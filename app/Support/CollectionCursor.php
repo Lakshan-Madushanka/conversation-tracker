@@ -17,7 +17,8 @@ use Carbon\CarbonImmutable;
  * Items whose order inside the same moment is worked out from their place in
  * the session — grammar notes, asked for by question order and then note
  * order — carry that place in the cursor too, so a page never repeats or
- * skips one.
+ * skips one. A to Z pages carry the words they sorted by, because two
+ * different items can share a moment but never share a word.
  *
  * The value travels in the address, so it is encoded as URL-safe base64 JSON.
  * A cursor this app did not make is ignored and the list starts again at the
@@ -29,6 +30,7 @@ final readonly class CollectionCursor
         public string $key,
         public CarbonImmutable $latestAt,
         public ?int $position = null,
+        public ?string $sortText = null,
     ) {}
 
     /**
@@ -57,6 +59,7 @@ final readonly class CollectionCursor
         $timestamp = $decoded['t'] ?? null;
         $key = $decoded['k'] ?? null;
         $position = $decoded['p'] ?? null;
+        $sortText = $decoded['s'] ?? null;
 
         if (! is_int($timestamp) || ! is_string($key) || $key === '') {
             return null;
@@ -66,6 +69,7 @@ final readonly class CollectionCursor
             $key,
             CarbonImmutable::createFromTimestamp($timestamp, date_default_timezone_get()),
             is_int($position) ? $position : null,
+            is_string($sortText) && $sortText !== '' ? $sortText : null,
         );
     }
 
@@ -76,6 +80,7 @@ final readonly class CollectionCursor
             't' => $this->latestAt->getTimestamp(),
             'k' => $this->key,
             'p' => $this->position,
+            's' => $this->sortText,
         ]);
 
         return rtrim(strtr(base64_encode($json === false ? '' : $json), '+/', '-_'), '=');

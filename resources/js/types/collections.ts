@@ -15,6 +15,49 @@ export interface CollectionTabData {
     count: number;
 }
 
+/** One topic that currently feeds the collection on screen. */
+export interface CollectionTopicOption {
+    id: number;
+    name: string;
+    /** How many items of this collection appeared in the topic. */
+    count: number;
+}
+
+/** The orders a collection can be shown in. */
+export type CollectionSort = 'newest' | 'az' | 'most_seen';
+
+/** The learner's own status, as a filter. */
+export type CollectionStatusFilter =
+    | 'all'
+    | 'none'
+    | 'learned'
+    | 'still_difficult';
+
+/** Everything that searches, narrows or orders one collection. */
+export interface CollectionFilters {
+    q: string;
+    starred: boolean;
+    status: CollectionStatusFilter;
+    attention: boolean;
+    topics: number[];
+    sort: CollectionSort;
+}
+
+/** One piece of a search hint: plain words, or a piece that matched. */
+export interface CollectionMatchSegment {
+    text: string;
+    match: boolean;
+}
+
+/**
+ * The server-computed hint saying where a search found an item. Its words are
+ * always plain text cut from what the learner saved, never saved markup.
+ */
+export interface CollectionMatch {
+    label: string;
+    segments: CollectionMatchSegment[];
+}
+
 /** One place something was saved, with the row it points back to. */
 export interface CollectionAppearance {
     session_id: number;
@@ -65,6 +108,8 @@ export interface CollectionItem {
     /** The open panel receives these; the list does not need them. */
     notes_html?: string;
     notes_version?: number;
+    /** Where the search found it, when a search is narrowing the list. */
+    match?: CollectionMatch | null;
     appearances: CollectionAppearance[];
 }
 
@@ -92,6 +137,8 @@ export interface CollectionNoteItem {
     has_notes: boolean;
     notes_html?: string;
     notes_version?: number;
+    /** Where the search found it, when a search is narrowing the list. */
+    match?: CollectionMatch | null;
 }
 
 /**
@@ -142,6 +189,8 @@ export interface CollectionMistakeItem {
     has_notes: boolean;
     notes_html?: string;
     notes_version?: number;
+    /** Where the search found it, when a search is narrowing the list. */
+    match?: CollectionMatch | null;
     appearances: CollectionMistakeAppearance[];
 }
 
@@ -158,6 +207,14 @@ export interface CollectionPage {
     next_cursor: string | null;
     has_more: boolean;
     total: number;
+    /** How many items the whole collection holds, before filters. */
+    all_total?: number;
+    /** How many items of the whole collection need attention. */
+    attention_count?: number;
+    /** The topics that currently feed this collection. */
+    topic_options?: CollectionTopicOption[];
+    /** The filters the server actually honoured. */
+    filters?: CollectionFilters;
     /** False when the learner has never finished a session. */
     has_finished_sessions: boolean;
     /** The item whose panel should open, when the address names one. */

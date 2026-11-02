@@ -57,6 +57,71 @@ final class EntrySearch
     }
 
     /**
+     * The item's public collection identity, by the same rule the Collections
+     * page groups by: the normalised word or phrase, the normalised mistake
+     * pair, or a grammar note's own row key.
+     *
+     * A blank row has no identity at all, so it never joins a collection.
+     */
+    public static function collectionKey(PracticeFeedbackEntry $entry): ?string
+    {
+        if ($entry->type === FeedbackType::GrammarNote) {
+            return $entry->exists ? 'note-'.$entry->getKey() : null;
+        }
+
+        if ($entry->type === FeedbackType::Mistake) {
+            $said = (string) $entry->content_text;
+            $correction = (string) $entry->correction_text;
+
+            return MistakeIdentity::isBlank($said, $correction)
+                ? null
+                : MistakeIdentity::pairKey($said, $correction);
+        }
+
+        if ($entry->type === FeedbackType::Vocabulary || $entry->type === FeedbackType::Phrase) {
+            $key = SearchText::normalize((string) $entry->content_text);
+
+            return $key === '' ? null : $key;
+        }
+
+        return null;
+    }
+
+    /** The words A to Z reads: the row's subject without capitals or accents. */
+    public static function sortText(PracticeFeedbackEntry $entry): string
+    {
+        return SearchText::normalize((string) $entry->content_text);
+    }
+
+    /**
+     * Why this row asks for attention, in the one shared wording. Grammar
+     * notes and rows outside Collections never ask for it.
+     */
+    public static function attentionReason(PracticeFeedbackEntry $entry): ?string
+    {
+        if (! $entry->type->isTable()) {
+            return null;
+        }
+
+        return RowAttention::reason(
+            $entry->type,
+            (string) $entry->content_text,
+            (string) $entry->correction_text,
+            self::exampleText($entry),
+        );
+    }
+
+    /**
+     * Whether this row's line held too many separators to split. A grouped
+     * item that holds one such row shows that calm reason instead of the
+     * plainer missing-meaning one.
+     */
+    public static function splitBroke(PracticeFeedbackEntry $entry): bool
+    {
+        return self::attentionReason($entry) === RowAttention::MORE_THAN_ONE;
+    }
+
+    /**
      * The field that best shows why a row matched, used for its snippet. The
      * field holding the most terms wins; the first one wins a tie.
      *

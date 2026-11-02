@@ -191,24 +191,24 @@ This describes the intended approach at a high level, using the agreed stack (La
 
 All interface pieces in Collections should come from **shadcn-vue**, the component library already chosen for the app. Only build a custom piece when shadcn-vue has nothing suitable, and then build it by **composing shadcn-vue parts with Tailwind**. Do not add any other component library.
 
-| Collections need | shadcn-vue component to use |
-|---|---|
-| The four collection tabs with counts | Tabs |
-| Item rows and cards | Card, or Table for wider screens with stacked cards on phones |
-| Star button | Toggle (with an accessible label naming the item) |
-| Status label and "Needs attention" marker | Badge (text, never color alone) |
-| Status choice (Learned, Still difficult, clear) | Toggle Group, or Dropdown Menu in the list |
-| Opened item | Sheet (side panel on larger screens, bottom or full-screen on phones), or Dialog |
-| Search box | Input with a clear button |
-| Starred only, status, and topic filters | Toggle, Toggle Group, Select, and Combobox |
-| "Needs attention only" filter and its count | Toggle, with Badge for the count |
-| Sort control | Select |
-| Active filter chips | Badge with a small Button to remove each |
-| Personal notes | The app's existing rich text editor, with Button for formatting |
-| Saved indicator and messages | Badge or text with Sonner (toast) |
-| "Show more" for long text or sessions list | Collapsible |
-| Loading, empty, and error states | Skeleton, Alert, and the existing empty-state piece |
-| Dividers and layout details | Separator, Scroll Area |
+| Collections need                                | shadcn-vue component to use                                                      |
+| ----------------------------------------------- | -------------------------------------------------------------------------------- |
+| The four collection tabs with counts            | Tabs                                                                             |
+| Item rows and cards                             | Card, or Table for wider screens with stacked cards on phones                    |
+| Star button                                     | Toggle (with an accessible label naming the item)                                |
+| Status label and "Needs attention" marker       | Badge (text, never color alone)                                                  |
+| Status choice (Learned, Still difficult, clear) | Toggle Group, or Dropdown Menu in the list                                       |
+| Opened item                                     | Sheet (side panel on larger screens, bottom or full-screen on phones), or Dialog |
+| Search box                                      | Input with a clear button                                                        |
+| Starred only, status, and topic filters         | Toggle, Toggle Group, Select, and Combobox                                       |
+| "Needs attention only" filter and its count     | Toggle, with Badge for the count                                                 |
+| Sort control                                    | Select                                                                           |
+| Active filter chips                             | Badge with a small Button to remove each                                         |
+| Personal notes                                  | The app's existing rich text editor, with Button for formatting                  |
+| Saved indicator and messages                    | Badge or text with Sonner (toast)                                                |
+| "Show more" for long text or sessions list      | Collapsible                                                                      |
+| Loading, empty, and error states                | Skeleton, Alert, and the existing empty-state piece                              |
+| Dividers and layout details                     | Separator, Scroll Area                                                           |
 
 Where a shadcn-vue component needs small changes, change its **variants and Tailwind classes** instead of replacing it, so Collections stays visually consistent with the rest of the app, in light and dark mode, and keeps the accessibility built into the components.
 
@@ -221,6 +221,7 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 **What it delivers:** A Collections page with the four tabs and counts, the automatic gathering of items from finished, non-archived sessions, and the Vocabulary collection as a read-only list with an opened item view and "See original session" links. The other three tabs show a friendly "coming soon in the next step" state only if needed during development, and are completed in the next steps.
 
 **Tests**
+
 - The Collections link in the main navigation opens the page, and the tab choice is kept in the address and survives a refresh.
 - The four tabs appear in order, arrow keys move between them, and the tabs not built yet show a calm "on its way" message with no count and no fake data.
 - The first 30 words load, more load when reaching the end and with Load more, with no duplicates or gaps.
@@ -244,6 +245,7 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 **What it delivers:** The Phrases collection (phrase, meaning or use, example) and the Grammar notes collection (each note as its own item, with a short preview in the list and the full formatted text when opened), using the same list, item view, and links as Vocabulary.
 
 **Tests**
+
 - Phrases come only from finished, non-archived sessions, each phrase appears once with its meaning or use and example, and the seen count when it appears more than once.
 - A phrase without a meaning or use is shown normally and is **not** marked "Needs attention", because that is normal for phrases.
 - A phrase without a meaning shows the quiet "No meaning added" text, and a phrase whose row had more than one separator is marked "Needs attention" by the shared rule.
@@ -263,6 +265,7 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 **What it delivers:** The My mistakes collection, grouping repeated mistakes, showing how often each was seen, ordering the most frequent first, and an opened view with every place the mistake appeared.
 
 **Tests**
+
 - The same mistake in several finished, non-archived sessions appears once, as one group, identified by the pair of what was said and the correction, ignoring capitalization, accents, and spaces.
 - Each group shows "Seen N times", counting each appearance, with a repeated row in the same box of the same session counted once.
 - The "Seen N times" label is always shown for mistakes, with correct singular wording ("Seen 1 time").
@@ -285,6 +288,7 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 **What it delivers:** The learner's own marks on items: a star, a status (Learned or Still difficult), and personal notes with simple formatting, saved automatically and kept safely, including the rules for edited text and disappearing items.
 
 **Tests**
+
 - A star can be added and removed from the list and from the opened item, and shows correctly everywhere the item appears.
 - The star in a list row is a separate control from the row's open action, and its accessible name includes the item.
 - Star and status requests carry the desired state, so repeated or simultaneous requests never flip them, and a failed save returns them to the previous state with a calm message.
@@ -316,6 +320,7 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 **What it delivers:** Search within each collection, "starred only," status and topic filters, sorting, removable filter chips, result counts, and the whole state kept in the page address.
 
 **Tests**
+
 - Search finds items by their text, meanings, examples, reasons, and the learner's notes, ignoring capitalization, accents, extra spaces, and formatting, and matching parts of words.
 - Typing several words finds only items where all of them appear together.
 - Search covers every meaning, example, and reason of an item and the learner's own notes, and an item that matches only in hidden text shows the correct "Matched in …" line.
@@ -345,6 +350,7 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 **What it delivers:** Collections that always follow the learner's sessions, plus a full check of speed, wording, accessibility, and consistency.
 
 **Tests**
+
 - Finishing a session makes its items appear straight away, and an unfinished session never contributes.
 - Editing a finished session updates the affected items, and adding or removing entries is reflected.
 - Archiving a session removes its items from Collections (unless they appear elsewhere), restoring brings them back with the learner's marks, and deleting removes them.

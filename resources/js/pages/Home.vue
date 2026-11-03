@@ -22,7 +22,7 @@ import {
 } from '@/components/ui/card';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { progressStats, todayReview } from '@/lib/sample-data';
-import { index as reviewSession } from '@/routes/review';
+import { index as reviewIndex } from '@/routes/review';
 import {
     create as sessionsCreate,
     index as sessionsIndex,
@@ -100,7 +100,7 @@ const greeting = computed(() => {
                 </div>
 
                 <Button size="lg" as-child>
-                    <Link :href="reviewSession.url()">
+                    <Link :href="reviewIndex.url()">
                         <PlayIcon aria-hidden="true" />
                         Start review
                     </Link>

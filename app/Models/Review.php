@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Carbon;
 
 /**
  * One review sitting: the fixed list of items the learner works through.
@@ -16,13 +16,29 @@ use Illuminate\Support\Carbon;
  * the current words are read again whenever a card is shown and a review left
  * open for a long time still shows what the learner actually saved.
  *
+ * `is_daily_review` marks a review started from the day's suggestion;
+ * `completed_on` is the learner's local day the finish screen was reached,
+ * so "You've reviewed today" can be worked out. A review left part-way
+ * keeps `completed_on` null.
+ *
  * @property int $id
- * @property Carbon|null $created_at
- * @property Carbon|null $updated_at
+ * @property bool $is_daily_review
+ * @property CarbonImmutable|null $completed_on
+ * @property CarbonImmutable|null $created_at
+ * @property CarbonImmutable|null $updated_at
  */
-#[Fillable([])]
+#[Fillable(['is_daily_review', 'completed_on'])]
 final class Review extends Model
 {
+    /** @return array<string, string> */
+    protected function casts(): array
+    {
+        return [
+            'is_daily_review' => 'boolean',
+            'completed_on' => 'immutable_date',
+        ];
+    }
+
     /**
      * The items in the order the learner meets them.
      *

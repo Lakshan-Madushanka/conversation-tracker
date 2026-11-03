@@ -7,15 +7,19 @@ namespace App\Http\Controllers;
 use App\Actions\Reviews\RecordRating;
 use App\Actions\Reviews\StartReview;
 use App\Actions\Reviews\UndoRating;
+use App\Enums\FeedbackType;
 use App\Http\Requests\RateReviewItemRequest;
+use App\Http\Requests\StartReviewRequest;
 use App\Http\Requests\UndoReviewItemRequest;
 use App\Http\Resources\ReviewCardResource;
 use App\Models\PracticeFeedbackEntry;
-use App\Models\PracticeSession;
 use App\Models\Rating;
 use App\Models\Review;
 use App\Models\ReviewItem;
 use App\Queries\ReviewCandidates;
+use App\Queries\TableCollection;
+use App\Queries\TodaysReview;
+use App\Support\LearnerDay;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -32,21 +36,38 @@ use Inertia\Response;
  */
 class ReviewController extends Controller
 {
-    public function index(ReviewCandidates $candidates): Response
-    {
+    public function index(
+        Request $request,
+        TodaysReview $todaysReview,
+        TableCollection $collection,
+    ): Response {
         return Inertia::render('review/Index', [
-            'reviewableCount' => $candidates->count(),
-            'hasFinishedSessions' => PracticeSession::query()->study()->exists(),
+            'todayReview' => $todaysReview->card($request),
+            // The same shared "needs attention" rule the collections use, so
+            // the note and the collections always agree.
+            'waitingForFix' => [
+                'vocabulary' => $collection->attentionCount(FeedbackType::Vocabulary),
+                'phrases' => $collection->attentionCount(FeedbackType::Phrase),
+            ],
         ]);
     }
 
     /**
-     * Start a review of the items most worth revisiting. Nothing reviewable
-     * goes back to Review Home, which explains what fills it.
+     * Start a review built from the items most worth revisiting at this
+     * moment. `daily` marks the sitting as the day's suggestion; `more`
+     * starts the "Review a bit more" sitting, which leaves out the items
+     * already rated today. Nothing reviewable goes back to Review Home,
+     * which explains what fills it.
      */
-    public function store(StartReview $startReview): RedirectResponse
-    {
-        $review = $startReview->handle();
+    public function store(
+        StartReviewRequest $request,
+        StartReview $startReview,
+    ): RedirectResponse {
+        $review = $startReview->handle(
+            daily: $request->daily(),
+            excludingRatedToday: $request->more(),
+            request: $request,
+        );
 
         if (! $review instanceof Review) {
             return to_route('review.index');
@@ -59,8 +80,12 @@ class ReviewController extends Controller
      * The next item in this review, or the finish screen once every item has
      * been rated or can no longer be shown.
      */
-    public function show(Request $request, ReviewCandidates $candidates): Response
-    {
+    public function show(
+        Request $request,
+        ReviewCandidates $candidates,
+        TodaysReview $todaysReview,
+        LearnerDay $day,
+    ): Response {
         $review = $this->reviewFrom($request);
 
         if (! $review instanceof Review) {
@@ -104,16 +129,30 @@ class ReviewController extends Controller
             break;
         }
 
+        $finished = $card === null;
         $counts = $ratings->countBy(fn (Rating $rating): string => $rating->rating->value);
         $total = $items->count();
         $completed = $ratings->count() + $skipped;
         $latest = $ratings->sortByDesc('id')->first();
 
+        // Reaching the finish screen completes a daily review. The learner's
+        // local day is recorded so the card can say "You've reviewed today"
+        // without keeping anything else. A review left part-way never
+        // completes, and the card never nags.
+        if ($finished && $review->is_daily_review && $review->completed_on === null) {
+            $review->completed_on = $day->today($request);
+            $review->save();
+        }
+
+        $canReviewMore = $finished
+            && $todaysReview->suggest(excludingRatedToday: true, request: $request)->count() > 0;
+
         return Inertia::render('review/Session', [
             'notFound' => false,
-            'finished' => $card === null,
+            'finished' => $finished,
             'card' => $card,
             'reviewId' => $review->id,
+            'isDailyReview' => $review->is_daily_review,
             'position' => [
                 'current' => $total === 0 ? 0 : min($total, $completed + 1),
                 'total' => $total,
@@ -133,7 +172,7 @@ class ReviewController extends Controller
                     'item_identity' => $latest->item_identity,
                 ]
                 : null,
-            'canReviewMore' => $candidates->count() > 0,
+            'canReviewMore' => $canReviewMore,
         ]);
     }
 
@@ -205,6 +244,7 @@ class ReviewController extends Controller
      *     reviewedCount: int,
      *     undo: null,
      *     canReviewMore: bool,
+     *     isDailyReview: bool,
      *     reviewId: null
      * }
      */
@@ -220,6 +260,7 @@ class ReviewController extends Controller
             'reviewedCount' => 0,
             'undo' => null,
             'canReviewMore' => false,
+            'isDailyReview' => false,
             'reviewId' => null,
         ];
     }

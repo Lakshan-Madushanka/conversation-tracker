@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Support\LearnerDay;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
@@ -17,7 +18,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // One learner's clock for the whole process, so every piece of the
+        // app reads the same moment and tests can pin it in one place.
+        $this->app->singleton(LearnerDay::class);
     }
 
     /**

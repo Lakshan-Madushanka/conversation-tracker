@@ -452,8 +452,9 @@ watch(
                     </Alert>
 
                     <p v-else class="mb-3 text-sm text-muted-foreground">
-                        These sessions are unfinished, so your progress totals,
-                        practice days, and streak will not change.
+                        These sessions are unfinished. They will leave the
+                        Library, Collections, and Review, but your progress
+                        totals, practice days, and streak will not change.
                     </p>
 
                     <section

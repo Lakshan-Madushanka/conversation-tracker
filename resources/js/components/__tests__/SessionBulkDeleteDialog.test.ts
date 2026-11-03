@@ -136,6 +136,9 @@ describe('deleting only unfinished sessions', () => {
         );
 
         expect(document.body.textContent).toContain('Delete 3 sessions?');
+        expect(document.body.textContent).toContain(
+            'They will leave the Library, Collections, and Review',
+        );
         expect(document.body.textContent).toContain('progress totals');
         expect(document.body.textContent).toContain('will not change');
         expect(document.getElementById('bulk-delete-understand')).toBeNull();

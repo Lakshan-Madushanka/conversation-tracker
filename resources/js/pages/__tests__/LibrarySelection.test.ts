@@ -510,7 +510,7 @@ describe('archiving several sessions', () => {
 
         expect(archiveSessions).toHaveBeenCalledWith([1, 2]);
         expect(success).toHaveBeenCalledWith(
-            '1 session archived. 1 session was skipped because unfinished sessions cannot be archived.',
+            '1 session archived. It is hidden from the Library and Collections, and you can restore it any time. 1 session was skipped because unfinished sessions cannot be archived.',
             expect.objectContaining({
                 action: expect.objectContaining({ label: 'Undo' }),
             }),

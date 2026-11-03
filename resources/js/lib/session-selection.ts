@@ -64,6 +64,21 @@ export function rangeIds(
     return sessions.slice(start, end + 1).map((session) => session.id);
 }
 
+/**
+ * What archiving now means, said calmly after a single archive. Archived
+ * sessions leave the Library and Collections but can always come back.
+ */
+export function archivedSessionMessage(): string {
+    return `Session archived. ${archivedVisibilityNote(1)}`;
+}
+
+/** The reassuring half of an archive message, for one or many sessions. */
+export function archivedVisibilityNote(count: number): string {
+    return count === 1
+        ? 'It is hidden from the Library and Collections, and you can restore it any time.'
+        : 'They are hidden from the Library and Collections, and you can restore them any time.';
+}
+
 /** "1 session archived." or "3 sessions archived.", plus every skip reason. */
 export function bulkArchiveMessage(result: BulkArchiveResult): string {
     const sentences: string[] = [];
@@ -73,6 +88,7 @@ export function bulkArchiveMessage(result: BulkArchiveResult): string {
     } else {
         sentences.push(
             `${countOf(result.archived_count, 'session')} archived.`,
+            archivedVisibilityNote(result.archived_count),
         );
     }
 

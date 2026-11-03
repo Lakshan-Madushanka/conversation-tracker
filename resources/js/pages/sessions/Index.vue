@@ -48,6 +48,7 @@ import {
     restoreSessions,
 } from '@/lib/session-bulk';
 import {
+    archivedSessionMessage,
     bulkArchiveMessage,
     bulkDeletionMessage,
     bulkRestoreMessage,
@@ -400,10 +401,10 @@ const count = computed(() =>
 const description = computed(() => {
     if (archivedView.value) {
         if (archivedTotal.value === 0) {
-            return 'Finished sessions you archive will appear here.';
+            return 'Finished sessions you archive will appear here. They are hidden from the Library and Collections, and you can restore one at any time.';
         }
 
-        return `${count.value}, ${sortLabel(filters.value.sort)}.`;
+        return `${count.value}, ${sortLabel(filters.value.sort)}. Archived sessions are hidden from the Library and Collections; restore one any time.`;
     }
 
     if (allTotal.value === 0) {
@@ -497,7 +498,7 @@ async function archiveFromList(session: SessionCardData): Promise<void> {
         return;
     }
 
-    toast.success('Session archived.', {
+    toast.success(archivedSessionMessage(), {
         action: {
             label: 'Undo',
             onClick: () => {
@@ -600,7 +601,7 @@ async function archivedFromDialog(sessionId: number): Promise<void> {
     const index = sessions.value.findIndex((card) => card.id === sessionId);
     deleteOpen.value = false;
 
-    toast.success('Session archived.', {
+    toast.success(archivedSessionMessage(), {
         action: {
             label: 'Undo',
             onClick: () => {

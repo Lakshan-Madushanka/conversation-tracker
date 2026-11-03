@@ -55,6 +55,7 @@ const props = defineProps<CollectionPage>();
 
 const {
     tab,
+    tabs,
     items,
     nextCursor,
     hasMore,
@@ -167,19 +168,19 @@ function itemMatchesFilters(item: CollectionOpenedItem): boolean {
 }
 
 /**
- * Puts focus on the item that took the removed one's place, then the one
- * before it, and finally the search box, so the learner is never dropped at
- * the top of the page.
+ * Puts focus on one item's open button when it is on screen, and otherwise on
+ * the search box, so the learner is never dropped at the top of the page.
  */
-function focusAfterRemoval(preferredKey: string | null): void {
+function focusCollectionItem(itemKey: string | null): void {
     void nextTick(() => {
-        const candidates = Array.from(
-            document.querySelectorAll<HTMLElement>('[data-collection-open]'),
-        );
-
-        if (preferredKey !== null) {
+        if (itemKey !== null) {
+            const candidates = Array.from(
+                document.querySelectorAll<HTMLElement>(
+                    '[data-collection-open]',
+                ),
+            );
             const matches = candidates.filter(
-                (button) => button.dataset.collectionOpen === preferredKey,
+                (button) => button.dataset.collectionOpen === itemKey,
             );
             const target =
                 matches.find((button) => button.offsetParent !== null) ??
@@ -194,6 +195,14 @@ function focusAfterRemoval(preferredKey: string | null): void {
 
         document.getElementById('collection-search')?.focus();
     });
+}
+
+/**
+ * Puts focus on the item that took the removed one's place, then the one
+ * before it, and finally the search box.
+ */
+function focusAfterRemoval(preferredKey: string | null): void {
+    focusCollectionItem(preferredKey);
 }
 
 /**
@@ -310,14 +319,38 @@ function flushPendingPanelMark(): void {
 
 /** Close the panel, then let its saved mark reach the list. */
 function closePanel(): void {
+    const itemKey = openItem.value?.key ?? null;
+
     closeItemPanel();
     flushPendingPanelMark();
+
+    // A mark may have removed the item; in that case reconcileItem has already
+    // moved focus to its neighbour. Otherwise the row it came from gets focus
+    // back, so closing the panel never drops the learner at the top.
+    if (itemKey !== null && items.value.some((item) => item.key === itemKey)) {
+        focusCollectionItem(itemKey);
+    }
 }
 
 /** Dismiss the calm note about an item that is no longer there. */
 function dismissMissing(): void {
     dismissMissingItem();
     flushPendingPanelMark();
+    focusCollectionItem(null);
+}
+
+const filterBar = ref<InstanceType<typeof CollectionFilterBar> | null>(null);
+
+/** Clearing the search from the empty state should leave the box focused. */
+function clearSearchAndFocus(): void {
+    clearSearch();
+    focusCollectionItem(null);
+}
+
+/** Clearing the filters from the empty state should leave a filter focused. */
+function clearFiltersAndFocus(): void {
+    clearFilters();
+    filterBar.value?.focusFirstControl();
 }
 
 /** Show only the items that need attention, or the whole collection again. */
@@ -487,11 +520,16 @@ onBeforeUnmount(() => {
         />
 
         <Tabs :model-value="tab" @update:model-value="changeTab">
-            <TabsList class="grid w-full grid-cols-4" aria-label="Collections">
+            <!-- A phone scrolls the four tabs sideways rather than squeezing
+                the names until they are cut off. -->
+            <TabsList
+                class="flex min-h-11 w-full justify-start overflow-x-auto md:grid md:grid-cols-4"
+                aria-label="Collections"
+            >
                 <TabsTrigger
-                    v-for="candidate in props.tabs"
+                    v-for="candidate in tabs"
                     :key="candidate.key"
-                    class="cursor-pointer"
+                    class="min-h-11 flex-none cursor-pointer px-3 md:min-h-0 md:flex-1"
                     :value="candidate.key"
                     :aria-label="
                         tabAriaName(
@@ -503,9 +541,7 @@ onBeforeUnmount(() => {
                 >
                     <!-- Each count is read as part of the tab's name, so a
                         screen reader hears "Phrases, 65 phrases". -->
-                    <span class="truncate">
-                        {{ candidate.label }} ({{ candidate.count }})
-                    </span>
+                    <span> {{ candidate.label }} ({{ candidate.count }}) </span>
                 </TabsTrigger>
             </TabsList>
 
@@ -540,6 +576,7 @@ onBeforeUnmount(() => {
                 />
 
                 <CollectionFilterBar
+                    ref="filterBar"
                     :filters="filters"
                     :topics="topicOptions"
                     :tab="tab"
@@ -589,8 +626,8 @@ onBeforeUnmount(() => {
                     @load-more="loadMore"
                     @star="changeStar"
                     @status="changeStatus"
-                    @clear-search="clearSearch"
-                    @clear-filters="clearFilters"
+                    @clear-search="clearSearchAndFocus"
+                    @clear-filters="clearFiltersAndFocus"
                     @retry-filters="retryFilters"
                 />
             </div>

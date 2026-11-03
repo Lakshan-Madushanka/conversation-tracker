@@ -115,7 +115,56 @@ export function isCollectionItemsPage(
         page.items.every(isCollectionOpenedItem) &&
         (typeof page.next_cursor === 'string' || page.next_cursor === null) &&
         typeof page.has_more === 'boolean' &&
-        typeof page.total === 'number'
+        typeof page.total === 'number' &&
+        (page.tabs === undefined ||
+            (Array.isArray(page.tabs) && isCollectionTabData(page.tabs))) &&
+        (page.all_total === undefined || typeof page.all_total === 'number') &&
+        (page.attention_count === undefined ||
+            typeof page.attention_count === 'number') &&
+        (page.topic_options === undefined ||
+            isCollectionTopicOptions(page.topic_options)) &&
+        (page.filters === undefined || isCollectionFilters(page.filters)) &&
+        (page.has_finished_sessions === undefined ||
+            typeof page.has_finished_sessions === 'boolean')
+    );
+}
+
+/** Whether the topic options a refresh sends back look right. */
+function isCollectionTopicOptions(value: unknown): boolean {
+    return (
+        Array.isArray(value) &&
+        value.every((topic) => {
+            if (typeof topic !== 'object' || topic === null) {
+                return false;
+            }
+
+            const candidate = topic as Record<string, unknown>;
+
+            return (
+                typeof candidate.id === 'number' &&
+                typeof candidate.name === 'string' &&
+                typeof candidate.count === 'number'
+            );
+        })
+    );
+}
+
+/** Whether the filters a refresh sends back look right. */
+function isCollectionFilters(value: unknown): boolean {
+    if (typeof value !== 'object' || value === null) {
+        return false;
+    }
+
+    const filters = value as Record<string, unknown>;
+
+    return (
+        typeof filters.q === 'string' &&
+        typeof filters.starred === 'boolean' &&
+        typeof filters.status === 'string' &&
+        typeof filters.attention === 'boolean' &&
+        Array.isArray(filters.topics) &&
+        filters.topics.every((topic) => typeof topic === 'number') &&
+        typeof filters.sort === 'string'
     );
 }
 

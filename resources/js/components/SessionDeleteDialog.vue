@@ -429,9 +429,9 @@ watch(
                 </Alert>
 
                 <p v-else class="mb-3 text-sm text-muted-foreground">
-                    This cannot be undone. Because the session is unfinished,
-                    your progress totals, practice days, and streak will not
-                    change.
+                    This cannot be undone. The session will leave the Library,
+                    Collections, and Review. Because it is unfinished, your
+                    progress totals, practice days, and streak will not change.
                 </p>
 
                 <section

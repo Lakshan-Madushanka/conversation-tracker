@@ -7,8 +7,6 @@ namespace App\Actions\Collections;
 use App\Enums\FeedbackType;
 use App\Models\CollectionItemMark;
 use App\Models\PracticeFeedbackEntry;
-use App\Support\MistakeIdentity;
-use App\Support\SearchText;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
@@ -88,10 +86,9 @@ final readonly class MoveMarkAfterEdit
 
     /**
      * Whether the old item has any other appearance in finished sessions that
-     * are not archived. This is a lone check on an edited entry, not a list
-     * build, so it reads the few columns it needs and compares identities the
-     * same way the collections do — the shared normalisation, so a difference
-     * in capitals, accents or spacing never reads as a different item.
+     * are not archived. The collection key is already stored on every row by
+     * the same shared normalisation the collections group by, so this is one
+     * lookup rather than reading and comparing every entry of the type.
      */
     private function appearsElsewhere(
         FeedbackType $kind,
@@ -99,37 +96,13 @@ final readonly class MoveMarkAfterEdit
         int $editedEntryId,
     ): bool {
         return PracticeFeedbackEntry::query()
-            ->select(['id', 'content_text', 'correction_text'])
             ->where('type', $kind->value)
+            ->where('collection_key', $fromIdentity)
             ->whereKeyNot($editedEntryId)
             ->whereHas(
                 'practiceQuestion.practiceSession',
                 fn (Builder $query): Builder => $query->study(),
             )
-            ->get()
-            ->contains(
-                fn (PracticeFeedbackEntry $entry): bool => $this->identityOf($kind, $entry) === $fromIdentity,
-            );
-    }
-
-    /**
-     * The identity an entry holds, by the same rule the collections group by.
-     * Grammar notes never come through here: their marks belong to the note
-     * itself, whatever its text becomes.
-     */
-    private function identityOf(FeedbackType $kind, PracticeFeedbackEntry $entry): ?string
-    {
-        $content = (string) $entry->content_text;
-        $correction = (string) $entry->correction_text;
-
-        if ($kind === FeedbackType::Mistake) {
-            return MistakeIdentity::isBlank($content, $correction)
-                ? null
-                : MistakeIdentity::pairKey($content, $correction);
-        }
-
-        $identity = SearchText::normalize($content);
-
-        return $identity === '' ? null : $identity;
+            ->exists();
     }
 }

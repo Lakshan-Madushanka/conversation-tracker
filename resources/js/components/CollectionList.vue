@@ -195,6 +195,17 @@ const announcement = computed(() => {
     )}.`;
 });
 
+/** The quiet line under the list once every matching item is on screen. */
+const everyItemLabel = computed(() => {
+    const many = props.total !== 1;
+    const noun = many ? config.value.unitPlural : config.value.unit;
+    const whole = many ? 'all' : 'every';
+
+    return filtered.value
+        ? `That is ${whole} matching ${noun} — ${props.total} in total.`
+        : `That is ${whole} ${noun} — ${props.total} in total.`;
+});
+
 function open(item: CollectionOpenedItem): void {
     emit('open', item);
 }
@@ -569,11 +580,11 @@ function exampleHtml(item: CollectionItem): string {
                         <Card
                             v-for="note in noteItems"
                             :key="note.key"
-                            class="relative py-0"
+                            class="py-0"
                         >
                             <button
                                 type="button"
-                                class="w-full p-4 pr-28 text-left focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+                                class="w-full p-4 text-left focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
                                 :data-collection-open="note.key"
                                 @click="open(note)"
                             >
@@ -590,7 +601,9 @@ function exampleHtml(item: CollectionItem): string {
                                     :match="note.match"
                                 />
                             </button>
-                            <div class="absolute top-2 right-2">
+                            <div
+                                class="flex items-center justify-end border-t px-4 py-1"
+                            >
                                 <CollectionMarksCluster
                                     :item="note"
                                     :name="noteMarkName(note)"
@@ -608,11 +621,11 @@ function exampleHtml(item: CollectionItem): string {
                         <Card
                             v-for="mistake in mistakeItems"
                             :key="mistake.key"
-                            class="relative py-0"
+                            class="py-0"
                         >
                             <button
                                 type="button"
-                                class="min-h-11 w-full p-4 pr-28 text-left focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+                                class="min-h-11 w-full p-4 text-left focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
                                 :aria-label="`Open mistake: ${mistakeName(mistake)}`"
                                 :data-collection-open="mistake.key"
                                 @click="open(mistake)"
@@ -691,7 +704,9 @@ function exampleHtml(item: CollectionItem): string {
                                     :match="mistake.match"
                                 />
                             </button>
-                            <div class="absolute top-2 right-2">
+                            <div
+                                class="flex items-center justify-end border-t px-4 py-1"
+                            >
                                 <CollectionMarksCluster
                                     :item="mistake"
                                     :name="markItemName(mistake)"
@@ -707,11 +722,11 @@ function exampleHtml(item: CollectionItem): string {
                         <Card
                             v-for="item in groupedItems"
                             :key="item.key"
-                            class="relative py-0"
+                            class="py-0"
                         >
                             <button
                                 type="button"
-                                class="w-full p-4 pr-28 text-left focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+                                class="w-full p-4 text-left focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
                                 :data-collection-open="item.key"
                                 @click="open(item)"
                             >
@@ -768,7 +783,9 @@ function exampleHtml(item: CollectionItem): string {
                                     :match="item.match"
                                 />
                             </button>
-                            <div class="absolute top-2 right-2">
+                            <div
+                                class="flex items-center justify-end border-t px-4 py-1"
+                            >
                                 <CollectionMarksCluster
                                     :item="item"
                                     :name="markItemName(item)"
@@ -919,14 +936,7 @@ function exampleHtml(item: CollectionItem): string {
             </Button>
 
             <p v-else class="text-xs text-muted-foreground">
-                <template v-if="filtered">
-                    That is every matching {{ config.unit }} —
-                    {{ props.total }} in total.
-                </template>
-                <template v-else>
-                    That is every {{ config.unit }} — {{ props.total }} in
-                    total.
-                </template>
+                {{ everyItemLabel }}
             </p>
 
             <p v-if="props.hasMore" class="text-xs text-muted-foreground">

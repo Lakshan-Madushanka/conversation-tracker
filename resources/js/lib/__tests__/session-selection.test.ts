@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vite-plus/test';
 import {
     archiveAvailabilityLabel,
     archiveInsteadLabel,
+    archivedSessionMessage,
+    archivedVisibilityNote,
     bulkArchiveMessage,
     bulkDeleteTitle,
     bulkDeletionMessage,
@@ -131,7 +133,22 @@ describe('a range chosen with Shift', () => {
     });
 });
 
-describe('the message after a bulk archive', () => {
+describe('the message after archiving', () => {
+    it('says a single session is hidden and can come back', () => {
+        expect(archivedSessionMessage()).toBe(
+            'Session archived. It is hidden from the Library and Collections, and you can restore it any time.',
+        );
+    });
+
+    it('speaks about one or several sessions in the same calm way', () => {
+        expect(archivedVisibilityNote(1)).toBe(
+            'It is hidden from the Library and Collections, and you can restore it any time.',
+        );
+        expect(archivedVisibilityNote(3)).toBe(
+            'They are hidden from the Library and Collections, and you can restore them any time.',
+        );
+    });
+
     it('says how many were archived and why others were skipped', () => {
         expect(
             bulkArchiveMessage(
@@ -144,7 +161,20 @@ describe('the message after a bulk archive', () => {
                 }),
             ),
         ).toBe(
-            '3 sessions archived. 2 sessions were skipped because unfinished sessions cannot be archived. 1 session was already archived. 1 session was no longer here.',
+            '3 sessions archived. They are hidden from the Library and Collections, and you can restore them any time. 2 sessions were skipped because unfinished sessions cannot be archived. 1 session was already archived. 1 session was no longer here.',
+        );
+    });
+
+    it('uses the singular when one session was archived', () => {
+        expect(
+            bulkArchiveMessage(
+                archiveResult({
+                    archived_ids: [1],
+                    archived_count: 1,
+                }),
+            ),
+        ).toBe(
+            '1 session archived. It is hidden from the Library and Collections, and you can restore it any time.',
         );
     });
 

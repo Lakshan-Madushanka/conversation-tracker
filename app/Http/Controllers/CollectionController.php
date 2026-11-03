@@ -51,12 +51,30 @@ class CollectionController extends Controller
         $items = $this->items($tab, $page['items'], $filters->terms());
 
         if ($request->wantsJson()) {
-            return response()->json([
+            $payload = [
                 'items' => $items,
                 'next_cursor' => $page['next_cursor'],
                 'has_more' => $page['has_more'],
                 'total' => $page['total'],
-            ]);
+            ];
+
+            // A refresh asks for the surrounding counts too, so the tabs, the
+            // topic picker and the attention marker follow an archive, restore,
+            // edit or deletion made in a session.
+            if ($request->wantsMeta()) {
+                $counts = $collection->counts();
+
+                $payload += [
+                    'tabs' => $this->tabs($counts),
+                    'all_total' => $counts[$tab->value],
+                    'attention_count' => $collection->attentionCount($type),
+                    'topic_options' => $topicOptions,
+                    'filters' => $filters->toArray(),
+                    'has_finished_sessions' => $collection->hasFinishedSessions(),
+                ];
+            }
+
+            return response()->json($payload);
         }
 
         $counts = $collection->counts();

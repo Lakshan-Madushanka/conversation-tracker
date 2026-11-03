@@ -99,13 +99,51 @@ const noteInvalidMessage = computed(
         'Your note was not saved. Nothing changed on the server.',
 );
 
+/** The star or status is on its way, so both controls wait for the answer. */
+const markSaving = ref(false);
+
+/** The last mark asked for, kept so a failed save can be tried again. */
+const pendingMark = ref<{
+    starred: boolean;
+    status: CollectionItemStatusValue | null;
+} | null>(null);
+
+const markFailed = ref(false);
+
 async function saveMark(
     starred: boolean,
     status: CollectionItemStatusValue | null,
 ): Promise<void> {
-    const mark = await saveItemMark(props.kind, props.itemKey, starred, status);
+    markSaving.value = true;
+    markFailed.value = false;
+    pendingMark.value = { starred, status };
 
-    emit('mark-saved', mark);
+    try {
+        const mark = await saveItemMark(
+            props.kind,
+            props.itemKey,
+            starred,
+            status,
+        );
+
+        pendingMark.value = null;
+        emit('mark-saved', mark);
+    } catch {
+        // The learner sees a calm message next to the controls; nothing on the
+        // server changed, so the controls still show the saved state.
+        markFailed.value = true;
+    } finally {
+        markSaving.value = false;
+    }
+}
+
+/** Try the same star or status again after a failed save. */
+function retryMark(): void {
+    const pending = pendingMark.value;
+
+    if (pending !== null) {
+        void saveMark(pending.starred, pending.status);
+    }
 }
 </script>
 
@@ -117,15 +155,34 @@ async function saveMark(
             <CollectionStarToggle
                 :starred="props.starred"
                 :label="starAriaLabel(props.unit, props.name, props.starred)"
+                :disabled="markSaving"
                 @change="saveMark($event, props.status)"
             />
 
             <CollectionStatusMenu
                 :status="props.status"
                 :label="statusAriaLabel(props.unit, props.name)"
+                :disabled="markSaving"
                 @change="saveMark(props.starred, $event)"
             />
         </div>
+
+        <Alert v-if="markFailed" variant="destructive" class="mt-4">
+            <TriangleAlertIcon aria-hidden="true" />
+            <AlertTitle>Your mark was not saved</AlertTitle>
+            <AlertDescription>
+                Nothing changed on the server. Check your connection and try
+                again.
+            </AlertDescription>
+            <Button
+                type="button"
+                variant="outline"
+                class="mt-2"
+                @click="retryMark"
+            >
+                Try again
+            </Button>
+        </Alert>
 
         <div class="mt-6 flex items-baseline justify-between gap-4">
             <h3 class="text-sm font-medium">Your notes</h3>

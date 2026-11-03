@@ -82,6 +82,7 @@ beforeEach(() => {
     vi.useFakeTimers();
     saveCalls.splice(0, saveCalls.length);
     resolver = null;
+    marksLib.saveItemMark.mockReset();
 
     marksLib.createNotesSaver.mockImplementation(
         () => async (request: unknown) => {
@@ -219,6 +220,45 @@ describe('the marks section', () => {
             html: '<p>My copy.</p>',
             version: 3,
         });
+
+        mounted.unmount();
+    });
+
+    it('says the star was not saved and offers another try', async () => {
+        marksLib.saveItemMark.mockRejectedValueOnce(new Error('offline'));
+
+        const mounted = await mountSection();
+
+        const star = [...document.querySelectorAll('button')].find((button) =>
+            button.getAttribute('aria-label')?.startsWith('Star the word'),
+        );
+
+        star?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await flushPromises();
+
+        expect(document.body.textContent).toContain('Your mark was not saved');
+
+        const retry = [...document.querySelectorAll('button')].find(
+            (button) => button.textContent?.trim() === 'Try again',
+        );
+        expect(retry).not.toBeNull();
+
+        marksLib.saveItemMark.mockResolvedValueOnce({
+            starred: true,
+            status: null,
+            has_notes: false,
+            notes_version: 0,
+            notes_html: '',
+        });
+        retry?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await flushPromises();
+
+        expect(mounted.emitted('mark-saved')?.[0]?.[0]).toMatchObject({
+            starred: true,
+        });
+        expect(document.body.textContent).not.toContain(
+            'Your mark was not saved',
+        );
 
         mounted.unmount();
     });

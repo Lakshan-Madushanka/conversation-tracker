@@ -12,6 +12,7 @@ import type { ReviewRating } from '@/components/RatingButtons.vue';
 import RatingButtons from '@/components/RatingButtons.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Separator } from '@/components/ui/separator';
 import {
     Card,
     CardContent,
@@ -49,6 +50,8 @@ const props = defineProps<{
     reviewedCount: number;
     undo: { kind: string; item_identity: string } | null;
     canReviewMore: boolean;
+    /** Whether the sitting was started from the day's suggestion. */
+    isDailyReview: boolean;
     reviewId: number | null;
 }>();
 
@@ -67,7 +70,7 @@ const undoForm = useForm({
     item_identity: '',
 });
 
-const startAnotherForm = useForm({});
+const startAnotherForm = useForm({ more: true });
 
 let undoTimer: number | undefined;
 
@@ -269,9 +272,21 @@ onBeforeUnmount(() => {
                     v-if="props.counts.hard > 0"
                     class="text-sm text-muted-foreground"
                 >
-                    The ones you found hard are worth another look. That is how
-                    they become familiar.
+                    The ones you found hard are worth another look. They will
+                    come back soon. That is how they become familiar.
                 </p>
+
+                <Separator v-if="props.isDailyReview" />
+
+                <div
+                    v-if="props.isDailyReview"
+                    class="rounded-lg border border-primary/30 bg-primary/5 p-3"
+                >
+                    <p class="font-medium">You've reviewed today</p>
+                    <p class="mt-0.5 text-sm text-muted-foreground">
+                        Nice work — a few minutes today keeps it fresh.
+                    </p>
+                </div>
             </CardContent>
 
             <CardFooter class="flex flex-wrap justify-center gap-2">

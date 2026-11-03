@@ -49,6 +49,14 @@ Route::inertia('/review/session', 'review/Session')->name('review.session');
 
 Route::inertia('/progress', 'progress/Index')->name('progress.index');
 
+Route::middleware('auth')->group(function () {
+    Route::inertia('/review/start', 'review/Start')->name('review.start');
+    Route::post('/api/review/start', [\App\Http\Controllers\Api\ReviewController::class, 'start'])
+        ->name('api.review.start');
+    Route::post('/api/review/rate', [\App\Http\Controllers\Api\ReviewController::class, 'rate'])
+        ->name('api.review.rate');
+});
+
 Route::inertia('/settings', 'settings/Preferences')->name('settings.index');
 Route::inertia('/settings/import', 'settings/Import')->name('settings.import');
 Route::inertia('/settings/export', 'settings/Export')->name('settings.export');

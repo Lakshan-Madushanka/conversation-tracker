@@ -529,7 +529,7 @@ onBeforeUnmount(() => {
                 <TabsTrigger
                     v-for="candidate in tabs"
                     :key="candidate.key"
-                    class="min-h-11 flex-none cursor-pointer px-3 md:min-h-0 md:flex-1"
+                    class="min-h-11     +flex-none cursor-pointer px-3 md:min-h-0 md:flex-1"
                     :value="candidate.key"
                     :aria-label="
                         tabAriaName(

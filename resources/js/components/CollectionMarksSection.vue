@@ -167,7 +167,7 @@ function retryMark(): void {
             />
         </div>
 
-        <Alert v-if="markFailed" variant="destructive" class="mt-4">
+        <Alert v-if="markFailed" variant="destructive" class="mt-4 w-full">
             <TriangleAlertIcon aria-hidden="true" />
             <AlertTitle>Your mark was not saved</AlertTitle>
             <AlertDescription>
@@ -204,21 +204,25 @@ function retryMark(): void {
             <CircleHelpIcon aria-hidden="true" />
             <AlertTitle>Your note changed in another place</AlertTitle>
             <AlertDescription>
-                This note was saved somewhere else while you edited it. Load the
-                latest version, or keep the copy you have.
+                <p>
+                    This note was saved somewhere else while you edited it. Load the
+                    latest version, or keep the copy you have.
+                </p>
+
+                <div class="flex flex-wrap gap-2">
+                    <Button type="button" @click="saver.loadLatest()">
+                        Load the latest version
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        @click="saver.keepMine()"
+                    >
+                        Keep what I have
+                    </Button>
+                </div>
             </AlertDescription>
-            <div class="flex flex-wrap gap-2">
-                <Button type="button" @click="saver.loadLatest()">
-                    Load the latest version
-                </Button>
-                <Button
-                    type="button"
-                    variant="outline"
-                    @click="saver.keepMine()"
-                >
-                    Keep what I have
-                </Button>
-            </div>
+
         </Alert>
 
         <Alert v-else-if="noteInvalid" variant="destructive" class="mt-4">

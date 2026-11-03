@@ -24,6 +24,7 @@ import RichTextEditor from '@/components/RichTextEditor.vue';
 import SaveIndicator from '@/components/SaveIndicator.vue';
 import SaveNotices from '@/components/SaveNotices.vue';
 import TopicField from '@/components/TopicField.vue';
+import {Separator} from "@/components/ui/separator";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -93,7 +94,7 @@ const props = defineProps<{
 const MAX_QUESTIONS = 50;
 
 /** Past this many questions, cards collapse into one-line summaries. */
-const COLLAPSE_THRESHOLD = 5;
+const COLLAPSE_THRESHOLD = 1;
 
 let uidCounter = 0;
 
@@ -144,7 +145,7 @@ const collapsible = computed(() => questions.value.length > COLLAPSE_THRESHOLD);
 
 const collapsed = ref<Set<string>>(
     new Set(
-        collapsible.value ? questions.value.slice(1).map((q) => q.uid) : [],
+        collapsible.value ? questions.value.slice(0).map((q) => q.uid) : [],
     ),
 );
 
@@ -1289,6 +1290,58 @@ onBeforeUnmount(() => {
                     :highlight="needsTopicHighlight"
                 />
 
+                <Separator class="mt-4"/>
+
+                <div class="flex justify-between">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            :disabled="atLimit"
+                            @click="addQuestion"
+                        >
+                            <PlusIcon aria-hidden="true" />
+                            Add question
+                        </Button>
+
+                        <!-- On long sessions, one control opens or shrinks every
+                            card at once. -->
+                        <template v-if="collapsible">
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                @click="expandAll"
+                            >
+                                Expand all
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                @click="collapseAll"
+                            >
+                                Collapse all
+                            </Button>
+                        </template>
+                    </div>
+                    <div
+                        class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+                    >
+
+                        <p :class="[
+                            'text-xs text-muted-foreground',
+                            {'text-danger!': atLimit}
+                            ]">
+                            {{
+                                atLimit
+                                    ? 'A session can hold up to 50 questions. Remove one to add another.'
+                                    : `${questionCount} of ${MAX_QUESTIONS} questions`
+                            }}
+                        </p>
+                    </div>
+                </div>
+
                 <div class="grid grid-cols-1 gap-4">
                     <div
                         v-for="(question, index) in questions"
@@ -1412,51 +1465,6 @@ onBeforeUnmount(() => {
                             @remove="requestRemove(index)"
                         />
                     </div>
-                </div>
-
-                <div
-                    class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
-                >
-                    <div class="flex flex-wrap items-center gap-2">
-                        <Button
-                            type="button"
-                            variant="outline"
-                            :disabled="atLimit"
-                            @click="addQuestion"
-                        >
-                            <PlusIcon aria-hidden="true" />
-                            Add question
-                        </Button>
-
-                        <!-- On long sessions, one control opens or shrinks every
-                            card at once. -->
-                        <template v-if="collapsible">
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                @click="expandAll"
-                            >
-                                Expand all
-                            </Button>
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                @click="collapseAll"
-                            >
-                                Collapse all
-                            </Button>
-                        </template>
-                    </div>
-
-                    <p class="text-xs text-muted-foreground">
-                        {{
-                            atLimit
-                                ? 'A session can hold up to 50 questions. Remove one to add another.'
-                                : `${questionCount} of ${MAX_QUESTIONS} questions`
-                        }}
-                    </p>
                 </div>
 
                 <p

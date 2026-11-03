@@ -161,7 +161,7 @@ describe('archiving from the Library list', () => {
 
         expect(archiveSession).toHaveBeenCalledWith(1);
         expect(success).toHaveBeenCalledWith(
-            'Session archived.',
+            'Session archived. It is hidden from the Library and Collections, and you can restore it any time.',
             expect.objectContaining({
                 action: expect.objectContaining({ label: 'Undo' }),
             }),

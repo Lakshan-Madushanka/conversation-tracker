@@ -194,6 +194,20 @@ describe('the collection list', () => {
         expect(wrapper.text()).toContain('That is every word — 1 in total.');
     });
 
+    it('uses the plural when more than one item matches', () => {
+        const wrapper = mount(CollectionList, {
+            props: {
+                items: [item(), item({ key: 'bread', title: 'bread' })],
+                total: 2,
+                hasFilters: true,
+            },
+        });
+
+        expect(wrapper.text()).toContain(
+            'That is all matching words — 2 in total.',
+        );
+    });
+
     it('shows placeholders while the next page arrives', () => {
         const wrapper = mount(CollectionList, {
             props: { items: [], loading: true },

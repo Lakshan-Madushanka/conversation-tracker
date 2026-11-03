@@ -253,7 +253,7 @@ function seeOriginal(event: MouseEvent): void {
                             id="collection-note-seen-in"
                             class="text-sm font-medium"
                         >
-                            Where it came from
+                            Seen in
                         </h3>
 
                         <p class="text-sm">

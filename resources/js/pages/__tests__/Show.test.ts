@@ -429,7 +429,7 @@ describe('a session that was archived', () => {
         expect(wrapper.text()).toContain('Archived');
         expect(wrapper.text()).toContain('This session is archived');
         expect(wrapper.text()).toContain(
-            'It is read-only until you restore it.',
+            'It is hidden from the Library and Collections while it is archived, and read-only until you restore it.',
         );
         expect(wrapper.text()).toContain('Restore session');
     });

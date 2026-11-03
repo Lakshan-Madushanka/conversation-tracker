@@ -128,6 +128,9 @@ describe('deleting an unfinished session', () => {
 
         expect(document.body.textContent).toContain('Ordering at a restaurant');
         expect(document.body.textContent).toContain('This cannot be undone.');
+        expect(document.body.textContent).toContain(
+            'leave the Library, Collections, and Review',
+        );
         expect(document.body.textContent).toContain('progress totals');
         expect(document.body.textContent).toContain('2');
 

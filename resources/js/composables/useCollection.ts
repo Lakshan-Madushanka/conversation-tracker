@@ -27,6 +27,7 @@ import type {
     CollectionOpenedItem,
     CollectionPage,
     CollectionSort,
+    CollectionTabData,
     CollectionTabKey,
     CollectionTopicOption,
 } from '@/types';
@@ -60,6 +61,7 @@ const PANEL_PROPS = ['open_item', 'open_item_missing'];
  */
 export function useCollection(initial: CollectionPage) {
     const tab = ref<CollectionTabKey>(initial.tab);
+    const tabs = ref<CollectionTabData[]>([...initial.tabs]);
     const items = ref<CollectionOpenedItem[]>([...initial.items]);
     const nextCursor = ref<string | null>(initial.next_cursor);
     const hasMore = ref(initial.has_more);
@@ -97,6 +99,7 @@ export function useCollection(initial: CollectionPage) {
         cursor: string | null,
         activeFilters: CollectionFilters,
         perPage?: number,
+        withMeta = false,
     ): Promise<CollectionItemsPage | null> {
         const query: Record<string, string | number> = {
             tab: activeTab,
@@ -109,6 +112,10 @@ export function useCollection(initial: CollectionPage) {
 
         if (perPage !== undefined) {
             query.per_page = perPage;
+        }
+
+        if (withMeta) {
+            query.meta = 1;
         }
 
         try {
@@ -190,6 +197,7 @@ export function useCollection(initial: CollectionPage) {
                 cursor,
                 activeFilters,
                 Math.min(100, wanted - loaded),
+                pages.length === 0,
             );
 
             if (page === null || run !== generation) {
@@ -222,6 +230,37 @@ export function useCollection(initial: CollectionPage) {
         nextCursor.value = lastPage.next_cursor;
         hasMore.value = lastPage.has_more;
         total.value = lastPage.total;
+
+        const meta = pages[0];
+
+        if (meta !== undefined) {
+            if (meta.tabs !== undefined) {
+                tabs.value = [...meta.tabs];
+            }
+
+            if (meta.all_total !== undefined) {
+                allTotal.value = meta.all_total;
+            }
+
+            if (meta.attention_count !== undefined) {
+                attentionCount.value = meta.attention_count;
+            }
+
+            if (meta.topic_options !== undefined) {
+                topicOptions.value = [...meta.topic_options];
+            }
+
+            if (meta.filters !== undefined) {
+                filters.value = normalizeCollectionFilters(
+                    meta.filters,
+                    activeTab,
+                );
+            }
+
+            if (meta.has_finished_sessions !== undefined) {
+                hasFinishedSessions.value = meta.has_finished_sessions;
+            }
+        }
     }
 
     /**
@@ -533,6 +572,7 @@ export function useCollection(initial: CollectionPage) {
 
     function syncPage(page: CollectionPage): void {
         tab.value = page.tab;
+        tabs.value = [...page.tabs];
         items.value = [...page.items];
         nextCursor.value = page.next_cursor;
         hasMore.value = page.has_more;
@@ -555,6 +595,7 @@ export function useCollection(initial: CollectionPage) {
 
     return {
         tab,
+        tabs,
         items,
         nextCursor,
         hasMore,

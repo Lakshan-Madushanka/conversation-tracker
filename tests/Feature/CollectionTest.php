@@ -1150,6 +1150,7 @@ describe('live queries', function (): void {
             DB::enableQueryLog();
 
             $this->getJson(route('collections.index', ['tab' => 'vocabulary']))->assertOk();
+            $this->getJson(route('collections.index', ['tab' => 'vocabulary', 'meta' => 1]))->assertOk();
             $this->getJson(route('collections.index', ['tab' => 'grammar']))->assertOk();
             $this->getJson(route('collections.index', ['tab' => 'mistakes']))->assertOk();
             $this->get(route('collections.index'))->assertOk();

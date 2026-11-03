@@ -372,7 +372,7 @@ describe('the Collections page', () => {
         expect(document.body.textContent).toContain(
             'Everything this note says, as you saved it in its session.',
         );
-        expect(document.body.textContent).toContain('Where it came from');
+        expect(document.body.textContent).toContain('Seen in');
     });
 
     it('puts search first and says how many match out of the whole collection', () => {

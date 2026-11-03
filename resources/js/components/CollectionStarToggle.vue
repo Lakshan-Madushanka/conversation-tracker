@@ -35,7 +35,7 @@ const emit = defineEmits<{
             :class="[
                 'size-5',
                 props.starred
-                    ? 'fill-amber-400 text-amber-500'
+                    ? 'fill-amber-500 text-amber-600 dark:fill-amber-400 dark:text-amber-300'
                     : 'text-muted-foreground',
             ]"
         />

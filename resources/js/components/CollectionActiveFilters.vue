@@ -75,7 +75,7 @@ function remove(chip: CollectionFilterChip, index: number): void {
                 type="button"
                 variant="ghost"
                 size="icon-xs"
-                class="relative size-7 rounded-full after:absolute after:-inset-2 after:content-[''] md:size-5 md:after:hidden"
+                class="relative size-7 rounded-full after:absolute after:-inset-2 after:content-[''] md:size-6 md:after:hidden"
                 :disabled="props.disabled"
                 :aria-label="`Remove ${chip.label} filter`"
                 data-chip-remove

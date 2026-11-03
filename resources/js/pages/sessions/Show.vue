@@ -48,6 +48,7 @@ import {
     type SearchTarget,
 } from '@/lib/search-target';
 import { restoreSession, archiveSession } from '@/lib/session-archive';
+import { archivedSessionMessage } from '@/lib/session-selection';
 import { edit as sessionsEdit } from '@/routes/sessions';
 import type {
     FeedbackType,
@@ -267,7 +268,7 @@ async function archive(): Promise<void> {
             return;
         }
 
-        toast.success('Session archived.', {
+        toast.success(archivedSessionMessage(), {
             action: {
                 label: 'Undo',
                 onClick: () => {
@@ -324,7 +325,7 @@ function missingFromReadingPage(): void {
 function archivedFromDialog(): void {
     deleteOpen.value = false;
 
-    toast.success('Session archived.', {
+    toast.success(archivedSessionMessage(), {
         action: {
             label: 'Undo',
             onClick: () => {
@@ -560,8 +561,10 @@ function itemHasMoved(): void {
                 <AlertTitle>This session is archived</AlertTitle>
                 <AlertDescription>
                     <p>
-                        It is read-only until you restore it. Its content, dates
-                        and totals stay exactly as they are.
+                        It is hidden from the Library and Collections while it
+                        is archived, and read-only until you restore it. Its
+                        content, dates and totals stay exactly as they are, and
+                        you can restore it at any time.
                     </p>
                     <Button
                         type="button"

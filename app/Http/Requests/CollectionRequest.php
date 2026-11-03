@@ -56,6 +56,16 @@ final class CollectionRequest extends FormRequest
         return is_string($cursor) && $cursor !== '' ? $cursor : null;
     }
 
+    /**
+     * Whether a JSON page should carry the counts shown around the list. A
+     * quiet refresh after returning from a session asks for them, so the tabs,
+     * topic picker and attention count never lag behind the items.
+     */
+    public function wantsMeta(): bool
+    {
+        return $this->query('meta') === '1';
+    }
+
     public function perPage(): int
     {
         $perPage = (int) $this->validated('per_page', TableCollection::PAGE_SIZE);

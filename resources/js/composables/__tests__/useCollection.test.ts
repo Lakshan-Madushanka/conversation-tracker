@@ -118,6 +118,74 @@ describe('the collection on screen', () => {
         expect(collection.loading.value).toBe(false);
     });
 
+    it('refreshes the counts around the list along with its items', async () => {
+        const fetchMock = vi.fn(
+            async (_url: string) =>
+                new Response(
+                    JSON.stringify({
+                        items: [item({ title: 'soup', starred: true })],
+                        next_cursor: null,
+                        has_more: false,
+                        total: 1,
+                        tabs: [
+                            {
+                                key: 'vocabulary',
+                                label: 'Vocabulary',
+                                count: 1,
+                            },
+                            { key: 'phrases', label: 'Phrases', count: 2 },
+                            {
+                                key: 'grammar',
+                                label: 'Grammar notes',
+                                count: 0,
+                            },
+                            {
+                                key: 'mistakes',
+                                label: 'My mistakes',
+                                count: 0,
+                            },
+                        ],
+                        all_total: 1,
+                        attention_count: 2,
+                        topic_options: [{ id: 9, name: 'Travel', count: 1 }],
+                        filters: {
+                            q: '',
+                            starred: false,
+                            status: 'all',
+                            attention: false,
+                            topics: [],
+                            sort: 'newest',
+                        },
+                        has_finished_sessions: true,
+                    }),
+                    {
+                        status: 200,
+                        headers: { 'Content-Type': 'application/json' },
+                    },
+                ),
+        );
+
+        vi.stubGlobal('fetch', fetchMock);
+        vi.spyOn(router, 'get').mockImplementation(() => {});
+
+        const collection = useCollection(page());
+
+        await collection.refresh();
+
+        expect(fetchMock.mock.calls[0]?.[0]).toContain('meta=1');
+        expect(collection.tabs.value[1]).toEqual({
+            key: 'phrases',
+            label: 'Phrases',
+            count: 2,
+        });
+        expect(collection.allTotal.value).toBe(1);
+        expect(collection.attentionCount.value).toBe(2);
+        expect(collection.topicOptions.value).toEqual([
+            { id: 9, name: 'Travel', count: 1 },
+        ]);
+        expect(collection.items.value[0]).toMatchObject({ starred: true });
+    });
+
     it('loads a page of grammar notes and keeps each note its own item', async () => {
         vi.stubGlobal(
             'fetch',

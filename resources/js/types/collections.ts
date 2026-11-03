@@ -229,6 +229,16 @@ export interface CollectionItemsPage {
     next_cursor: string | null;
     has_more: boolean;
     total: number;
+    /**
+     * The counts around the list. A quiet refresh asks for these, so the tabs,
+     * topic picker and attention count follow changes made elsewhere.
+     */
+    tabs?: CollectionTabData[];
+    all_total?: number;
+    attention_count?: number;
+    topic_options?: CollectionTopicOption[];
+    filters?: CollectionFilters;
+    has_finished_sessions?: boolean;
 }
 
 /**

@@ -44,6 +44,18 @@ const filtersLabel = computed(() =>
         : `Filters, ${activeCount.value} active`,
 );
 
+/** A control is usable when it is on screen and not disabled. */
+function canFocus(target: HTMLElement): boolean {
+    if (target.getAttribute('aria-disabled') === 'true') {
+        return false;
+    }
+
+    return !(
+        'disabled' in target &&
+        (target as { disabled?: boolean }).disabled === true
+    );
+}
+
 /**
  * After Clear all, focus goes back to a control the learner can use: the
  * topic button on a computer, the Filters button on a phone.
@@ -64,7 +76,7 @@ function focusFirstControl(): void {
         for (const id of candidates) {
             const target = document.getElementById(id);
 
-            if (target instanceof HTMLElement && !('disabled' in target)) {
+            if (target instanceof HTMLElement && canFocus(target)) {
                 target.focus();
 
                 return;

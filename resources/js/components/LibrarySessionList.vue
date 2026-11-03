@@ -223,7 +223,7 @@ onBeforeUnmount(() => observer?.disconnect());
                     !props.filterError
                 "
                 title="No archived sessions"
-                description="Finished sessions you archive will appear here. You can restore one at any time."
+                description="Finished sessions you archive will appear here. They are hidden from the Library and Collections, and you can restore one at any time."
             />
 
             <EmptyState

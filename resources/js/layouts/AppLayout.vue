@@ -5,12 +5,15 @@ import AppLogo from '@/components/AppLogo.vue';
 import AppSidebar from '@/components/AppSidebar.vue';
 import ThemeToggle from '@/components/ThemeToggle.vue';
 import { Toaster } from '@/components/ui/sonner';
+import { useSidebar } from '@/composables/useSidebar';
 import { bottomNavHiddenKey } from '@/lib/layout';
 
 /** Pages can ask the bottom navigation to step aside for a moment. */
 const bottomNavHidden = ref(false);
 
 provide(bottomNavHiddenKey, bottomNavHidden);
+
+const { collapsed: sidebarCollapsed } = useSidebar();
 </script>
 
 <template>
@@ -22,7 +25,14 @@ provide(bottomNavHiddenKey, bottomNavHidden);
             Skip to content
         </a>
 
-        <div class="md:grid md:grid-cols-[16rem_minmax(0,1fr)]">
+        <div
+            class="md:grid md:transition-[grid-template-columns] md:duration-200 md:ease-in-out"
+            :class="
+                sidebarCollapsed
+                    ? 'md:grid-cols-[4rem_minmax(0,1fr)]'
+                    : 'md:grid-cols-[16rem_minmax(0,1fr)]'
+            "
+        >
             <AppSidebar />
 
             <div class="flex min-h-dvh min-w-0 flex-col">
@@ -37,9 +47,10 @@ provide(bottomNavHiddenKey, bottomNavHidden);
                     id="main-content"
                     tabindex="-1"
                     class="mx-auto w-full max-w-5xl flex-1 px-4 py-6 md:px-8 md:pb-10"
-                    :class="
-                        bottomNavHidden ? 'pb-48 md:pb-44' : 'pb-24 md:pb-10'
-                    "
+                    :class="{
+                        'pb-48 md:pb-44': bottomNavHidden,
+                        'pb-24 md:pb-10': !bottomNavHidden,
+                    }"
                 >
                     <slot />
                 </main>

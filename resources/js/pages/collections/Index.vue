@@ -523,7 +523,7 @@ onBeforeUnmount(() => {
             <!-- A phone scrolls the four tabs sideways rather than squeezing
                 the names until they are cut off. -->
             <TabsList
-                class="flex min-h-11 w-full justify-start overflow-x-auto md:grid md:grid-cols-4"
+                class="flex min-h-11 items-baseline w-full justify-start overflow-x-auto md:grid md:grid-cols-4"
                 aria-label="Collections"
             >
                 <TabsTrigger

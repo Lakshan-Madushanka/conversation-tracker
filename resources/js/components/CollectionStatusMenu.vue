@@ -48,11 +48,11 @@ const chosen = computed(() =>
                 type="button"
                 variant="ghost"
                 :aria-label="props.label"
-                class="size-11 min-h-11 min-w-11 shrink-0 p-0"
+                class="size-8 shrink-0 p-0 cursor-pointer"
             >
                 <TagIcon
                     aria-hidden="true"
-                    class="size-5 text-muted-foreground"
+                    class="size-4 text-muted-foreground"
                 />
             </Button>
             <Button
@@ -60,7 +60,7 @@ const chosen = computed(() =>
                 type="button"
                 variant="ghost"
                 :aria-label="props.label"
-                class="min-h-11 max-w-48 shrink-0 justify-start gap-2 px-3"
+                class="min-h-11 max-w-48 shrink-0 justify-start gap-2 px-3 cursor-pointer"
             >
                 <TagIcon
                     aria-hidden="true"
@@ -93,13 +93,13 @@ const chosen = computed(() =>
                     )
                 "
             >
-                <DropdownMenuRadioItem value="learned">
+                <DropdownMenuRadioItem class="cursor-pointer" value="learned">
                     Learned
                 </DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="still_difficult">
+                <DropdownMenuRadioItem class="cursor-pointer" value="still_difficult">
                     Still difficult
                 </DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="none">
+                <DropdownMenuRadioItem class="cursor-pointer" value="none">
                     No status
                 </DropdownMenuRadioItem>
             </DropdownMenuRadioGroup>

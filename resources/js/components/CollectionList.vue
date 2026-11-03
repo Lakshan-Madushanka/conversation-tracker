@@ -550,7 +550,7 @@ function exampleHtml(item: CollectionItem): string {
                                     <span v-else aria-hidden="true">—</span>
                                 </TableCell>
 
-                                <TableCell class="text-right align-top">
+                                <TableCell class="text-right align-middle">
                                     <Badge
                                         v-if="item.seen_count > 1"
                                         variant="outline"
@@ -559,7 +559,7 @@ function exampleHtml(item: CollectionItem): string {
                                     </Badge>
                                 </TableCell>
 
-                                <TableCell class="text-right align-top">
+                                <TableCell class="text-right align-middle">
                                     <CollectionMarksCluster
                                         :item="item"
                                         :name="markItemName(item)"

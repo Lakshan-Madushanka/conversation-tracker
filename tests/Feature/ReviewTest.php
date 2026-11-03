@@ -69,7 +69,7 @@ function reviewStart(object $test): Review
 }
 
 describe('Review Home', function (): void {
-    it('counts only words and phrases that carry a meaning', function (): void {
+    it('offers the words and phrases that carry a meaning', function (): void {
         $session = reviewSession();
         reviewRow($session, 'serendipity', 'finding something good by chance');
         reviewRow($session, 'break the ice', 'start a conversation', FeedbackType::Phrase);
@@ -80,8 +80,8 @@ describe('Review Home', function (): void {
             ->assertOk()
             ->assertInertia(fn (Assert $page): Assert => $page
                 ->component('review/Index')
-                ->where('reviewableCount', 2)
-                ->where('hasFinishedSessions', true));
+                ->where('todayReview.state', 'suggest')
+                ->where('todayReview.count', 2));
     });
 
     it('says so when no session has been finished yet', function (): void {
@@ -91,8 +91,7 @@ describe('Review Home', function (): void {
             ->assertOk()
             ->assertInertia(fn (Assert $page): Assert => $page
                 ->component('review/Index')
-                ->where('reviewableCount', 0)
-                ->where('hasFinishedSessions', false));
+                ->where('todayReview.state', 'empty'));
     });
 
     it('leaves unfinished and archived sessions out', function (): void {
@@ -106,7 +105,8 @@ describe('Review Home', function (): void {
 
         $this->get(route('review.index'))
             ->assertInertia(fn (Assert $page): Assert => $page
-                ->where('reviewableCount', 1));
+                ->where('todayReview.state', 'suggest')
+                ->where('todayReview.count', 1));
 
         $review = reviewStart($this);
 
@@ -292,7 +292,7 @@ describe('choosing the items', function (): void {
         expect($review->items)->toHaveCount(8);
     });
 
-    it('puts never-reviewed items before the ones already reviewed', function (): void {
+    it('offers the never-reviewed items when nothing is due yet', function (): void {
         $session = reviewSession();
 
         foreach (range(1, 10) as $number) {
@@ -314,17 +314,13 @@ describe('choosing the items', function (): void {
 
         $second = reviewStart($this);
 
-        // The two never-reviewed items lead, and the rest are the ones left
-        // alone the longest.
-        $second->items->take(2)->each(function ($item) use ($firstIdentities): void {
+        // Easy ratings are a week away, so only the never-reviewed items
+        // are worth revisiting today. Hard ones would come back tomorrow.
+        expect($second->items)->toHaveCount(2);
+
+        $second->items->each(function ($item) use ($firstIdentities): void {
             expect($firstIdentities)->not->toContain($item->item_identity);
         });
-
-        $second->items->slice(2)->each(function ($item) use ($firstIdentities): void {
-            expect($firstIdentities)->toContain($item->item_identity);
-        });
-
-        expect($second->items)->toHaveCount(8);
     });
 });
 

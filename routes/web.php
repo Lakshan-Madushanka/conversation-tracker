@@ -6,6 +6,7 @@ use App\Http\Controllers\HomeController;
 use App\Http\Controllers\LibraryBulkController;
 use App\Http\Controllers\LibraryController;
 use App\Http\Controllers\PracticeSessionController;
+use App\Http\Controllers\ReviewController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', HomeController::class)->name('home');
@@ -44,8 +45,14 @@ Route::get('/collections', [CollectionController::class, 'index'])->name('collec
 Route::put('/collections/marks', [CollectionMarkController::class, 'store'])->name('collections.marks.store');
 Route::put('/collections/notes', [CollectionMarkController::class, 'storeNotes'])->name('collections.notes.store');
 
-Route::inertia('/review', 'review/Index')->name('review.index');
-Route::inertia('/review/session', 'review/Session')->name('review.session');
+// Review and re-practice. The sitting is named in the exercise page's address,
+// so a refresh returns to the next item not yet rated and a finished review
+// shows its summary.
+Route::get('/review', [ReviewController::class, 'index'])->name('review.index');
+Route::post('/review', [ReviewController::class, 'store'])->name('review.store');
+Route::get('/review/session', [ReviewController::class, 'show'])->name('review.session');
+Route::post('/review/{review}/rate', [ReviewController::class, 'rate'])->name('review.rate');
+Route::delete('/review/{review}/rating', [ReviewController::class, 'undo'])->name('review.undo');
 
 Route::inertia('/progress', 'progress/Index')->name('progress.index');
 

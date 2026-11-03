@@ -1,10 +1,16 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue';
-import { Head, Link } from '@inertiajs/vue3';
-import { CheckCheckIcon, EyeIcon } from '@lucide/vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { Head, Link, useForm } from '@inertiajs/vue3';
+import {
+    ArrowRightIcon,
+    CheckCheckIcon,
+    EyeIcon,
+    ExternalLinkIcon,
+    RotateCcwIcon,
+} from '@lucide/vue';
 import type { ReviewRating } from '@/components/RatingButtons.vue';
 import RatingButtons from '@/components/RatingButtons.vue';
-import SectionLabel from '@/components/SectionLabel.vue';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
     Card,
@@ -14,56 +20,214 @@ import {
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
-import { Textarea } from '@/components/ui/textarea';
 import FocusLayout from '@/layouts/FocusLayout.vue';
-import type { ReviewType } from '@/lib/sample-data';
-import { reviewItems } from '@/lib/sample-data';
-import { index as reviewIndex } from '@/routes/review';
+import {
+    index as reviewIndex,
+    rate as reviewRate,
+    store as reviewStore,
+    undo as reviewUndo,
+} from '@/routes/review';
 
-const total = reviewItems.length;
-const index = ref(0);
+interface ReviewCard {
+    kind: 'vocabulary' | 'phrase';
+    item_identity: string;
+    label: string;
+    front: string;
+    meaning: string;
+    example: string | null;
+    session_url: string | null;
+}
+
+const props = defineProps<{
+    /** The review in the address does not exist (or was never named). */
+    notFound: boolean;
+    finished: boolean;
+    card: ReviewCard | null;
+    position: { current: number; total: number };
+    progress: number;
+    counts: { hard: number; okay: number; easy: number };
+    reviewedCount: number;
+    undo: { kind: string; item_identity: string } | null;
+    canReviewMore: boolean;
+    reviewId: number | null;
+}>();
+
 const revealed = ref(false);
-const draft = ref('');
+const undoOffered = ref(false);
+const saveFailed = ref(false);
 
-const counts = reactive({ hard: 0, okay: 0, easy: 0 });
+const rateForm = useForm({
+    kind: '',
+    item_identity: '',
+    rating: '',
+});
 
-const finished = computed(() => index.value >= total);
-const current = computed(() => reviewItems[index.value]);
+const undoForm = useForm({
+    kind: '',
+    item_identity: '',
+});
 
-const progress = computed(() => Math.round((index.value / total) * 100));
+const startAnotherForm = useForm({});
 
-const position = computed(() => ({
-    current: Math.min(index.value + 1, total),
-    total,
-}));
+let undoTimer: number | undefined;
 
-const typeLabel: Record<ReviewType, string> = {
-    flashcard: 'Flashcard',
-    fix: 'Fix the mistake',
-    'say-again': 'Say it again',
-    'fill-blank': 'Fill in the blank',
-};
+const announcement = computed(() => {
+    if (props.notFound) {
+        return 'This review could not be found.';
+    }
+
+    if (props.finished) {
+        return 'Review complete.';
+    }
+
+    if (!props.card) {
+        return '';
+    }
+
+    return revealed.value
+        ? `${props.card.label} answer shown. Choose Hard, Okay, or Easy.`
+        : `${props.card.label}, ${props.position.current} of ${props.position.total}. Try to recall it, then show the answer.`;
+});
+
+watch(
+    () => props.card?.item_identity,
+    () => {
+        revealed.value = false;
+        saveFailed.value = false;
+    },
+);
+
+watch(
+    () => props.undo,
+    (value) => {
+        undoOffered.value = value !== null;
+
+        if (undoTimer !== undefined) {
+            window.clearTimeout(undoTimer);
+        }
+
+        if (value !== null) {
+            undoTimer = window.setTimeout(() => {
+                undoOffered.value = false;
+            }, 8000);
+        }
+    },
+    { immediate: true },
+);
 
 function rate(rating: ReviewRating): void {
-    counts[rating] += 1;
-    revealed.value = false;
-    draft.value = '';
-    index.value += 1;
+    if (!props.card || props.reviewId === null || rateForm.processing) {
+        return;
+    }
+
+    saveFailed.value = false;
+    rateForm.kind = props.card.kind;
+    rateForm.item_identity = props.card.item_identity;
+    rateForm.rating = rating;
+    rateForm.post(reviewRate.url({ review: props.reviewId }), {
+        preserveScroll: true,
+        onError: () => {
+            saveFailed.value = true;
+        },
+    });
 }
+
+function undoLastRating(): void {
+    if (!props.undo || props.reviewId === null || undoForm.processing) {
+        return;
+    }
+
+    undoForm.kind = props.undo.kind;
+    undoForm.item_identity = props.undo.item_identity;
+    undoForm.delete(reviewUndo.url({ review: props.reviewId }), {
+        preserveScroll: true,
+    });
+}
+
+function startAnotherReview(): void {
+    startAnotherForm.post(reviewStore.url());
+}
+
+function onKeydown(event: KeyboardEvent): void {
+    const target = event.target as HTMLElement | null;
+
+    // Shortcuts never interfere with typing.
+    if (
+        target !== null &&
+        (target.tagName === 'INPUT' ||
+            target.tagName === 'TEXTAREA' ||
+            target.isContentEditable)
+    ) {
+        return;
+    }
+
+    if (props.notFound || props.finished || !props.card) {
+        return;
+    }
+
+    if (!revealed.value) {
+        if (event.key === ' ' || event.key === 'Enter') {
+            event.preventDefault();
+            revealed.value = true;
+        }
+
+        return;
+    }
+
+    const shortcuts: Record<string, ReviewRating> = {
+        '1': 'hard',
+        '2': 'okay',
+        '3': 'easy',
+    };
+
+    const rating = shortcuts[event.key];
+
+    if (rating) {
+        event.preventDefault();
+        rate(rating);
+    }
+}
+
+onMounted(() => window.addEventListener('keydown', onKeydown));
+
+onBeforeUnmount(() => {
+    window.removeEventListener('keydown', onKeydown);
+
+    if (undoTimer !== undefined) {
+        window.clearTimeout(undoTimer);
+    }
+});
 </script>
 
 <template>
     <FocusLayout
-        :progress="progress"
-        :position="position"
+        :progress="props.progress"
+        :position="props.position"
         :exit-href="reviewIndex.url()"
     >
-        <Head title="Review session" />
+        <Head title="Review" />
 
-        <h1 class="sr-only">Review session</h1>
+        <p class="sr-only" aria-live="polite">{{ announcement }}</p>
 
-        <!-- Summary shown once every item is done -->
-        <Card v-if="finished" class="text-center">
+        <Card v-if="props.notFound" class="text-center">
+            <CardHeader>
+                <CardTitle class="text-xl">
+                    We couldn’t find that review
+                </CardTitle>
+                <CardDescription>
+                    It may have been finished already, or the address may have
+                    changed. Nothing is lost — your saved words are still in
+                    Collections.
+                </CardDescription>
+            </CardHeader>
+            <CardFooter class="justify-center">
+                <Button size="lg" class="h-11 px-4" as-child>
+                    <Link :href="reviewIndex.url()">Back to Review</Link>
+                </Button>
+            </CardFooter>
+        </Card>
+
+        <Card v-else-if="props.finished" class="text-center">
             <CardHeader>
                 <span
                     class="mx-auto mb-2 flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary"
@@ -71,83 +235,172 @@ function rate(rating: ReviewRating): void {
                 >
                     <CheckCheckIcon class="size-6" />
                 </span>
-                <CardTitle class="text-xl">Nice work!</CardTitle>
+                <CardTitle class="text-xl">Nicely done</CardTitle>
                 <CardDescription>
-                    You finished today’s review.
+                    You looked at {{ props.reviewedCount }}
+                    {{ props.reviewedCount === 1 ? 'item' : 'items' }}. Take
+                    your time — every visit helps.
                 </CardDescription>
             </CardHeader>
-            <CardContent>
+
+            <CardContent class="space-y-4">
                 <div class="grid grid-cols-3 gap-2 text-sm">
                     <div class="rounded-lg border p-3">
                         <p class="text-2xl font-semibold tabular-nums">
-                            {{ counts.easy }}
+                            {{ props.counts.easy }}
                         </p>
                         <p class="text-muted-foreground">Easy</p>
                     </div>
                     <div class="rounded-lg border p-3">
                         <p class="text-2xl font-semibold tabular-nums">
-                            {{ counts.okay }}
+                            {{ props.counts.okay }}
                         </p>
                         <p class="text-muted-foreground">Okay</p>
                     </div>
                     <div class="rounded-lg border p-3">
                         <p class="text-2xl font-semibold tabular-nums">
-                            {{ counts.hard }}
+                            {{ props.counts.hard }}
                         </p>
                         <p class="text-muted-foreground">Hard</p>
                     </div>
                 </div>
+
+                <p
+                    v-if="props.counts.hard > 0"
+                    class="text-sm text-muted-foreground"
+                >
+                    The ones you found hard are worth another look. That is how
+                    they become familiar.
+                </p>
             </CardContent>
-            <CardFooter class="justify-center">
-                <Button size="lg" as-child>
+
+            <CardFooter class="flex flex-wrap justify-center gap-2">
+                <Button size="lg" class="h-11 px-4" as-child>
                     <Link :href="reviewIndex.url()">Done</Link>
+                </Button>
+
+                <Button
+                    v-if="props.canReviewMore"
+                    size="lg"
+                    variant="outline"
+                    class="h-11 px-4"
+                    :disabled="startAnotherForm.processing"
+                    @click="startAnotherReview"
+                >
+                    <ArrowRightIcon aria-hidden="true" />
+                    Review a little more
+                </Button>
+
+                <Button
+                    v-if="undoOffered && props.undo"
+                    size="lg"
+                    variant="ghost"
+                    class="h-11 px-4"
+                    :disabled="undoForm.processing"
+                    @click="undoLastRating"
+                >
+                    <RotateCcwIcon aria-hidden="true" />
+                    Undo last rating
                 </Button>
             </CardFooter>
         </Card>
 
-        <!-- Current exercise -->
-        <Card v-else-if="current">
+        <Card v-else-if="props.card">
             <CardHeader>
-                <CardDescription>
-                    {{ typeLabel[current.type] }}
-                </CardDescription>
-                <CardTitle class="text-2xl text-balance">
-                    {{ current.prompt }}
+                <div class="mb-1 flex items-center gap-2">
+                    <Badge variant="secondary">{{ props.card.label }}</Badge>
+                    <span class="text-xs text-muted-foreground tabular-nums">
+                        {{ props.position.current }} of
+                        {{ props.position.total }}
+                    </span>
+                </div>
+
+                <CardTitle
+                    class="text-2xl text-balance break-words sm:text-3xl"
+                >
+                    {{ props.card.front }}
                 </CardTitle>
+                <CardDescription v-if="!revealed">
+                    Try to recall the meaning, then show the answer.
+                </CardDescription>
             </CardHeader>
 
             <CardContent class="space-y-4">
-                <Textarea
-                    v-if="current.type === 'fix' && !revealed"
-                    v-model="draft"
-                    placeholder="Type the corrected version…"
-                    aria-label="Your correction"
-                />
-
                 <Button
                     v-if="!revealed"
                     size="lg"
-                    class="w-full"
+                    class="h-11 w-full"
                     @click="revealed = true"
                 >
                     <EyeIcon aria-hidden="true" />
                     Show answer
                 </Button>
 
-                <div v-else class="space-y-3 rounded-lg border bg-muted/40 p-4">
-                    <p class="text-lg font-medium">{{ current.answer }}</p>
-                    <p
-                        v-if="current.explanation"
-                        class="text-sm text-muted-foreground"
+                <div v-else class="space-y-4 rounded-lg border bg-muted/40 p-4">
+                    <div>
+                        <p
+                            class="text-xs font-medium tracking-wide text-muted-foreground uppercase"
+                        >
+                            Meaning
+                        </p>
+                        <p class="mt-1 text-lg font-medium break-words">
+                            {{ props.card.meaning }}
+                        </p>
+                    </div>
+
+                    <div v-if="props.card.example">
+                        <p
+                            class="text-xs font-medium tracking-wide text-muted-foreground uppercase"
+                        >
+                            Example
+                        </p>
+                        <p class="mt-1 text-sm break-words">
+                            {{ props.card.example }}
+                        </p>
+                    </div>
+
+                    <a
+                        v-if="props.card.session_url"
+                        :href="props.card.session_url"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
                     >
-                        {{ current.explanation }}
-                    </p>
-                    <SectionLabel tone="natural">Natural answer</SectionLabel>
+                        Open original session
+                        <ExternalLinkIcon class="size-3.5" aria-hidden="true" />
+                        <span class="sr-only">(opens in a new tab)</span>
+                    </a>
                 </div>
+
+                <p
+                    v-if="saveFailed"
+                    class="text-sm text-destructive"
+                    role="alert"
+                >
+                    That rating was not saved. Please try again.
+                </p>
             </CardContent>
 
-            <CardFooter v-if="revealed">
+            <CardFooter v-if="revealed" class="flex-col items-stretch gap-3">
+                <p class="text-sm text-muted-foreground">How did that go?</p>
+
                 <RatingButtons @rate="rate" />
+
+                <p class="text-center text-xs text-muted-foreground">
+                    Shortcuts: 1 Hard, 2 Okay, 3 Easy
+                </p>
+
+                <Button
+                    v-if="undoOffered && props.undo"
+                    variant="ghost"
+                    size="sm"
+                    class="self-center"
+                    :disabled="undoForm.processing"
+                    @click="undoLastRating"
+                >
+                    <RotateCcwIcon aria-hidden="true" />
+                    Undo last rating
+                </Button>
             </CardFooter>
         </Card>
     </FocusLayout>

@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
-import { ClockIcon, PlayIcon, SlidersHorizontalIcon } from '@lucide/vue';
+import { Head, Link, useForm } from '@inertiajs/vue3';
+import { GraduationCapIcon, PlayIcon, SquarePenIcon } from '@lucide/vue';
 import PageHeader from '@/components/PageHeader.vue';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
     Card,
@@ -13,10 +12,23 @@ import {
     CardTitle,
 } from '@/components/ui/card';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { recentReviews, todayReview } from '@/lib/sample-data';
-import { session as reviewSession } from '@/routes/review';
+import { store as reviewStore } from '@/routes/review';
+import { create as sessionsCreate } from '@/routes/sessions';
 
 defineOptions({ layout: AppLayout });
+
+const props = defineProps<{
+    /** How many words and phrases could be reviewed right now. */
+    reviewableCount: number;
+    /** Whether the learner has finished at least one session. */
+    hasFinishedSessions: boolean;
+}>();
+
+const form = useForm({});
+
+function startReview(): void {
+    form.post(reviewStore.url());
+}
 </script>
 
 <template>
@@ -25,90 +37,71 @@ defineOptions({ layout: AppLayout });
 
         <PageHeader
             title="Review"
-            description="Re-practice the words, phrases and mistakes you want to keep."
+            description="A calm few minutes with the words and phrases you want to keep."
         />
 
-        <!-- Today's suggestion -->
         <Card class="border-primary/30 bg-primary/5">
             <CardHeader>
-                <CardDescription>Today’s suggestion</CardDescription>
+                <span
+                    class="mb-1 flex size-11 items-center justify-center rounded-full bg-primary/10 text-primary"
+                    aria-hidden="true"
+                >
+                    <GraduationCapIcon class="size-5" />
+                </span>
+
                 <CardTitle class="text-xl">
-                    {{ todayReview.minutes }} minutes ·
-                    {{ todayReview.items }} items
+                    <template v-if="!props.hasFinishedSessions">
+                        Review fills up after your first session
+                    </template>
+                    <template v-else-if="props.reviewableCount === 0">
+                        Nothing is ready to review just yet
+                    </template>
+                    <template v-else>
+                        {{ props.reviewableCount }}
+                        {{ props.reviewableCount === 1 ? 'item' : 'items' }}
+                        ready to revisit
+                    </template>
                 </CardTitle>
+
+                <CardDescription>
+                    <template v-if="!props.hasFinishedSessions">
+                        Finish a practice session and the words and phrases you
+                        save will show up here as flashcards.
+                    </template>
+                    <template v-else-if="props.reviewableCount === 0">
+                        Words and phrases need a meaning (or a use) before they
+                        can become a flashcard. They will appear here once they
+                        have one.
+                    </template>
+                    <template v-else>
+                        About five minutes. Learn at your own pace — there is no
+                        timer and no score.
+                    </template>
+                </CardDescription>
             </CardHeader>
-            <CardContent>
-                <p class="text-sm text-muted-foreground">
-                    {{ todayReview.mix }}
-                </p>
-            </CardContent>
-            <CardFooter>
-                <Button size="lg" as-child>
-                    <Link :href="reviewSession.url()">
-                        <PlayIcon aria-hidden="true" />
-                        Start review
+
+            <CardFooter class="flex flex-wrap gap-2">
+                <Button
+                    v-if="props.reviewableCount > 0"
+                    size="lg"
+                    :disabled="form.processing"
+                    @click="startReview"
+                >
+                    <PlayIcon aria-hidden="true" />
+                    Start review
+                </Button>
+
+                <Button
+                    v-else-if="!props.hasFinishedSessions"
+                    size="lg"
+                    as-child
+                >
+                    <Link :href="sessionsCreate.url()">
+                        <SquarePenIcon aria-hidden="true" />
+                        Start a session
                     </Link>
                 </Button>
             </CardFooter>
         </Card>
-
-        <!-- Custom review -->
-        <div class="mt-6 grid gap-3 sm:grid-cols-2">
-            <Card>
-                <CardHeader>
-                    <CardTitle class="flex items-center gap-2 text-base">
-                        <SlidersHorizontalIcon
-                            class="size-4 text-muted-foreground"
-                            aria-hidden="true"
-                        />
-                        Custom review
-                    </CardTitle>
-                    <CardDescription>
-                        Choose a topic, a collection, or starred items only.
-                    </CardDescription>
-                </CardHeader>
-                <CardFooter>
-                    <Button variant="outline" as-child>
-                        <Link :href="reviewSession.url()">
-                            Build a custom set
-                        </Link>
-                    </Button>
-                </CardFooter>
-            </Card>
-
-            <Card>
-                <CardHeader>
-                    <CardTitle class="flex items-center gap-2 text-base">
-                        <ClockIcon
-                            class="size-4 text-muted-foreground"
-                            aria-hidden="true"
-                        />
-                        Recent reviews
-                    </CardTitle>
-                    <CardDescription>
-                        Your last few sessions at a glance.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <ul class="space-y-2">
-                        <li
-                            v-for="review in recentReviews"
-                            :key="review.date"
-                            class="flex items-center justify-between gap-2 text-sm"
-                        >
-                            <span>{{ review.date }}</span>
-                            <span class="flex items-center gap-2">
-                                <span class="text-muted-foreground">{{
-                                    review.counts
-                                }}</span>
-                                <Badge variant="secondary">{{
-                                    review.result
-                                }}</Badge>
-                            </span>
-                        </li>
-                    </ul>
-                </CardContent>
-            </Card>
-        </div>
     </div>
 </template>

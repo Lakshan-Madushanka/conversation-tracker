@@ -2,6 +2,9 @@
 
 declare(strict_types=1);
 
+use App\Actions\Collections\SaveItemMark;
+use App\Enums\CollectionItemStatus;
+use App\Models\CollectionItemMark;
 use App\Actions\Collections\MoveMarkAfterEdit;
 use App\Actions\PracticeQuestions\SavePracticeQuestions;
 use App\Enums\FeedbackType;
@@ -548,21 +551,21 @@ describe('what reviewing does not touch', function (): void {
         $session = schedSession();
         schedRow($session, 'serendipity');
 
-        app(App\Actions\Collections\SaveItemMark::class)->handle(
+        app(SaveItemMark::class)->handle(
             FeedbackType::Vocabulary,
             'serendipity',
             true,
-            App\Enums\CollectionItemStatus::StillDifficult,
+            CollectionItemStatus::StillDifficult,
         );
 
         $sessionsBefore = PracticeSession::query()->get(['id', 'updated_at'])->map(fn ($s) => $s->updated_at?->toIso8601String())->toArray();
-        $marksBefore = App\Models\CollectionItemMark::query()->get()->map(fn ($m) => [$m->starred, $m->status?->value, $m->notes_version])->toArray();
+        $marksBefore = CollectionItemMark::query()->get()->map(fn ($m): array => [$m->starred, $m->status?->value, $m->notes_version])->toArray();
 
         $review = schedStart($this);
         schedRate($this, $review, 'serendipity', ReviewRating::Easy);
 
         $sessionsAfter = PracticeSession::query()->get(['id', 'updated_at'])->map(fn ($s) => $s->updated_at?->toIso8601String())->toArray();
-        $marksAfter = App\Models\CollectionItemMark::query()->get()->map(fn ($m) => [$m->starred, $m->status?->value, $m->notes_version])->toArray();
+        $marksAfter = CollectionItemMark::query()->get()->map(fn ($m): array => [$m->starred, $m->status?->value, $m->notes_version])->toArray();
 
         expect($sessionsAfter)->toBe($sessionsBefore)
             ->and($marksAfter)->toBe($marksBefore);

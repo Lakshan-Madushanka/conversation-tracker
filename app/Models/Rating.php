@@ -4,99 +4,60 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\FeedbackType;
+use App\Enums\ReviewRating;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Http;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 /**
- * A rating given by a learner for an item in a review.
+ * How the learner judged one item in one review.
  *
- * One row per (review, item, kind) combination. The unique_key ensures that
- * a double tap, retry, or repeated request is counted only once.
- *
- * Ratings are tied to the item's normalized identity (same as Collections uses),
- * not to a specific collection_item_mark row. This means they follow the item
- * when its session is edited, a typo is fixed, or it appears in different sessions.
+ * The row is keyed by the item's identity, never by a session, so ratings can
+ * follow a typo fix and wait for an item that disappears and comes back. The
+ * `unique_key` is derived from the review, the kind and the identity, so a
+ * double tap or a retried request finds the same row instead of writing a
+ * second one.
  *
  * @property int $id
  * @property int $review_id
- * @property string $item_identity  normalized key matching Collections' item identity
- * @property string $kind  'word' or 'phrase'
- * @property string $rating  'hard', 'okay', or 'easy'
- * @property string $unique_key  used to make saving safe to repeat
- * @property string $given_at
- * @property bool $is_pending
- * @property Carbon|null $resolved_at
- *
- * @property Review $review
+ * @property FeedbackType $kind
+ * @property string $item_identity
+ * @property ReviewRating $rating
+ * @property string $unique_key
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
  */
-#[Fillable([
-    'review_id',
-    'item_identity',
-    'kind',
-    'rating',
-    'unique_key',
-    'is_pending',
-])]
-class Rating extends Model
+#[Fillable(['review_id', 'kind', 'item_identity', 'rating', 'unique_key'])]
+final class Rating extends Model
 {
-    /** @use HasFactory<Database\Factories\RatingFactory> */
-    use HasFactory;
-
     /**
-     * Boot the model and set up saving hooks.
+     * @return array<string, string>
      */
-    protected static function booted(): void
+    protected function casts(): array
     {
-        static::saving(function (self $rating): void {
-            // Ensure unique_key is set - generate one if not provided
-            if (trim($rating->unique_key) === '') {
-                $rating->unique_key = 'rating-'.substr(sha1(
-                    $rating->kind . "\u{0}" . $rating->item_identity . "\u{0}" . now(),
-                ), 0, 20);
-            }
-        });
-
-        static::saved(function (self $rating): void {
-            // Mark as resolved if it was pending
-            if ($rating->is_pending) {
-                $rating->forceFill(['is_pending' => false, 'resolved_at' => now()])->saveQuietly();
-            }
-        });
+        return [
+            'kind' => FeedbackType::class,
+            'rating' => ReviewRating::class,
+        ];
     }
 
     /**
-     * Scope a query to only ratings for a given review.
+     * The one key a rating for this item in this review can ever have. A
+     * repeated request computes the same key, so it is recognised instead of
+     * counted again.
      */
-    public function scopeForReview(Builder $query, int $reviewId): Builder
+    public static function keyFor(int $reviewId, FeedbackType $kind, string $itemIdentity): string
     {
-        return $query->where('review_id', $reviewId);
+        return 'rating-'.sha1($reviewId."\u{0}".$kind->value."\u{0}".$itemIdentity);
     }
 
     /**
-     * Scope to only ratings that have been resolved (not pending).
-     */
-    public function scopeResolved(Builder $query): Builder
-    {
-        return $query->where('is_pending', false);
-    }
-
-    /**
-     * Scope to only ratings for a given item identity and kind.
-     * This is the primary way to look up ratings by item identity.
-     */
-    public function scopeForItem(Builder $query, string $itemIdentity, string $kind): Builder
-    {
-        return $query
-            ->where('item_identity', $itemIdentity)
-            ->where('kind', $kind);
-    }
-
-    /**
-     * Get the review this rating belongs to.
+     * @return BelongsTo<Review, $this>
      */
     public function review(): BelongsTo
     {
-        return $this->belongsTo(Review::class, 'review_id');
+        return $this->belongsTo(Review::class);
     }
 }

@@ -27,13 +27,13 @@ const emit = defineEmits<{
         :model-value="props.starred"
         :disabled="props.disabled"
         :aria-label="props.label"
-        class="size-11 min-h-11 min-w-11 shrink-0"
+        class="size-8 shrink-0 cursor-pointer"
         @update:model-value="emit('change', Boolean($event))"
     >
         <StarIcon
             aria-hidden="true"
             :class="[
-                'size-5',
+                'size-4',
                 props.starred
                     ? 'fill-amber-500 text-amber-600 dark:fill-amber-400 dark:text-amber-300'
                     : 'text-muted-foreground',

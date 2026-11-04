@@ -15,7 +15,7 @@ function card(overrides: Partial<FillInTheBlankCard> = {}): FillInTheBlankCard {
         item_identity: 'hello',
         label: 'Fill in the blank',
         prompt_html:
-            '<p>I <span data-blank="" role="img" aria-label="missing word"></span> to school every day.</p>',
+            '<p>I <span data-blank="" role="img" aria-label="missing word">_</span> to school every day.</p>',
         answer_html: '<p>I <mark>walk</mark> to school every day.</p>',
         answer_text: 'walk',
         hint: null,
@@ -73,6 +73,7 @@ describe('opening the card', () => {
 
         expect(wrapper.text()).toContain('Fill in the blank');
         expect(wrapper.find('[data-blank]').exists()).toBe(true);
+        expect(wrapper.find('[data-blank]').text()).toBe('_');
         expect(wrapper.text()).toContain('to school every day.');
 
         wrapper.unmount();

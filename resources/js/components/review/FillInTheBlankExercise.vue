@@ -162,7 +162,9 @@ onBeforeUnmount(() => {
                 </Badge>
             </div>
 
-            <CardTitle class="text-2xl text-balance break-words sm:text-3xl">
+            <CardTitle
+                class="text-2xl text-balance break-words sm:text-3xl [&_[data-blank]]:font-semibold [&_[data-blank]]:text-primary"
+            >
                 <!-- The server builds the safe prompt; the blank is part of it. -->
                 <h1 v-html="props.card.prompt_html" />
             </CardTitle>

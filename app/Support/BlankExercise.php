@@ -750,12 +750,18 @@ final class BlankExercise
         return $applied;
     }
 
+    /**
+     * The slot the prompt shows where the missing word was. The underscore is
+     * the visible marker; role="img" keeps the announcement as "missing word"
+     * instead of reading the character out.
+     */
     private static function blankSpan(DOMDocument $document): DOMElement
     {
         $span = $document->createElement('span');
         $span->setAttribute('data-blank', '');
         $span->setAttribute('role', 'img');
         $span->setAttribute('aria-label', 'missing word');
+        $span->appendChild($document->createTextNode('_'));
 
         return $span;
     }

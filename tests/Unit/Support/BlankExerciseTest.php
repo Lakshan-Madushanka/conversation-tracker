@@ -30,7 +30,7 @@ function blankExerciseEntry(array $attributes = []): PracticeFeedbackEntry
 /** The safe markup the prompt uses where the missing word was. */
 function blankExerciseSpan(): string
 {
-    return '<span data-blank="" role="img" aria-label="missing word"></span>';
+    return '<span data-blank="" role="img" aria-label="missing word">_</span>';
 }
 
 describe('vocabulary examples', function (): void {
@@ -46,6 +46,16 @@ describe('vocabulary examples', function (): void {
             ->and($blank['answer_text'])->toBe('A lovely serendipity moment.')
             ->and($blank['hint'])->toBeNull()
             ->and($blank['hint_label'])->toBeNull();
+    });
+
+    it('shows the missing word position as an underscore, never in the answer', function (): void {
+        $blank = BlankExercise::build(blankExerciseEntry([
+            'content_text' => 'serendipity',
+            'example' => 'A lovely serendipity moment.',
+        ]));
+
+        expect($blank['prompt_html'])->toContain('aria-label="missing word">_</span>')
+            ->and($blank['answer_html'])->not->toContain('_');
     });
 
     it('keeps the formatting saved in the example', function (): void {

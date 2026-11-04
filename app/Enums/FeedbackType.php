@@ -60,14 +60,15 @@ enum FeedbackType: string
     }
 
     /**
-     * The kinds a review can hold. A question is reviewed as say-it-again; the
-     * other kinds are reviewed through the boxes above.
+     * The kinds a review can hold. A question is reviewed as say-it-again;
+     * the other kinds are reviewed through the boxes above, with a grammar
+     * note becoming a fill-in-the-blank.
      *
      * @return list<self>
      */
     public static function reviewableTypes(): array
     {
-        return [self::Mistake, self::Vocabulary, self::Phrase, self::Question];
+        return [self::Mistake, self::Vocabulary, self::Phrase, self::GrammarNote, self::Question];
     }
 
     /**

@@ -17,16 +17,20 @@ namespace App\Support;
  * When the sitting has room for every available kind, each kind keeps at least
  * one slot: a kind the shares would have left at zero takes its slot from the
  * kind holding the most. That way a kind with only one item still earns its
- * step instead of disappearing from the mix.
+ * step instead of disappearing from the mix. A caller may name which kinds
+ * deserve that protection, so a kind that only fills leftovers does not take a
+ * slot from the exercise its items naturally belong to.
  */
 final class ReviewAllocation
 {
     /**
      * @param  list<string>  $active  the kinds that have candidates
      * @param  array<string, float>  $shares  the target share per kind key
+     * @param  list<string>|null  $mustFill  the kinds that keep at least one
+     *                                       slot; defaults to every active kind
      * @return array<string, int> count per active kind
      */
-    public static function quotas(array $active, int $size, array $shares): array
+    public static function quotas(array $active, int $size, array $shares, ?array $mustFill = null): array
     {
         $active = array_values(array_unique($active));
         $count = count($active);
@@ -34,6 +38,10 @@ final class ReviewAllocation
         if ($count === 0) {
             return [];
         }
+
+        $protected = $mustFill === null
+            ? $active
+            : array_values(array_intersect($active, array_unique($mustFill)));
 
         $quotas = array_fill_keys($active, 0);
         $size = max(0, $size);
@@ -85,7 +93,7 @@ final class ReviewAllocation
         }
 
         if ($size >= $count) {
-            foreach ($active as $key) {
+            foreach ($protected as $key) {
                 if ($quotas[$key] > 0) {
                     continue;
                 }

@@ -299,14 +299,16 @@ onBeforeUnmount(() => {
                             :key="step.number"
                             v-slot="{ state }"
                             :step="step.number"
-                            class="relative w-16 shrink-0 flex-col items-center gap-1 sm:w-auto sm:min-w-20 sm:flex-1 cursor-pointer"
+                            class="relative w-16 shrink-0 cursor-pointer flex-col items-center gap-1 sm:w-auto sm:min-w-20 sm:flex-1"
                         >
                             <StepperSeparator
                                 v-if="step.number !== props.steps.length"
                                 class="absolute top-[19px] left-[calc(50%+19px)] h-0.5 w-[calc(100%-38px)] rounded-full bg-border"
                             />
 
-                            <StepperTrigger class="w-full gap-1 p-0.5 cursor-pointer">
+                            <StepperTrigger
+                                class="w-full cursor-pointer gap-1 p-0.5"
+                            >
                                 <span
                                     class="z-10 flex size-9 shrink-0 items-center justify-center rounded-full border text-sm font-medium tabular-nums transition-colors"
                                     :class="
@@ -352,7 +354,7 @@ onBeforeUnmount(() => {
                 </CardDescription>
             </CardHeader>
             <CardFooter class="justify-center">
-                <Button size="lg" class="h-11 px-4 cursor-pointer" as-child>
+                <Button size="lg" class="h-11 cursor-pointer px-4" as-child>
                     <Link :href="reviewIndex.url()">Back to Review</Link>
                 </Button>
             </CardFooter>
@@ -418,7 +420,7 @@ onBeforeUnmount(() => {
             </CardContent>
 
             <CardFooter class="flex flex-wrap justify-center gap-2">
-                <Button size="lg" class="h-11 px-4 cursor-pointer" as-child>
+                <Button size="lg" class="h-11 cursor-pointer px-4" as-child>
                     <Link :href="reviewIndex.url()">Done</Link>
                 </Button>
 
@@ -426,7 +428,7 @@ onBeforeUnmount(() => {
                     v-if="props.canReviewMore"
                     size="lg"
                     variant="outline"
-                    class="h-11 px-4 cursor-pointer"
+                    class="h-11 cursor-pointer px-4"
                     :disabled="startAnotherForm.processing"
                     @click="startAnotherReview"
                 >
@@ -438,7 +440,7 @@ onBeforeUnmount(() => {
                     v-if="undoOffered && props.undo"
                     size="lg"
                     variant="ghost"
-                    class="h-11 px-4 cursor-pointer"
+                    class="h-11 cursor-pointer px-4"
                     :disabled="undoForm.processing"
                     @click="undoLastRating"
                 >
@@ -540,7 +542,7 @@ onBeforeUnmount(() => {
                         v-if="undoOffered && props.undo"
                         variant="ghost"
                         size="sm"
-                        class="self-center cursor-pointer"
+                        class="cursor-pointer self-center"
                         :disabled="undoForm.processing"
                         @click="undoLastRating"
                     >
@@ -564,7 +566,7 @@ onBeforeUnmount(() => {
                         v-if="undoOffered && props.undo"
                         variant="ghost"
                         size="sm"
-                        class="self-center cursor-pointer"
+                        class="cursor-pointer self-center"
                         :disabled="undoForm.processing"
                         @click="undoLastRating"
                     >

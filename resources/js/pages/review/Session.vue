@@ -276,67 +276,73 @@ onBeforeUnmount(() => {
 
         <p class="sr-only" aria-live="polite">{{ announcement }}</p>
 
-        <section
-            v-if="!props.notFound && !props.finished && props.steps.length > 1"
-            class="mb-4"
-            aria-label="Review steps"
-        >
-            <nav
-                class="-mx-4 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6"
-                aria-label="Review items"
+        <template #above>
+            <section
+                v-if="
+                    !props.notFound && !props.finished && props.steps.length > 1
+                "
+                class="mb-4"
+                aria-label="Review steps"
             >
-                <Stepper
-                    :model-value="props.currentStep ?? 1"
-                    :linear="false"
-                    class="mx-auto w-max items-start gap-0"
-                    @update:model-value="goToStep"
+                <nav
+                    class="-mx-4 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6"
+                    aria-label="Review items"
                 >
-                    <StepperItem
-                        v-for="step in props.steps"
-                        :key="step.number"
-                        v-slot="{ state }"
-                        :step="step.number"
-                        class="relative w-14 shrink-0 flex-col items-center gap-1 sm:w-16"
+                    <Stepper
+                        :model-value="props.currentStep ?? 1"
+                        :linear="false"
+                        class="mx-auto w-max items-start gap-0 sm:w-full"
+                        @update:model-value="goToStep"
                     >
-                        <StepperSeparator
-                            v-if="step.number !== props.steps.length"
-                            class="absolute top-[17px] left-[calc(50%+19px)] h-0.5 w-[calc(100%-38px)] rounded-full bg-border"
-                        />
+                        <StepperItem
+                            v-for="step in props.steps"
+                            :key="step.number"
+                            v-slot="{ state }"
+                            :step="step.number"
+                            class="relative w-16 shrink-0 flex-col items-center gap-1 sm:w-auto sm:min-w-20 sm:flex-1"
+                        >
+                            <StepperSeparator
+                                v-if="step.number !== props.steps.length"
+                                class="absolute top-[19px] left-[calc(50%+19px)] h-0.5 w-[calc(100%-38px)] rounded-full bg-border"
+                            />
 
-                        <StepperTrigger class="w-full gap-1 p-0.5">
-                            <span
-                                class="z-10 flex size-9 shrink-0 items-center justify-center rounded-full border text-sm font-medium tabular-nums transition-colors"
-                                :class="
-                                    state === 'active'
-                                        ? 'border-primary bg-primary text-primary-foreground ring-2 ring-primary/30'
-                                        : step.rating
-                                          ? 'border-primary/40 bg-background text-primary'
-                                          : 'border-border bg-background text-muted-foreground hover:border-foreground/30'
-                                "
-                            >
-                                <CheckIcon
-                                    v-if="step.rating"
-                                    class="size-4"
-                                    aria-hidden="true"
-                                />
-                                <template v-else>{{ step.number }}</template>
-                            </span>
+                            <StepperTrigger class="w-full gap-1 p-0.5">
+                                <span
+                                    class="z-10 flex size-9 shrink-0 items-center justify-center rounded-full border text-sm font-medium tabular-nums transition-colors"
+                                    :class="
+                                        state === 'active'
+                                            ? 'border-primary bg-primary text-primary-foreground ring-2 ring-primary/30'
+                                            : step.rating
+                                              ? 'border-primary/40 bg-background text-primary'
+                                              : 'border-border bg-background text-muted-foreground hover:border-foreground/30'
+                                    "
+                                >
+                                    <CheckIcon
+                                        v-if="step.rating"
+                                        class="size-4"
+                                        aria-hidden="true"
+                                    />
+                                    <template v-else>{{
+                                        step.number
+                                    }}</template>
+                                </span>
 
-                            <StepperTitle
-                                as="span"
-                                class="w-full truncate text-[11px] leading-tight font-normal text-muted-foreground group-data-[state=active]:text-foreground"
-                            >
-                                {{ step.card.front }}
-                            </StepperTitle>
-                        </StepperTrigger>
-                    </StepperItem>
-                </Stepper>
-            </nav>
+                                <StepperTitle
+                                    as="span"
+                                    class="line-clamp-2 w-full text-[11px] leading-tight font-normal text-balance whitespace-normal text-muted-foreground group-data-[state=active]:text-foreground sm:text-xs"
+                                >
+                                    {{ step.card.front }}
+                                </StepperTitle>
+                            </StepperTrigger>
+                        </StepperItem>
+                    </Stepper>
+                </nav>
 
-            <p class="mt-2 text-center text-xs text-muted-foreground">
-                Open any step, in any order.
-            </p>
-        </section>
+                <p class="mt-2 text-center text-xs text-muted-foreground">
+                    Open any step, in any order.
+                </p>
+            </section>
+        </template>
 
         <Card v-if="props.notFound" class="text-center">
             <CardHeader>

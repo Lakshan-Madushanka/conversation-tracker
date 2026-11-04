@@ -462,12 +462,12 @@ onBeforeUnmount(() => {
                     !props.finished &&
                     props.position.current > 0
                 "
-                class="mb-4 flex justify-end"
+                class="mb-4 flex justify-center"
             >
                 <AlertDialog>
                     <AlertDialogTrigger as-child>
                         <Button
-                            variant="ghost"
+                            variant="outline"
                             size="sm"
                             class="cursor-pointer text-muted-foreground"
                         >

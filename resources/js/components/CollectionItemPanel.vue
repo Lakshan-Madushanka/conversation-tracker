@@ -299,8 +299,8 @@ function seeOriginal(event: MouseEvent): void {
                         unit="note"
                         :starred="noteItem.starred"
                         :status="noteItem.status"
-                        :notes-html="noteItem.notes_html ?? ''"
-                        :notes-version="noteItem.notes_version ?? 0"
+                        :notes-html="noteItem.notes_html"
+                        :notes-version="noteItem.notes_version"
                         @mark-saved="(mark) => markSaved(noteItem, mark)"
                     />
                 </div>
@@ -511,8 +511,8 @@ function seeOriginal(event: MouseEvent): void {
                         :unit="config.unit"
                         :starred="wordItem.starred"
                         :status="wordItem.status"
-                        :notes-html="wordItem.notes_html ?? ''"
-                        :notes-version="wordItem.notes_version ?? 0"
+                        :notes-html="wordItem.notes_html"
+                        :notes-version="wordItem.notes_version"
                         @mark-saved="(mark) => markSaved(wordItem, mark)"
                     />
                 </div>

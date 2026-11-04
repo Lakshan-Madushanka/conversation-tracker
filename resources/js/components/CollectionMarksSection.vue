@@ -1,26 +1,21 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue';
-import { CircleHelpIcon, TriangleAlertIcon } from '@lucide/vue';
-import RichTextEditor from '@/components/RichTextEditor.vue';
-import SaveIndicator from '@/components/SaveIndicator.vue';
+import { computed, ref } from 'vue';
+import { TriangleAlertIcon } from '@lucide/vue';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { useAutoSave } from '@/composables/useAutoSave';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
-    createNotesSaver,
     saveItemMark,
     starAriaLabel,
     statusAriaLabel,
-    type NotesMarker,
-    type NotesSnapshot,
 } from '@/lib/collection-marks';
-import { isRichTextBlank } from '@/lib/rich-text';
 import type {
     CollectionItemStatusValue,
     CollectionKindValue,
     ItemMarkData,
 } from '@/types';
+import CollectionNotesEditor from './CollectionNotesEditor.vue';
 import CollectionStarToggle from './CollectionStarToggle.vue';
 import CollectionStatusMenu from './CollectionStatusMenu.vue';
 
@@ -45,9 +40,9 @@ const props = defineProps<{
     /** The chosen status, or null while none is set. */
     status: CollectionItemStatusValue | null;
     /** The saved note as cleaned formatted text. */
-    notesHtml: string;
+    notesHtml?: string;
     /** The version the saved note was stored as. */
-    notesVersion: number;
+    notesVersion?: number;
 }>();
 
 const emit = defineEmits<{
@@ -55,48 +50,8 @@ const emit = defineEmits<{
     'mark-saved': [mark: ItemMarkData];
 }>();
 
-/** Shapes the note the server just stored as a mark patch for the page. */
-function notePatch(html: string, version: number): ItemMarkData {
-    return {
-        starred: props.starred,
-        status: props.status,
-        has_notes: !isRichTextBlank(html),
-        notes_version: version,
-        notes_html: html,
-    };
-}
-
-const notes = ref(props.notesHtml);
-
-const saver = useAutoSave<NotesSnapshot, NotesMarker>({
-    snapshot: () => ({ html: notes.value }),
-    save: createNotesSaver(props.kind, props.itemKey),
-    hasTopic: () => true,
-    // An emptied note is still a change worth saving: a stored note has to be
-    // cleared on the server. For an item with no mark yet, storing empty
-    // words changes nothing.
-    hasContent: () => true,
-    sessionId: null,
-    version: props.notesVersion,
-    onSaved: (saved) => {
-        emit('mark-saved', notePatch(saved.html, saved.version));
-    },
-    onLoadLatest: (latest) => {
-        notes.value = latest.html;
-        emit('mark-saved', notePatch(latest.html, latest.version));
-    },
-});
-
-const noteInvalid = computed(
-    () =>
-        saver.status.value === 'failed' &&
-        saver.errors.value.html !== undefined,
-);
-
-const noteInvalidMessage = computed(
-    () =>
-        saver.errors.value.html ??
-        'Your note was not saved. Nothing changed on the server.',
+const notesLoaded = computed(
+    () => props.notesHtml !== undefined && props.notesVersion !== undefined,
 );
 
 /** The star or status is on its way, so both controls wait for the answer. */
@@ -184,59 +139,24 @@ function retryMark(): void {
             </Button>
         </Alert>
 
-        <div class="mt-6 flex items-baseline justify-between gap-4">
-            <h3 class="text-sm font-medium">Your notes</h3>
-            <SaveIndicator
-                :status="saver.status.value"
-                :last-saved-at="saver.lastSavedAt.value"
-            />
-        </div>
-
-        <RichTextEditor
-            v-model="notes"
-            variant="full"
-            :label="`Notes about the ${props.unit} ${props.name}`"
-            :placeholder="`Write your own notes about this ${props.unit}…`"
-            class="mt-2"
+        <CollectionNotesEditor
+            v-if="notesLoaded"
+            :kind="props.kind"
+            :item-key="props.itemKey"
+            :name="props.name"
+            :unit="props.unit"
+            :starred="props.starred"
+            :status="props.status"
+            :notes-html="props.notesHtml!"
+            :notes-version="props.notesVersion!"
+            @mark-saved="emit('mark-saved', $event)"
         />
 
-        <Alert v-if="saver.status.value === 'conflict'" class="mt-4">
-            <CircleHelpIcon aria-hidden="true" />
-            <AlertTitle>Your note changed in another place</AlertTitle>
-            <AlertDescription>
-                <p>
-                    This note was saved somewhere else while you edited it. Load the
-                    latest version, or keep the copy you have.
-                </p>
-
-                <div class="flex flex-wrap gap-2">
-                    <Button type="button" @click="saver.loadLatest()">
-                        Load the latest version
-                    </Button>
-                    <Button
-                        type="button"
-                        variant="outline"
-                        @click="saver.keepMine()"
-                    >
-                        Keep what I have
-                    </Button>
-                </div>
-            </AlertDescription>
-
-        </Alert>
-
-        <Alert v-else-if="noteInvalid" variant="destructive" class="mt-4">
-            <TriangleAlertIcon aria-hidden="true" />
-            <AlertTitle>Your note was not saved</AlertTitle>
-            <AlertDescription>{{ noteInvalidMessage }}</AlertDescription>
-            <Button
-                type="button"
-                variant="outline"
-                class="mt-2"
-                @click="saver.retry()"
-            >
-                Try again
-            </Button>
-        </Alert>
+        <div v-else class="mt-6 space-y-2">
+            <div class="flex items-baseline justify-between gap-4">
+                <h3 class="text-sm font-medium">Your notes</h3>
+            </div>
+            <Skeleton class="h-28 w-full rounded-md" />
+        </div>
     </section>
 </template>

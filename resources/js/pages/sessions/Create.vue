@@ -24,7 +24,7 @@ import RichTextEditor from '@/components/RichTextEditor.vue';
 import SaveIndicator from '@/components/SaveIndicator.vue';
 import SaveNotices from '@/components/SaveNotices.vue';
 import TopicField from '@/components/TopicField.vue';
-import {Separator} from "@/components/ui/separator";
+import { Separator } from '@/components/ui/separator';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -1290,7 +1290,7 @@ onBeforeUnmount(() => {
                     :highlight="needsTopicHighlight"
                 />
 
-                <Separator class="mt-4"/>
+                <Separator class="mt-4" />
 
                 <div class="flex justify-between">
                     <div class="flex flex-wrap items-center gap-2">
@@ -1328,11 +1328,12 @@ onBeforeUnmount(() => {
                     <div
                         class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
                     >
-
-                        <p :class="[
-                            'text-xs text-muted-foreground',
-                            {'text-danger!': atLimit}
-                            ]">
+                        <p
+                            :class="[
+                                'text-xs text-muted-foreground',
+                                { 'text-danger!': atLimit },
+                            ]"
+                        >
                             {{
                                 atLimit
                                     ? 'A session can hold up to 50 questions. Remove one to add another.'

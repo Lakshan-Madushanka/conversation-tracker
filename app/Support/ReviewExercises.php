@@ -4,26 +4,71 @@ declare(strict_types=1);
 
 namespace App\Support;
 
+use App\Enums\FeedbackType;
+
 /**
- * The registry of exercise kinds, and the two small pieces of wording built
- * from it: how long a review of them takes, and how the mix reads.
+ * The registry of exercise kinds, and the small pieces of wording built from
+ * it: how long a review of them takes, how the mix reads, and which step a
+ * saved item belongs to.
  *
- * Only flashcards exist so far, so a review today is described as
- * "8 flashcards". When the next steps add kinds, they join `all()` and both
- * the estimate and the description change by themselves.
+ * Flashcards and fix-the-mistake are built today. Say-it-again and
+ * fill-in-the-blank already have a share in `ReviewSettings::TARGET_SHARES`,
+ * so they will slot in without touching the composer when their candidate
+ * source arrives.
  */
 final class ReviewExercises
 {
     /**
-     * The kinds a review can be built from, in the order the mix lists them.
+     * The kinds a review can be built from, in the fixed friendly order the
+     * mix and the stepper use.
      *
      * @return list<ExerciseKind>
      */
     public static function all(): array
     {
         return [
-            new ExerciseKind('flashcard', 'flashcard', 'flashcards', ReviewSettings::FLASHCARD_SECONDS),
+            new ExerciseKind(
+                'flashcard',
+                'flashcard',
+                'flashcards',
+                'Flashcards',
+                'book-open',
+                ReviewSettings::FLASHCARD_SECONDS,
+            ),
+            new ExerciseKind(
+                'mistake',
+                'mistake to fix',
+                'mistakes to fix',
+                'Fix the mistake',
+                'square-pen',
+                ReviewSettings::MISTAKE_SECONDS,
+            ),
         ];
+    }
+
+    /** The registry entry for a key, or null when nothing is built for it. */
+    public static function find(string $key): ?ExerciseKind
+    {
+        foreach (self::all() as $kind) {
+            if ($kind->key === $key) {
+                return $kind;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * The exercise one saved feedback kind is shown as. Vocabulary and
+     * phrases share the flashcard step; a mistake has its own.
+     */
+    public static function kindOf(FeedbackType $type): string
+    {
+        return match ($type) {
+            FeedbackType::Mistake => 'mistake',
+            FeedbackType::Vocabulary, FeedbackType::Phrase => 'flashcard',
+            default => $type->value,
+        };
     }
 
     /**

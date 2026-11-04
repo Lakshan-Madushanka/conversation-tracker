@@ -21,4 +21,21 @@ final class ReviewSettings
 
     /** How long one flashcard takes, for the estimate. */
     public const int FLASHCARD_SECONDS = 35;
+
+    /** How long one fix-the-mistake item takes, for the estimate. */
+    public const int MISTAKE_SECONDS = 60;
+
+    /**
+     * The target share of every planned exercise kind. Only built kinds with
+     * candidates take part; the rest are dropped and the remaining shares are
+     * renormalised, so the setting can list the whole plan from day one.
+     *
+     * @var array<string, float>
+     */
+    public const array TARGET_SHARES = [
+        'flashcard' => 0.5,
+        'mistake' => 0.25,
+        'say_it_again' => 0.125,
+        'fill_in_the_blank' => 0.125,
+    ];
 }

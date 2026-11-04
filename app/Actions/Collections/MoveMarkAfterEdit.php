@@ -32,9 +32,10 @@ use Illuminate\Support\Facades\DB;
  * as the session edit, is safe to repeat, and never touches grammar notes,
  * whose marks belong to the note itself.
  *
- * Ratings only exist for vocabulary and phrases, so mistakes and notes never
- * move any. After a move, the schedules of the old and the new identity are
- * rebuilt from the rating history, in the same transaction.
+ * Ratings follow the same rule for every table row: a word, a phrase or a
+ * mistake, whichever exercise kind its ratings were given in. Grammar notes
+ * never carry ratings. After a move, the schedules of the old and the new
+ * identity are rebuilt from the rating history, in the same transaction.
  */
 final readonly class MoveMarkAfterEdit
 {
@@ -115,10 +116,6 @@ final readonly class MoveMarkAfterEdit
         string $fromIdentity,
         string $toIdentity,
     ): void {
-        if (! in_array($kind, [FeedbackType::Vocabulary, FeedbackType::Phrase], true)) {
-            return;
-        }
-
         /** @var Collection<int, Rating> $ratings */
         $ratings = Rating::query()
             ->where('kind', $kind->value)

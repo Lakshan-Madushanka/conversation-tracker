@@ -15,6 +15,7 @@ use App\Models\Rating;
 use App\Models\Review;
 use App\Models\Topic;
 use App\Queries\TodaysReview;
+use App\Support\MistakeIdentity;
 use App\Support\ReviewSettings;
 use App\Support\ReviewSuggestion;
 use Carbon\Carbon;
@@ -55,7 +56,7 @@ function dailySession(?CarbonImmutable $at = null): PracticeSession
 }
 
 /**
- * One vocabulary or phrase row saved the way the editor saves it.
+ * One table row saved the way the editor saves a word, a phrase or a mistake.
  */
 function dailyRow(
     PracticeSession $session,
@@ -125,10 +126,15 @@ function dailyStart(object $test, bool $daily = true): ?Review
 /**
  * Rate one item through the route the learner uses.
  */
-function dailyRate(object $test, Review $review, string $identity, ReviewRating $rating): void
-{
+function dailyRate(
+    object $test,
+    Review $review,
+    string $identity,
+    ReviewRating $rating,
+    FeedbackType $kind = FeedbackType::Vocabulary,
+): void {
     $test->post(route('review.rate', ['review' => $review->id]), [
-        'kind' => FeedbackType::Vocabulary->value,
+        'kind' => $kind->value,
         'item_identity' => $identity,
         'rating' => $rating->value,
     ])->assertRedirect();
@@ -140,7 +146,7 @@ function dailyRate(object $test, Review $review, string $identity, ReviewRating 
 function dailyFinish(object $test, Review $review, ReviewRating $rating = ReviewRating::Easy): void
 {
     foreach ($review->items()->get() as $item) {
-        dailyRate($test, $review, (string) $item->item_identity, $rating);
+        dailyRate($test, $review, (string) $item->item_identity, $rating, $item->kind);
     }
 
     $test->get(route('review.session', ['review' => $review->id]))->assertOk();
@@ -338,6 +344,72 @@ describe('choosing today’s items', function (): void {
             ->and($counts['new'])->toBe(0);
     });
 
+    it('mixes flashcards and fix-the-mistake by their target shares', function (): void {
+        Carbon::setTestNow('2026-11-03 10:00:00');
+        $session = dailySession();
+
+        foreach (range(1, 10) as $i) {
+            dailyRow($session, "word-{$i}");
+            dailyRow($session, "said-{$i}", "told-{$i}", FeedbackType::Mistake);
+        }
+
+        $suggestion = dailySuggest();
+
+        // 5 of 8 flashcards and 3 mistakes, as the one setting asks for.
+        expect($suggestion->count())->toBe(8)
+            ->and($suggestion->perKind())->toBe(['flashcard' => 5, 'mistake' => 3])
+            ->and($suggestion->mix())->toBe('5 flashcards, 3 mistakes to fix')
+            ->and($suggestion->minutes())->toBe(6);
+    });
+
+    it('renormalises over the kinds that have items and fills gaps from the other kind', function (): void {
+        Carbon::setTestNow('2026-11-03 10:00:00');
+        $session = dailySession();
+
+        foreach (range(1, 10) as $i) {
+            dailyRow($session, "word-{$i}");
+        }
+
+        dailyRow($session, 'I has went', 'I have gone', FeedbackType::Mistake);
+
+        $suggestion = dailySuggest();
+
+        // The single mistake fills its share, and flashcards take the rest.
+        expect($suggestion->count())->toBe(8)
+            ->and($suggestion->perKind())->toBe(['flashcard' => 7, 'mistake' => 1]);
+    });
+
+    it('offers the one built kind when it is the only kind with items', function (): void {
+        Carbon::setTestNow('2026-11-03 10:00:00');
+        $session = dailySession();
+
+        foreach (range(1, 10) as $i) {
+            dailyRow($session, "said-{$i}", "told-{$i}", FeedbackType::Mistake);
+        }
+
+        $suggestion = dailySuggest();
+
+        expect($suggestion->count())->toBe(8)
+            ->and($suggestion->perKind())->toBe(['mistake' => 8])
+            ->and($suggestion->mix())->toBe('8 mistakes to fix');
+    });
+
+    it('treats the same mistake pair as one item and a different pair as another', function (): void {
+        Carbon::setTestNow('2026-11-03 10:00:00');
+        $session = dailySession();
+
+        // The same correction on two different sentences is two mistakes.
+        dailyRow($session, 'I has went', 'I have gone', FeedbackType::Mistake);
+        dailyRow($session, 'She has went', 'I have gone', FeedbackType::Mistake);
+        dailyRow($session, 'I has went', 'I have gone', FeedbackType::Mistake);
+
+        $suggestion = dailySuggest();
+
+        expect($suggestion->count())->toBe(2)
+            ->and(collect($suggestion->items)->pluck('kind')->unique()->values()->all())
+            ->toBe([FeedbackType::Mistake]);
+    });
+
     it('treats the same word and the same phrase as two items', function (): void {
         Carbon::setTestNow('2026-11-03 10:00:00');
         $session = dailySession();
@@ -461,6 +533,17 @@ describe('the daily suggestion card', function (): void {
                 ->where('todayReview.mix', '1 flashcard'));
     });
 
+    it('uses singular wording and the mistake time for a single mistake', function (): void {
+        Carbon::setTestNow('2026-11-03 10:00:00');
+        dailyRow(dailySession(), 'I has went', 'I have gone', FeedbackType::Mistake);
+
+        $this->get(route('home'))
+            ->assertInertia(fn (Assert $page): Assert => $page
+                ->where('todayReview.count', 1)
+                ->where('todayReview.minutes', 1)
+                ->where('todayReview.mix', '1 mistake to fix'));
+    });
+
     it('matches the review that starts with what the card shows', function (): void {
         Carbon::setTestNow('2026-11-03 10:00:00');
         $session = dailySession();
@@ -544,6 +627,41 @@ describe('the daily suggestion card', function (): void {
             ->assertInertia(fn (Assert $page): Assert => $page
                 ->where('todayReview.state', 'done')
                 ->where('todayReview.canReviewMore', false));
+    });
+
+    it('reviews mistakes in Review a bit more, leaving out what was already rated today', function (): void {
+        Carbon::setTestNow('2026-11-03 10:00:00');
+        $session = dailySession();
+
+        foreach (range(1, 6) as $i) {
+            dailyRow($session, "more-word-{$i}");
+            dailyRow($session, "more-said-{$i}", "more-told-{$i}", FeedbackType::Mistake);
+        }
+
+        $review = dailyStart($this);
+
+        expect($review->items)->toHaveCount(8)
+            ->and($review->items->filter(fn ($item): bool => $item->kind === FeedbackType::Mistake))->toHaveCount(3);
+
+        dailyFinish($this, $review);
+
+        $this->post(route('review.store'), ['more' => true])->assertRedirect();
+
+        /** @var Review $bitMore */
+        $bitMore = Review::query()->latest('id')->firstOrFail();
+
+        $ratedToday = Rating::query()
+            ->where('created_at', '>=', CarbonImmutable::parse('2026-11-03', config('app.timezone'))->setTimezone('UTC'))
+            ->pluck('item_identity')
+            ->all();
+
+        expect($bitMore->is_daily_review)->toBeFalse()
+            ->and($bitMore->items)->toHaveCount(4)
+            ->and($bitMore->items->filter(fn ($item): bool => $item->kind === FeedbackType::Mistake))->toHaveCount(3);
+
+        foreach ($bitMore->items as $item) {
+            expect($ratedToday)->not->toContain($item->item_identity);
+        }
     });
 
     it('shows the friendly message instead of the option when nothing more remains', function (): void {
@@ -644,22 +762,12 @@ describe('the daily suggestion card', function (): void {
                 ->where('todayReview.state', 'suggest'));
     });
 
-    it('shows the friendly nothing-due message when there is nothing worth reviewing', function (): void {
+    it('shows the friendly nothing-due message when nothing worth reviewing is saved', function (): void {
         Carbon::setTestNow('2026-11-03 10:00:00');
 
-        // A mistake is not a reviewable flashcard; the friendly message shows.
-        $question = PracticeQuestion::factory()->for(dailySession())->create(['position' => 1]);
-        PracticeFeedbackEntry::factory()->for($question)->create([
-            'type' => FeedbackType::Mistake,
-            'content_text' => 'said -> told',
-            'correction_text' => 'told',
-            'correction_html' => 'told',
-            'example' => '',
-            'example_html' => [],
-            'reason' => '',
-            'position' => 0,
-            'is_split' => true,
-        ]);
+        // A mistake without its correction is waiting for a fix, not
+        // reviewable, and no word or phrase exists at all.
+        dailyRow(dailySession(), 'I has went', '', FeedbackType::Mistake);
 
         $this->get(route('home'))
             ->assertInertia(fn (Assert $page): Assert => $page
@@ -667,7 +775,8 @@ describe('the daily suggestion card', function (): void {
 
         $this->get(route('review.index'))
             ->assertInertia(fn (Assert $page): Assert => $page
-                ->where('todayReview.state', 'nothing'));
+                ->where('todayReview.state', 'nothing')
+                ->where('waitingForFix.mistakes', 1));
     });
 
     it('shows the friendly empty state when no session has been finished', function (): void {
@@ -686,14 +795,16 @@ describe('the daily suggestion card', function (): void {
 
         dailyRow($session, 'no-meaning-word', '');
         dailyRow($session, 'unsplittable -> line -> here', '', FeedbackType::Phrase);
+        dailyRow($session, 'I has went', '', FeedbackType::Mistake);
 
         $this->get(route('review.index'))
             ->assertInertia(fn (Assert $page): Assert => $page
                 ->where('waitingForFix.vocabulary', 1)
-                ->where('waitingForFix.phrases', 1));
+                ->where('waitingForFix.phrases', 1)
+                ->where('waitingForFix.mistakes', 1));
 
-        // When both are fixed, the note disappears. Saving through the model
-        // recomputes the stored markers the Collections read.
+        // When all three are fixed, the note disappears. Saving through the
+        // model recomputes the stored markers the Collections read.
         PracticeFeedbackEntry::query()
             ->where('content_text', 'no-meaning-word')
             ->first()
@@ -702,11 +813,16 @@ describe('the daily suggestion card', function (): void {
             ->where('content_text', 'unsplittable -> line -> here')
             ->first()
             ?->update(['example' => 'a real example']);
+        PracticeFeedbackEntry::query()
+            ->where('content_text', 'I has went')
+            ->first()
+            ?->update(['correction_text' => 'I have gone']);
 
         $this->get(route('review.index'))
             ->assertInertia(fn (Assert $page): Assert => $page
                 ->where('waitingForFix.vocabulary', 0)
-                ->where('waitingForFix.phrases', 0));
+                ->where('waitingForFix.phrases', 0)
+                ->where('waitingForFix.mistakes', 0));
     });
 
     it('marks the suggestion review as the daily review, and the extra one not', function (): void {
@@ -800,6 +916,37 @@ function bulkDailyPool(int $words): void
         DB::table('practice_feedback_entries')->insert($rows);
     }
 
+    // A thousand mistakes with a correction sit alongside the words, so the
+    // composer has both kinds to share the sitting between.
+    $mistakeRows = [];
+
+    foreach (range(1, 1000) as $i) {
+        $said = 'I has went '.$i;
+        $correction = 'I have gone '.$i;
+
+        $mistakeRows[] = [
+            'practice_question_id' => $questionBase + $i,
+            'type' => 'mistake',
+            'content_text' => $said,
+            'content_html' => $said,
+            'correction_text' => $correction,
+            'correction_html' => '<strong>'.$correction.'</strong>',
+            'example' => '',
+            'example_html' => '',
+            'reason' => 'Use the past participle.',
+            'position' => 0,
+            'is_split' => true,
+            'collection_key' => MistakeIdentity::pairKey($said, $correction),
+            'client_id' => (string) Str::uuid(),
+            'created_at' => $now->toDateTimeString(),
+            'updated_at' => $now->toDateTimeString(),
+        ];
+    }
+
+    foreach (array_chunk($mistakeRows, 1000) as $chunk) {
+        DB::table('practice_feedback_entries')->insert($chunk);
+    }
+
     // A thousand items carry a rating history and a schedule.
     $reviewIds = [];
 
@@ -862,6 +1009,38 @@ function bulkDailyPool(int $words): void
         }
     }
 
+    // Two hundred mistakes also carry history, so due work exists in both
+    // kinds and the composer has a real choice to make.
+    foreach (range(1, 200) as $i) {
+        $identity = MistakeIdentity::pairKey('I has went '.$i, 'I have gone '.$i);
+
+        foreach ([0, 1] as $offset) {
+            $ratingRows[] = [
+                'review_id' => $reviewIds[$offset],
+                'kind' => 'mistake',
+                'item_identity' => $identity,
+                'rating' => $i % 3 === 0 ? 'hard' : 'okay',
+                'unique_key' => Rating::keyFor($reviewIds[$offset], FeedbackType::Mistake, $identity),
+                'created_at' => $now->subDays(40 - $offset)->toDateTimeString(),
+                'updated_at' => $now->subDays(40 - $offset)->toDateTimeString(),
+            ];
+        }
+
+        $overdue = $i % 2 === 0;
+
+        $scheduleRows[] = [
+            'kind' => 'mistake',
+            'item_identity' => $identity,
+            'due_on' => $overdue ? $now->subDays(($i % 60) + 1)->toDateString() : $now->addDays(30)->toDateString(),
+            'last_rated_on' => $now->subDays(39)->toDateString(),
+            'last_rating' => $overdue ? 'hard' : 'okay',
+            'rated_count' => 2,
+            'easy_run' => 0,
+            'created_at' => $now->toDateTimeString(),
+            'updated_at' => $now->toDateTimeString(),
+        ];
+    }
+
     foreach (array_chunk($ratingRows, 500) as $chunk) {
         DB::table('ratings')->insert($chunk);
     }
@@ -876,7 +1055,7 @@ function bulkDailyPool(int $words): void
 }
 
 describe('the daily review at scale', function (): void {
-    it('builds the suggestion in a bounded number of queries with 5,000 items', function (): void {
+    it('builds the suggestion in a bounded number of queries with thousands of items', function (): void {
         Carbon::setTestNow('2026-11-03 10:00:00');
         bulkDailyPool(5000);
 
@@ -887,11 +1066,12 @@ describe('the daily review at scale', function (): void {
 
         expect($queries)->toBeLessThanOrEqual(20);
 
-        // And the suggestion at this size is full and honest.
+        // And the suggestion at this size is full and honest, in both kinds.
         $this->get(route('home'))
             ->assertInertia(fn (Assert $page): Assert => $page
                 ->where('todayReview.state', 'suggest')
-                ->where('todayReview.count', 8));
+                ->where('todayReview.count', 8)
+                ->where('todayReview.mix', '5 flashcards, 3 mistakes to fix'));
     });
 
     it('keeps the same bounded number of queries for a small pool', function (): void {

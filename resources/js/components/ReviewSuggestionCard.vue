@@ -184,8 +184,8 @@ function reviewABitMore(): void {
                 <h2>Review fills up after your first session</h2>
             </CardTitle>
             <CardDescription>
-                Finish a practice session and the words and phrases you save
-                will show up here as flashcards.
+                Finish a practice session and the words, phrases and mistakes
+                you save will show up here as exercises.
             </CardDescription>
         </CardHeader>
 

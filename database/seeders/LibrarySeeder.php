@@ -652,11 +652,12 @@ class LibrarySeeder extends Seeder
     }
 
     /**
-     * Gives a large sample of words and phrases a rating history spread over
-     * the past four months, so the daily suggestion and the schedule have
-     * real work to do: some items are overdue, some are freshly easy, and
-     * most have never been rated. Creates its own historical daily reviews
-     * to hold the ratings. Runs once; a second run adds nothing.
+     * Gives a large sample of words, phrases and mistakes a rating history
+     * spread over the past four months, so the daily suggestion and the
+     * schedule have real work to do in every built exercise kind: some items
+     * are overdue, some are freshly easy, and most have never been rated.
+     * Creates its own historical daily reviews to hold the ratings. Runs once;
+     * a second run adds nothing.
      */
     private function seedReviewRatings(): void
     {
@@ -665,9 +666,14 @@ class LibrarySeeder extends Seeder
         }
 
         $entries = PracticeFeedbackEntry::query()
-            ->whereIn('type', [FeedbackType::Vocabulary->value, FeedbackType::Phrase->value])
+            ->whereIn('type', [
+                FeedbackType::Vocabulary->value,
+                FeedbackType::Phrase->value,
+                FeedbackType::Mistake->value,
+            ])
             ->whereNotNull('collection_key')
             ->whereRaw("TRIM(collection_key) <> ''")
+            ->whereRaw("TRIM(content_text) <> ''")
             ->whereRaw("TRIM(correction_text) <> ''")
             ->whereHas(
                 'practiceQuestion.practiceSession',

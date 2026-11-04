@@ -25,14 +25,21 @@ final readonly class ReviewSuggestion
     }
 
     /**
-     * How many items of each exercise kind are in the review. Flashcards
-     * carry every item today; later kinds join here automatically.
+     * How many items of each exercise kind are in the review. Vocabulary and
+     * phrases share the flashcard step; a mistake has its own.
      *
      * @return array<string, int>
      */
     public function perKind(): array
     {
-        return $this->items === [] ? [] : ['flashcard' => count($this->items)];
+        $counts = [];
+
+        foreach ($this->items as $item) {
+            $key = ReviewExercises::kindOf($item['kind']);
+            $counts[$key] = ($counts[$key] ?? 0) + 1;
+        }
+
+        return $counts;
     }
 
     /** Whole minutes for the review, at least one. */

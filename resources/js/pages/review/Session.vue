@@ -1,19 +1,26 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import {
+    computed,
+    onBeforeUnmount,
+    onMounted,
+    reactive,
+    ref,
+    watch,
+    type Component,
+} from 'vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import {
     ArrowRightIcon,
+    BookOpenIcon,
     CheckCheckIcon,
     CheckIcon,
-    EyeIcon,
-    ExternalLinkIcon,
     RotateCcwIcon,
+    SquarePenIcon,
 } from '@lucide/vue';
 import type { ReviewRating } from '@/components/RatingButtons.vue';
-import RatingButtons from '@/components/RatingButtons.vue';
-import { Badge } from '@/components/ui/badge';
+import FlashcardExercise from '@/components/review/FlashcardExercise.vue';
+import FixTheMistakeExercise from '@/components/review/FixTheMistakeExercise.vue';
 import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
 import {
     Card,
     CardContent,
@@ -22,11 +29,22 @@ import {
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import {
     Stepper,
     StepperItem,
     StepperSeparator,
-    StepperTitle,
     StepperTrigger,
 } from '@/components/ui/stepper';
 import FocusLayout from '@/layouts/FocusLayout.vue';
@@ -36,38 +54,27 @@ import {
     store as reviewStore,
     undo as reviewUndo,
 } from '@/routes/review';
-
-interface ReviewCard {
-    kind: 'vocabulary' | 'phrase';
-    item_identity: string;
-    label: string;
-    front: string;
-    meaning: string;
-    example: string | null;
-    session_url: string | null;
-}
-
-interface ReviewStep {
-    number: number;
-    rating: ReviewRating | null;
-    url: string;
-    card: ReviewCard;
-}
+import type {
+    CompletedSection,
+    CurrentReviewItem,
+    ReviewCard,
+    ReviewCounts,
+    ReviewSection,
+} from '@/types';
 
 const props = defineProps<{
     /** The review in the address does not exist (or was never named). */
     notFound: boolean;
     finished: boolean;
-    /** Every item in the sitting, in the order the learner meets them. */
-    steps: ReviewStep[];
-    /** The step whose card is shown, or null on the finish screen. */
-    currentStep: number | null;
-    card: ReviewCard | null;
-    /** The rating already given to this card, if it has one. */
-    cardRating: ReviewRating | null;
+    /** One step per exercise kind, in the fixed friendly order. */
+    sections: ReviewSection[];
+    /** The card on screen, or null on a finished-section panel. */
+    current: CurrentReviewItem | null;
+    /** A finished section opened from the stepper. */
+    completedSection: CompletedSection | null;
     position: { current: number; total: number };
     progress: number;
-    counts: { hard: number; okay: number; easy: number };
+    counts: ReviewCounts;
     reviewedCount: number;
     undo: { kind: string; item_identity: string } | null;
     canReviewMore: boolean;
@@ -82,10 +89,19 @@ const ratingLabels: Record<ReviewRating, string> = {
     easy: 'Easy',
 };
 
-/** An already-rated card opens with its answer showing. */
-const revealed = ref(props.cardRating !== null);
+const sectionIcons: Record<string, Component> = {
+    'book-open': BookOpenIcon,
+    'square-pen': SquarePenIcon,
+};
+
+/** The learner's unsent attempts and checks, kept while the page lives. */
+const attempts = reactive<Record<string, string>>({});
+const checkedItems = reactive<Record<string, boolean>>({});
+const lastPosition = reactive<Record<string, number>>({});
+
 const undoOffered = ref(false);
 const saveFailed = ref(false);
+const canRateByShortcut = ref(false);
 
 const rateForm = useForm({
     kind: '',
@@ -102,6 +118,32 @@ const startAnotherForm = useForm({ more: true });
 
 let undoTimer: number | undefined;
 
+function itemKey(card: ReviewCard): string {
+    return `${card.kind}:${card.item_identity}`;
+}
+
+const currentKey = computed(() =>
+    props.current === null ? '' : itemKey(props.current.card),
+);
+
+const activeSectionKey = computed(
+    () =>
+        props.current?.step ??
+        props.completedSection?.key ??
+        props.sections[0]?.key ??
+        '',
+);
+
+const activeSectionNumber = computed(
+    () =>
+        props.sections.find((section) => section.key === activeSectionKey.value)
+            ?.number ?? 1,
+);
+
+const unratedCount = computed(
+    () => props.position.total - props.position.current,
+);
+
 const announcement = computed(() => {
     if (props.notFound) {
         return 'This review could not be found.';
@@ -111,26 +153,35 @@ const announcement = computed(() => {
         return 'Review complete.';
     }
 
-    if (!props.card) {
+    if (props.completedSection !== null) {
+        return `${props.completedSection.label} is complete. All done here.`;
+    }
+
+    if (props.current === null) {
         return '';
     }
 
-    if (props.cardRating !== null) {
-        return `${props.card.label} answer shown. You rated this ${ratingLabels[props.cardRating]}.`;
+    if (props.current.rating !== null) {
+        return `${props.current.label}, ${props.current.stepPosition} of ${props.current.total}. You rated this ${ratingLabels[props.current.rating]}.`;
     }
 
-    return revealed.value
-        ? `${props.card.label} answer shown. Choose Hard, Okay, or Easy.`
-        : `${props.card.label}, ${props.position.current} of ${props.position.total}. Try to recall it, then show the answer.`;
+    return `${props.current.label}, ${props.current.stepPosition} of ${props.current.total}.`;
 });
 
 watch(
-    () => props.card?.item_identity,
-    () => {
-        revealed.value = props.cardRating !== null;
-        saveFailed.value = false;
+    () => props.current,
+    (current) => {
+        if (current !== null) {
+            lastPosition[current.step] = current.position;
+        }
     },
+    { immediate: true },
 );
+
+watch(currentKey, () => {
+    canRateByShortcut.value = false;
+    saveFailed.value = false;
+});
 
 watch(
     () => props.undo,
@@ -150,20 +201,87 @@ watch(
     { immediate: true },
 );
 
+function iconFor(name: string): Component {
+    return sectionIcons[name] ?? BookOpenIcon;
+}
+
+function stepLabel(section: ReviewSection): string {
+    const parts = [section.label, `${section.rated} of ${section.total} rated`];
+
+    if (section.completed) {
+        parts.push('completed');
+    }
+
+    if (section.key === activeSectionKey.value) {
+        parts.push('current step');
+    }
+
+    return parts.join(', ');
+}
+
+/** Keep the item the learner was on when switching back to a section. */
+function withRememberedPosition(url: string): string {
+    const step = new URL(url, window.location.origin).searchParams.get('step');
+    const position = step === null ? undefined : lastPosition[step];
+
+    if (position === undefined) {
+        return url;
+    }
+
+    const target = new URL(url, window.location.origin);
+    target.searchParams.set('position', String(position));
+
+    return `${target.pathname}${target.search}`;
+}
+
+/**
+ * Open the step the learner picked. The sitting stays on the same page, so
+ * the stepper keeps its place, and each section returns to its next unrated
+ * item.
+ */
+function goToStep(step: number | undefined): void {
+    const section = props.sections.find((item) => item.number === step);
+
+    if (section === undefined || section.key === activeSectionKey.value) {
+        return;
+    }
+
+    router.visit(withRememberedPosition(section.url), {
+        preserveScroll: true,
+        preserveState: true,
+    });
+}
+
+function setAttempt(value: string): void {
+    if (currentKey.value !== '') {
+        attempts[currentKey.value] = value;
+    }
+}
+
+function setChecked(value: boolean): void {
+    if (currentKey.value !== '') {
+        checkedItems[currentKey.value] = value;
+    }
+}
+
+function onReady(value: boolean): void {
+    canRateByShortcut.value = value;
+}
+
 function rate(rating: ReviewRating): void {
     // The first rating counts; an already-rated card is shown, not rated again.
     if (
-        !props.card ||
+        props.current === null ||
         props.reviewId === null ||
-        props.cardRating !== null ||
+        props.current.rating !== null ||
         rateForm.processing
     ) {
         return;
     }
 
     saveFailed.value = false;
-    rateForm.kind = props.card.kind;
-    rateForm.item_identity = props.card.item_identity;
+    rateForm.kind = props.current.card.kind;
+    rateForm.item_identity = props.current.card.item_identity;
     rateForm.rating = rating;
     rateForm.post(reviewRate.url({ review: props.reviewId }), {
         preserveScroll: true,
@@ -189,55 +307,36 @@ function startAnotherReview(): void {
     startAnotherForm.post(reviewStore.url());
 }
 
-/**
- * Open the step the learner picked. The sitting stays on the same page, so
- * the stepper keeps its place and the reveal starts fresh for the new card.
- */
-function goToStep(step: number | undefined): void {
-    const target = props.steps.find((item) => item.number === step);
-
-    if (step === undefined || !target || target.number === props.currentStep) {
-        return;
-    }
-
-    router.visit(target.url, {
-        preserveScroll: true,
-        preserveState: true,
-    });
+/** Leave the sitting early; nothing unrated is rescheduled. */
+function finishEarly(): void {
+    router.visit(reviewIndex.url());
 }
 
 function onKeydown(event: KeyboardEvent): void {
     const target = event.target as HTMLElement | null;
 
-    // Shortcuts never interfere with typing.
+    // Shortcuts never interfere with typing or browser/OS shortcuts.
     if (
         target !== null &&
         (target.tagName === 'INPUT' ||
             target.tagName === 'TEXTAREA' ||
+            target.tagName === 'SELECT' ||
             target.isContentEditable)
     ) {
         return;
     }
 
-    if (props.notFound || props.finished || !props.card) {
+    if (event.ctrlKey || event.metaKey || event.altKey) {
         return;
     }
 
-    // Enter and Space belong to the control that has focus (a step, or Show
-    // answer); only the bare page reveals the card.
-    const onControl = target?.closest('button, a, [role="button"]') != null;
-
-    if (!revealed.value) {
-        if (!onControl && (event.key === ' ' || event.key === 'Enter')) {
-            event.preventDefault();
-            revealed.value = true;
-        }
-
-        return;
-    }
-
-    // An already-rated card has nothing left to rate.
-    if (props.cardRating !== null) {
+    if (
+        !canRateByShortcut.value ||
+        rateForm.processing ||
+        props.finished ||
+        props.current === null ||
+        props.current.rating !== null
+    ) {
         return;
     }
 
@@ -279,73 +378,139 @@ onBeforeUnmount(() => {
         <template #above>
             <section
                 v-if="
-                    !props.notFound && !props.finished && props.steps.length > 1
+                    !props.notFound &&
+                    !props.finished &&
+                    props.sections.length > 1
                 "
-                class="mb-8"
+                class="mb-4"
                 aria-label="Review steps"
             >
-                <nav
-                    class="-mx-4 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6"
-                    aria-label="Review items"
+                <Stepper
+                    :model-value="activeSectionNumber"
+                    :linear="false"
+                    class="w-full items-start gap-1"
+                    @update:model-value="goToStep"
                 >
-                    <Stepper
-                        :model-value="props.currentStep ?? 1"
-                        :linear="false"
-                        class="mx-auto w-max items-start gap-0 sm:w-full"
-                        @update:model-value="goToStep"
+                    <StepperItem
+                        v-for="(section, index) in props.sections"
+                        :key="section.key"
+                        :step="section.number"
+                        class="relative min-w-0 flex-1 cursor-pointer flex-col items-center gap-0"
                     >
-                        <StepperItem
-                            v-for="step in props.steps"
-                            :key="step.number"
-                            v-slot="{ state }"
-                            :step="step.number"
-                            class="relative w-16 shrink-0 cursor-pointer flex-col items-center gap-1 sm:w-auto sm:min-w-20 sm:flex-1"
-                        >
-                            <StepperSeparator
-                                v-if="step.number !== props.steps.length"
-                                class="absolute top-[19px] left-[calc(50%+19px)] h-0.5 w-[calc(100%-38px)] rounded-full bg-border"
-                            />
+                        <StepperSeparator
+                            v-if="index < props.sections.length - 1"
+                            class="absolute top-[23px] left-[calc(50%+22px)] h-0.5 w-[calc(100%-44px)] rounded-full bg-border"
+                        />
 
-                            <StepperTrigger
-                                class="w-full cursor-pointer gap-1 p-0.5"
+                        <StepperTrigger
+                            class="min-h-11 w-full cursor-pointer flex-col gap-1 p-1"
+                            :aria-current="
+                                section.key === activeSectionKey
+                                    ? 'step'
+                                    : undefined
+                            "
+                            :aria-label="stepLabel(section)"
+                        >
+                            <span
+                                class="z-10 flex size-10 shrink-0 items-center justify-center rounded-full border transition-colors"
+                                :class="
+                                    section.key === activeSectionKey
+                                        ? 'border-primary bg-primary text-primary-foreground ring-2 ring-primary/30'
+                                        : section.completed
+                                          ? 'border-primary/40 bg-background text-primary'
+                                          : 'border-border bg-background text-muted-foreground'
+                                "
                             >
+                                <CheckIcon
+                                    v-if="section.completed"
+                                    class="size-4"
+                                    aria-hidden="true"
+                                />
+                                <component
+                                    :is="iconFor(section.icon)"
+                                    v-else
+                                    class="size-4"
+                                    aria-hidden="true"
+                                />
+                            </span>
+
+                            <span class="w-full min-w-0">
                                 <span
-                                    class="z-10 flex size-9 shrink-0 items-center justify-center rounded-full border text-sm font-medium tabular-nums transition-colors"
+                                    class="block text-[11px] leading-tight font-medium text-balance"
                                     :class="
-                                        state === 'active'
-                                            ? 'border-primary bg-primary text-primary-foreground ring-2 ring-primary/30'
-                                            : step.rating
-                                              ? 'border-primary/40 bg-background text-primary'
-                                              : 'border-border bg-background text-muted-foreground hover:border-foreground/30'
+                                        section.key === activeSectionKey
+                                            ? 'block'
+                                            : 'hidden sm:block'
                                     "
                                 >
-                                    <CheckIcon
-                                        v-if="step.rating"
-                                        class="size-4"
-                                        aria-hidden="true"
-                                    />
-                                    <template v-else>{{
-                                        step.number
-                                    }}</template>
+                                    {{ section.label }}
                                 </span>
-
-                                <StepperTitle
-                                    as="span"
-                                    class="line-clamp-2 w-full text-[11px] leading-tight font-normal text-balance whitespace-normal text-muted-foreground group-data-[state=active]:text-foreground sm:text-xs"
+                                <span
+                                    class="block text-[10px] text-muted-foreground tabular-nums sm:text-xs"
                                 >
-                                    {{ step.card.front }}
-                                </StepperTitle>
-                            </StepperTrigger>
-                        </StepperItem>
-                    </Stepper>
-                </nav>
+                                    {{ section.rated }} of {{ section.total }}
+                                </span>
+                            </span>
+                        </StepperTrigger>
+                    </StepperItem>
+                </Stepper>
             </section>
+
+            <div
+                v-if="
+                    !props.notFound &&
+                    !props.finished &&
+                    props.position.current > 0
+                "
+                class="mb-4 flex justify-center"
+            >
+                <AlertDialog>
+                    <AlertDialogTrigger as-child>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            class="cursor-pointer text-muted-foreground"
+                        >
+                            Finish review
+                        </Button>
+                    </AlertDialogTrigger>
+
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>
+                                Finish this review early?
+                            </AlertDialogTitle>
+                            <AlertDialogDescription>
+                                {{ unratedCount }}
+                                {{
+                                    unratedCount === 1 ? 'item is' : 'items are'
+                                }}
+                                still to rate. They will stay scheduled for
+                                another day, and this sitting will not count as
+                                your review for today.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+
+                        <AlertDialogFooter>
+                            <AlertDialogCancel class="cursor-pointer">
+                                Keep reviewing
+                            </AlertDialogCancel>
+                            <AlertDialogAction
+                                class="cursor-pointer"
+                                @click="finishEarly"
+                            >
+                                Finish review
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+            </div>
         </template>
 
         <Card v-if="props.notFound" class="text-center">
             <CardHeader>
                 <CardTitle class="text-xl">
-                    We couldn’t find that review
+                    <h1>We couldn’t find that review</h1>
                 </CardTitle>
                 <CardDescription>
                     It may have been finished already, or the address may have
@@ -368,7 +533,9 @@ onBeforeUnmount(() => {
                 >
                     <CheckCheckIcon class="size-6" />
                 </span>
-                <CardTitle class="text-xl">Nicely done</CardTitle>
+                <CardTitle class="text-xl">
+                    <h1>Nicely done</h1>
+                </CardTitle>
                 <CardDescription>
                     You looked at {{ props.reviewedCount }}
                     {{ props.reviewedCount === 1 ? 'item' : 'items' }}. Take
@@ -450,131 +617,119 @@ onBeforeUnmount(() => {
             </CardFooter>
         </Card>
 
-        <Card v-else-if="props.card">
+        <Card v-else-if="props.completedSection" class="text-center">
             <CardHeader>
-                <div class="mb-1 flex flex-wrap items-center gap-2">
-                    <Badge variant="secondary">{{ props.card.label }}</Badge>
-                    <Badge v-if="props.cardRating" variant="outline">
-                        Rated {{ ratingLabels[props.cardRating] }}
-                    </Badge>
-                </div>
-
-                <CardTitle
-                    class="text-2xl text-balance break-words sm:text-3xl"
+                <span
+                    class="mx-auto mb-2 flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary"
+                    aria-hidden="true"
                 >
-                    {{ props.card.front }}
+                    <CheckCheckIcon class="size-6" />
+                </span>
+                <CardTitle class="text-xl">
+                    <h1>All done here</h1>
                 </CardTitle>
-                <CardDescription v-if="!revealed">
-                    Try to recall the meaning, then show the answer.
+                <CardDescription>
+                    Every {{ props.completedSection.label.toLowerCase() }} item
+                    in this review has a rating.
                 </CardDescription>
             </CardHeader>
 
             <CardContent class="space-y-4">
-                <Button
-                    v-if="!revealed"
-                    size="lg"
-                    class="h-11 w-full cursor-pointer"
-                    @click="revealed = true"
-                >
-                    <EyeIcon aria-hidden="true" />
-                    Show answer
-                </Button>
-
-                <div v-else class="space-y-4 rounded-lg border bg-muted/40 p-4">
-                    <div>
-                        <p
-                            class="text-xs font-medium tracking-wide text-muted-foreground uppercase"
-                        >
-                            Meaning
+                <div class="grid grid-cols-3 gap-2 text-sm">
+                    <div class="rounded-lg border p-3">
+                        <p class="text-2xl font-semibold tabular-nums">
+                            {{ props.completedSection.counts.easy }}
                         </p>
-                        <p class="mt-1 text-lg font-medium break-words">
-                            {{ props.card.meaning }}
-                        </p>
+                        <p class="text-muted-foreground">Easy</p>
                     </div>
-
-                    <div v-if="props.card.example">
-                        <p
-                            class="text-xs font-medium tracking-wide text-muted-foreground uppercase"
-                        >
-                            Example
+                    <div class="rounded-lg border p-3">
+                        <p class="text-2xl font-semibold tabular-nums">
+                            {{ props.completedSection.counts.okay }}
                         </p>
-                        <p class="mt-1 text-sm break-words">
-                            {{ props.card.example }}
-                        </p>
+                        <p class="text-muted-foreground">Okay</p>
                     </div>
-
-                    <a
-                        v-if="props.card.session_url"
-                        :href="props.card.session_url"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
-                    >
-                        Open original session
-                        <ExternalLinkIcon class="size-3.5" aria-hidden="true" />
-                        <span class="sr-only">(opens in a new tab)</span>
-                    </a>
+                    <div class="rounded-lg border p-3">
+                        <p class="text-2xl font-semibold tabular-nums">
+                            {{ props.completedSection.counts.hard }}
+                        </p>
+                        <p class="text-muted-foreground">Hard</p>
+                    </div>
                 </div>
-
-                <p
-                    v-if="saveFailed"
-                    class="text-sm text-destructive"
-                    role="alert"
-                >
-                    That rating was not saved. Please try again.
-                </p>
             </CardContent>
 
-            <CardFooter v-if="revealed" class="flex-col items-stretch gap-3">
-                <template v-if="props.cardRating">
-                    <p class="text-sm text-muted-foreground">
-                        You rated this one
-                        {{ ratingLabels[props.cardRating] }}.
-                        <template v-if="undoOffered && props.undo">
-                            You can undo it below.
-                        </template>
-                        <template v-else>
-                            Open another step whenever you are ready.
-                        </template>
-                    </p>
+            <CardFooter class="flex flex-col gap-2">
+                <Button
+                    v-if="props.completedSection.next_url"
+                    size="lg"
+                    class="h-11 w-full cursor-pointer"
+                    as-child
+                >
+                    <Link :href="props.completedSection.next_url">
+                        Continue with the next step
+                    </Link>
+                </Button>
 
-                    <Button
-                        v-if="undoOffered && props.undo"
-                        variant="ghost"
-                        size="sm"
-                        class="cursor-pointer self-center"
-                        :disabled="undoForm.processing"
-                        @click="undoLastRating"
-                    >
-                        <RotateCcwIcon aria-hidden="true" />
-                        Undo last rating
-                    </Button>
-                </template>
+                <Button
+                    v-if="undoOffered && props.undo"
+                    variant="ghost"
+                    size="sm"
+                    class="cursor-pointer self-center"
+                    :disabled="undoForm.processing"
+                    @click="undoLastRating"
+                >
+                    <RotateCcwIcon aria-hidden="true" />
+                    Undo last rating
+                </Button>
 
-                <template v-else>
-                    <p class="text-sm text-muted-foreground">
-                        How did that go?
-                    </p>
-
-                    <RatingButtons @rate="rate" />
-
-                    <p class="text-center text-xs text-muted-foreground">
-                        Shortcuts: 1 Hard, 2 Okay, 3 Easy
-                    </p>
-
-                    <Button
-                        v-if="undoOffered && props.undo"
-                        variant="ghost"
-                        size="sm"
-                        class="cursor-pointer self-center"
-                        :disabled="undoForm.processing"
-                        @click="undoLastRating"
-                    >
-                        <RotateCcwIcon aria-hidden="true" />
-                        Undo last rating
-                    </Button>
-                </template>
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    class="cursor-pointer"
+                    as-child
+                >
+                    <Link :href="reviewIndex.url()">Back to Review</Link>
+                </Button>
             </CardFooter>
         </Card>
+
+        <template v-else-if="props.current">
+            <FlashcardExercise
+                v-if="props.current.card.exercise === 'flashcard'"
+                :key="currentKey"
+                :card="props.current.card"
+                :rating="props.current.rating"
+                :processing="rateForm.processing"
+                :undo-offered="undoOffered"
+                :undo-processing="undoForm.processing"
+                @rate="rate"
+                @undo="undoLastRating"
+                @ready="onReady"
+            />
+
+            <FixTheMistakeExercise
+                v-else
+                :key="currentKey"
+                :card="props.current.card"
+                :attempt="attempts[currentKey] ?? ''"
+                :checked="checkedItems[currentKey] ?? false"
+                :rating="props.current.rating"
+                :processing="rateForm.processing"
+                :undo-offered="undoOffered"
+                :undo-processing="undoForm.processing"
+                @update:attempt="setAttempt"
+                @update:checked="setChecked"
+                @rate="rate"
+                @undo="undoLastRating"
+                @ready="onReady"
+            />
+
+            <p
+                v-if="saveFailed"
+                class="mt-3 text-center text-sm text-destructive"
+                role="alert"
+            >
+                That rating was not saved. Please try again.
+            </p>
+        </template>
     </FocusLayout>
 </template>

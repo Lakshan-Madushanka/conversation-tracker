@@ -13,7 +13,7 @@ use App\Http\Requests\StartReviewRequest;
 use App\Http\Requests\UndoReviewItemRequest;
 use App\Models\Rating;
 use App\Models\Review;
-use App\Queries\ReviewSteps;
+use App\Queries\ReviewSections;
 use App\Queries\TableCollection;
 use App\Queries\TodaysReview;
 use App\Support\LearnerDay;
@@ -26,11 +26,12 @@ use Inertia\Response;
  * Review and re-practice: the home that starts a review, the distraction-free
  * exercise screen, and the ratings that walk through it.
  *
- * The review lives at its own address (`?review=` on the exercise page), so a
- * refresh, a bookmark or the Back button return to the same sitting and to the
- * next item not yet rated. Every item is also a step (`&step=`), so the learner
- * can open any of them at any time instead of going in order. A missing or
- * unknown review shows a calm "couldn't find that review" instead of an error.
+ * A review is shown as one section per exercise kind, in a fixed friendly
+ * order. Every section can be opened at any time (`&step=` names it and
+ * `&position=` the item inside it), so a refresh, a bookmark or the Back
+ * button return to the same sitting and to the next item still to rate. A
+ * missing or unknown review shows a calm "couldn't find that review" instead
+ * of an error.
  */
 class ReviewController extends Controller
 {
@@ -46,6 +47,7 @@ class ReviewController extends Controller
             'waitingForFix' => [
                 'vocabulary' => $collection->attentionCount(FeedbackType::Vocabulary),
                 'phrases' => $collection->attentionCount(FeedbackType::Phrase),
+                'mistakes' => $collection->attentionCount(FeedbackType::Mistake),
             ],
         ]);
     }
@@ -75,13 +77,13 @@ class ReviewController extends Controller
     }
 
     /**
-     * Every item in this review as a step, with the step named in the address
-     * (or the first one still to rate) shown as a card. Once every step has
-     * a rating the finish screen takes over.
+     * Every section of this review, with the section and item named in the
+     * address (or the first one still to rate) shown as a card. Once every
+     * item has a rating the finish screen takes over.
      */
     public function show(
         Request $request,
-        ReviewSteps $steps,
+        ReviewSections $sectionsQuery,
         TodaysReview $todaysReview,
         LearnerDay $day,
     ): Response {
@@ -91,17 +93,12 @@ class ReviewController extends Controller
             return Inertia::render('review/Session', $this->emptyPayload(notFound: true));
         }
 
-        $allSteps = $steps->for($review);
-        $current = $steps->current($allSteps, $request->query('step'));
-        $currentNumber = $current['number'] ?? null;
-        $ratings = $review->ratings;
-        $total = count($allSteps);
-        $rated = count(array_filter(
-            $allSteps,
-            fn (array $step): bool => $step['rating'] !== null,
-        ));
-
+        $sections = $sectionsQuery->for($review);
+        $total = array_sum(array_column($sections, 'total'));
+        $rated = array_sum(array_column($sections, 'rated'));
         $finished = $total === 0 || $rated === $total;
+
+        $ratings = $review->ratings;
         $counts = $ratings->countBy(fn (Rating $rating): string => $rating->rating->value);
         $latest = $ratings->sortByDesc('id')->first();
 
@@ -114,25 +111,45 @@ class ReviewController extends Controller
             $review->save();
         }
 
+        $current = null;
+        $completedSection = null;
+
+        if (! $finished) {
+            $opened = $sectionsQuery->open(
+                $sections,
+                $request->query('step'),
+                $request->query('position'),
+            );
+
+            if ($opened !== null && $opened['item'] === null) {
+                $completedSection = $this->completedSection($opened['section'], $sections);
+            } elseif ($opened !== null) {
+                $index = array_search($opened['item'], $opened['section']['items'], true);
+                $current = [
+                    'step' => $opened['section']['key'],
+                    'label' => $opened['section']['label'],
+                    'position' => $opened['item']['position'],
+                    'stepPosition' => $index === false ? 1 : $index + 1,
+                    'total' => $opened['section']['total'],
+                    'card' => $opened['item']['card'],
+                    'rating' => $opened['item']['rating'],
+                ];
+            }
+        }
+
         $canReviewMore = $finished
             && $todaysReview->suggest(excludingRatedToday: true, request: $request)->count() > 0;
 
         return Inertia::render('review/Session', [
             'notFound' => false,
             'finished' => $finished,
-            'steps' => $allSteps,
-            'currentStep' => $finished ? null : $currentNumber,
-            'card' => $finished ? null : $current['card'],
-            'cardRating' => $finished ? null : $current['rating'],
+            'sections' => array_map($this->sectionSummary(...), $sections),
+            'current' => $current,
+            'completedSection' => $completedSection,
             'reviewId' => $review->id,
             'isDailyReview' => $review->is_daily_review,
-            'position' => [
-                'current' => $finished ? $total : ($currentNumber ?? 0),
-                'total' => $total,
-            ],
-            'progress' => $total === 0
-                ? 0
-                : (int) round(($rated / $total) * 100),
+            'position' => ['current' => $rated, 'total' => $total],
+            'progress' => $total === 0 ? 0 : (int) round(($rated / $total) * 100),
             'counts' => [
                 'hard' => $counts->get('hard', 0),
                 'okay' => $counts->get('okay', 0),
@@ -150,7 +167,7 @@ class ReviewController extends Controller
     }
 
     /**
-     * Save one rating immediately and open the next step still to rate.
+     * Save one rating immediately and open the next item still to rate.
      * Repeating the same request changes nothing, so a double tap or a retry
      * counts once.
      */
@@ -158,7 +175,7 @@ class ReviewController extends Controller
         RateReviewItemRequest $request,
         Review $review,
         RecordRating $recordRating,
-        ReviewSteps $steps,
+        ReviewSections $sectionsQuery,
     ): RedirectResponse {
         abort_unless(
             $review->items()
@@ -177,15 +194,15 @@ class ReviewController extends Controller
 
         $review->load(['items', 'ratings']);
 
-        $next = $steps->nextUnrated(
-            $steps->for($review),
+        $next = $sectionsQuery->nextAfterRating(
+            $sectionsQuery->for($review),
             $request->kind(),
             $request->itemIdentity(),
         );
 
         return to_route('review.session', $next === null
             ? ['review' => $review->id]
-            : ['review' => $review->id, 'step' => $next]);
+            : ['review' => $review->id, 'step' => $next['step'], 'position' => $next['position']]);
     }
 
     /**
@@ -196,20 +213,81 @@ class ReviewController extends Controller
         UndoReviewItemRequest $request,
         Review $review,
         UndoRating $undoRating,
-        ReviewSteps $steps,
+        ReviewSections $sectionsQuery,
     ): RedirectResponse {
         $undoRating->handle($review, $request->kind(), $request->itemIdentity());
 
         $review->load(['items', 'ratings']);
-        $number = $steps->numberOf(
-            $steps->for($review),
+        $place = $sectionsQuery->locate(
+            $sectionsQuery->for($review),
             $request->kind(),
             $request->itemIdentity(),
         );
 
-        return to_route('review.session', $number === null
+        return to_route('review.session', $place === null
             ? ['review' => $review->id]
-            : ['review' => $review->id, 'step' => $number]);
+            : ['review' => $review->id, 'step' => $place['step'], 'position' => $place['position']]);
+    }
+
+    /**
+     * The summary the stepper shows: name, icon, progress and its own address,
+     * without the items themselves.
+     *
+     * @param  array{key: string, label: string, icon: string, number: int, total: int, rated: int, completed: bool, counts: array{hard: int, okay: int, easy: int}, url: string, items: list<array<string, mixed>>}  $section
+     * @return array{key: string, label: string, icon: string, number: int, total: int, rated: int, completed: bool, counts: array{hard: int, okay: int, easy: int}, url: string}
+     */
+    private function sectionSummary(array $section): array
+    {
+        unset($section['items']);
+
+        return $section;
+    }
+
+    /**
+     * What a finished section shows instead of a card: its own tally and a way
+     * on to the next section still holding unrated items.
+     *
+     * @param  array{key: string, label: string, icon: string, number: int, total: int, rated: int, completed: bool, counts: array{hard: int, okay: int, easy: int}, url: string, items: list<array<string, mixed>>}  $section
+     * @param  list<array{key: string, label: string, icon: string, number: int, total: int, rated: int, completed: bool, counts: array{hard: int, okay: int, easy: int}, url: string, items: list<array<string, mixed>>}>  $sections
+     * @return array{key: string, label: string, total: int, counts: array{hard: int, okay: int, easy: int}, next_url: string|null}
+     */
+    private function completedSection(array $section, array $sections): array
+    {
+        return [
+            'key' => $section['key'],
+            'label' => $section['label'],
+            'total' => $section['total'],
+            'counts' => $section['counts'],
+            'next_url' => $this->nextUnfinishedUrl($section, $sections),
+        ];
+    }
+
+    /**
+     * @param  array{key: string, label: string, icon: string, number: int, total: int, rated: int, completed: bool, counts: array{hard: int, okay: int, easy: int}, url: string, items: list<array<string, mixed>>}  $section
+     * @param  list<array{key: string, label: string, icon: string, number: int, total: int, rated: int, completed: bool, counts: array{hard: int, okay: int, easy: int}, url: string, items: list<array<string, mixed>>}>  $sections
+     */
+    private function nextUnfinishedUrl(array $section, array $sections): ?string
+    {
+        $count = count($sections);
+        $start = 0;
+
+        foreach ($sections as $index => $candidate) {
+            if ($candidate['key'] === $section['key']) {
+                $start = $index;
+
+                break;
+            }
+        }
+
+        for ($offset = 1; $offset <= $count; $offset += 1) {
+            $candidate = $sections[($start + $offset) % $count];
+
+            if (! $candidate['completed']) {
+                return $candidate['url'];
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -233,10 +311,9 @@ class ReviewController extends Controller
      * @return array{
      *     notFound: bool,
      *     finished: bool,
-     *     steps: list<array<string, mixed>>,
-     *     currentStep: null,
-     *     card: null,
-     *     cardRating: null,
+     *     sections: list<array<string, mixed>>,
+     *     current: null,
+     *     completedSection: null,
      *     position: array{current: int, total: int},
      *     progress: int,
      *     counts: array{hard: int, okay: int, easy: int},
@@ -252,10 +329,9 @@ class ReviewController extends Controller
         return [
             'notFound' => $notFound,
             'finished' => false,
-            'steps' => [],
-            'currentStep' => null,
-            'card' => null,
-            'cardRating' => null,
+            'sections' => [],
+            'current' => null,
+            'completedSection' => null,
             'position' => ['current' => 0, 'total' => 0],
             'progress' => 0,
             'counts' => ['hard' => 0, 'okay' => 0, 'easy' => 0],

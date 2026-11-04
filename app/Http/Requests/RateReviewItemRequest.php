@@ -24,10 +24,7 @@ final class RateReviewItemRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'kind' => ['required', 'string', Rule::in([
-                FeedbackType::Vocabulary->value,
-                FeedbackType::Phrase->value,
-            ])],
+            'kind' => ['required', 'string', Rule::in(FeedbackType::tableValues())],
             'item_identity' => ['required', 'string', 'max:191'],
             'rating' => ['required', 'string', Rule::in(ReviewRating::values())],
         ];

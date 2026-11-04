@@ -281,7 +281,7 @@ onBeforeUnmount(() => {
                 v-if="
                     !props.notFound && !props.finished && props.steps.length > 1
                 "
-                class="mb-4"
+                class="mb-8"
                 aria-label="Review steps"
             >
                 <nav
@@ -299,14 +299,14 @@ onBeforeUnmount(() => {
                             :key="step.number"
                             v-slot="{ state }"
                             :step="step.number"
-                            class="relative w-16 shrink-0 flex-col items-center gap-1 sm:w-auto sm:min-w-20 sm:flex-1"
+                            class="relative w-16 shrink-0 flex-col items-center gap-1 sm:w-auto sm:min-w-20 sm:flex-1 cursor-pointer"
                         >
                             <StepperSeparator
                                 v-if="step.number !== props.steps.length"
                                 class="absolute top-[19px] left-[calc(50%+19px)] h-0.5 w-[calc(100%-38px)] rounded-full bg-border"
                             />
 
-                            <StepperTrigger class="w-full gap-1 p-0.5">
+                            <StepperTrigger class="w-full gap-1 p-0.5 cursor-pointer">
                                 <span
                                     class="z-10 flex size-9 shrink-0 items-center justify-center rounded-full border text-sm font-medium tabular-nums transition-colors"
                                     :class="
@@ -337,10 +337,6 @@ onBeforeUnmount(() => {
                         </StepperItem>
                     </Stepper>
                 </nav>
-
-                <p class="mt-2 text-center text-xs text-muted-foreground">
-                    Open any step, in any order.
-                </p>
             </section>
         </template>
 
@@ -356,7 +352,7 @@ onBeforeUnmount(() => {
                 </CardDescription>
             </CardHeader>
             <CardFooter class="justify-center">
-                <Button size="lg" class="h-11 px-4" as-child>
+                <Button size="lg" class="h-11 px-4 cursor-pointer" as-child>
                     <Link :href="reviewIndex.url()">Back to Review</Link>
                 </Button>
             </CardFooter>
@@ -422,7 +418,7 @@ onBeforeUnmount(() => {
             </CardContent>
 
             <CardFooter class="flex flex-wrap justify-center gap-2">
-                <Button size="lg" class="h-11 px-4" as-child>
+                <Button size="lg" class="h-11 px-4 cursor-pointer" as-child>
                     <Link :href="reviewIndex.url()">Done</Link>
                 </Button>
 
@@ -430,7 +426,7 @@ onBeforeUnmount(() => {
                     v-if="props.canReviewMore"
                     size="lg"
                     variant="outline"
-                    class="h-11 px-4"
+                    class="h-11 px-4 cursor-pointer"
                     :disabled="startAnotherForm.processing"
                     @click="startAnotherReview"
                 >
@@ -442,7 +438,7 @@ onBeforeUnmount(() => {
                     v-if="undoOffered && props.undo"
                     size="lg"
                     variant="ghost"
-                    class="h-11 px-4"
+                    class="h-11 px-4 cursor-pointer"
                     :disabled="undoForm.processing"
                     @click="undoLastRating"
                 >
@@ -475,7 +471,7 @@ onBeforeUnmount(() => {
                 <Button
                     v-if="!revealed"
                     size="lg"
-                    class="h-11 w-full"
+                    class="h-11 w-full cursor-pointer"
                     @click="revealed = true"
                 >
                     <EyeIcon aria-hidden="true" />
@@ -544,7 +540,7 @@ onBeforeUnmount(() => {
                         v-if="undoOffered && props.undo"
                         variant="ghost"
                         size="sm"
-                        class="self-center"
+                        class="self-center cursor-pointer"
                         :disabled="undoForm.processing"
                         @click="undoLastRating"
                     >
@@ -568,7 +564,7 @@ onBeforeUnmount(() => {
                         v-if="undoOffered && props.undo"
                         variant="ghost"
                         size="sm"
-                        class="self-center"
+                        class="self-center cursor-pointer"
                         :disabled="undoForm.processing"
                         @click="undoLastRating"
                     >

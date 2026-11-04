@@ -50,7 +50,7 @@ const options: {
             type="button"
             :class="
                 cn(
-                    'flex items-center justify-center gap-2 rounded-xl border px-3 py-3 text-sm font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
+                    'flex cursor-pointer items-center justify-center gap-2 rounded-xl border px-3 py-3 text-sm font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
                     option.classes,
                 )
             "

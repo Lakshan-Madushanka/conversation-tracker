@@ -22,7 +22,7 @@ final class UndoReviewItemRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'kind' => ['required', 'string', Rule::in(FeedbackType::tableValues())],
+            'kind' => ['required', 'string', Rule::in(FeedbackType::reviewableValues())],
             'item_identity' => ['required', 'string', 'max:191'],
         ];
     }

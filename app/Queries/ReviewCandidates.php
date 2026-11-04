@@ -6,6 +6,7 @@ namespace App\Queries;
 
 use App\Enums\FeedbackType;
 use App\Models\PracticeFeedbackEntry;
+use App\Models\PracticeQuestion;
 use App\Models\PracticeSession;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
@@ -13,8 +14,9 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * The items a review can be built from: the words and phrases that carry a
- * meaning (or use), and the mistakes that carry a correction, from finished
- * sessions that are not archived.
+ * meaning (or use), the mistakes that carry a correction, and the questions
+ * that carry a more natural version, from finished sessions that are not
+ * archived.
  *
  * An item is the same identity Collections groups by, so two sessions that
  * mention the same word — or the same mistake pair — make one item. The text
@@ -35,7 +37,7 @@ final class ReviewCandidates
     /** How many distinct items could be reviewed right now. */
     public function count(): int
     {
-        return DB::query()
+        $entries = DB::query()
             ->fromSub(
                 $this->base()
                     ->select(['entries.type', 'entries.collection_key'])
@@ -43,6 +45,15 @@ final class ReviewCandidates
                 'reviewable',
             )
             ->count();
+
+        $questions = DB::query()
+            ->fromSub(
+                $this->questionsBase()->select('questions.id as collection_key'),
+                'reviewable_questions',
+            )
+            ->count();
+
+        return $entries + $questions;
     }
 
     /**
@@ -103,6 +114,63 @@ final class ReviewCandidates
         return $cards;
     }
 
+    /**
+     * The current question and its natural version behind each say-it-again
+     * identity, in one query for the whole review. A question whose session
+     * has gone, was archived, or whose natural version was removed is skipped
+     * rather than shown stale.
+     *
+     * @param  array<int, array{kind: FeedbackType, identity: string}>  $items
+     * @return array<string, array{question: PracticeQuestion, natural: PracticeFeedbackEntry}>
+     *                                                                                          keyed by kind and identity
+     */
+    public function questionCardsFor(array $items): array
+    {
+        $ids = [];
+
+        foreach ($items as $item) {
+            if ($item['kind'] === FeedbackType::Question && is_numeric($item['identity'])) {
+                $ids[] = (int) $item['identity'];
+            }
+        }
+
+        if ($ids === []) {
+            return [];
+        }
+
+        $naturals = PracticeFeedbackEntry::query()
+            ->select('practice_feedback_entries.*')
+            ->join('practice_questions as questions', 'questions.id', '=', 'practice_feedback_entries.practice_question_id')
+            ->join('practice_sessions as sessions', 'sessions.id', '=', 'questions.practice_session_id')
+            ->with('practiceQuestion.practiceSession')
+            ->where('practice_feedback_entries.type', FeedbackType::NaturalVersion->value)
+            ->whereIn('practice_feedback_entries.practice_question_id', $ids)
+            ->whereRaw("TRIM(practice_feedback_entries.content_text) <> ''")
+            ->whereRaw("TRIM(questions.question_text) <> ''")
+            ->where('sessions.status', PracticeSession::STATUS_FINISHED)
+            ->whereNull('sessions.archived_at')
+            ->orderByDesc('practice_feedback_entries.id')
+            ->get();
+
+        /** @var array<string, array{question: PracticeQuestion, natural: PracticeFeedbackEntry}> $cards */
+        $cards = [];
+
+        foreach ($naturals as $natural) {
+            $question = $natural->practiceQuestion;
+
+            if (! $question instanceof PracticeQuestion) {
+                continue;
+            }
+
+            $cards[$this->key(FeedbackType::Question, (string) $question->id)] ??= [
+                'question' => $question,
+                'natural' => $natural,
+            ];
+        }
+
+        return $cards;
+    }
+
     /** The key a review item and its current entry share. */
     public function key(FeedbackType $kind, string $identity): string
     {
@@ -141,6 +209,29 @@ final class ReviewCandidates
                             ->whereRaw("TRIM(entries.content_text) <> ''")
                             ->whereRaw("TRIM(entries.correction_text) <> ''");
                     });
+            });
+    }
+
+    /**
+     * The starting point for say-it-again: a tutor's question with words and a
+     * non-empty natural version, from a finished session that is not archived.
+     * A question's identity is its own row id, so the same words in two
+     * sessions stay two items and an edit never moves a rating.
+     */
+    public function questionsBase(): QueryBuilder
+    {
+        return DB::table('practice_questions as questions')
+            ->join('practice_sessions as sessions', 'sessions.id', '=', 'questions.practice_session_id')
+            ->whereNull('sessions.archived_at')
+            ->where('sessions.status', PracticeSession::STATUS_FINISHED)
+            ->whereRaw("TRIM(questions.question_text) <> ''")
+            ->whereExists(function (QueryBuilder $natural): void {
+                $natural
+                    ->select(DB::raw('1'))
+                    ->from('practice_feedback_entries as natural')
+                    ->whereColumn('natural.practice_question_id', 'questions.id')
+                    ->where('natural.type', FeedbackType::NaturalVersion->value)
+                    ->whereRaw("TRIM(natural.content_text) <> ''");
             });
     }
 }

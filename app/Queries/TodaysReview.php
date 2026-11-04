@@ -14,6 +14,7 @@ use App\Models\Review;
 use App\Models\ReviewSchedule;
 use App\Support\ExerciseKind;
 use App\Support\LearnerDay;
+use App\Support\ReviewAllocation;
 use App\Support\ReviewExercises;
 use App\Support\ReviewSettings;
 use App\Support\ReviewSuggestion;
@@ -23,10 +24,11 @@ use Illuminate\Http\Request;
 /**
  * Choosing today's items, in one place on the server.
  *
- * Candidates are reviewable words, phrases and mistakes from finished,
- * non-archived sessions that are either due again (by the item's schedule)
- * or never reviewed. Learned items are left out unless they are due again; a
- * never-reviewed Learned item is never suggested.
+ * Candidates are reviewable words, phrases, mistakes and questions from
+ * finished, non-archived sessions that are either due again (by the item's
+ * schedule) or never reviewed. Learned items are left out unless they are due
+ * again; a never-reviewed Learned item is never suggested. A question has no
+ * star or status, so it takes part through its schedule alone.
  *
  * The sitting is split between the built exercise kinds by the target shares
  * in `ReviewSettings`, renormalised over the kinds that actually have
@@ -35,14 +37,16 @@ use Illuminate\Http\Request;
  * other due items most overdue first, then new items (starred or Still
  * difficult first). Due items crowd out new ones. If one kind cannot fill its
  * share, the other kinds take the free slots, so a full sitting is still on
- * offer on a quiet day.
+ * offer on a quiet day. When the sitting has room for every kind, each kind
+ * keeps at least one slot, so its step never disappears while it has something
+ * to show.
  *
  * The choice is worked out from the current data every time, in bulk: one
- * grouped candidate query, one read of the schedules, one of the marks and
- * one of today's ratings — the number of queries never grows with the number
- * of items. Items are returned grouped one list per kind, in the fixed
- * friendly order the stepper uses; within each kind due and new items are
- * interleaved evenly.
+ * grouped candidate query for the saved entries and one for the questions, one
+ * read of the schedules, one of the marks and one of today's ratings — the
+ * number of queries never grows with the number of items. Items are returned
+ * grouped one list per kind, in the fixed friendly order the stepper uses;
+ * within each kind due and new items are interleaved evenly.
  */
 final readonly class TodaysReview
 {
@@ -158,7 +162,7 @@ final readonly class TodaysReview
             $pools[$exercise]['new'] = [...$boosted, ...$plain];
         }
 
-        $quotas = $this->quotas($active, $size);
+        $quotas = ReviewAllocation::quotas($active, $size, ReviewSettings::TARGET_SHARES);
 
         $dueAvailable = 0;
         $candidateTotal = 0;
@@ -193,6 +197,33 @@ final readonly class TodaysReview
 
         $picked = 0;
         $newPicked = 0;
+
+        // Every kind the shares give a slot gets one before any kind takes a
+        // second, so a kind holding only new items is not crowded out of the
+        // sitting (and the stepper) by the kinds ahead of it.
+        if ($size >= count($active)) {
+            foreach ($active as $exercise) {
+                if (($quotas[$exercise] ?? 0) < 1) {
+                    continue;
+                }
+
+                if (isset($pools[$exercise]['due'][$dueIndex[$exercise]])) {
+                    $pickedDue[$exercise][] = $this->brief($pools[$exercise]['due'][$dueIndex[$exercise]]);
+                    $dueIndex[$exercise] += 1;
+                    $picked += 1;
+
+                    continue;
+                }
+
+                if ($newPicked < $newAllowance
+                    && isset($pools[$exercise]['new'][$newIndex[$exercise]])) {
+                    $pickedNew[$exercise][] = $this->brief($pools[$exercise]['new'][$newIndex[$exercise]]);
+                    $newIndex[$exercise] += 1;
+                    $picked += 1;
+                    $newPicked += 1;
+                }
+            }
+        }
 
         // Each kind fills its share, due items first.
         foreach ($active as $exercise) {
@@ -337,7 +368,7 @@ final readonly class TodaysReview
      */
     private function candidateRows(): array
     {
-        return array_values($this->candidates->base()
+        $entries = array_values($this->candidates->base()
             ->select(['entries.type', 'entries.collection_key'])
             ->distinct()
             ->get()
@@ -346,6 +377,18 @@ final readonly class TodaysReview
                 'collection_key' => (string) $row->collection_key,
             ])
             ->all());
+
+        $questions = array_values($this->candidates->questionsBase()
+            ->select('questions.id as collection_key')
+            ->distinct()
+            ->get()
+            ->map(fn (object $row): array => [
+                'type' => FeedbackType::Question->value,
+                'collection_key' => (string) $row->collection_key,
+            ])
+            ->all());
+
+        return [...$entries, ...$questions];
     }
 
     /**
@@ -376,62 +419,6 @@ final readonly class TodaysReview
     }
 
     /**
-     * Split the sitting between the active kinds by their target shares,
-     * renormalised over those kinds. The largest remainder takes the last
-     * slot, so the shares stay honest and the total always adds up.
-     *
-     * @param  list<string>  $active
-     * @return array<string, int>
-     */
-    private function quotas(array $active, int $size): array
-    {
-        $shares = [];
-        $totalShare = 0.0;
-
-        foreach ($active as $key) {
-            $share = ReviewSettings::TARGET_SHARES[$key] ?? 1.0;
-            $shares[$key] = $share;
-            $totalShare += $share;
-        }
-
-        if ($totalShare <= 0.0) {
-            foreach ($active as $key) {
-                $shares[$key] = 1.0;
-            }
-
-            $totalShare = (float) count($active);
-        }
-
-        $quotas = [];
-        $fractions = [];
-        $assigned = 0;
-
-        foreach ($active as $key) {
-            $exact = $size * $shares[$key] / $totalShare;
-            $base = (int) floor($exact);
-            $quotas[$key] = $base;
-            $fractions[$key] = $exact - $base;
-            $assigned += $base;
-        }
-
-        while ($assigned < $size) {
-            $next = $active[0];
-
-            foreach ($active as $key) {
-                if ($fractions[$key] > $fractions[$next]) {
-                    $next = $key;
-                }
-            }
-
-            $quotas[$next] += 1;
-            $fractions[$next] = -1.0;
-            $assigned += 1;
-        }
-
-        return $quotas;
-    }
-
-    /**
      * The stored schedules, read once for the whole set: one read per kind
      * rather than one question per item. A few thousand rows is the natural
      * size here, and the read stays honest however big the pool grows.
@@ -442,7 +429,7 @@ final readonly class TodaysReview
     {
         $found = [];
 
-        foreach (FeedbackType::tableTypes() as $kind) {
+        foreach (FeedbackType::reviewableTypes() as $kind) {
             foreach (ReviewSchedule::query()->where('kind', $kind->value)->get() as $schedule) {
                 $found[$this->candidates->key($kind, $schedule->item_identity)] = $schedule;
             }
@@ -492,7 +479,7 @@ final readonly class TodaysReview
             ->where('created_at', '>=', $today->setTimezone('UTC'))
             ->whereIn('kind', array_map(
                 fn (FeedbackType $kind): string => $kind->value,
-                FeedbackType::tableTypes(),
+                FeedbackType::reviewableTypes(),
             ))
             ->get(['kind', 'item_identity']);
 

@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace App\Queries;
 
 use App\Enums\FeedbackType;
+use App\Http\Resources\QuestionCardResource;
 use App\Http\Resources\ReviewCardResource;
 use App\Models\PracticeFeedbackEntry;
+use App\Models\PracticeQuestion;
 use App\Models\Rating;
 use App\Models\Review;
 use App\Models\ReviewItem;
@@ -54,6 +56,7 @@ final readonly class ReviewSections
     {
         $items = $review->items;
         $cards = $this->cardsFor($items);
+        $questionCards = $this->questionCardsFor($items);
         $ratings = $this->ratingsFor($review);
 
         /** @var array<string, list<SectionItem>> $grouped */
@@ -61,10 +64,11 @@ final readonly class ReviewSections
 
         foreach ($items as $item) {
             $key = ReviewExercises::kindOf($item->kind);
-            $card = $cards[$this->candidates->key($item->kind, $item->item_identity)] ?? null;
+            $itemKey = $this->candidates->key($item->kind, $item->item_identity);
+            $payload = $this->cardPayload($item->kind, $itemKey, $cards, $questionCards);
 
-            // A removed or archived item is skipped; the review moves on.
-            if ($card === null) {
+            // A removed, archived or changed item is skipped; the review moves on.
+            if ($payload === null) {
                 continue;
             }
 
@@ -72,8 +76,8 @@ final readonly class ReviewSections
                 'position' => $item->position,
                 'kind' => $item->kind,
                 'identity' => $item->item_identity,
-                'card' => (new ReviewCardResource($card['entry'], $card['reasons']))->resolve(),
-                'rating' => ($ratings[$this->candidates->key($item->kind, $item->item_identity)] ?? null)?->rating->value,
+                'card' => $payload,
+                'rating' => ($ratings[$itemKey] ?? null)?->rating->value,
             ];
         }
 
@@ -337,15 +341,59 @@ final readonly class ReviewSections
      */
     private function cardsFor(Collection $items): array
     {
-        return $this->candidates->cardsFor(
-            $items
-                ->map(fn (ReviewItem $item): array => [
-                    'kind' => $item->kind,
-                    'identity' => $item->item_identity,
-                ])
-                ->values()
-                ->all(),
-        );
+        return $this->candidates->cardsFor($this->itemPairs($items));
+    }
+
+    /**
+     * @param  Collection<int, ReviewItem>  $items
+     * @return array<string, array{question: PracticeQuestion, natural: PracticeFeedbackEntry}>
+     */
+    private function questionCardsFor(Collection $items): array
+    {
+        return $this->candidates->questionCardsFor($this->itemPairs($items));
+    }
+
+    /**
+     * @param  Collection<int, ReviewItem>  $items
+     * @return array<int, array{kind: FeedbackType, identity: string}>
+     */
+    private function itemPairs(Collection $items): array
+    {
+        return $items
+            ->map(fn (ReviewItem $item): array => [
+                'kind' => $item->kind,
+                'identity' => $item->item_identity,
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * The payload for one item, shaped by the box or question it came from.
+     *
+     * @param  array<string, array{entry: PracticeFeedbackEntry, reasons: list<string>}>  $cards
+     * @param  array<string, array{question: PracticeQuestion, natural: PracticeFeedbackEntry}>  $questionCards
+     * @return array<string, mixed>|null
+     */
+    private function cardPayload(
+        FeedbackType $kind,
+        string $key,
+        array $cards,
+        array $questionCards,
+    ): ?array {
+        if ($kind === FeedbackType::Question) {
+            $card = $questionCards[$key] ?? null;
+
+            return $card === null
+                ? null
+                : (new QuestionCardResource($card['question'], $card['natural']))->resolve();
+        }
+
+        $card = $cards[$key] ?? null;
+
+        return $card === null
+            ? null
+            : (new ReviewCardResource($card['entry'], $card['reasons']))->resolve();
     }
 
     /**

@@ -21,6 +21,13 @@ enum FeedbackType: string
     case NaturalVersion = 'natural_version';
 
     /**
+     * A past question, reviewed by answering it out loud. It is not a feedback
+     * box; it sits here so a review can name its items by one kind, the same
+     * way it names words, phrases and mistakes.
+     */
+    case Question = 'question';
+
+    /**
      * The boxes shown as a table: a fixed set of columns, one row per line.
      *
      * @return list<self>
@@ -42,13 +49,25 @@ enum FeedbackType: string
     }
 
     /**
-     * Every box, in the order the editor shows it.
+     * Every box, in the order the editor shows it. A question is not a box, so
+     * the editor never writes one.
      *
      * @return list<self>
      */
     public static function ordered(): array
     {
-        return self::cases();
+        return [self::Mistake, self::Vocabulary, self::Phrase, self::GrammarNote, self::NaturalVersion];
+    }
+
+    /**
+     * The kinds a review can hold. A question is reviewed as say-it-again; the
+     * other kinds are reviewed through the boxes above.
+     *
+     * @return list<self>
+     */
+    public static function reviewableTypes(): array
+    {
+        return [self::Mistake, self::Vocabulary, self::Phrase, self::Question];
     }
 
     /**
@@ -73,7 +92,15 @@ enum FeedbackType: string
      */
     public static function values(): array
     {
-        return array_map(fn (self $type): string => $type->value, self::cases());
+        return array_map(fn (self $type): string => $type->value, self::ordered());
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function reviewableValues(): array
+    {
+        return array_map(fn (self $type): string => $type->value, self::reviewableTypes());
     }
 
     /**

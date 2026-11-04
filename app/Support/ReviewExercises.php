@@ -11,10 +11,10 @@ use App\Enums\FeedbackType;
  * it: how long a review of them takes, how the mix reads, and which step a
  * saved item belongs to.
  *
- * Flashcards and fix-the-mistake are built today. Say-it-again and
- * fill-in-the-blank already have a share in `ReviewSettings::TARGET_SHARES`,
- * so they will slot in without touching the composer when their candidate
- * source arrives.
+ * Flashcards, fix-the-mistake and say-it-again are built today.
+ * Fill-in-the-blank already has a share in `ReviewSettings::TARGET_SHARES`, so
+ * it will slot in without touching the composer when its candidate source
+ * arrives.
  */
 final class ReviewExercises
 {
@@ -43,6 +43,14 @@ final class ReviewExercises
                 'square-pen',
                 ReviewSettings::MISTAKE_SECONDS,
             ),
+            new ExerciseKind(
+                'say_it_again',
+                'question to say again',
+                'questions to say again',
+                'Say it again',
+                'message-circle',
+                ReviewSettings::SAY_IT_AGAIN_SECONDS,
+            ),
         ];
     }
 
@@ -59,13 +67,14 @@ final class ReviewExercises
     }
 
     /**
-     * The exercise one saved feedback kind is shown as. Vocabulary and
-     * phrases share the flashcard step; a mistake has its own.
+     * The exercise one saved kind is shown as. Vocabulary and phrases share
+     * the flashcard step; a mistake and a past question have their own.
      */
     public static function kindOf(FeedbackType $type): string
     {
         return match ($type) {
             FeedbackType::Mistake => 'mistake',
+            FeedbackType::Question => 'say_it_again',
             FeedbackType::Vocabulary, FeedbackType::Phrase => 'flashcard',
             default => $type->value,
         };

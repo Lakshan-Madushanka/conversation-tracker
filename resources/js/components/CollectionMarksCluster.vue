@@ -8,14 +8,14 @@ import {
     Popover,
     PopoverContent,
     PopoverTrigger,
-} from '@/components/ui/popover'
+} from '@/components/ui/popover';
 import {
     starAriaLabel,
     statusAriaLabel,
     type MarkableItem,
 } from '@/lib/collection-marks';
 import type { CollectionItemStatusValue } from '@/types';
-import notes from "@/routes/collections/notes";
+import notes from '@/routes/collections/notes';
 
 /**
  * The marks shown beside one collection item in the list: the star, the
@@ -58,7 +58,10 @@ const statusWord = computed(() =>
             class="inline-flex items-center text-muted-foreground"
         >
             <PopoverTrigger>
-                <NotebookIcon aria-hidden="true" class="size-5 cursor-pointer" />
+                <NotebookIcon
+                    aria-hidden="true"
+                    class="size-5 cursor-pointer"
+                />
             </PopoverTrigger>
             <PopoverContent>
                 <div v-html="item.notes_html"></div>

@@ -50,8 +50,8 @@ const { collapsed: sidebarCollapsed } = useSidebar();
                     :class="{
                         'pb-48 md:pb-44': bottomNavHidden,
                         'pb-24 md:pb-10': !bottomNavHidden,
-                        'px-4 max-w-6xl': sidebarCollapsed,
-                        'px-4 md:px-8 max-w-5xl': !sidebarCollapsed,
+                        'max-w-6xl px-4': sidebarCollapsed,
+                        'max-w-5xl px-4 md:px-8': !sidebarCollapsed,
                     }"
                 >
                     <slot />

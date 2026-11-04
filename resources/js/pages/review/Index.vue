@@ -1,13 +1,17 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { Head, Link } from '@inertiajs/vue3';
-import { InfoIcon } from '@lucide/vue';
+import { InfoIcon, LightbulbIcon } from '@lucide/vue';
 import PageHeader from '@/components/PageHeader.vue';
 import ReviewSuggestionCard from '@/components/ReviewSuggestionCard.vue';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { index as collectionsIndex } from '@/routes/collections';
-import type { TodayReviewData, WaitingForFixData } from '@/types';
+import type {
+    GrammarNotesTipData,
+    TodayReviewData,
+    WaitingForFixData,
+} from '@/types';
 
 defineOptions({ layout: AppLayout });
 
@@ -16,6 +20,8 @@ const props = defineProps<{
     todayReview: TodayReviewData;
     /** How many words, phrases and mistakes cannot be practiced yet. */
     waitingForFix: WaitingForFixData;
+    /** How many grammar notes cannot make a blank yet. */
+    grammarNotesTip: GrammarNotesTipData;
 }>();
 
 const waitingGroups = computed(() =>
@@ -70,6 +76,17 @@ const waitingSentence = computed(() => {
 
     return `${list} ${waitingCount.value === 1 ? 'needs' : 'need'} attention before ${waitingCount.value === 1 ? 'it' : 'they'} can be practiced`;
 });
+
+/** The grammar-note nudge, with the right number wording. */
+const grammarNotesSentence = computed(() =>
+    props.grammarNotesTip.count === 1
+        ? '1 grammar note cannot be used yet.'
+        : `${props.grammarNotesTip.count} grammar notes cannot be used yet.`,
+);
+
+const grammarNotesLink = computed(() =>
+    collectionsIndex.url({ query: { tab: 'grammar' } }),
+);
 </script>
 
 <template>
@@ -99,6 +116,25 @@ const waitingSentence = computed(() => {
                         class="font-medium text-primary hover:underline focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
                     >
                         {{ group.linkLabel }}
+                    </Link>
+                </p>
+            </AlertDescription>
+        </Alert>
+
+        <!-- Grammar notes with nothing to blank yet, kept separate on purpose -->
+        <Alert v-if="props.grammarNotesTip.count > 0" class="mt-4">
+            <LightbulbIcon aria-hidden="true" />
+            <AlertTitle>
+                <h2 class="font-medium">{{ grammarNotesSentence }}</h2>
+            </AlertTitle>
+            <AlertDescription>
+                <p>Bold the key part of a note to turn it into an exercise.</p>
+                <p class="mt-1">
+                    <Link
+                        :href="grammarNotesLink"
+                        class="font-medium text-primary hover:underline focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+                    >
+                        Grammar notes in Collections
                     </Link>
                 </p>
             </AlertDescription>

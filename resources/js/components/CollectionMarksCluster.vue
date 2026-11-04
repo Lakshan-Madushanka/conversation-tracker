@@ -5,11 +5,17 @@ import CollectionStarToggle from '@/components/CollectionStarToggle.vue';
 import CollectionStatusMenu from '@/components/CollectionStatusMenu.vue';
 import { Badge } from '@/components/ui/badge';
 import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover'
+import {
     starAriaLabel,
     statusAriaLabel,
     type MarkableItem,
 } from '@/lib/collection-marks';
 import type { CollectionItemStatusValue } from '@/types';
+import notes from "@/routes/collections/notes";
 
 /**
  * The marks shown beside one collection item in the list: the star, the
@@ -47,13 +53,17 @@ const statusWord = computed(() =>
     used, so marking never also opens the item. -->
 <template>
     <div class="flex flex-wrap items-center justify-end gap-1" @click.stop>
-        <span
+        <Popover
             v-if="props.item.has_notes"
             class="inline-flex items-center text-muted-foreground"
         >
-            <NotebookIcon aria-hidden="true" class="size-5" />
-            <span class="sr-only">Has notes</span>
-        </span>
+            <PopoverTrigger>
+                <NotebookIcon aria-hidden="true" class="size-5 cursor-pointer" />
+            </PopoverTrigger>
+            <PopoverContent>
+                <div v-html="item.notes_html"></div>
+            </PopoverContent>
+        </Popover>
 
         <Badge v-if="props.item.status !== null" variant="outline">
             {{ statusWord }}

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Queries;
 
 use App\Enums\FeedbackType;
+use App\Http\Resources\FillInTheBlankCardResource;
 use App\Http\Resources\QuestionCardResource;
 use App\Http\Resources\ReviewCardResource;
 use App\Models\PracticeFeedbackEntry;
@@ -12,6 +13,7 @@ use App\Models\PracticeQuestion;
 use App\Models\Rating;
 use App\Models\Review;
 use App\Models\ReviewItem;
+use App\Support\BlankExercise;
 use App\Support\ReviewExercises;
 use Illuminate\Support\Collection;
 
@@ -47,6 +49,9 @@ use Illuminate\Support\Collection;
  */
 final readonly class ReviewSections
 {
+    /** The registry key of the exercise built from a blank. */
+    private const string FILL_EXERCISE = 'fill_in_the_blank';
+
     public function __construct(private ReviewCandidates $candidates) {}
 
     /**
@@ -63,9 +68,9 @@ final readonly class ReviewSections
         $grouped = [];
 
         foreach ($items as $item) {
-            $key = ReviewExercises::kindOf($item->kind);
+            $key = $item->exercise ?? ReviewExercises::kindOf($item->kind);
             $itemKey = $this->candidates->key($item->kind, $item->item_identity);
-            $payload = $this->cardPayload($item->kind, $itemKey, $cards, $questionCards);
+            $payload = $this->cardPayload($item->kind, $key, $itemKey, $cards, $questionCards);
 
             // A removed, archived or changed item is skipped; the review moves on.
             if ($payload === null) {
@@ -369,7 +374,7 @@ final readonly class ReviewSections
     }
 
     /**
-     * The payload for one item, shaped by the box or question it came from.
+     * The payload for one item, shaped by the exercise chosen for it.
      *
      * @param  array<string, array{entry: PracticeFeedbackEntry, reasons: list<string>}>  $cards
      * @param  array<string, array{question: PracticeQuestion, natural: PracticeFeedbackEntry}>  $questionCards
@@ -377,10 +382,29 @@ final readonly class ReviewSections
      */
     private function cardPayload(
         FeedbackType $kind,
+        string $exercise,
         string $key,
         array $cards,
         array $questionCards,
     ): ?array {
+        if ($exercise === self::FILL_EXERCISE) {
+            $card = $cards[$key] ?? null;
+
+            if ($card === null) {
+                return null;
+            }
+
+            $entry = $card['entry'];
+            $topic = (string) ($entry->practiceQuestion?->practiceSession?->topic->name ?? '');
+            $blank = BlankExercise::build($entry, $topic, $card['reasons'][0] ?? null);
+
+            // An item edited into something that cannot hold a blank is
+            // skipped, exactly like the item it came from being removed.
+            return $blank === null
+                ? null
+                : (new FillInTheBlankCardResource($entry, $blank))->resolve();
+        }
+
         if ($kind === FeedbackType::Question) {
             $card = $questionCards[$key] ?? null;
 

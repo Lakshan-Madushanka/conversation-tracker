@@ -17,8 +17,10 @@ import {
     MessageCircleIcon,
     RotateCcwIcon,
     SquarePenIcon,
+    TextCursorInputIcon,
 } from '@lucide/vue';
 import type { ReviewRating } from '@/components/RatingButtons.vue';
+import FillInTheBlankExercise from '@/components/review/FillInTheBlankExercise.vue';
 import FlashcardExercise from '@/components/review/FlashcardExercise.vue';
 import FixTheMistakeExercise from '@/components/review/FixTheMistakeExercise.vue';
 import SayItAgainExercise from '@/components/review/SayItAgainExercise.vue';
@@ -95,6 +97,7 @@ const sectionIcons: Record<string, Component> = {
     'book-open': BookOpenIcon,
     'square-pen': SquarePenIcon,
     'message-circle': MessageCircleIcon,
+    'text-cursor-input': TextCursorInputIcon,
 };
 
 /** The learner's unsent attempts and checks, kept while the page lives. */
@@ -722,8 +725,25 @@ onBeforeUnmount(() => {
                 @ready="onReady"
             />
 
+            <FillInTheBlankExercise
+                v-else-if="props.current.card.exercise === 'fill_in_the_blank'"
+                :key="currentKey"
+                :card="props.current.card"
+                :attempt="attempts[currentKey] ?? ''"
+                :checked="checkedItems[currentKey] ?? false"
+                :rating="props.current.rating"
+                :processing="rateForm.processing"
+                :undo-offered="undoOffered"
+                :undo-processing="undoForm.processing"
+                @update:attempt="setAttempt"
+                @update:checked="setChecked"
+                @rate="rate"
+                @undo="undoLastRating"
+                @ready="onReady"
+            />
+
             <FixTheMistakeExercise
-                v-else
+                v-else-if="props.current.card.exercise === 'mistake'"
                 :key="currentKey"
                 :card="props.current.card"
                 :attempt="attempts[currentKey] ?? ''"

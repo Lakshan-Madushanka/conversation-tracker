@@ -66,7 +66,30 @@ export interface SayItAgainCard {
     session_url: string | null;
 }
 
-export type ReviewCard = FlashcardCard | MistakeCard | SayItAgainCard;
+/** One fill-in-the-blank card: the prompt with a gap, and its answer. */
+export interface FillInTheBlankCard {
+    kind: 'vocabulary' | 'phrase' | 'mistake' | 'grammar_note';
+    exercise: 'fill_in_the_blank';
+    item_identity: string;
+    label: string;
+    prompt_html: string;
+    answer_html: string;
+    answer_text: string;
+    hint: string | null;
+    hint_label: string | null;
+    session_url: string | null;
+}
+
+export type ReviewCard =
+    | FlashcardCard
+    | MistakeCard
+    | SayItAgainCard
+    | FillInTheBlankCard;
+
+/** The friendly nudge for grammar notes that cannot make a blank yet. */
+export interface GrammarNotesTipData {
+    count: number;
+}
 
 export interface ReviewCounts {
     hard: number;

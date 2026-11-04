@@ -398,8 +398,8 @@ function seeOriginal(event: MouseEvent): void {
                         :unit="config.unit"
                         :starred="props.item.starred"
                         :status="props.item.status"
-                        :notes-html="props.item.notes_html ?? ''"
-                        :notes-version="props.item.notes_version ?? 0"
+                        :notes-html="props.item.notes_html"
+                        :notes-version="props.item.notes_version"
                         @mark-saved="(mark) => markSaved(props.item, mark)"
                     />
                 </div>

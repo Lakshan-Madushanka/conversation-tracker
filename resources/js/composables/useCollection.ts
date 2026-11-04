@@ -587,10 +587,17 @@ export function useCollection(initial: CollectionPage) {
     }
 
     function syncPanel(props: Record<string, unknown>): void {
-        openItem.value = isCollectionOpenedItem(props.open_item)
+        const opened = isCollectionOpenedItem(props.open_item)
             ? props.open_item
             : null;
+        openItem.value = opened;
         openItemMissing.value = props.open_item_missing === true;
+
+        if (opened !== null) {
+            items.value = items.value.map((item) =>
+                item.key === opened.key ? { ...item, ...opened } : item,
+            );
+        }
     }
 
     return {

@@ -38,23 +38,25 @@ async function mountSection(
     overrides: Partial<{
         starred: boolean;
         status: 'learned' | 'still_difficult' | null;
-        notesHtml: string;
-        notesVersion: number;
+        notesHtml: string | undefined;
+        notesVersion: number | undefined;
     }> = {},
 ): Promise<ReturnType<typeof mount>> {
+    const props = {
+        kind: 'vocabulary' as CollectionKindValue,
+        itemKey: 'soup',
+        name: 'soup',
+        unit: 'word',
+        starred: false,
+        status: null as 'learned' | 'still_difficult' | null,
+        notesHtml: '' as string | undefined,
+        notesVersion: 0 as number | undefined,
+        ...overrides,
+    };
+
     const mounted = mount(CollectionMarksSection, {
         attachTo: document.body,
-        props: {
-            kind: 'vocabulary' as CollectionKindValue,
-            itemKey: 'soup',
-            name: 'soup',
-            unit: 'word',
-            starred: false,
-            status: null,
-            notesHtml: '',
-            notesVersion: 0,
-            ...overrides,
-        },
+        props,
     });
 
     // The notes editor builds itself over a flush; wait until it exists.
@@ -286,6 +288,47 @@ describe('the marks section', () => {
             (button) => button.textContent?.trim() === 'Try again',
         );
         expect(retry).not.toBeNull();
+
+        mounted.unmount();
+    });
+
+    it('shows a skeleton while notes are loading and mounts the editor when notes arrive', async () => {
+        const mounted = await mountSection({
+            notesHtml: undefined,
+            notesVersion: undefined,
+        });
+
+        expect(document.querySelector('[data-slot="skeleton"]')).not.toBeNull();
+        expect(
+            document.body.querySelector('div[contenteditable="true"]'),
+        ).toBeNull();
+
+        await mounted.setProps({
+            notesHtml: '<p>Previously saved note.</p>',
+            notesVersion: 4,
+        });
+        await flushPromises();
+        await flushPromises();
+
+        expect(document.querySelector('[data-slot="skeleton"]')).toBeNull();
+        const editor = document.body.querySelector(
+            'div[contenteditable="true"]',
+        );
+        expect(editor).not.toBeNull();
+        expect(editor?.innerHTML).toContain('Previously saved note.');
+
+        await writeNotes(
+            mounted,
+            '<p>Previously saved note with new edits.</p>',
+        );
+        await vi.advanceTimersByTimeAsync(1500);
+        await flushPromises();
+
+        expect(saveCalls).toHaveLength(1);
+        expect(saveCalls[0]).toMatchObject({
+            html: '<p>Previously saved note with new edits.</p>',
+            version: 4,
+        });
 
         mounted.unmount();
     });

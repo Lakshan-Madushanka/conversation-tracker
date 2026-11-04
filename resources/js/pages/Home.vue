@@ -1,33 +1,28 @@
 <script setup lang="ts">
-import { computed } from 'vue';
 import { Head, Link } from '@inertiajs/vue3';
 import {
     ArrowRightIcon,
     FlameIcon,
-    PlayIcon,
     SquarePenIcon,
     TrophyIcon,
 } from '@lucide/vue';
 import ContinueSessionCard from '@/components/ContinueSessionCard.vue';
 import PageHeader from '@/components/PageHeader.vue';
+import ReviewSuggestionCard from '@/components/ReviewSuggestionCard.vue';
 import SessionCard from '@/components/SessionCard.vue';
 import StatTile from '@/components/StatTile.vue';
 import { Button } from '@/components/ui/button';
-import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
-} from '@/components/ui/card';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { progressStats, todayReview } from '@/lib/sample-data';
-import { index as reviewIndex } from '@/routes/review';
+import { progressStats } from '@/lib/sample-data';
 import {
     create as sessionsCreate,
     index as sessionsIndex,
 } from '@/routes/sessions';
-import type { ContinueCardData, SessionCardData } from '@/types';
+import type {
+    ContinueCardData,
+    SessionCardData,
+    TodayReviewData,
+} from '@/types';
 
 defineOptions({ layout: AppLayout });
 
@@ -37,23 +32,20 @@ withDefaults(
         unfinishedSession?: ContinueCardData | null;
         /** The most recent finished sessions, newest first. */
         recentSessions?: SessionCardData[];
+        /** Today's review suggestion, or the "You've reviewed today" state. */
+        todayReview?: TodayReviewData;
     }>(),
-    { recentSessions: () => [] },
+    {
+        recentSessions: () => [],
+        todayReview: () => ({
+            state: 'nothing',
+            count: null,
+            minutes: null,
+            mix: null,
+            canReviewMore: null,
+        }),
+    },
 );
-
-const greeting = computed(() => {
-    const hour = new Date().getHours();
-
-    if (hour < 12) {
-        return 'Good morning';
-    }
-
-    if (hour < 18) {
-        return 'Good afternoon';
-    }
-
-    return 'Good evening';
-});
 </script>
 
 <template>
@@ -81,32 +73,7 @@ const greeting = computed(() => {
         />
 
         <!-- Today's review suggestion -->
-        <Card class="border-primary/30 bg-primary/5">
-            <CardHeader>
-                <CardDescription>{{ greeting }}</CardDescription>
-                <CardTitle class="text-xl">
-                    A short review is ready for you
-                </CardTitle>
-            </CardHeader>
-            <CardContent
-                class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
-            >
-                <div class="text-sm text-muted-foreground">
-                    <p class="font-medium text-foreground">
-                        {{ todayReview.minutes }} minutes ·
-                        {{ todayReview.items }} items
-                    </p>
-                    <p class="mt-1">{{ todayReview.mix }}</p>
-                </div>
-
-                <Button size="lg" as-child>
-                    <Link :href="reviewIndex.url()">
-                        <PlayIcon aria-hidden="true" />
-                        Start review
-                    </Link>
-                </Button>
-            </CardContent>
-        </Card>
+        <ReviewSuggestionCard :suggestion="todayReview" />
 
         <!-- Streak + practice days -->
         <div class="mt-6 grid grid-cols-2 gap-3 sm:gap-4">

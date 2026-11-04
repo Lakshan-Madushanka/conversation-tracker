@@ -49,11 +49,16 @@ defineProps<{
             </span>
         </header>
 
-        <main
-            class="flex flex-1 items-center justify-center px-4 pb-10 sm:px-6"
-        >
-            <div class="w-full max-w-xl">
-                <slot />
+        <main class="flex flex-1 flex-col items-center px-4 pt-4 pb-10 sm:px-6">
+            <!-- The wrapper centers on tall screens but never clips the top
+                when the content is taller than the viewport. -->
+            <div class="my-auto w-full max-w-3xl">
+                <!-- Wide content above the card, such as the review steps. -->
+                <slot name="above" />
+
+                <div class="mx-auto w-full max-w-xl">
+                    <slot />
+                </div>
             </div>
         </main>
 

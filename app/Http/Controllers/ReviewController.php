@@ -7,15 +7,16 @@ namespace App\Http\Controllers;
 use App\Actions\Reviews\RecordRating;
 use App\Actions\Reviews\StartReview;
 use App\Actions\Reviews\UndoRating;
+use App\Enums\FeedbackType;
 use App\Http\Requests\RateReviewItemRequest;
+use App\Http\Requests\StartReviewRequest;
 use App\Http\Requests\UndoReviewItemRequest;
-use App\Http\Resources\ReviewCardResource;
-use App\Models\PracticeFeedbackEntry;
-use App\Models\PracticeSession;
 use App\Models\Rating;
 use App\Models\Review;
-use App\Models\ReviewItem;
-use App\Queries\ReviewCandidates;
+use App\Queries\ReviewSteps;
+use App\Queries\TableCollection;
+use App\Queries\TodaysReview;
+use App\Support\LearnerDay;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -27,26 +28,44 @@ use Inertia\Response;
  *
  * The review lives at its own address (`?review=` on the exercise page), so a
  * refresh, a bookmark or the Back button return to the same sitting and to the
- * next item not yet rated. A missing or unknown review shows a calm "couldn't
- * find that review" instead of an error.
+ * next item not yet rated. Every item is also a step (`&step=`), so the learner
+ * can open any of them at any time instead of going in order. A missing or
+ * unknown review shows a calm "couldn't find that review" instead of an error.
  */
 class ReviewController extends Controller
 {
-    public function index(ReviewCandidates $candidates): Response
-    {
+    public function index(
+        Request $request,
+        TodaysReview $todaysReview,
+        TableCollection $collection,
+    ): Response {
         return Inertia::render('review/Index', [
-            'reviewableCount' => $candidates->count(),
-            'hasFinishedSessions' => PracticeSession::query()->study()->exists(),
+            'todayReview' => $todaysReview->card($request),
+            // The same shared "needs attention" rule the collections use, so
+            // the note and the collections always agree.
+            'waitingForFix' => [
+                'vocabulary' => $collection->attentionCount(FeedbackType::Vocabulary),
+                'phrases' => $collection->attentionCount(FeedbackType::Phrase),
+            ],
         ]);
     }
 
     /**
-     * Start a review of the items most worth revisiting. Nothing reviewable
-     * goes back to Review Home, which explains what fills it.
+     * Start a review built from the items most worth revisiting at this
+     * moment. `daily` marks the sitting as the day's suggestion; `more`
+     * starts the "Review a bit more" sitting, which leaves out the items
+     * already rated today. Nothing reviewable goes back to Review Home,
+     * which explains what fills it.
      */
-    public function store(StartReview $startReview): RedirectResponse
-    {
-        $review = $startReview->handle();
+    public function store(
+        StartReviewRequest $request,
+        StartReview $startReview,
+    ): RedirectResponse {
+        $review = $startReview->handle(
+            daily: $request->daily(),
+            excludingRatedToday: $request->more(),
+            request: $request,
+        );
 
         if (! $review instanceof Review) {
             return to_route('review.index');
@@ -56,71 +75,64 @@ class ReviewController extends Controller
     }
 
     /**
-     * The next item in this review, or the finish screen once every item has
-     * been rated or can no longer be shown.
+     * Every item in this review as a step, with the step named in the address
+     * (or the first one still to rate) shown as a card. Once every step has
+     * a rating the finish screen takes over.
      */
-    public function show(Request $request, ReviewCandidates $candidates): Response
-    {
+    public function show(
+        Request $request,
+        ReviewSteps $steps,
+        TodaysReview $todaysReview,
+        LearnerDay $day,
+    ): Response {
         $review = $this->reviewFrom($request);
 
         if (! $review instanceof Review) {
             return Inertia::render('review/Session', $this->emptyPayload(notFound: true));
         }
 
-        $items = $review->items;
+        $allSteps = $steps->for($review);
+        $current = $steps->current($allSteps, $request->query('step'));
+        $currentNumber = $current['number'] ?? null;
         $ratings = $review->ratings;
+        $total = count($allSteps);
+        $rated = count(array_filter(
+            $allSteps,
+            fn (array $step): bool => $step['rating'] !== null,
+        ));
 
-        $rated = $ratings->mapWithKeys(fn (Rating $rating): array => [
-            $candidates->key($rating->kind, $rating->item_identity) => true,
-        ]);
+        $finished = $total === 0 || $rated === $total;
+        $counts = $ratings->countBy(fn (Rating $rating): string => $rating->rating->value);
+        $latest = $ratings->sortByDesc('id')->first();
 
-        $unrated = $items->reject(
-            fn (ReviewItem $item): bool => $rated->has($candidates->key($item->kind, $item->item_identity)),
-        );
-
-        $entries = $candidates->entriesFor($unrated
-            ->map(fn (ReviewItem $item): array => [
-                'kind' => $item->kind,
-                'identity' => $item->item_identity,
-            ])
-            ->values()
-            ->all());
-
-        $card = null;
-        $skipped = 0;
-
-        foreach ($unrated as $item) {
-            $entry = $entries[$candidates->key($item->kind, $item->item_identity)] ?? null;
-
-            // A removed or archived item is skipped; the review moves on.
-            if (! $entry instanceof PracticeFeedbackEntry) {
-                $skipped += 1;
-
-                continue;
-            }
-
-            $card = (new ReviewCardResource($entry))->resolve();
-
-            break;
+        // Reaching the finish screen completes a daily review. The learner's
+        // local day is recorded so the card can say "You've reviewed today"
+        // without keeping anything else. A review left part-way never
+        // completes, and the card never nags.
+        if ($finished && $review->is_daily_review && $review->completed_on === null) {
+            $review->completed_on = $day->today($request);
+            $review->save();
         }
 
-        $counts = $ratings->countBy(fn (Rating $rating): string => $rating->rating->value);
-        $total = $items->count();
-        $completed = $ratings->count() + $skipped;
-        $latest = $ratings->sortByDesc('id')->first();
+        $canReviewMore = $finished
+            && $todaysReview->suggest(excludingRatedToday: true, request: $request)->count() > 0;
 
         return Inertia::render('review/Session', [
             'notFound' => false,
-            'finished' => $card === null,
-            'card' => $card,
+            'finished' => $finished,
+            'steps' => $allSteps,
+            'currentStep' => $finished ? null : $currentNumber,
+            'card' => $finished ? null : $current['card'],
+            'cardRating' => $finished ? null : $current['rating'],
             'reviewId' => $review->id,
+            'isDailyReview' => $review->is_daily_review,
             'position' => [
-                'current' => $total === 0 ? 0 : min($total, $completed + 1),
+                'current' => $finished ? $total : ($currentNumber ?? 0),
                 'total' => $total,
             ],
             'progress' => $total === 0
                 ? 0
-                : (int) round(($completed / $total) * 100),
+                : (int) round(($rated / $total) * 100),
             'counts' => [
                 'hard' => $counts->get('hard', 0),
                 'okay' => $counts->get('okay', 0),
@@ -133,18 +145,20 @@ class ReviewController extends Controller
                     'item_identity' => $latest->item_identity,
                 ]
                 : null,
-            'canReviewMore' => $candidates->count() > 0,
+            'canReviewMore' => $canReviewMore,
         ]);
     }
 
     /**
-     * Save one rating immediately and move to the next item. Repeating the same
-     * request changes nothing, so a double tap or a retry counts once.
+     * Save one rating immediately and open the next step still to rate.
+     * Repeating the same request changes nothing, so a double tap or a retry
+     * counts once.
      */
     public function rate(
         RateReviewItemRequest $request,
         Review $review,
         RecordRating $recordRating,
+        ReviewSteps $steps,
     ): RedirectResponse {
         abort_unless(
             $review->items()
@@ -161,20 +175,41 @@ class ReviewController extends Controller
             $request->rating(),
         );
 
-        return to_route('review.session', ['review' => $review->id]);
+        $review->load(['items', 'ratings']);
+
+        $next = $steps->nextUnrated(
+            $steps->for($review),
+            $request->kind(),
+            $request->itemIdentity(),
+        );
+
+        return to_route('review.session', $next === null
+            ? ['review' => $review->id]
+            : ['review' => $review->id, 'step' => $next]);
     }
 
     /**
-     * Take back the last rating. Every other rating stays exactly as it was.
+     * Take back the last rating and reopen the item it belonged to, ready to
+     * rate again. Every other rating stays exactly as it was.
      */
     public function undo(
         UndoReviewItemRequest $request,
         Review $review,
         UndoRating $undoRating,
+        ReviewSteps $steps,
     ): RedirectResponse {
         $undoRating->handle($review, $request->kind(), $request->itemIdentity());
 
-        return to_route('review.session', ['review' => $review->id]);
+        $review->load(['items', 'ratings']);
+        $number = $steps->numberOf(
+            $steps->for($review),
+            $request->kind(),
+            $request->itemIdentity(),
+        );
+
+        return to_route('review.session', $number === null
+            ? ['review' => $review->id]
+            : ['review' => $review->id, 'step' => $number]);
     }
 
     /**
@@ -198,13 +233,17 @@ class ReviewController extends Controller
      * @return array{
      *     notFound: bool,
      *     finished: bool,
+     *     steps: list<array<string, mixed>>,
+     *     currentStep: null,
      *     card: null,
+     *     cardRating: null,
      *     position: array{current: int, total: int},
      *     progress: int,
      *     counts: array{hard: int, okay: int, easy: int},
      *     reviewedCount: int,
      *     undo: null,
      *     canReviewMore: bool,
+     *     isDailyReview: bool,
      *     reviewId: null
      * }
      */
@@ -213,13 +252,17 @@ class ReviewController extends Controller
         return [
             'notFound' => $notFound,
             'finished' => false,
+            'steps' => [],
+            'currentStep' => null,
             'card' => null,
+            'cardRating' => null,
             'position' => ['current' => 0, 'total' => 0],
             'progress' => 0,
             'counts' => ['hard' => 0, 'okay' => 0, 'easy' => 0],
             'reviewedCount' => 0,
             'undo' => null,
             'canReviewMore' => false,
+            'isDailyReview' => false,
             'reviewId' => null,
         ];
     }

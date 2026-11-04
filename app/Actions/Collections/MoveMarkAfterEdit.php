@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\Collections;
 
+use App\Actions\Reviews\SyncReviewSchedule;
 use App\Enums\FeedbackType;
 use App\Models\CollectionItemMark;
 use App\Models\PracticeFeedbackEntry;
@@ -32,10 +33,13 @@ use Illuminate\Support\Facades\DB;
  * whose marks belong to the note itself.
  *
  * Ratings only exist for vocabulary and phrases, so mistakes and notes never
- * move any.
+ * move any. After a move, the schedules of the old and the new identity are
+ * rebuilt from the rating history, in the same transaction.
  */
 final readonly class MoveMarkAfterEdit
 {
+    public function __construct(private SyncReviewSchedule $schedule) {}
+
     public function handle(
         FeedbackType $kind,
         string $fromIdentity,
@@ -139,6 +143,12 @@ final readonly class MoveMarkAfterEdit
             $rating->unique_key = Rating::keyFor($rating->review_id, $kind, $toIdentity);
             $rating->save();
         }
+
+        // The moved history lands on a new identity, so both schedules are
+        // rebuilt from the history: the old one may have nothing left, the
+        // new one now carries the moved ratings.
+        $this->schedule->handle($kind, $fromIdentity);
+        $this->schedule->handle($kind, $toIdentity);
     }
 
     /**

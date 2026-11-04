@@ -6,12 +6,15 @@ namespace Database\Seeders;
 
 use App\Actions\Collections\SaveItemMark;
 use App\Actions\Collections\SaveItemNotes;
+use App\Actions\Reviews\SyncReviewSchedule;
 use App\Enums\CollectionItemStatus;
 use App\Enums\FeedbackType;
+use App\Enums\ReviewRating;
 use App\Models\CollectionItemMark;
 use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeQuestion;
 use App\Models\PracticeSession;
+use App\Models\Rating;
 use App\Models\Topic;
 use App\Support\MistakeIdentity;
 use App\Support\SearchText;
@@ -59,6 +62,13 @@ class LibrarySeeder extends Seeder
      * times mixed through the tab.
      */
     private const int TARGET_MISTAKES = 5000;
+
+    /**
+     * How many distinct words and phrases get a rating history, so the
+     * daily suggestion has due, overdue and never-reviewed items to
+     * choose from.
+     */
+    private const int TARGET_RATED_ITEMS = 900;
 
     /** One showcase session: eight questions with twelve rows each. */
     private const int SHOWCASE_QUESTIONS = 8;
@@ -481,6 +491,7 @@ class LibrarySeeder extends Seeder
         $this->seedGrammarShowcase($topics);
         $this->seedMistakesShowcase($topics);
         $this->seedMarks();
+        $this->seedReviewRatings();
     }
 
     /**
@@ -638,6 +649,158 @@ class LibrarySeeder extends Seeder
             .'<li>'.e('The phrase where it belongs, in a sentence you said.').'</li>'
             .'<li>'.e('The familiar friend nearby — one term, three words.').'</li>'
             .'<li>'.e('A last case long enough that the saved note is later than the first page can show.').'</li></ul>';
+    }
+
+    /**
+     * Gives a large sample of words and phrases a rating history spread over
+     * the past four months, so the daily suggestion and the schedule have
+     * real work to do: some items are overdue, some are freshly easy, and
+     * most have never been rated. Creates its own historical daily reviews
+     * to hold the ratings. Runs once; a second run adds nothing.
+     */
+    private function seedReviewRatings(): void
+    {
+        if (Rating::query()->exists()) {
+            return;
+        }
+
+        $entries = PracticeFeedbackEntry::query()
+            ->whereIn('type', [FeedbackType::Vocabulary->value, FeedbackType::Phrase->value])
+            ->whereNotNull('collection_key')
+            ->whereRaw("TRIM(collection_key) <> ''")
+            ->whereRaw("TRIM(correction_text) <> ''")
+            ->whereHas(
+                'practiceQuestion.practiceSession',
+                fn ($query) => $query->study(),
+            )
+            ->inRandomOrder()
+            ->limit(1500)
+            ->get(['type', 'collection_key']);
+
+        $items = [];
+
+        foreach ($entries as $entry) {
+            $key = $entry->type->value."\u{0}".$entry->collection_key;
+
+            $items[$key] ??= ['kind' => $entry->type, 'identity' => (string) $entry->collection_key];
+        }
+
+        $items = array_values($items);
+        shuffle($items);
+        $items = array_slice($items, 0, self::TARGET_RATED_ITEMS);
+
+        if ($items === []) {
+            return;
+        }
+
+        // A season of historical daily reviews to hold the ratings, one or
+        // two per week-ish, spread over the past four months.
+        $reviewIds = [];
+        $now = CarbonImmutable::now();
+
+        for ($day = 130; $day >= 1; $day -= random_int(2, 5)) {
+            $moment = $now->subDays($day)->setTime(19, 0);
+
+            $reviewIds[] = (int) DB::table('reviews')->insertGetId([
+                'is_daily_review' => true,
+                'completed_on' => $moment->toDateString(),
+                'created_at' => $moment,
+                'updated_at' => $moment,
+            ]);
+        }
+
+        $saveMark = app(SaveItemMark::class);
+        $sync = app(SyncReviewSchedule::class);
+
+        foreach ($items as $position => $item) {
+            $kind = $item['kind'];
+            $identity = $item['identity'];
+
+            // The scenario for this item, for a spread-over-time mix.
+            $scenario = match ($position % 10) {
+                // Hard a while ago: due and overdue, the queue to work from.
+                0, 1 => 'hard_overdue',
+                // Okay a while ago: due soon after.
+                2, 3, 4 => 'okay_overdue',
+                // A run of Easy a long time ago: due around now, gap grown.
+                5, 6 => 'easy_run',
+                // Freshly Easy: not due for a while.
+                7 => 'easy_fresh',
+                // A mixed history that ends Okay.
+                8 => 'mixed_okay',
+                // Long since learned-ish: Easy several times.
+                default => 'easy_repeat',
+            };
+
+            $ratings = $this->ratingHistoryFor($scenario, $now);
+
+            // Each rating of one item goes into a different sitting, so the
+            // one rating per item per review stays exactly one.
+            $picks = array_rand($reviewIds, count($ratings));
+            $picks = is_array($picks) ? $picks : [$picks];
+
+            foreach ($ratings as $index => $rating) {
+                $moment = $rating['at'];
+                $reviewId = $reviewIds[$picks[$index]];
+                $key = Rating::keyFor($reviewId, $kind, $identity);
+
+                DB::table('ratings')->insert([
+                    'review_id' => $reviewId,
+                    'kind' => $kind->value,
+                    'item_identity' => $identity,
+                    'rating' => $rating['rating']->value,
+                    'unique_key' => $key,
+                    'created_at' => $moment,
+                    'updated_at' => $moment,
+                ]);
+            }
+
+            // A third of the Hard items are marked Still difficult or
+            // starred, so the queue's priorities have something to show.
+            if ($scenario === 'hard_overdue') {
+                if ($position % 9 === 0) {
+                    $saveMark->handle($kind, $identity, true, null);
+                } elseif ($position % 9 === 3) {
+                    $saveMark->handle($kind, $identity, false, CollectionItemStatus::StillDifficult);
+                }
+            }
+
+            $sync->handle($kind, $identity);
+        }
+    }
+
+    /**
+     * A rating history for one scenario, ending where the scenario wants.
+     *
+     * @return list<array{rating: ReviewRating, at: CarbonImmutable}>
+     */
+    private function ratingHistoryFor(string $scenario, CarbonImmutable $now): array
+    {
+        return match ($scenario) {
+            'hard_overdue' => [
+                ['rating' => ReviewRating::Hard, 'at' => $now->subDays(random_int(2, 30))->setTime(19, 0)],
+            ],
+            'okay_overdue' => [
+                ['rating' => ReviewRating::Okay, 'at' => $now->subDays(random_int(4, 90))->setTime(19, 0)],
+            ],
+            'easy_run' => [
+                ['rating' => ReviewRating::Easy, 'at' => $now->subDays(random_int(130, 150))->setTime(19, 0)],
+                ['rating' => ReviewRating::Easy, 'at' => $now->subDays(random_int(80, 100))->setTime(19, 0)],
+                ['rating' => ReviewRating::Easy, 'at' => $now->subDays(random_int(30, 40))->setTime(19, 0)],
+            ],
+            'easy_fresh' => [
+                ['rating' => ReviewRating::Easy, 'at' => $now->subDays(random_int(1, 5))->setTime(19, 0)],
+            ],
+            'mixed_okay' => [
+                ['rating' => ReviewRating::Hard, 'at' => $now->subDays(random_int(90, 110))->setTime(19, 0)],
+                ['rating' => ReviewRating::Okay, 'at' => $now->subDays(random_int(20, 40))->setTime(19, 0)],
+            ],
+            default => [
+                ['rating' => ReviewRating::Easy, 'at' => $now->subDays(random_int(200, 260))->setTime(19, 0)],
+                ['rating' => ReviewRating::Easy, 'at' => $now->subDays(random_int(120, 160))->setTime(19, 0)],
+                ['rating' => ReviewRating::Easy, 'at' => $now->subDays(random_int(40, 70))->setTime(19, 0)],
+            ],
+        };
     }
 
     /**

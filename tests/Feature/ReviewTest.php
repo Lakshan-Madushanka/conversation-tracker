@@ -69,7 +69,7 @@ function reviewStart(object $test): Review
 }
 
 describe('Review Home', function (): void {
-    it('counts only words and phrases that carry a meaning', function (): void {
+    it('offers the words and phrases that carry a meaning', function (): void {
         $session = reviewSession();
         reviewRow($session, 'serendipity', 'finding something good by chance');
         reviewRow($session, 'break the ice', 'start a conversation', FeedbackType::Phrase);
@@ -80,8 +80,8 @@ describe('Review Home', function (): void {
             ->assertOk()
             ->assertInertia(fn (Assert $page): Assert => $page
                 ->component('review/Index')
-                ->where('reviewableCount', 2)
-                ->where('hasFinishedSessions', true));
+                ->where('todayReview.state', 'suggest')
+                ->where('todayReview.count', 2));
     });
 
     it('says so when no session has been finished yet', function (): void {
@@ -91,8 +91,7 @@ describe('Review Home', function (): void {
             ->assertOk()
             ->assertInertia(fn (Assert $page): Assert => $page
                 ->component('review/Index')
-                ->where('reviewableCount', 0)
-                ->where('hasFinishedSessions', false));
+                ->where('todayReview.state', 'empty'));
     });
 
     it('leaves unfinished and archived sessions out', function (): void {
@@ -106,7 +105,8 @@ describe('Review Home', function (): void {
 
         $this->get(route('review.index'))
             ->assertInertia(fn (Assert $page): Assert => $page
-                ->where('reviewableCount', 1));
+                ->where('todayReview.state', 'suggest')
+                ->where('todayReview.count', 1));
 
         $review = reviewStart($this);
 
@@ -149,7 +149,7 @@ describe('the exercise screen', function (): void {
             'kind' => $first->kind->value,
             'item_identity' => $first->item_identity,
             'rating' => ReviewRating::Easy->value,
-        ])->assertRedirect(route('review.session', ['review' => $review->id]));
+        ])->assertRedirect(route('review.session', ['review' => $review->id, 'step' => 2]));
 
         // A refresh is the same request the screen makes.
         $this->get(route('review.session', ['review' => $review->id]))
@@ -183,7 +183,73 @@ describe('the exercise screen', function (): void {
             ->assertInertia(fn (Assert $page): Assert => $page
                 ->where('finished', false)
                 ->where('card.front', 'still here')
-                ->where('position.total', 2));
+                ->has('steps', 1)
+                ->where('position.total', 1));
+    });
+
+    it('shows every item as a step the learner can open in any order', function (): void {
+        $session = reviewSession();
+        reviewRow($session, 'one', 'first meaning');
+        reviewRow($session, 'two', 'second meaning');
+        reviewRow($session, 'three', 'third meaning');
+
+        $review = reviewStart($this);
+        $identities = $review->items->pluck('item_identity')->all();
+
+        $this->get(route('review.session', ['review' => $review->id]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page): Assert => $page
+                ->component('review/Session')
+                ->where('currentStep', 1)
+                ->where('card.front', $identities[0])
+                ->where('cardRating', null)
+                ->has('steps', 3)
+                ->where('steps.0.number', 1)
+                ->where('steps.0.card.front', $identities[0])
+                ->where('steps.0.url', route('review.session', ['review' => $review->id, 'step' => 1]))
+                ->where('steps.2.number', 3)
+                ->where('steps.2.card.front', $identities[2]));
+
+        // The address names the step, so any step opens before the ones
+        // before it are rated.
+        $this->get(route('review.session', ['review' => $review->id, 'step' => 3]))
+            ->assertInertia(fn (Assert $page): Assert => $page
+                ->where('currentStep', 3)
+                ->where('card.front', $identities[2])
+                ->where('position.current', 3));
+    });
+
+    it('lets the learner rate a later step before the earlier ones', function (): void {
+        $session = reviewSession();
+        reviewRow($session, 'one', 'first meaning');
+        reviewRow($session, 'two', 'second meaning');
+        reviewRow($session, 'three', 'third meaning');
+
+        $review = reviewStart($this);
+        $third = $review->items->last();
+
+        $this->post(route('review.rate', ['review' => $review->id]), [
+            'kind' => $third->kind->value,
+            'item_identity' => $third->item_identity,
+            'rating' => ReviewRating::Easy->value,
+        ])->assertRedirect(route('review.session', ['review' => $review->id, 'step' => 1]));
+
+        expect(Rating::query()->sole()->item_identity)->toBe($third->item_identity);
+
+        // The rated step still opens, showing the rating it was given.
+        $this->get(route('review.session', ['review' => $review->id, 'step' => 3]))
+            ->assertInertia(fn (Assert $page): Assert => $page
+                ->where('cardRating', 'easy')
+                ->where('steps.2.rating', 'easy')
+                ->where('steps.0.rating', null));
+
+        // Taking the rating back reopens the same step, ready to rate again.
+        $this->delete(route('review.undo', ['review' => $review->id]), [
+            'kind' => $third->kind->value,
+            'item_identity' => $third->item_identity,
+        ])->assertRedirect(route('review.session', ['review' => $review->id, 'step' => 3]));
+
+        expect(Rating::query()->count())->toBe(0);
     });
 });
 
@@ -224,7 +290,7 @@ describe('ratings', function (): void {
         $this->delete(route('review.undo', ['review' => $review->id]), [
             'kind' => $item->kind->value,
             'item_identity' => $item->item_identity,
-        ])->assertRedirect(route('review.session', ['review' => $review->id]));
+        ])->assertRedirect(route('review.session', ['review' => $review->id, 'step' => 1]));
 
         expect(Rating::query()->count())->toBe(0);
 
@@ -292,7 +358,7 @@ describe('choosing the items', function (): void {
         expect($review->items)->toHaveCount(8);
     });
 
-    it('puts never-reviewed items before the ones already reviewed', function (): void {
+    it('offers the never-reviewed items when nothing is due yet', function (): void {
         $session = reviewSession();
 
         foreach (range(1, 10) as $number) {
@@ -314,17 +380,13 @@ describe('choosing the items', function (): void {
 
         $second = reviewStart($this);
 
-        // The two never-reviewed items lead, and the rest are the ones left
-        // alone the longest.
-        $second->items->take(2)->each(function ($item) use ($firstIdentities): void {
+        // Easy ratings are a week away, so only the never-reviewed items
+        // are worth revisiting today. Hard ones would come back tomorrow.
+        expect($second->items)->toHaveCount(2);
+
+        $second->items->each(function ($item) use ($firstIdentities): void {
             expect($firstIdentities)->not->toContain($item->item_identity);
         });
-
-        $second->items->slice(2)->each(function ($item) use ($firstIdentities): void {
-            expect($firstIdentities)->toContain($item->item_identity);
-        });
-
-        expect($second->items)->toHaveCount(8);
     });
 });
 

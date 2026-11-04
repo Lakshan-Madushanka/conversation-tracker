@@ -1,0 +1,49 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Support;
+
+use App\Enums\FeedbackType;
+
+/**
+ * The result of choosing today's items: the fixed list, the count per
+ * exercise kind, and the honest estimate and mix built from it. The card on
+ * screen and the review that starts both read this, so they always agree.
+ */
+final readonly class ReviewSuggestion
+{
+    /**
+     * @param  list<array{kind: FeedbackType, identity: string}>  $items
+     *                                                                    the items to review, in the order the learner meets them
+     */
+    public function __construct(public array $items) {}
+
+    public function count(): int
+    {
+        return count($this->items);
+    }
+
+    /**
+     * How many items of each exercise kind are in the review. Flashcards
+     * carry every item today; later kinds join here automatically.
+     *
+     * @return array<string, int>
+     */
+    public function perKind(): array
+    {
+        return $this->items === [] ? [] : ['flashcard' => count($this->items)];
+    }
+
+    /** Whole minutes for the review, at least one. */
+    public function minutes(): int
+    {
+        return ReviewExercises::minutes($this->perKind());
+    }
+
+    /** The mix description, with correct singular and plural wording. */
+    public function mix(): string
+    {
+        return ReviewExercises::describe($this->perKind());
+    }
+}

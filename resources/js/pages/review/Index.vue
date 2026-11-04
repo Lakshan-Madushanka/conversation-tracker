@@ -1,34 +1,45 @@
 <script setup lang="ts">
-import { Head, Link, useForm } from '@inertiajs/vue3';
-import { GraduationCapIcon, PlayIcon, SquarePenIcon } from '@lucide/vue';
+import { computed } from 'vue';
+import { Head, Link } from '@inertiajs/vue3';
+import { InfoIcon } from '@lucide/vue';
 import PageHeader from '@/components/PageHeader.vue';
-import { Button } from '@/components/ui/button';
-import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardFooter,
-    CardHeader,
-    CardTitle,
-} from '@/components/ui/card';
+import ReviewSuggestionCard from '@/components/ReviewSuggestionCard.vue';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { store as reviewStore } from '@/routes/review';
-import { create as sessionsCreate } from '@/routes/sessions';
+import { index as collectionsIndex } from '@/routes/collections';
+import type { TodayReviewData, WaitingForFixData } from '@/types';
 
 defineOptions({ layout: AppLayout });
 
 const props = defineProps<{
-    /** How many words and phrases could be reviewed right now. */
-    reviewableCount: number;
-    /** Whether the learner has finished at least one session. */
-    hasFinishedSessions: boolean;
+    /** Today's review suggestion, or the "You've reviewed today" state. */
+    todayReview: TodayReviewData;
+    /** How many words and phrases cannot be practiced yet. */
+    waitingForFix: WaitingForFixData;
 }>();
 
-const form = useForm({});
+const wordsLink = collectionsIndex.url({
+    query: { tab: 'vocabulary', attention: '1' },
+});
+const phrasesLink = collectionsIndex.url({
+    query: { tab: 'phrases', attention: '1' },
+});
 
-function startReview(): void {
-    form.post(reviewStore.url());
-}
+const waitingCount = computed(
+    () => props.waitingForFix.vocabulary + props.waitingForFix.phrases,
+);
+
+/** The tail of the sentence, with correct grammar for a group of one. */
+const waitingVerb = computed(() => {
+    const total = waitingCount.value;
+
+    if (total === 1) {
+        return 'needs a meaning (or a use) before it can be practiced';
+    }
+
+    return 'need a meaning (or a use) before they can be practiced';
+});
 </script>
 
 <template>
@@ -40,68 +51,63 @@ function startReview(): void {
             description="A calm few minutes with the words and phrases you want to keep."
         />
 
-        <Card class="border-primary/30 bg-primary/5">
-            <CardHeader>
-                <span
-                    class="mb-1 flex size-11 items-center justify-center rounded-full bg-primary/10 text-primary"
-                    aria-hidden="true"
-                >
-                    <GraduationCapIcon class="size-5" />
-                </span>
+        <ReviewSuggestionCard :suggestion="props.todayReview" />
 
-                <CardTitle class="text-xl">
-                    <template v-if="!props.hasFinishedSessions">
-                        Review fills up after your first session
+        <!-- Items waiting for a fix, by the same shared rule as the collections -->
+        <Alert v-if="waitingCount > 0" class="mt-4">
+            <InfoIcon aria-hidden="true" />
+            <AlertTitle>
+                <h2 class="font-medium">Waiting for a fix</h2>
+            </AlertTitle>
+            <AlertDescription>
+                <p class="flex flex-wrap items-center gap-x-1.5">
+                    <template v-if="props.waitingForFix.vocabulary > 0">
+                        <Badge variant="secondary">{{
+                            props.waitingForFix.vocabulary
+                        }}</Badge>
+                        {{
+                            props.waitingForFix.vocabulary === 1
+                                ? 'word'
+                                : 'words'
+                        }}
                     </template>
-                    <template v-else-if="props.reviewableCount === 0">
-                        Nothing is ready to review just yet
+                    <template
+                        v-if="
+                            props.waitingForFix.vocabulary > 0 &&
+                            props.waitingForFix.phrases > 0
+                        "
+                    >
+                        and
                     </template>
-                    <template v-else>
-                        {{ props.reviewableCount }}
-                        {{ props.reviewableCount === 1 ? 'item' : 'items' }}
-                        ready to revisit
+                    <template v-if="props.waitingForFix.phrases > 0">
+                        <Badge variant="secondary">{{
+                            props.waitingForFix.phrases
+                        }}</Badge>
+                        {{
+                            props.waitingForFix.phrases === 1
+                                ? 'phrase'
+                                : 'phrases'
+                        }}
                     </template>
-                </CardTitle>
-
-                <CardDescription>
-                    <template v-if="!props.hasFinishedSessions">
-                        Finish a practice session and the words and phrases you
-                        save will show up here as flashcards.
-                    </template>
-                    <template v-else-if="props.reviewableCount === 0">
-                        Words and phrases need a meaning (or a use) before they
-                        can become a flashcard. They will appear here once they
-                        have one.
-                    </template>
-                    <template v-else>
-                        About five minutes. Learn at your own pace — there is no
-                        timer and no score.
-                    </template>
-                </CardDescription>
-            </CardHeader>
-
-            <CardFooter class="flex flex-wrap gap-2">
-                <Button
-                    v-if="props.reviewableCount > 0"
-                    size="lg"
-                    :disabled="form.processing"
-                    @click="startReview"
-                >
-                    <PlayIcon aria-hidden="true" />
-                    Start review
-                </Button>
-
-                <Button
-                    v-else-if="!props.hasFinishedSessions"
-                    size="lg"
-                    as-child
-                >
-                    <Link :href="sessionsCreate.url()">
-                        <SquarePenIcon aria-hidden="true" />
-                        Start a session
+                    {{ waitingVerb }} — you can fix that in Collections.
+                </p>
+                <p class="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                    <Link
+                        v-if="props.waitingForFix.vocabulary > 0"
+                        :href="wordsLink"
+                        class="font-medium text-primary hover:underline focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+                    >
+                        Vocabulary: Needs attention only
                     </Link>
-                </Button>
-            </CardFooter>
-        </Card>
+                    <Link
+                        v-if="props.waitingForFix.phrases > 0"
+                        :href="phrasesLink"
+                        class="font-medium text-primary hover:underline focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+                    >
+                        Phrases: Needs attention only
+                    </Link>
+                </p>
+            </AlertDescription>
+        </Alert>
     </div>
 </template>

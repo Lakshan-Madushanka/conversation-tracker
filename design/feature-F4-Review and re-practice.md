@@ -43,6 +43,7 @@ Every day the Home screen suggests a **short review of about five minutes** with
 - **Spec goals:** make re-practicing easy and enjoyable, not like homework. **Success measures:** the learner practices review several times a week, repeats the same mistakes less often, and remembers more of the words and phrases they have learned.
 - **User flow in the feature list:** the Home screen suggests today's review ("5 minutes: 8 items to review"), the learner taps **Start review**, sees a card, tries to recall, taps **Show answer**, rates it **Easy, Okay, or Hard**, and moves on, possibly through a different kind of exercise. A short summary at the end shows how many were easy and how many need more practice, and hard items are scheduled to come back soon. The learner can also open **Custom review** and choose a topic, a collection, or starred items only, and how many items.
 - **Screens in the feature list:** **Review Home** (today's suggested review with a Start review button, a Custom review option, and a short list of recent results) and the **Exercise screen** (distraction-free, one item at a time, a thin progress bar and an Exit button, a large card, a Show answer button, and three large Hard, Okay, and Easy buttons), plus a **finish screen** with a friendly summary and a Done button.
+- **Stepper decision (made later):** when a review contains more than one kind of exercise, the exercise screen shows a **non-linear stepper with one step per exercise kind**, so the learner can start with the kind they like and move between kinds freely. Inside each step, items are still shown one at a time in the distraction-free layout.
 - **Example journey in the spec:** the next morning Home suggests a five-minute review of three flashcards, two mistake-fixing exercises, and one say-it-again question. The learner completes it and rates the items, and the hard ones come back sooner. (The streak is not part of this, because it comes only from finished sessions.)
 - **Existing visual reference:** the layout mockups already show the Home "Today's review" card and the focus layout for a flashcard with Hard, Okay, and Easy buttons.
 - **Not part of this feature:** recording or playing back the learner's voice, automatic marking, the Progress screen, and streaks.
@@ -66,7 +67,7 @@ Every day the Home screen suggests a **short review of about five minutes** with
 3. A **Start review** button begins it. The same suggestion appears on the **Home screen**, where it starts the same review.
 4. The suggestion favors items that are **due**, items the learner found **Hard**, items marked **Still difficult**, **starred** items, and items never reviewed before. It leaves out **Learned** items unless they are due again.
 5. The suggestion mixes **different kinds of exercise** where the learner's content allows it, and fills any gaps with other kinds, so it is never empty just because one kind of content is missing.
-6. After the learner finishes the day's review, the suggestion changes to a friendly **"You've reviewed today"** message, with an option to **review a bit more** from the next items worth revisiting. It never nags.
+6. After the learner **completes** the day's review (every item rated or skipped), the suggestion changes to a friendly **"You've reviewed today"** message, with an option to **review a bit more** from the next items worth revisiting. It never nags.
 7. When **nothing is worth reviewing right now**, a friendly message says so and points to Custom review and to recording a new session.
 8. When the learner has **no finished sessions** (or no reviewable items), a friendly empty state explains that Review fills up after finishing a session, with a button to start one.
 9. Review Home mentions how many items are **waiting for a fix** before they can be reviewed (for example "3 items need a meaning or a correction first"), with a link to those items in Collections ("Needs attention only").
@@ -83,75 +84,91 @@ Every day the Home screen suggests a **short review of about five minutes** with
 
 ### Exercises in general
 
-17. A review shows **one item at a time** in a **distraction-free layout** (no main navigation), with a thin **progress bar** (for example "4 of 8"), an **Exit** button, and one clear next action. There are **no timers** and no time pressure.
+17. A review shows **one item at a time** in a **distraction-free layout** (no main navigation), with a thin **progress bar** (for example "4 of 8 rated"), an **Exit** button, and one clear next action. When the review has more than one kind of exercise, a **stepper** (see below) lets the learner move between kinds. There are **no timers** and no time pressure.
 18. The exercise kinds are **flashcards**, **fix-the-mistake**, **say-it-again**, and **fill-in-the-blank**. Each item is shown as the kind of exercise that suits its content.
 19. After the answer is revealed, the learner rates the item **Hard**, **Okay**, or **Easy** with three large buttons that use clear text (never color alone). Nothing else is needed to continue.
 20. The learner can **undo the last rating** briefly (for example for a few seconds, or until they answer the next item), in case of an accidental tap.
 21. Only items that can make a good exercise are used. **Items missing a needed part** (a word with no meaning, a mistake with no correction, a question with no natural version, a grammar note with no usable bold part or quoted example) are skipped, and nothing breaks.
 22. If an item is **removed or archived during a review** (for example in another tab), it is skipped gracefully with no error. If its text is edited, the review shows the current text.
-23. The learner can **exit at any time**. Ratings already given are **kept**, and nothing is lost. Leaving mid-review never penalizes the learner.
+23. The learner can **exit at any time**. Ratings already given are **kept**, and nothing is lost. Leaving mid-review never penalizes the learner. Exiting leaves immediately, while **finishing early** (see below) shows the summary first.
+
+### Moving between exercise kinds (the stepper)
+
+24. When a review contains **two or more kinds of exercise**, a **stepper** appears at the top of the exercise screen with **one step per kind**, in a fixed, friendly order (flashcards, fix-the-mistake, say-it-again, fill-in-the-blank). Each step shows its **name, an icon, and its progress** (for example "Flashcards 2 of 5"). When a review has only **one kind**, there is no stepper and the plain progress bar is shown.
+25. The steps are **not linear**. The learner can open **any step at any time**, in any order, without finishing the previous one. No step is ever locked.
+26. Inside a step, items are shown **one at a time**, in a steady order, in the same distraction-free layout. Each step **remembers its place** (its next unrated item), so the learner can leave a step half-finished and come back. Switching steps never loses anything.
+27. Items in a review are grouped into **one list per kind**. Within a kind, due and new items are mixed fairly and the order stays stable once the review has started. No order is imposed across kinds.
+28. Each step shows its **state** in a way that never relies on color alone: **active** (the one being shown), **completed** (every item in it rated or skipped, with a check mark), or **not finished** (with its count). Opening a completed step shows a calm "All done here" panel with its Easy, Okay, and Hard counts and a button to continue with the next step that is not finished.
+29. The review opens on the first step, in the suggested order, that still has unrated items. A refresh or a return puts the learner back on the **step and item** they were on.
+30. The thin overall progress bar remains, showing how many items are rated across all steps (for example "4 of 8 rated").
+31. The learner can **finish the review early** once at least one item is rated. When items are unrated, a short, friendly confirmation says how many and that they will stay due. Finishing early shows the finish screen for the items rated, and unrated items are not rescheduled.
+32. A review is **complete** when every item is rated or skipped. Only a completed daily review changes the suggestion to "You've reviewed today". Finishing early keeps the ratings, and the suggestion simply shrinks to what is still worth revisiting.
+33. **Undo** works across steps: it returns the learner to the item that was rated, and to its step, for a few seconds, whichever step they are on.
+34. A step whose items were all removed or skipped during the review is left out of the stepper, and the counts adjust calmly.
+35. The stepper is **accessible navigation among sections**. It has a clear accessible name, each step is a keyboard-reachable control (arrow keys move between steps, Enter or Space opens one), and names, counts, and states are read aloud. Opening a step moves focus to that step's current item and announces it calmly. Rating shortcuts and typing are never affected by the stepper.
+36. On phones the stepper is **compact** (an icon and a count for each step, with the active step's name shown clearly), each step is at least 44 px to tap, and nothing scrolls sideways.
 
 ### Flashcards
 
-24. A flashcard shows a **word or phrase** on the front. The learner tries to recall its meaning, then taps **Show answer** to reveal the **meaning (or use)** and the **example**, if there is one.
-25. Flashcards work for **vocabulary** and **phrases**. A word or phrase without a meaning (or use) is not shown as a flashcard.
-26. The back of the card also lets the learner open the original session if they want more context.
+37. A flashcard shows a **word or phrase** on the front. The learner tries to recall its meaning, then taps **Show answer** to reveal the **meaning (or use)** and the **example**, if there is one.
+38. Flashcards work for **vocabulary** and **phrases**. A word or phrase without a meaning (or use) is not shown as a flashcard.
+39. The back of the card also lets the learner open the original session if they want more context.
 
 ### Fix the mistake
 
-27. **Fix-the-mistake** shows a **sentence that contains a mistake** the learner made (what they said), and asks them to type the corrected version.
-28. The learner types their attempt and taps **Check**. The app then shows the learner's attempt next to the **correction** and the **reason** (the tutor's explanation), if there is one. The app does not mark the attempt right or wrong.
-29. The learner rates the item Hard, Okay, or Easy. Typing is optional: the learner can also choose to just think about the answer and tap **Check**.
-30. Fix-the-mistake uses **mistakes that have a correction**. Mistakes without a correction are skipped.
+40. **Fix-the-mistake** shows a **sentence that contains a mistake** the learner made (what they said), and asks them to type the corrected version.
+41. The learner types their attempt and taps **Check**. The app then shows the learner's attempt next to the **correction** and the **reason** (the tutor's explanation), if there is one. The app does not mark the attempt right or wrong.
+42. The learner rates the item Hard, Okay, or Easy. Typing is optional: the learner can also choose to just think about the answer and tap **Check**.
+43. Fix-the-mistake uses **mistakes that have a correction**. Mistakes without a correction are skipped.
 
 ### Say it again
 
-31. **Say-it-again** shows a **question from a past session** (the tutor's question) and asks the learner to **answer it out loud**, in their own words.
-32. The learner taps **Show natural answer** to see the **more natural version** saved with that question, and compares it with what they said.
-33. The learner rates the item Hard, Okay, or Easy.
-34. Say-it-again uses questions that have **both a tutor's question and a more natural version**. Other questions are skipped.
-35. No recording is made. The app does not listen. (Recording is a future idea.)
+44. **Say-it-again** shows a **question from a past session** (the tutor's question) and asks the learner to **answer it out loud**, in their own words.
+45. The learner taps **Show natural answer** to see the **more natural version** saved with that question, and compares it with what they said.
+46. The learner rates the item Hard, Okay, or Easy.
+47. Say-it-again uses questions that have **both a tutor's question and a more natural version**. Other questions are skipped.
+48. No recording is made. The app does not listen. (Recording is a future idea.)
 
 ### Fill in the blank
 
-36. **Fill-in-the-blank** shows a **sentence or phrase with a word missing**, and the learner types the missing word, then taps **Check** to see the full text, with the missing word highlighted. The app does not mark the attempt right or wrong.
-37. Blanks are built automatically from the learner's saved content: **example sentences of vocabulary** (the word itself is blanked), **phrases and their examples** (a key word is blanked), **corrections of mistakes** (the words that changed from what the learner said are blanked, with the reason shown as a hint), and **grammar notes** (see below).
-38. The app chooses the blank sensibly and **skips items that have no suitable text**. Sentences are shown exactly as the learner saved them, apart from the blank.
-39. The learner rates the item Hard, Okay, or Easy.
-40. **Grammar notes** become exercises through the part the learner has **bolded**. A note qualifies when a sentence or list item in it contains a **bold part of one to four words**. That bold part is blanked, and the learner sees the **sentence or list item** it came from, with the blank, and a small hint naming the session's topic.
-41. If a note has **several bold parts**, one is chosen, and the same one is used throughout a review. If a note has **no bold part** but contains a **quoted example sentence**, a key word of that sentence is blanked, using the same sensible choice as for phrases. Notes with neither, whose bold part is **longer than four words**, or whose whole text is bold, are **skipped** and never shown as broken exercises.
-42. Checking shows the **full note** with its formatting, with the blanked part highlighted. The **note itself is the item**: its ratings and schedule belong to it, stay with it when its text is edited, are kept when it disappears, and return if it comes back. Two notes with identical text remain separate items.
-43. Grammar notes count toward the daily suggestion's fill-in-the-blank mix.
+49. **Fill-in-the-blank** shows a **sentence or phrase with a word missing**, and the learner types the missing word, then taps **Check** to see the full text, with the missing word highlighted. The app does not mark the attempt right or wrong.
+50. Blanks are built automatically from the learner's saved content: **example sentences of vocabulary** (the word itself is blanked), **phrases and their examples** (a key word is blanked), **corrections of mistakes** (the words that changed from what the learner said are blanked, with the reason shown as a hint), and **grammar notes** (see below).
+51. The app chooses the blank sensibly and **skips items that have no suitable text**. Sentences are shown exactly as the learner saved them, apart from the blank.
+52. The learner rates the item Hard, Okay, or Easy.
+53. **Grammar notes** become exercises through the part the learner has **bolded**. A note qualifies when a sentence or list item in it contains a **bold part of one to four words**. That bold part is blanked, and the learner sees the **sentence or list item** it came from, with the blank, and a small hint naming the session's topic.
+54. If a note has **several bold parts**, one is chosen, and the same one is used throughout a review. If a note has **no bold part** but contains a **quoted example sentence**, a key word of that sentence is blanked, using the same sensible choice as for phrases. Notes with neither, whose bold part is **longer than four words**, or whose whole text is bold, are **skipped** and never shown as broken exercises.
+55. Checking shows the **full note** with its formatting, with the blanked part highlighted. The **note itself is the item**: its ratings and schedule belong to it, stay with it when its text is edited, are kept when it disappears, and return if it comes back. Two notes with identical text remain separate items.
+56. Grammar notes count toward the daily suggestion's fill-in-the-blank mix.
 
 ### Ratings and scheduling
 
-44. Every rating is **saved immediately**, safely, and **once** (a double tap or a retry never counts twice).
-45. Each item has a **schedule** that decides when it is worth revisiting. Items **never reviewed** are due right away. A rating of **Hard** brings an item back **soon** (by the next day). **Okay** brings it back after a few days. **Easy** brings it back after a longer time, and **repeated Easy ratings** make the gap longer and longer, up to a sensible limit.
-46. A Hard rating **resets** an item's gap, so something that was getting easy but slips returns soon again.
-47. Nothing disappears from review forever. Even items rated Easy repeatedly come back eventually.
-48. An item's schedule is the same whichever kind of exercise it was reviewed with.
-49. Schedules and ratings belong to the **item**. They **follow it when the learner fixes a typo** in a session (using the same rule as marks in Collections), are **kept quietly** when the item disappears, and **return** when it comes back.
-50. The learner's **status** (Learned or Still difficult) only influences what is suggested. Review never changes a status automatically.
+57. Every rating is **saved immediately**, safely, and **once** (a double tap or a retry never counts twice).
+58. Each item has a **schedule** that decides when it is worth revisiting. Items **never reviewed** are due right away. A rating of **Hard** brings an item back **soon** (by the next day). **Okay** brings it back after a few days. **Easy** brings it back after a longer time, and **repeated Easy ratings** make the gap longer and longer, up to a sensible limit.
+59. A Hard rating **resets** an item's gap, so something that was getting easy but slips returns soon again.
+60. Nothing disappears from review forever. Even items rated Easy repeatedly come back eventually.
+61. An item's schedule is the same whichever kind of exercise it was reviewed with.
+62. Schedules and ratings belong to the **item**. They **follow it when the learner fixes a typo** in a session (using the same rule as marks in Collections), are **kept quietly** when the item disappears, and **return** when it comes back.
+63. The learner's **status** (Learned or Still difficult) only influences what is suggested. Review never changes a status automatically.
 
 ### Finishing a review
 
-51. At the end, a **finish screen** shows a friendly summary: how many items were reviewed and how many were **Easy**, **Okay**, and **Hard**, a short note that hard items will come back soon, and a **Done** button. It also offers to **review a little more** when there are more items worth revisiting, and a way to **open the Hard items in Collections**.
-52. When the learner has rated an item **Easy several times in a row**, the summary may gently suggest **marking it as Learned**, and when they have rated it **Hard several times**, it may suggest **marking it as Still difficult**. These are only suggestions. The learner confirms or ignores each one, and Review never changes a status by itself. The number of ratings needed is one clearly named setting.
-53. The finished review is added to the **recent results** on Review Home, and is also shown with the Home suggestion changing to "You've reviewed today."
-54. Wording on the summary is **always encouraging**. Hard items are described as "worth another look", never as failures.
+64. At the end, a **finish screen** shows a friendly summary: how many items were reviewed and how many were **Easy**, **Okay**, and **Hard**, a short note that hard items will come back soon, and a **Done** button. It also offers to **review a little more** when there are more items worth revisiting, and a way to **open the Hard items in Collections**.
+65. When the learner has rated an item **Easy several times in a row**, the summary may gently suggest **marking it as Learned**, and when they have rated it **Hard several times**, it may suggest **marking it as Still difficult**. These are only suggestions. The learner confirms or ignores each one, and Review never changes a status by itself. The number of ratings needed is one clearly named setting.
+66. The finished review is added to the **recent results** on Review Home, and is also shown with the Home suggestion changing to "You've reviewed today."
+67. Wording on the summary is **always encouraging**. Hard items are described as "worth another look", never as failures.
 
 ### Staying in step
 
-55. Review reflects the learner's sessions **straight away**. New finished sessions add reviewable items, edited sessions change the text shown, and archived or deleted sessions remove their items from future reviews. Restored sessions bring their items, with their schedules, back.
-56. Starring an item or changing its status in Collections changes what Review suggests from then on.
-57. The counts and estimates on Review Home and Home (items, minutes, mix) are always correct for what would actually be shown.
+68. Review reflects the learner's sessions **straight away**. New finished sessions add reviewable items, edited sessions change the text shown, and archived or deleted sessions remove their items from future reviews. Restored sessions bring their items, with their schedules, back.
+69. Starring an item or changing its status in Collections changes what Review suggests from then on.
+70. The counts and estimates on Review Home and Home (items, minutes, mix) are always correct for what would actually be shown.
 
 ### Experience
 
-58. Review works comfortably on a phone, tablet, and computer, with large, easy-to-tap buttons and no sideways scrolling.
-59. Everything works with the keyboard and a screen reader. Showing the answer, rating, checking, and exiting all have clear keyboard actions and visible focus. Ratings can be given with the keyboard (for example with number keys), with the shortcuts shown on screen, and shortcuts never interfere while the learner is typing an answer.
-60. Moving to the next item and revealing answers are announced calmly to screen readers, and progress ("4 of 8") is available to them.
-61. Wording is friendly and encouraging. Nothing about Review makes the learner feel judged, rushed, or scored.
+71. Review works comfortably on a phone, tablet, and computer, with large, easy-to-tap buttons and no sideways scrolling.
+72. Everything works with the keyboard and a screen reader. Showing the answer, rating, checking, and exiting all have clear keyboard actions and visible focus. Ratings can be given with the keyboard (for example with number keys), with the shortcuts shown on screen, and shortcuts never interfere while the learner is typing an answer.
+73. Moving to the next item and revealing answers are announced calmly to screen readers, and progress ("4 of 8") is available to them.
+74. Wording is friendly and encouraging. Nothing about Review makes the learner feel judged, rushed, or scored.
 
 ### Edge cases
 
@@ -174,6 +191,15 @@ Every day the Home screen suggests a **short review of about five minutes** with
 - **Formatted text** (bold or italic in examples and natural versions): shown safely with only the supported formatting.
 - **Typed answers:** never judged. Empty answers are allowed.
 - **Many items to choose from:** thousands of items still produce today's suggestion and a custom selection quickly.
+- **A review with only one kind of exercise:** no stepper is shown, only the plain progress bar.
+- **Steps opened in any order:** nothing is lost, each step keeps its own place, and ratings are saved per item.
+- **A step left unfinished:** its items stay unrated and are not rescheduled, and the learner can come back to it any time during the review.
+- **Finishing early with unrated items:** a friendly confirmation first, then a summary of the items rated, with no "You've reviewed today" message.
+- **A step whose items all disappear:** left out of the stepper, with counts adjusted.
+- **Switching steps quickly or undoing across steps:** the rating and the place in each step stay correct.
+- **Two tabs reviewing:** each tab has its own step and place, and ratings from both are kept.
+- **A kind that is not available** (nothing suitable, or not built yet): no step for it.
+- **Narrow screens:** the stepper shows icons and counts, with the active step's name, and never scrolls sideways.
 - **A grammar note with several bold parts:** one is used, consistently within a review.
 - **A grammar note that is entirely bold, or whose bold part is longer than four words:** skipped.
 - **A grammar note with no bold part but with a quoted example sentence:** a key word of that sentence is blanked.
@@ -192,7 +218,7 @@ This describes the intended approach at a high level, using the agreed stack (La
 4. **Create a simple, explainable schedule.** Use a small, readable rule (a few clearly named intervals, growing with repeated Easy ratings and resetting on Hard) kept in one place, so it can be tuned without touching the screens.
 5. **Choose today's items.** Build the daily suggestion in one place: due items first, boosted by Hard, Still difficult, starred, and never-reviewed items, leaving out Learned unless due, mixing exercise types, never repeating an item, and filling gaps from other kinds. Use the same selection piece for custom reviews with the learner's choices. Work this out efficiently in bulk, with a bounded number of database queries however many items exist.
 6. **Create Review Home.** A Vue page in the main layout with today's suggestion, the Custom review option, items waiting for a fix, and recent results. Reuse the Home screen's card for today's suggestion.
-7. **Create the exercise screen.** A page in the focus layout that walks through the selected items one at a time, with the progress bar, Exit, the answer reveal, the rating buttons, undo for the last rating, and keyboard shortcuts. Build each exercise kind as a small piece that plugs into the same screen.
+7. **Create the exercise screen.** A page in the focus layout with a **section for each exercise kind**, a **non-linear stepper** (one step per kind, shown only when there is more than one), a thin overall progress bar, Exit and Finish early, the answer reveal, the rating buttons, undo across steps, and keyboard shortcuts. Build each exercise kind as a small piece registered as a section with its own items and its own place, so adding a kind only adds a step.
 8. **Build the four exercise kinds.** Flashcards, fix-the-mistake, say-it-again, and fill-in-the-blank, each following the rules above, with the blank chosen automatically and safely. For grammar notes, find the bold part (or quoted example) in the note's saved formatting, using the same safe handling of formatted text as elsewhere, and keep the choice of blank in one place so it is predictable and testable.
 9. **Create the finish screen and suggestions.** A summary of the review, gentle suggestions to mark items as Learned or Still difficult that the learner confirms, and links back to Collections.
 10. **Add custom review.** The choices for topics, collections, starred only, number of items, and learned items, with a live count of matching items, using the same selection piece.
@@ -204,24 +230,25 @@ This describes the intended approach at a high level, using the agreed stack (La
 
 All interface pieces in Review should come from **shadcn-vue**, the component library already chosen for the app. Only build a custom piece when shadcn-vue has nothing suitable, and then build it by **composing shadcn-vue parts with Tailwind**. Do not add any other component library.
 
-| Review need                                                         | shadcn-vue component to use                                                   |
-| ------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| Flashcard, and Review Home cards                                    | Card                                                                          |
-| Show answer, Check, Hard / Okay / Easy, Start review, Done, Exit    | Button (rating buttons use clear text and distinct styles, never color alone) |
-| Progress bar ("4 of 8")                                             | Progress                                                                      |
-| Typed answers (fix-the-mistake and fill-in-the-blank)               | Input, and Textarea for longer sentences                                      |
-| Labels such as exercise kind, "Needs attention", and results counts | Badge                                                                         |
-| Custom review choices: topics                                       | Combobox (Popover with Command and Checkbox)                                  |
-| Custom review choices: collections                                  | Toggle Group, or Checkboxes                                                   |
-| Custom review choices: starred only and include learned             | Switch, or Toggle                                                             |
-| Custom review choices: number of items                              | Select, or Toggle Group                                                       |
-| Custom review panel on phones                                       | Sheet                                                                         |
-| Undo for the last rating and brief messages                         | Sonner (toast)                                                                |
-| Exit confirmation if needed                                         | Alert Dialog                                                                  |
-| Failure, empty, and no-results messages                             | Alert, and the existing empty-state piece                                     |
-| Loading states                                                      | Skeleton                                                                      |
-| Recent results list                                                 | Card, or Table on wide screens with stacked cards on phones                   |
-| Dividers and layout details                                         | Separator                                                                     |
+| Review need                                                           | shadcn-vue component to use                                                                      |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Flashcard, and Review Home cards                                      | Card                                                                                             |
+| Show answer, Check, Hard / Okay / Easy, Start review, Done, Exit      | Button (rating buttons use clear text and distinct styles, never color alone)                    |
+| Overall progress bar ("4 of 8 rated")                                 | Progress                                                                                         |
+| Exercise-kind steps (non-linear, one per kind, with icons and counts) | Stepper, with its linear option turned off and a custom look built from Button, icons, and Badge |
+| Typed answers (fix-the-mistake and fill-in-the-blank)                 | Input, and Textarea for longer sentences                                                         |
+| Labels such as exercise kind, "Needs attention", and results counts   | Badge                                                                                            |
+| Custom review choices: topics                                         | Combobox (Popover with Command and Checkbox)                                                     |
+| Custom review choices: collections                                    | Toggle Group, or Checkboxes                                                                      |
+| Custom review choices: starred only and include learned               | Switch, or Toggle                                                                                |
+| Custom review choices: number of items                                | Select, or Toggle Group                                                                          |
+| Custom review panel on phones                                         | Sheet                                                                                            |
+| Undo for the last rating and brief messages                           | Sonner (toast)                                                                                   |
+| Exit confirmation if needed                                           | Alert Dialog                                                                                     |
+| Failure, empty, and no-results messages                               | Alert, and the existing empty-state piece                                                        |
+| Loading states                                                        | Skeleton                                                                                         |
+| Recent results list                                                   | Card, or Table on wide screens with stacked cards on phones                                      |
+| Dividers and layout details                                           | Separator                                                                                        |
 
 Where a shadcn-vue component needs small changes, change its **variants and Tailwind classes** instead of replacing it, so Review stays visually consistent with the rest of the app, in light and dark mode, and keeps the accessibility built into the components.
 
@@ -231,11 +258,13 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 
 ### Step 1: The review screen, flashcards, and ratings
 
-**What it delivers:** A Review Home with a Start review button, the distraction-free exercise screen, **flashcards** for words and phrases, the Hard, Okay, and Easy rating buttons with undo, saving of every rating safely and once, and a finish screen. At this step the items come from a simple selection (reviewable words and phrases, never-reviewed first), and the smart schedule and daily suggestion come in Step 2.
+**What it delivers:** A Review Home with a Start review button, the distraction-free exercise screen, **flashcards** for words and phrases, the Hard, Okay, and Easy rating buttons with undo, saving of every rating safely and once, and a finish screen. At this step the items come from a simple selection (reviewable words and phrases, never-reviewed first), and the smart schedule and daily suggestion come in Step 2. The exercise screen is built so that each exercise kind is a **section** with its own list of items and its own place, even though only flashcards exist so far, so no stepper is shown yet.
 
 **Tests**
 
 - The Review link in the main navigation opens Review Home, and the placeholder pages are replaced.
+- With only one kind of exercise in a review, no stepper is shown and the plain progress bar is shown.
+- The screen keeps a separate place for each section, so more kinds can be added later without changing how flashcards work.
 - Start review begins a review of reviewable words and phrases from finished, non-archived sessions only. Unfinished and archived sessions never contribute.
 - A word or phrase without a meaning (or use) is never shown as a flashcard.
 - The exercise screen uses the focus layout, with a progress bar ("4 of 8"), an Exit button, and no timer.
@@ -273,11 +302,20 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 
 ### Step 3: Fix-the-mistake
 
-**What it delivers:** The fix-the-mistake exercise using mistakes that have a correction, with typed answers, Check, the side-by-side correction and reason, and rating.
+**What it delivers:** The fix-the-mistake exercise using mistakes that have a correction, with typed answers, Check, the side-by-side correction and reason, and rating. It also introduces the **stepper**: when a review has flashcards and mistakes to fix, the exercise screen shows a non-linear stepper with one step per kind.
 
 **Tests**
 
 - Only mistakes with a correction become exercises, from finished, non-archived sessions. Mistakes without a correction are skipped.
+- A review with flashcards and mistakes shows a stepper with two steps, each with its name, icon, and progress (for example "Flashcards 2 of 5"), and a review with only one kind shows no stepper.
+- Any step can be opened at any time, in any order, without finishing the previous one, and no step is locked.
+- Each step remembers its place (its next unrated item), and leaving a step half-finished and coming back loses nothing.
+- Each step shows active, completed (check mark), or not finished (count) without relying on color alone, and a completed step shows a calm "All done here" panel with its counts and a way to continue.
+- The review opens on the first step in the suggested order that has unrated items, and a refresh returns to the same step and item.
+- Finishing early is available once an item is rated, asks first when items are unrated, shows the summary for rated items, does not reschedule unrated items, and does not show "You've reviewed today".
+- Undo returns to the item that was rated and its step, even from another step.
+- The stepper is keyboard-reachable (arrow keys, Enter or Space), has an accessible name, reads names, counts, and states aloud, moves focus to the current item when a step opens, and never interferes with rating shortcuts or typing.
+- On phones the stepper is compact, each step is at least 44 px, and nothing scrolls sideways.
 - The sentence shown is exactly what the learner said, and long text wraps neatly.
 - The learner can type an answer, or leave it empty, and Check always works.
 - Check shows the learner's attempt beside the correction and the reason, with formatting shown safely, and never marks the attempt right or wrong.
@@ -291,11 +329,13 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 
 ### Step 4: Say-it-again
 
-**What it delivers:** The say-it-again exercise using past questions and their more natural versions, with Show natural answer and rating.
+**What it delivers:** The say-it-again exercise using past questions and their more natural versions, with Show natural answer and rating. Say-it-again appears as a **third step** in the stepper when questions are available.
 
 **Tests**
 
 - Only questions that have both a tutor's question and a more natural version, from finished, non-archived sessions, become exercises.
+- Say it again appears as its own step in the stepper, with its name, icon, and progress, and can be opened at any time and in any order.
+- A review with no usable questions shows no say-it-again step.
 - The question is shown as saved, with formatting displayed safely.
 - Show natural answer reveals the natural version with its formatting, and the learner can compare it with what they said out loud.
 - No recording is made and no microphone permission is requested.
@@ -308,11 +348,13 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 
 ### Step 5: Fill-in-the-blank
 
-**What it delivers:** The fill-in-the-blank exercise built automatically from vocabulary examples, phrases and their examples, corrections of mistakes, and grammar notes (through their bold parts or quoted examples), with typed answers, Check, and rating, plus the friendly tip on Review Home about grammar notes that cannot be used yet.
+**What it delivers:** The fill-in-the-blank exercise built automatically from vocabulary examples, phrases and their examples, corrections of mistakes, and grammar notes (through their bold parts or quoted examples), with typed answers, Check, and rating, plus the friendly tip on Review Home about grammar notes that cannot be used yet. Fill-in-the-blank appears as a **fourth step** in the stepper when suitable text is available.
 
 **Tests**
 
 - Blanks are built from vocabulary examples (the word is blanked), phrases and their examples (a key word is blanked), and mistake corrections (the changed words are blanked, with the reason as a hint).
+- Fill in the blank appears as its own step in the stepper, with its name, icon, and progress, and can be opened at any time and in any order.
+- A review with no suitable text shows no fill-in-the-blank step, and with four kinds the stepper still fits a phone without scrolling sideways.
 - Items with no suitable text are skipped, and sentences are shown exactly as saved apart from the blank.
 - A grammar note with a bold part of one to four words in a sentence or list item becomes an exercise: the bold part is blanked, the sentence or list item is shown with the blank, and a small hint names the session's topic.
 - A note with several bold parts uses one of them, and the same one throughout a review.
@@ -339,6 +381,7 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 **Tests**
 
 - Custom review lets the learner choose topics, collections (words, phrases, grammar notes, mistakes, past questions), starred only, the number of items, and whether to include Learned items.
+- A custom review uses the same stepper rules: one step per kind that has items, hidden when there is only one kind, non-linear, with early finishing.
 - The preview shows how many items match, and a friendly message appears when too few match, with a way to change the choices.
 - A custom review mixes exercise types, never repeats an item, and uses the same rating and scheduling rules.
 - Only items from finished, non-archived sessions are used, and Learned items are left out unless included.
@@ -357,6 +400,7 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 **Tests**
 
 - Finishing a session adds its items to future reviews, and an unfinished session never contributes.
+- In the full journey, steps are opened in an unusual order, a step is left half-finished and finished later, an item is undone from another step, and the review is finished early once and completed fully once, with the daily review message appearing only after a complete review.
 - Editing a finished session changes the text shown in later exercises.
 - Archiving removes items from future reviews, restoring brings them back with their schedules, and deleting removes them.
 - Starring an item or changing its status changes what is suggested.
@@ -382,6 +426,8 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 - **Typed answers are never marked automatically.** The learner judges how it went.
 - **Hard items are scheduled for the next day** and are not repeated within the same review.
 - **The daily review defaults to about 8 items** (about five minutes).
+- **The exercise screen has a non-linear stepper with one step per exercise kind**, shown only when a review has more than one kind. Items inside a step are shown one at a time in the distraction-free layout, each step remembers its place, and no step is ever locked.
+- **Finishing early is allowed** once an item is rated. A review is complete when every item is rated or skipped, and only a completed daily review changes the suggestion to "You've reviewed today".
 
 ## Open Questions
 

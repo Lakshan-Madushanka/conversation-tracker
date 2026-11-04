@@ -19,6 +19,10 @@ final readonly class ExerciseKind
         public string $singular,
         /** The wording for many, e.g. `flashcards`. */
         public string $plural,
+        /** The name a review step uses, e.g. `Fix the mistake`. */
+        public string $label,
+        /** The icon a review step shows, by its shared name. */
+        public string $icon,
         /** A rough duration for one item, for the estimate. */
         public int $seconds,
     ) {}

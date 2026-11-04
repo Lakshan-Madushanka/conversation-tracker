@@ -17,6 +17,7 @@ use App\Models\Review;
 use App\Models\ReviewSchedule;
 use App\Models\Topic;
 use App\Queries\TodaysReview;
+use App\Support\MistakeIdentity;
 use Carbon\Carbon;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Str;
@@ -495,6 +496,159 @@ describe('the schedule through a typo fix', function (): void {
         expect(Rating::query()->where('item_identity', 'teh')->count())->toBe(1)
             ->and(schedEntry(FeedbackType::Vocabulary, 'teh'))->not->toBeNull()
             ->and(schedEntry(FeedbackType::Vocabulary, 'the'))->toBeNull();
+    });
+});
+
+describe('the schedule through a mistake correction', function (): void {
+    it('moves a mistake rating and schedule to the corrected pair', function (): void {
+        Carbon::setTestNow('2026-11-01 10:00:00');
+        $session = schedSession();
+        $entry = schedRow($session, 'I has went', 'I went', FeedbackType::Mistake);
+        $from = (string) $entry->collection_key;
+
+        $review = schedStart($this);
+        schedRate($this, $review, $entry, ReviewRating::Hard);
+
+        $entry->update(['correction_text' => 'I have gone', 'correction_html' => 'I have gone']);
+        $to = (string) $entry->fresh()->collection_key;
+
+        expect($to)->not->toBe($from);
+
+        Carbon::setTestNow('2026-11-03 10:00:00');
+        app(MoveMarkAfterEdit::class)->handle(FeedbackType::Mistake, $from, $to, $entry->id);
+
+        expect(Rating::query()->sole()->item_identity)->toBe($to)
+            ->and(schedEntry(FeedbackType::Mistake, $from))->toBeNull()
+            ->and(schedEntry(FeedbackType::Mistake, $to))->not->toBeNull()
+            ->and(schedEntry(FeedbackType::Mistake, $to)->rated_count)->toBe(1);
+    });
+
+    it('keeps a mistake rating on the old pair when it still appears elsewhere', function (): void {
+        Carbon::setTestNow('2026-11-03 10:00:00');
+        $first = schedSession();
+        $entry = schedRow($first, 'I has went', 'I went', FeedbackType::Mistake);
+        $from = (string) $entry->collection_key;
+
+        // The same mistake pair is recorded in another finished session.
+        schedRow(schedSession(), 'I has went', 'I went', FeedbackType::Mistake);
+
+        $review = schedStart($this);
+        schedRate($this, $review, $entry, ReviewRating::Hard);
+
+        $entry->update(['correction_text' => 'I have gone', 'correction_html' => 'I have gone']);
+        $to = (string) $entry->fresh()->collection_key;
+
+        app(MoveMarkAfterEdit::class)->handle(FeedbackType::Mistake, $from, $to, $entry->id);
+
+        expect(Rating::query()->sole()->item_identity)->toBe($from)
+            ->and(schedEntry(FeedbackType::Mistake, $from))->not->toBeNull()
+            ->and(schedEntry(FeedbackType::Mistake, $to))->toBeNull();
+    });
+
+    it('keeps the rating the corrected pair already has', function (): void {
+        Carbon::setTestNow('2026-11-01 10:00:00');
+        $first = schedSession();
+        $entry = schedRow($first, 'I has went', 'I went', FeedbackType::Mistake);
+        $from = (string) $entry->collection_key;
+
+        $oldReview = schedStart($this);
+        schedRate($this, $oldReview, $entry, ReviewRating::Hard);
+
+        // The corrected pair is already saved in another session.
+        $alreadyCorrect = schedRow(schedSession(), 'I has went', 'I have gone', FeedbackType::Mistake);
+        $to = (string) $alreadyCorrect->collection_key;
+
+        Carbon::setTestNow('2026-11-02 10:00:00');
+        $newReview = schedStart($this);
+
+        $this->post(route('review.rate', ['review' => $newReview->id]), [
+            'kind' => FeedbackType::Mistake->value,
+            'item_identity' => $to,
+            'rating' => ReviewRating::Easy->value,
+        ])->assertRedirect();
+
+        $entry->update(['correction_text' => 'I have gone', 'correction_html' => 'I have gone']);
+        app(MoveMarkAfterEdit::class)->handle(FeedbackType::Mistake, $from, $to, $entry->id);
+
+        // Nothing is overwritten and nothing is double counted.
+        expect(Rating::query()->where('item_identity', $from)->count())->toBe(1)
+            ->and(Rating::query()->where('item_identity', $to)->count())->toBe(1)
+            ->and(schedEntry(FeedbackType::Mistake, $from)->rated_count)->toBe(1)
+            ->and(schedEntry(FeedbackType::Mistake, $to)->rated_count)->toBe(1);
+    });
+
+    it('moves nothing when only the case or spacing of a mistake changes', function (): void {
+        Carbon::setTestNow('2026-11-03 10:00:00');
+        $session = schedSession();
+        $entry = schedRow($session, 'I has went', 'I went', FeedbackType::Mistake);
+        $from = (string) $entry->collection_key;
+
+        $review = schedStart($this);
+        schedRate($this, $review, $entry, ReviewRating::Hard);
+
+        // The shared normalisation treats extra spaces and capitals as the
+        // same mistake, so the editor hands back the same identity.
+        $entry->update(['content_text' => '  I   HAS went ']);
+        $same = (string) $entry->fresh()->collection_key;
+
+        expect($same)->toBe($from);
+
+        app(MoveMarkAfterEdit::class)->handle(FeedbackType::Mistake, $from, $same, $entry->id);
+
+        expect(Rating::query()->sole()->item_identity)->toBe($from)
+            ->and(schedEntry(FeedbackType::Mistake, $from))->not->toBeNull();
+    });
+
+    it('moves no mistake rating from a session that is not studyable', function (): void {
+        Carbon::setTestNow('2026-11-03 10:00:00');
+        $finished = schedSession();
+        $rated = schedRow($finished, 'I has went', 'I went', FeedbackType::Mistake);
+        $from = (string) $rated->collection_key;
+
+        $review = schedStart($this);
+        schedRate($this, $review, $rated, ReviewRating::Hard);
+
+        foreach (['unfinished', 'archived'] as $state) {
+            $topic = Topic::factory()->create();
+
+            $session = $state === 'unfinished'
+                ? PracticeSession::factory()->for($topic)->create(['created_at' => CarbonImmutable::now()])
+                : PracticeSession::factory()->archived()->for($topic)->create();
+
+            $question = PracticeQuestion::factory()->for($session)->create(['position' => 1]);
+
+            $row = PracticeFeedbackEntry::factory()->for($question)->create([
+                'type' => FeedbackType::Mistake,
+                'content_text' => 'I has went',
+                'content_html' => 'I has went',
+                'correction_text' => 'I went',
+                'correction_html' => 'I went',
+                'example' => '',
+                'example_html' => [],
+                'reason' => '',
+                'position' => 0,
+                'is_split' => true,
+                'client_id' => (string) Str::uuid(),
+            ]);
+
+            app(SavePracticeQuestions::class)->handle($session, [[
+                'question_html' => '<p>What did you notice?</p>',
+                'answer_html' => '<p>A sentence.</p>',
+                'feedback' => [
+                    'mistake' => [[
+                        'id' => $row->client_id,
+                        'text' => 'I has went',
+                        'correction_html' => 'I have gone',
+                    ]],
+                ],
+            ]]);
+        }
+
+        $to = MistakeIdentity::pairKey('I has went', 'I have gone');
+
+        expect(Rating::query()->sole()->item_identity)->toBe($from)
+            ->and(schedEntry(FeedbackType::Mistake, $from))->not->toBeNull()
+            ->and(schedEntry(FeedbackType::Mistake, $to))->toBeNull();
     });
 });
 

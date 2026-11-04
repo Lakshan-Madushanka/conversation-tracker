@@ -12,7 +12,9 @@ use App\Models\PracticeSession;
 use App\Models\Rating;
 use App\Models\Review;
 use App\Models\ReviewSchedule;
+use App\Support\ExerciseKind;
 use App\Support\LearnerDay;
+use App\Support\ReviewExercises;
 use App\Support\ReviewSettings;
 use App\Support\ReviewSuggestion;
 use Carbon\CarbonImmutable;
@@ -21,22 +23,26 @@ use Illuminate\Http\Request;
 /**
  * Choosing today's items, in one place on the server.
  *
- * Candidates are reviewable words and phrases from finished, non-archived
- * sessions that are either due again (by the item's schedule) or never
- * reviewed. Learned items are left out unless they are due again; a
+ * Candidates are reviewable words, phrases and mistakes from finished,
+ * non-archived sessions that are either due again (by the item's schedule)
+ * or never reviewed. Learned items are left out unless they are due again; a
  * never-reviewed Learned item is never suggested.
  *
- * The choice is worked out from the current data every time, in bulk: one
- * grouped candidate query and one read of the schedules and one of the
- * marks for the whole set — the number of queries never grows with the
- * number of items.
+ * The sitting is split between the built exercise kinds by the target shares
+ * in `ReviewSettings`, renormalised over the kinds that actually have
+ * something to offer. Within one kind the Step 2 rules still hold: due Hard
+ * items, then due Still difficult items, then due starred items, then the
+ * other due items most overdue first, then new items (starred or Still
+ * difficult first). Due items crowd out new ones. If one kind cannot fill its
+ * share, the other kinds take the free slots, so a full sitting is still on
+ * offer on a quiet day.
  *
- * The fill order is: due Hard items, then due Still difficult items, then
- * due starred items, then the other due items most overdue first, then new
- * items (starred or Still difficult first). An item appears at most once.
- * Due items crowd out new ones, and new items take what is left, up to the
- * size of the review. Within the review, due and new items are interleaved
- * evenly so the sitting feels varied.
+ * The choice is worked out from the current data every time, in bulk: one
+ * grouped candidate query, one read of the schedules, one of the marks and
+ * one of today's ratings — the number of queries never grows with the number
+ * of items. Items are returned grouped one list per kind, in the fixed
+ * friendly order the stepper uses; within each kind due and new items are
+ * interleaved evenly.
  */
 final readonly class TodaysReview
 {
@@ -46,8 +52,7 @@ final readonly class TodaysReview
     ) {}
 
     /**
-     * The items worth reviewing right now, in the order the learner meets
-     * them.
+     * The items worth reviewing right now, grouped by exercise kind.
      */
     public function suggest(
         int $size = ReviewSettings::SIZE,
@@ -65,15 +70,18 @@ final readonly class TodaysReview
         $marks = $this->marksFor();
         $ratedToday = $excludingRatedToday ? $this->ratedToday($today) : [];
 
-        /** @var list<array{priority: int, due_on: int, kind: FeedbackType, identity: string}> $due */
-        $due = [];
-        $boostedNew = [];
-        $plainNew = [];
+        /** @var array<string, array{due: list<array{priority: int, due_on: int, kind: FeedbackType, identity: string}>, new: list<array{kind: FeedbackType, identity: string, boosted: bool}>}> $pools */
+        $pools = [];
 
         foreach ($rows as $row) {
             $kind = FeedbackType::from($row['type']);
             $identity = $row['collection_key'];
             $key = $this->candidates->key($kind, $identity);
+            $exercise = ReviewExercises::kindOf($kind);
+
+            if (! ReviewExercises::find($exercise) instanceof ExerciseKind) {
+                continue;
+            }
 
             if (isset($ratedToday[$key])) {
                 continue;
@@ -84,22 +92,19 @@ final readonly class TodaysReview
             $status = $mark?->status;
             $schedule = $schedules[$key] ?? null;
 
+            $pools[$exercise] ??= ['due' => [], 'new' => []];
+
             if ($schedule === null) {
                 // A never-reviewed Learned item is not suggested.
                 if ($status === CollectionItemStatus::Learned) {
                     continue;
                 }
 
-                $candidate = [
+                $pools[$exercise]['new'][] = [
                     'kind' => $kind,
                     'identity' => $identity,
+                    'boosted' => $starred || $status === CollectionItemStatus::StillDifficult,
                 ];
-
-                if ($starred || $status === CollectionItemStatus::StillDifficult) {
-                    $boostedNew[] = $candidate;
-                } else {
-                    $plainNew[] = $candidate;
-                }
 
                 continue;
             }
@@ -116,7 +121,7 @@ final readonly class TodaysReview
                 default => 4,
             };
 
-            $due[] = [
+            $pools[$exercise]['due'][] = [
                 'priority' => $priority,
                 'due_on' => $schedule->due_on->startOfDay()->getTimestamp(),
                 'kind' => $kind,
@@ -124,41 +129,151 @@ final readonly class TodaysReview
             ];
         }
 
-        usort($due, fn (array $a, array $b): int => $a['priority'] <=> $b['priority']
-            ?: $a['due_on'] <=> $b['due_on']
-            ?: strcmp($a['kind']->value."\u{0}".$a['identity'], $b['kind']->value."\u{0}".$b['identity']));
+        $active = $this->activeKeys($pools);
 
-        // New items, starred or Still difficult first, then in a varied
-        // order; the groups stay in that order in the final mix.
-        shuffle($boostedNew);
-        shuffle($plainNew);
-        $new = [...$boostedNew, ...$plainNew];
+        if ($active === []) {
+            return new ReviewSuggestion([]);
+        }
 
-        $pickedDue = array_slice($due, 0, $size);
-        $dueCount = count($pickedDue);
-        $remaining = $size - $dueCount;
+        foreach ($active as $exercise) {
+            usort($pools[$exercise]['due'], fn (array $a, array $b): int => $a['priority'] <=> $b['priority']
+                ?: $a['due_on'] <=> $b['due_on']
+                ?: strcmp($a['kind']->value."\u{0}".$a['identity'], $b['kind']->value."\u{0}".$b['identity']));
+
+            // Starred and Still difficult new items lead the kind; the two
+            // groups keep their own varied order.
+            $boosted = [];
+            $plain = [];
+
+            foreach ($pools[$exercise]['new'] ?? [] as $item) {
+                if ($item['boosted']) {
+                    $boosted[] = $item;
+                } else {
+                    $plain[] = $item;
+                }
+            }
+
+            shuffle($boosted);
+            shuffle($plain);
+            $pools[$exercise]['new'] = [...$boosted, ...$plain];
+        }
+
+        $quotas = $this->quotas($active, $size);
+
+        $dueAvailable = 0;
+        $candidateTotal = 0;
+
+        foreach ($active as $exercise) {
+            $dueAvailable += count($pools[$exercise]['due']);
+            $candidateTotal += count($pools[$exercise]['due']) + count($pools[$exercise]['new']);
+        }
 
         // New items are limited when there is enough due work to fill the
-        // review; otherwise they fill whatever is left, so a full sitting is
-        // still on offer on a quiet day.
-        $maxNew = max(0, ReviewSettings::MAX_NEW_ITEMS);
+        // review; otherwise they may fill whatever is left, so a full sitting
+        // is still on offer on a quiet day.
+        $newAllowance = $dueAvailable >= max(0, $size - ReviewSettings::MAX_NEW_ITEMS)
+            ? ReviewSettings::MAX_NEW_ITEMS
+            : max(0, $size - $dueAvailable);
 
-        $newTake = $dueCount >= $size - $maxNew
-            ? min($remaining, $maxNew)
-            : $remaining;
+        /** @var array<string, list<array{kind: FeedbackType, identity: string}>> $pickedDue */
+        $pickedDue = [];
+        /** @var array<string, list<array{kind: FeedbackType, identity: string}>> $pickedNew */
+        $pickedNew = [];
+        /** @var array<string, int> $dueIndex */
+        $dueIndex = [];
+        /** @var array<string, int> $newIndex */
+        $newIndex = [];
 
-        $pickedNew = array_slice($new, 0, max(0, $newTake));
+        foreach ($active as $exercise) {
+            $pickedDue[$exercise] = [];
+            $pickedNew[$exercise] = [];
+            $dueIndex[$exercise] = 0;
+            $newIndex[$exercise] = 0;
+        }
 
-        // Due items mixed with new ones, evenly spread through the sitting.
-        $ordered = $this->interleave($pickedDue, $pickedNew);
+        $picked = 0;
+        $newPicked = 0;
 
-        return new ReviewSuggestion(array_map(
-            fn (array $item): array => [
-                'kind' => $item['kind'],
-                'identity' => $item['identity'],
-            ],
-            $ordered,
-        ));
+        // Each kind fills its share, due items first.
+        foreach ($active as $exercise) {
+            $quota = $quotas[$exercise] ?? 0;
+
+            while (count($pickedDue[$exercise]) < $quota
+                && isset($pools[$exercise]['due'][$dueIndex[$exercise]])) {
+                $pickedDue[$exercise][] = $this->brief($pools[$exercise]['due'][$dueIndex[$exercise]]);
+                $dueIndex[$exercise] += 1;
+                $picked += 1;
+            }
+
+            while (count($pickedDue[$exercise]) + count($pickedNew[$exercise]) < $quota
+                && $newPicked < $newAllowance
+                && isset($pools[$exercise]['new'][$newIndex[$exercise]])) {
+                $pickedNew[$exercise][] = $this->brief($pools[$exercise]['new'][$newIndex[$exercise]]);
+                $newIndex[$exercise] += 1;
+                $picked += 1;
+                $newPicked += 1;
+            }
+        }
+
+        // A kind with fewer candidates than its share leaves a gap. Fill it
+        // from the other kinds: due work first, then new work within the
+        // sitting's new limit.
+        $limit = min($size, $candidateTotal);
+
+        while ($picked < $limit) {
+            $added = false;
+
+            foreach ($active as $exercise) {
+                if ($picked >= $limit) {
+                    break;
+                }
+
+                if (isset($pools[$exercise]['due'][$dueIndex[$exercise]])) {
+                    $pickedDue[$exercise][] = $this->brief($pools[$exercise]['due'][$dueIndex[$exercise]]);
+                    $dueIndex[$exercise] += 1;
+                    $picked += 1;
+                    $added = true;
+                }
+            }
+
+            if ($picked >= $limit || $newPicked >= $newAllowance) {
+                if (! $added) {
+                    break;
+                }
+
+                continue;
+            }
+
+            foreach ($active as $exercise) {
+                if ($picked >= $limit || $newPicked >= $newAllowance) {
+                    break;
+                }
+
+                if (isset($pools[$exercise]['new'][$newIndex[$exercise]])) {
+                    $pickedNew[$exercise][] = $this->brief($pools[$exercise]['new'][$newIndex[$exercise]]);
+                    $newIndex[$exercise] += 1;
+                    $picked += 1;
+                    $newPicked += 1;
+                    $added = true;
+                }
+            }
+
+            if (! $added) {
+                break;
+            }
+        }
+
+        // Each kind keeps its own mixed order; the kinds follow the fixed
+        // friendly order, with no order imposed across them.
+        $ordered = [];
+
+        foreach ($active as $exercise) {
+            foreach ($this->interleave($pickedDue[$exercise], $pickedNew[$exercise]) as $item) {
+                $ordered[] = $item;
+            }
+        }
+
+        return new ReviewSuggestion(array_slice($ordered, 0, $size));
     }
 
     /**
@@ -234,6 +349,89 @@ final readonly class TodaysReview
     }
 
     /**
+     * The kinds present in this pool, in the registry's fixed order.
+     *
+     * @param  array<string, array{due: list<mixed>, new: list<mixed>}>  $pools
+     * @return list<string>
+     */
+    private function activeKeys(array $pools): array
+    {
+        $active = [];
+
+        foreach (ReviewExercises::all() as $kind) {
+            if (isset($pools[$kind->key])
+                && ($pools[$kind->key]['due'] !== [] || $pools[$kind->key]['new'] !== [])) {
+                $active[] = $kind->key;
+            }
+        }
+
+        foreach ($pools as $key => $pool) {
+            if (! in_array($key, $active, true)
+                && ($pool['due'] !== [] || $pool['new'] !== [])) {
+                $active[] = $key;
+            }
+        }
+
+        return $active;
+    }
+
+    /**
+     * Split the sitting between the active kinds by their target shares,
+     * renormalised over those kinds. The largest remainder takes the last
+     * slot, so the shares stay honest and the total always adds up.
+     *
+     * @param  list<string>  $active
+     * @return array<string, int>
+     */
+    private function quotas(array $active, int $size): array
+    {
+        $shares = [];
+        $totalShare = 0.0;
+
+        foreach ($active as $key) {
+            $share = ReviewSettings::TARGET_SHARES[$key] ?? 1.0;
+            $shares[$key] = $share;
+            $totalShare += $share;
+        }
+
+        if ($totalShare <= 0.0) {
+            foreach ($active as $key) {
+                $shares[$key] = 1.0;
+            }
+
+            $totalShare = (float) count($active);
+        }
+
+        $quotas = [];
+        $fractions = [];
+        $assigned = 0;
+
+        foreach ($active as $key) {
+            $exact = $size * $shares[$key] / $totalShare;
+            $base = (int) floor($exact);
+            $quotas[$key] = $base;
+            $fractions[$key] = $exact - $base;
+            $assigned += $base;
+        }
+
+        while ($assigned < $size) {
+            $next = $active[0];
+
+            foreach ($active as $key) {
+                if ($fractions[$key] > $fractions[$next]) {
+                    $next = $key;
+                }
+            }
+
+            $quotas[$next] += 1;
+            $fractions[$next] = -1.0;
+            $assigned += 1;
+        }
+
+        return $quotas;
+    }
+
+    /**
      * The stored schedules, read once for the whole set: one read per kind
      * rather than one question per item. A few thousand rows is the natural
      * size here, and the read stays honest however big the pool grows.
@@ -244,7 +442,7 @@ final readonly class TodaysReview
     {
         $found = [];
 
-        foreach ([FeedbackType::Vocabulary, FeedbackType::Phrase] as $kind) {
+        foreach (FeedbackType::tableTypes() as $kind) {
             foreach (ReviewSchedule::query()->where('kind', $kind->value)->get() as $schedule) {
                 $found[$this->candidates->key($kind, $schedule->item_identity)] = $schedule;
             }
@@ -263,7 +461,7 @@ final readonly class TodaysReview
     {
         $found = [];
 
-        foreach ([FeedbackType::Vocabulary, FeedbackType::Phrase] as $kind) {
+        foreach (FeedbackType::tableTypes() as $kind) {
             $storage = CollectionItemMark::query()
                 ->where('kind', $kind->value)
                 ->get(['item_key', 'starred', 'status', 'group_key']);
@@ -292,7 +490,10 @@ final readonly class TodaysReview
     {
         $pairs = Rating::query()
             ->where('created_at', '>=', $today->setTimezone('UTC'))
-            ->whereIn('kind', [FeedbackType::Vocabulary->value, FeedbackType::Phrase->value])
+            ->whereIn('kind', array_map(
+                fn (FeedbackType $kind): string => $kind->value,
+                FeedbackType::tableTypes(),
+            ))
             ->get(['kind', 'item_identity']);
 
         $found = [];
@@ -302,6 +503,17 @@ final readonly class TodaysReview
         }
 
         return $found;
+    }
+
+    /**
+     * Just the two fields the review needs, without the ordering helpers.
+     *
+     * @param  array{kind: FeedbackType, identity: string}  $item
+     * @return array{kind: FeedbackType, identity: string}
+     */
+    private function brief(array $item): array
+    {
+        return ['kind' => $item['kind'], 'identity' => $item['identity']];
     }
 
     /**

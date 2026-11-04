@@ -1,8 +1,19 @@
 <script setup lang="ts">
 import { CircleXIcon, EqualIcon, ThumbsUpIcon } from '@lucide/vue';
 import { cn } from 'cn';
+import type { ReviewRating } from '@/types/review';
 
-export type ReviewRating = 'hard' | 'okay' | 'easy';
+export type { ReviewRating };
+
+withDefaults(
+    defineProps<{
+        /** Whether a rating is already on its way to the server. */
+        disabled?: boolean;
+    }>(),
+    {
+        disabled: false,
+    },
+);
 
 const emit = defineEmits<{
     rate: [rating: ReviewRating];
@@ -48,9 +59,10 @@ const options: {
             v-for="option in options"
             :key="option.rating"
             type="button"
+            :disabled="disabled"
             :class="
                 cn(
-                    'flex cursor-pointer items-center justify-center gap-2 rounded-xl border px-3 py-3 text-sm font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
+                    'flex cursor-pointer items-center justify-center gap-2 rounded-xl border px-3 py-3 text-sm font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-60',
                     option.classes,
                 )
             "

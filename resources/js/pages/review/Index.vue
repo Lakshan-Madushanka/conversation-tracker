@@ -5,7 +5,6 @@ import { InfoIcon } from '@lucide/vue';
 import PageHeader from '@/components/PageHeader.vue';
 import ReviewSuggestionCard from '@/components/ReviewSuggestionCard.vue';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { index as collectionsIndex } from '@/routes/collections';
 import type { TodayReviewData, WaitingForFixData } from '@/types';
@@ -15,30 +14,61 @@ defineOptions({ layout: AppLayout });
 const props = defineProps<{
     /** Today's review suggestion, or the "You've reviewed today" state. */
     todayReview: TodayReviewData;
-    /** How many words and phrases cannot be practiced yet. */
+    /** How many words, phrases and mistakes cannot be practiced yet. */
     waitingForFix: WaitingForFixData;
 }>();
 
-const wordsLink = collectionsIndex.url({
-    query: { tab: 'vocabulary', attention: '1' },
-});
-const phrasesLink = collectionsIndex.url({
-    query: { tab: 'phrases', attention: '1' },
-});
-
-const waitingCount = computed(
-    () => props.waitingForFix.vocabulary + props.waitingForFix.phrases,
+const waitingGroups = computed(() =>
+    [
+        {
+            count: props.waitingForFix.vocabulary,
+            singular: 'word',
+            plural: 'words',
+            link: collectionsIndex.url({
+                query: { tab: 'vocabulary', attention: '1' },
+            }),
+            linkLabel: 'Vocabulary: Needs attention only',
+        },
+        {
+            count: props.waitingForFix.phrases,
+            singular: 'phrase',
+            plural: 'phrases',
+            link: collectionsIndex.url({
+                query: { tab: 'phrases', attention: '1' },
+            }),
+            linkLabel: 'Phrases: Needs attention only',
+        },
+        {
+            count: props.waitingForFix.mistakes,
+            singular: 'mistake',
+            plural: 'mistakes',
+            link: collectionsIndex.url({
+                query: { tab: 'mistakes', attention: '1' },
+            }),
+            linkLabel: 'My mistakes: Needs attention only',
+        },
+    ].filter((group) => group.count > 0),
 );
 
-/** The tail of the sentence, with correct grammar for a group of one. */
-const waitingVerb = computed(() => {
-    const total = waitingCount.value;
+const waitingCount = computed(() =>
+    waitingGroups.value.reduce((total, group) => total + group.count, 0),
+);
 
-    if (total === 1) {
-        return 'needs a meaning (or a use) before it can be practiced';
-    }
+/** The sentence, with correct grammar for each group and for the total. */
+const waitingSentence = computed(() => {
+    const parts = waitingGroups.value.map(
+        (group) =>
+            `${group.count} ${group.count === 1 ? group.singular : group.plural}`,
+    );
 
-    return 'need a meaning (or a use) before they can be practiced';
+    const list =
+        parts.length <= 1
+            ? (parts[0] ?? '')
+            : parts.length === 2
+              ? `${parts[0]} and ${parts[1]}`
+              : `${parts.slice(0, -1).join(', ')}, and ${parts.at(-1)}`;
+
+    return `${list} ${waitingCount.value === 1 ? 'needs' : 'need'} attention before ${waitingCount.value === 1 ? 'it' : 'they'} can be practiced`;
 });
 </script>
 
@@ -48,7 +78,7 @@ const waitingVerb = computed(() => {
 
         <PageHeader
             title="Review"
-            description="A calm few minutes with the words and phrases you want to keep."
+            description="A calm few minutes with the words, phrases and mistakes you want to keep."
         />
 
         <ReviewSuggestionCard :suggestion="props.todayReview" />
@@ -60,51 +90,15 @@ const waitingVerb = computed(() => {
                 <h2 class="font-medium">Waiting for a fix</h2>
             </AlertTitle>
             <AlertDescription>
-                <p class="flex flex-wrap items-center gap-x-1.5">
-                    <template v-if="props.waitingForFix.vocabulary > 0">
-                        <Badge variant="secondary">{{
-                            props.waitingForFix.vocabulary
-                        }}</Badge>
-                        {{
-                            props.waitingForFix.vocabulary === 1
-                                ? 'word'
-                                : 'words'
-                        }}
-                    </template>
-                    <template
-                        v-if="
-                            props.waitingForFix.vocabulary > 0 &&
-                            props.waitingForFix.phrases > 0
-                        "
-                    >
-                        and
-                    </template>
-                    <template v-if="props.waitingForFix.phrases > 0">
-                        <Badge variant="secondary">{{
-                            props.waitingForFix.phrases
-                        }}</Badge>
-                        {{
-                            props.waitingForFix.phrases === 1
-                                ? 'phrase'
-                                : 'phrases'
-                        }}
-                    </template>
-                    {{ waitingVerb }} — you can fix that in Collections.
-                </p>
+                <p>{{ waitingSentence }} — you can fix that in Collections.</p>
                 <p class="mt-1 flex flex-wrap gap-x-3 gap-y-1">
                     <Link
-                        v-if="props.waitingForFix.vocabulary > 0"
-                        :href="wordsLink"
+                        v-for="group in waitingGroups"
+                        :key="group.linkLabel"
+                        :href="group.link"
                         class="font-medium text-primary hover:underline focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
                     >
-                        Vocabulary: Needs attention only
-                    </Link>
-                    <Link
-                        v-if="props.waitingForFix.phrases > 0"
-                        :href="phrasesLink"
-                        class="font-medium text-primary hover:underline focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
-                    >
-                        Phrases: Needs attention only
+                        {{ group.linkLabel }}
                     </Link>
                 </p>
             </AlertDescription>

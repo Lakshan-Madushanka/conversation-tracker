@@ -149,7 +149,7 @@ describe('the exercise screen', function (): void {
             'kind' => $first->kind->value,
             'item_identity' => $first->item_identity,
             'rating' => ReviewRating::Easy->value,
-        ])->assertRedirect(route('review.session', ['review' => $review->id]));
+        ])->assertRedirect(route('review.session', ['review' => $review->id, 'step' => 2]));
 
         // A refresh is the same request the screen makes.
         $this->get(route('review.session', ['review' => $review->id]))
@@ -183,7 +183,73 @@ describe('the exercise screen', function (): void {
             ->assertInertia(fn (Assert $page): Assert => $page
                 ->where('finished', false)
                 ->where('card.front', 'still here')
-                ->where('position.total', 2));
+                ->has('steps', 1)
+                ->where('position.total', 1));
+    });
+
+    it('shows every item as a step the learner can open in any order', function (): void {
+        $session = reviewSession();
+        reviewRow($session, 'one', 'first meaning');
+        reviewRow($session, 'two', 'second meaning');
+        reviewRow($session, 'three', 'third meaning');
+
+        $review = reviewStart($this);
+        $identities = $review->items->pluck('item_identity')->all();
+
+        $this->get(route('review.session', ['review' => $review->id]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page): Assert => $page
+                ->component('review/Session')
+                ->where('currentStep', 1)
+                ->where('card.front', $identities[0])
+                ->where('cardRating', null)
+                ->has('steps', 3)
+                ->where('steps.0.number', 1)
+                ->where('steps.0.card.front', $identities[0])
+                ->where('steps.0.url', route('review.session', ['review' => $review->id, 'step' => 1]))
+                ->where('steps.2.number', 3)
+                ->where('steps.2.card.front', $identities[2]));
+
+        // The address names the step, so any step opens before the ones
+        // before it are rated.
+        $this->get(route('review.session', ['review' => $review->id, 'step' => 3]))
+            ->assertInertia(fn (Assert $page): Assert => $page
+                ->where('currentStep', 3)
+                ->where('card.front', $identities[2])
+                ->where('position.current', 3));
+    });
+
+    it('lets the learner rate a later step before the earlier ones', function (): void {
+        $session = reviewSession();
+        reviewRow($session, 'one', 'first meaning');
+        reviewRow($session, 'two', 'second meaning');
+        reviewRow($session, 'three', 'third meaning');
+
+        $review = reviewStart($this);
+        $third = $review->items->last();
+
+        $this->post(route('review.rate', ['review' => $review->id]), [
+            'kind' => $third->kind->value,
+            'item_identity' => $third->item_identity,
+            'rating' => ReviewRating::Easy->value,
+        ])->assertRedirect(route('review.session', ['review' => $review->id, 'step' => 1]));
+
+        expect(Rating::query()->sole()->item_identity)->toBe($third->item_identity);
+
+        // The rated step still opens, showing the rating it was given.
+        $this->get(route('review.session', ['review' => $review->id, 'step' => 3]))
+            ->assertInertia(fn (Assert $page): Assert => $page
+                ->where('cardRating', 'easy')
+                ->where('steps.2.rating', 'easy')
+                ->where('steps.0.rating', null));
+
+        // Taking the rating back reopens the same step, ready to rate again.
+        $this->delete(route('review.undo', ['review' => $review->id]), [
+            'kind' => $third->kind->value,
+            'item_identity' => $third->item_identity,
+        ])->assertRedirect(route('review.session', ['review' => $review->id, 'step' => 3]));
+
+        expect(Rating::query()->count())->toBe(0);
     });
 });
 
@@ -224,7 +290,7 @@ describe('ratings', function (): void {
         $this->delete(route('review.undo', ['review' => $review->id]), [
             'kind' => $item->kind->value,
             'item_identity' => $item->item_identity,
-        ])->assertRedirect(route('review.session', ['review' => $review->id]));
+        ])->assertRedirect(route('review.session', ['review' => $review->id, 'step' => 1]));
 
         expect(Rating::query()->count())->toBe(0);
 

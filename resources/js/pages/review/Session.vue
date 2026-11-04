@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { Head, Link, useForm } from '@inertiajs/vue3';
+import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import {
     ArrowRightIcon,
     CheckCheckIcon,
+    CheckIcon,
     EyeIcon,
     ExternalLinkIcon,
     RotateCcwIcon,
@@ -21,6 +22,13 @@ import {
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
+import {
+    Stepper,
+    StepperItem,
+    StepperSeparator,
+    StepperTitle,
+    StepperTrigger,
+} from '@/components/ui/stepper';
 import FocusLayout from '@/layouts/FocusLayout.vue';
 import {
     index as reviewIndex,
@@ -39,11 +47,24 @@ interface ReviewCard {
     session_url: string | null;
 }
 
+interface ReviewStep {
+    number: number;
+    rating: ReviewRating | null;
+    url: string;
+    card: ReviewCard;
+}
+
 const props = defineProps<{
     /** The review in the address does not exist (or was never named). */
     notFound: boolean;
     finished: boolean;
+    /** Every item in the sitting, in the order the learner meets them. */
+    steps: ReviewStep[];
+    /** The step whose card is shown, or null on the finish screen. */
+    currentStep: number | null;
     card: ReviewCard | null;
+    /** The rating already given to this card, if it has one. */
+    cardRating: ReviewRating | null;
     position: { current: number; total: number };
     progress: number;
     counts: { hard: number; okay: number; easy: number };
@@ -55,7 +76,14 @@ const props = defineProps<{
     reviewId: number | null;
 }>();
 
-const revealed = ref(false);
+const ratingLabels: Record<ReviewRating, string> = {
+    hard: 'Hard',
+    okay: 'Okay',
+    easy: 'Easy',
+};
+
+/** An already-rated card opens with its answer showing. */
+const revealed = ref(props.cardRating !== null);
 const undoOffered = ref(false);
 const saveFailed = ref(false);
 
@@ -87,6 +115,10 @@ const announcement = computed(() => {
         return '';
     }
 
+    if (props.cardRating !== null) {
+        return `${props.card.label} answer shown. You rated this ${ratingLabels[props.cardRating]}.`;
+    }
+
     return revealed.value
         ? `${props.card.label} answer shown. Choose Hard, Okay, or Easy.`
         : `${props.card.label}, ${props.position.current} of ${props.position.total}. Try to recall it, then show the answer.`;
@@ -95,7 +127,7 @@ const announcement = computed(() => {
 watch(
     () => props.card?.item_identity,
     () => {
-        revealed.value = false;
+        revealed.value = props.cardRating !== null;
         saveFailed.value = false;
     },
 );
@@ -119,7 +151,13 @@ watch(
 );
 
 function rate(rating: ReviewRating): void {
-    if (!props.card || props.reviewId === null || rateForm.processing) {
+    // The first rating counts; an already-rated card is shown, not rated again.
+    if (
+        !props.card ||
+        props.reviewId === null ||
+        props.cardRating !== null ||
+        rateForm.processing
+    ) {
         return;
     }
 
@@ -151,6 +189,23 @@ function startAnotherReview(): void {
     startAnotherForm.post(reviewStore.url());
 }
 
+/**
+ * Open the step the learner picked. The sitting stays on the same page, so
+ * the stepper keeps its place and the reveal starts fresh for the new card.
+ */
+function goToStep(step: number | undefined): void {
+    const target = props.steps.find((item) => item.number === step);
+
+    if (step === undefined || !target || target.number === props.currentStep) {
+        return;
+    }
+
+    router.visit(target.url, {
+        preserveScroll: true,
+        preserveState: true,
+    });
+}
+
 function onKeydown(event: KeyboardEvent): void {
     const target = event.target as HTMLElement | null;
 
@@ -168,12 +223,21 @@ function onKeydown(event: KeyboardEvent): void {
         return;
     }
 
+    // Enter and Space belong to the control that has focus (a step, or Show
+    // answer); only the bare page reveals the card.
+    const onControl = target?.closest('button, a, [role="button"]') != null;
+
     if (!revealed.value) {
-        if (event.key === ' ' || event.key === 'Enter') {
+        if (!onControl && (event.key === ' ' || event.key === 'Enter')) {
             event.preventDefault();
             revealed.value = true;
         }
 
+        return;
+    }
+
+    // An already-rated card has nothing left to rate.
+    if (props.cardRating !== null) {
         return;
     }
 
@@ -211,6 +275,68 @@ onBeforeUnmount(() => {
         <Head title="Review" />
 
         <p class="sr-only" aria-live="polite">{{ announcement }}</p>
+
+        <section
+            v-if="!props.notFound && !props.finished && props.steps.length > 1"
+            class="mb-4"
+            aria-label="Review steps"
+        >
+            <nav
+                class="-mx-4 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6"
+                aria-label="Review items"
+            >
+                <Stepper
+                    :model-value="props.currentStep ?? 1"
+                    :linear="false"
+                    class="mx-auto w-max items-start gap-0"
+                    @update:model-value="goToStep"
+                >
+                    <StepperItem
+                        v-for="step in props.steps"
+                        :key="step.number"
+                        v-slot="{ state }"
+                        :step="step.number"
+                        class="relative w-14 shrink-0 flex-col items-center gap-1 sm:w-16"
+                    >
+                        <StepperSeparator
+                            v-if="step.number !== props.steps.length"
+                            class="absolute top-[17px] left-[calc(50%+19px)] h-0.5 w-[calc(100%-38px)] rounded-full bg-border"
+                        />
+
+                        <StepperTrigger class="w-full gap-1 p-0.5">
+                            <span
+                                class="z-10 flex size-9 shrink-0 items-center justify-center rounded-full border text-sm font-medium tabular-nums transition-colors"
+                                :class="
+                                    state === 'active'
+                                        ? 'border-primary bg-primary text-primary-foreground ring-2 ring-primary/30'
+                                        : step.rating
+                                          ? 'border-primary/40 bg-background text-primary'
+                                          : 'border-border bg-background text-muted-foreground hover:border-foreground/30'
+                                "
+                            >
+                                <CheckIcon
+                                    v-if="step.rating"
+                                    class="size-4"
+                                    aria-hidden="true"
+                                />
+                                <template v-else>{{ step.number }}</template>
+                            </span>
+
+                            <StepperTitle
+                                as="span"
+                                class="w-full truncate text-[11px] leading-tight font-normal text-muted-foreground group-data-[state=active]:text-foreground"
+                            >
+                                {{ step.card.front }}
+                            </StepperTitle>
+                        </StepperTrigger>
+                    </StepperItem>
+                </Stepper>
+            </nav>
+
+            <p class="mt-2 text-center text-xs text-muted-foreground">
+                Open any step, in any order.
+            </p>
+        </section>
 
         <Card v-if="props.notFound" class="text-center">
             <CardHeader>
@@ -322,12 +448,11 @@ onBeforeUnmount(() => {
 
         <Card v-else-if="props.card">
             <CardHeader>
-                <div class="mb-1 flex items-center gap-2">
+                <div class="mb-1 flex flex-wrap items-center gap-2">
                     <Badge variant="secondary">{{ props.card.label }}</Badge>
-                    <span class="text-xs text-muted-foreground tabular-nums">
-                        {{ props.position.current }} of
-                        {{ props.position.total }}
-                    </span>
+                    <Badge v-if="props.cardRating" variant="outline">
+                        Rated {{ ratingLabels[props.cardRating] }}
+                    </Badge>
                 </div>
 
                 <CardTitle
@@ -397,25 +522,54 @@ onBeforeUnmount(() => {
             </CardContent>
 
             <CardFooter v-if="revealed" class="flex-col items-stretch gap-3">
-                <p class="text-sm text-muted-foreground">How did that go?</p>
+                <template v-if="props.cardRating">
+                    <p class="text-sm text-muted-foreground">
+                        You rated this one
+                        {{ ratingLabels[props.cardRating] }}.
+                        <template v-if="undoOffered && props.undo">
+                            You can undo it below.
+                        </template>
+                        <template v-else>
+                            Open another step whenever you are ready.
+                        </template>
+                    </p>
 
-                <RatingButtons @rate="rate" />
+                    <Button
+                        v-if="undoOffered && props.undo"
+                        variant="ghost"
+                        size="sm"
+                        class="self-center"
+                        :disabled="undoForm.processing"
+                        @click="undoLastRating"
+                    >
+                        <RotateCcwIcon aria-hidden="true" />
+                        Undo last rating
+                    </Button>
+                </template>
 
-                <p class="text-center text-xs text-muted-foreground">
-                    Shortcuts: 1 Hard, 2 Okay, 3 Easy
-                </p>
+                <template v-else>
+                    <p class="text-sm text-muted-foreground">
+                        How did that go?
+                    </p>
 
-                <Button
-                    v-if="undoOffered && props.undo"
-                    variant="ghost"
-                    size="sm"
-                    class="self-center"
-                    :disabled="undoForm.processing"
-                    @click="undoLastRating"
-                >
-                    <RotateCcwIcon aria-hidden="true" />
-                    Undo last rating
-                </Button>
+                    <RatingButtons @rate="rate" />
+
+                    <p class="text-center text-xs text-muted-foreground">
+                        Shortcuts: 1 Hard, 2 Okay, 3 Easy
+                    </p>
+
+                    <Button
+                        v-if="undoOffered && props.undo"
+                        variant="ghost"
+                        size="sm"
+                        class="self-center"
+                        :disabled="undoForm.processing"
+                        @click="undoLastRating"
+                    >
+                        <RotateCcwIcon aria-hidden="true" />
+                        Undo last rating
+                    </Button>
+                </template>
             </CardFooter>
         </Card>
     </FocusLayout>

@@ -11,10 +11,9 @@ use App\Enums\FeedbackType;
  * it: how long a review of them takes, how the mix reads, and which step a
  * saved item belongs to.
  *
- * Flashcards, fix-the-mistake and say-it-again are built today.
- * Fill-in-the-blank already has a share in `ReviewSettings::TARGET_SHARES`, so
- * it will slot in without touching the composer when its candidate source
- * arrives.
+ * All four kinds are built: flashcards, fix-the-mistake, say-it-again and
+ * fill-in-the-blank. The stepper, the mix and the estimate all read the same
+ * registry, so they always agree.
  */
 final class ReviewExercises
 {
@@ -51,6 +50,14 @@ final class ReviewExercises
                 'message-circle',
                 ReviewSettings::SAY_IT_AGAIN_SECONDS,
             ),
+            new ExerciseKind(
+                'fill_in_the_blank',
+                'blank to fill in',
+                'blanks to fill in',
+                'Fill in the blank',
+                'text-cursor-input',
+                ReviewSettings::FILL_IN_THE_BLANK_SECONDS,
+            ),
         ];
     }
 
@@ -68,7 +75,9 @@ final class ReviewExercises
 
     /**
      * The exercise one saved kind is shown as. Vocabulary and phrases share
-     * the flashcard step; a mistake and a past question have their own.
+     * the flashcard step; a mistake, a past question and a grammar note have
+     * their own. The default arm keeps a future kind named rather than
+     * silently dropped.
      */
     public static function kindOf(FeedbackType $type): string
     {
@@ -76,6 +85,7 @@ final class ReviewExercises
             FeedbackType::Mistake => 'mistake',
             FeedbackType::Question => 'say_it_again',
             FeedbackType::Vocabulary, FeedbackType::Phrase => 'flashcard',
+            FeedbackType::GrammarNote => 'fill_in_the_blank',
             default => $type->value,
         };
     }

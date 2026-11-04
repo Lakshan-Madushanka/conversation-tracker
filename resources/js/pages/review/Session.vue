@@ -14,12 +14,14 @@ import {
     BookOpenIcon,
     CheckCheckIcon,
     CheckIcon,
+    MessageCircleIcon,
     RotateCcwIcon,
     SquarePenIcon,
 } from '@lucide/vue';
 import type { ReviewRating } from '@/components/RatingButtons.vue';
 import FlashcardExercise from '@/components/review/FlashcardExercise.vue';
 import FixTheMistakeExercise from '@/components/review/FixTheMistakeExercise.vue';
+import SayItAgainExercise from '@/components/review/SayItAgainExercise.vue';
 import { Button } from '@/components/ui/button';
 import {
     Card,
@@ -92,6 +94,7 @@ const ratingLabels: Record<ReviewRating, string> = {
 const sectionIcons: Record<string, Component> = {
     'book-open': BookOpenIcon,
     'square-pen': SquarePenIcon,
+    'message-circle': MessageCircleIcon,
 };
 
 /** The learner's unsent attempts and checks, kept while the page lives. */
@@ -695,6 +698,19 @@ onBeforeUnmount(() => {
         <template v-else-if="props.current">
             <FlashcardExercise
                 v-if="props.current.card.exercise === 'flashcard'"
+                :key="currentKey"
+                :card="props.current.card"
+                :rating="props.current.rating"
+                :processing="rateForm.processing"
+                :undo-offered="undoOffered"
+                :undo-processing="undoForm.processing"
+                @rate="rate"
+                @undo="undoLastRating"
+                @ready="onReady"
+            />
+
+            <SayItAgainExercise
+                v-else-if="props.current.card.exercise === 'say_it_again'"
                 :key="currentKey"
                 :card="props.current.card"
                 :rating="props.current.rating"

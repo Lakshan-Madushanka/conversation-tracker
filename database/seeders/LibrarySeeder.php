@@ -70,6 +70,20 @@ class LibrarySeeder extends Seeder
      */
     private const int TARGET_RATED_ITEMS = 900;
 
+    /**
+     * Enough questions with a natural version to practice Say it again by
+     * hand, with questions that have no natural version, blank ones,
+     * formatted and very long text, and the same question in two sessions
+     * mixed through the set.
+     */
+    private const int TARGET_SAY_IT_AGAIN = 5000;
+
+    /**
+     * How many of those questions get a rating history over many days, so
+     * the daily suggestion has due, overdue and never-reviewed questions.
+     */
+    private const int TARGET_RATED_QUESTIONS = 400;
+
     /** One showcase session: eight questions with twelve rows each. */
     private const int SHOWCASE_QUESTIONS = 8;
 
@@ -461,6 +475,62 @@ class LibrarySeeder extends Seeder
         'Ça marche for me; let’s meet at the café.',
     ];
 
+    /**
+     * Questions reused across different sessions, so the same words are two
+     * separate say-it-again items. Each keeps the natural version it had.
+     *
+     * @var list<array{question: string, natural: string}>
+     */
+    private const array SHOWCASE_QUESTION_PAIRS = [
+        [
+            'question' => 'What do you usually do at the weekend?',
+            'natural' => 'Most weekends I keep things simple: a slow breakfast, a long walk and an afternoon with a book.',
+        ],
+        [
+            'question' => 'Could you tell me where the nearest bank is?',
+            'natural' => 'Sorry to bother you — could you point me towards the nearest bank?',
+        ],
+        [
+            'question' => 'Why did you decide to learn English?',
+            'natural' => 'I wanted to feel at ease when I travel and to speak with colleagues without hesitating.',
+        ],
+        [
+            'question' => 'What are you working on at the moment?',
+            'natural' => 'I’m putting together a presentation for next week, so most of my time goes into that.',
+        ],
+        [
+            'question' => 'How was your weekend?',
+            'natural' => 'It was lovely, thank you — quiet, unhurried and exactly what I needed.',
+        ],
+    ];
+
+    /**
+     * Questions with accents, other scripts and punctuation, so the review
+     * card proves it shows them exactly as they were saved.
+     *
+     * @var list<string>
+     */
+    private const array SPECIAL_QUESTIONS = [
+        '¿Cómo llegarías a la estación desde aquí, y cuánto tarda?',
+        'Comment expliqueriez-vous « dépaysement » à un ami anglophone ?',
+        'Was bedeutet „Feierabend“ auf Englisch, und wann benutzt man es?',
+        '「よろしくお願いします」は英語でどう言えば自然ですか？',
+        'Could you explain the difference between “savoir” and “connaître”?',
+        'Naïve, café, façade — which accents do you keep in English?',
+    ];
+
+    /** A question longer than a phone screen, so the card must scroll. */
+    private const string LONG_QUESTION = 'I’ve been invited to a work dinner next Thursday, and I’m not sure how to accept politely while also explaining that I need to leave early because of a train. Could you help me put that into one clear, friendly message that sounds natural rather than rude, and could you also suggest a shorter version I could use in a quick reply if the first one feels too formal?';
+
+    /** A long, natural reply to the long question above. */
+    private const string LONG_NATURAL = 'Thanks so much for the invitation — I’d love to join you on Thursday. I do need to catch a train afterwards, so I’ll probably slip away a little early, but I’m really looking forward to seeing everyone. If it helps, I can send a quick note on the day to confirm what time I’ll be there.';
+
+    /** A question kept in the Archive: Say it again must never show it. */
+    private const string EXCLUDED_ARCHIVED_QUESTION = 'Why was this question kept in an archived session?';
+
+    /** A question still waiting in an unfinished session: never shown. */
+    private const string EXCLUDED_UNFINISHED_QUESTION = 'Why is this question still waiting in an unfinished session?';
+
     public function run(): void
     {
         if (! app()->isLocal()) {
@@ -490,8 +560,10 @@ class LibrarySeeder extends Seeder
         $this->seedPhrasesShowcase($topics);
         $this->seedGrammarShowcase($topics);
         $this->seedMistakesShowcase($topics);
+        $this->seedQuestionsShowcase($topics);
         $this->seedMarks();
         $this->seedReviewRatings();
+        $this->seedQuestionRatings();
     }
 
     /**
@@ -807,6 +879,90 @@ class LibrarySeeder extends Seeder
                 ['rating' => ReviewRating::Easy, 'at' => $now->subDays(random_int(40, 70))->setTime(19, 0)],
             ],
         };
+    }
+
+    /**
+     * Gives a few hundred finished questions a rating history spread over the
+     * past months, so Say it again has due and overdue items to work from.
+     * Creates its own historical daily reviews to hold the ratings. Runs once;
+     * a second run adds nothing.
+     */
+    private function seedQuestionRatings(): void
+    {
+        if (Rating::query()->where('kind', FeedbackType::Question->value)->exists()) {
+            return;
+        }
+
+        $identities = PracticeQuestion::query()
+            ->whereRaw("TRIM(question_text) <> ''")
+            ->whereHas(
+                'practiceSession',
+                fn ($query) => $query->study(),
+            )
+            ->whereHas(
+                'feedbackEntries',
+                fn ($query) => $query
+                    ->where('type', FeedbackType::NaturalVersion->value)
+                    ->whereRaw("TRIM(content_text) <> ''"),
+            )
+            ->inRandomOrder()
+            ->limit(self::TARGET_RATED_QUESTIONS)
+            ->pluck('id');
+
+        if ($identities->isEmpty()) {
+            return;
+        }
+
+        $reviewIds = [];
+        $now = CarbonImmutable::now();
+
+        for ($day = 150; $day >= 1; $day -= random_int(2, 6)) {
+            $moment = $now->subDays($day)->setTime(19, 0);
+
+            $reviewIds[] = (int) DB::table('reviews')->insertGetId([
+                'is_daily_review' => true,
+                'completed_on' => $moment->toDateString(),
+                'created_at' => $moment,
+                'updated_at' => $moment,
+            ]);
+        }
+
+        $sync = app(SyncReviewSchedule::class);
+
+        foreach ($identities->values() as $position => $id) {
+            $identity = (string) $id;
+
+            $scenario = match ($position % 10) {
+                0, 1 => 'hard_overdue',
+                2, 3, 4 => 'okay_overdue',
+                5, 6 => 'easy_run',
+                7 => 'easy_fresh',
+                8 => 'mixed_okay',
+                default => 'easy_repeat',
+            };
+
+            $ratings = $this->ratingHistoryFor($scenario, $now);
+
+            $picks = array_rand($reviewIds, count($ratings));
+            $picks = is_array($picks) ? $picks : [$picks];
+
+            foreach ($ratings as $index => $rating) {
+                $moment = $rating['at'];
+                $reviewId = $reviewIds[$picks[$index]];
+
+                DB::table('ratings')->insert([
+                    'review_id' => $reviewId,
+                    'kind' => FeedbackType::Question->value,
+                    'item_identity' => $identity,
+                    'rating' => $rating['rating']->value,
+                    'unique_key' => Rating::keyFor($reviewId, FeedbackType::Question, $identity),
+                    'created_at' => $moment,
+                    'updated_at' => $moment,
+                ]);
+            }
+
+            $sync->handle(FeedbackType::Question, $identity);
+        }
     }
 
     /**
@@ -1280,6 +1436,337 @@ class LibrarySeeder extends Seeder
         }
 
         return ['text' => $text, 'html' => $html];
+    }
+
+    /**
+     * Tops the say-it-again pool up to a few thousand finished questions, so
+     * the review screen has real work by hand.
+     *
+     * The pool mixes unique questions with the cases the card has to handle:
+     * questions without a natural version, blank natural versions, formatted
+     * text, very long text, accents and other scripts, and the same question
+     * in two different sessions. Two extra questions sit in an archived and
+     * an unfinished session, so the review proves it leaves them out. The
+     * target is counted from the database, so a later run continues where the
+     * last one stopped.
+     *
+     * @param  Collection<int, Topic>  $topics
+     */
+    private function seedQuestionsShowcase(Collection $topics): void
+    {
+        $remaining = self::TARGET_SAY_IT_AGAIN - $this->eligibleQuestionCount();
+
+        if ($remaining > 0) {
+            $index = 0;
+
+            DB::transaction(function () use ($topics, $remaining, &$index): void {
+                $left = $remaining;
+
+                while ($left > 0) {
+                    $session = $this->questionShowcaseSession($topics->random());
+
+                    foreach (range(1, self::SHOWCASE_QUESTIONS) as $position) {
+                        if ($this->createShowcaseQuestion($session, $position, $index++)) {
+                            $left--;
+                        }
+                    }
+                }
+            });
+        }
+
+        $this->seedExcludedQuestions($topics);
+    }
+
+    /** How many questions Say it again can draw on right now. */
+    private function eligibleQuestionCount(): int
+    {
+        return PracticeQuestion::query()
+            ->whereRaw("TRIM(question_text) <> ''")
+            ->whereHas(
+                'practiceSession',
+                fn ($query) => $query->study(),
+            )
+            ->whereHas(
+                'feedbackEntries',
+                fn ($query) => $query
+                    ->where('type', FeedbackType::NaturalVersion->value)
+                    ->whereRaw("TRIM(content_text) <> ''"),
+            )
+            ->count();
+    }
+
+    /** One finished session holding a screen of showcase questions. */
+    private function questionShowcaseSession(Topic $topic): PracticeSession
+    {
+        $finishedAt = $this->notInTheFuture(
+            now()
+                ->subDays(fake()->numberBetween(0, 240))
+                ->setTime(
+                    fake()->numberBetween(7, 21),
+                    fake()->numberBetween(0, 59),
+                ),
+        );
+        $createdAt = $this->notInTheFuture(
+            $finishedAt->subMinutes(fake()->numberBetween(20, 120)),
+        );
+        $lastChangedAt = $this->lastChangedAt($createdAt, $finishedAt);
+
+        return PracticeSession::factory()
+            ->for($topic)
+            ->create([
+                'status' => PracticeSession::STATUS_FINISHED,
+                'created_at' => $createdAt,
+                'updated_at' => $lastChangedAt,
+                'finished_at' => $finishedAt,
+                'last_changed_at' => $lastChangedAt,
+            ]);
+    }
+
+    /**
+     * One showcase question, with a natural version unless this one is meant
+     * to sit outside the pool.
+     *
+     * @return bool whether the question is eligible for Say it again
+     */
+    private function createShowcaseQuestion(
+        PracticeSession $session,
+        int $position,
+        int $index,
+    ): bool {
+        $question = $this->showcaseQuestionText($index);
+
+        $stored = PracticeQuestion::factory()->for($session)->create([
+            'position' => $position,
+            'question_text' => $question['text'],
+            'question_html' => $question['html'],
+            'answer_text' => '',
+            'answer_html' => '',
+        ]);
+
+        // No natural version at all.
+        if ($index % 7 === 0) {
+            return false;
+        }
+
+        // A natural version that holds nothing readable.
+        if ($index % 11 === 0) {
+            PracticeFeedbackEntry::factory()->for($stored)->create([
+                'type' => FeedbackType::NaturalVersion,
+                'position' => 0,
+                'content_text' => '   ',
+                'content_html' => '',
+            ]);
+
+            return false;
+        }
+
+        $natural = $this->showcaseNatural($index);
+
+        PracticeFeedbackEntry::factory()->for($stored)->create([
+            'type' => FeedbackType::NaturalVersion,
+            'position' => 0,
+            'content_text' => $natural['text'],
+            'content_html' => $natural['html'],
+        ]);
+
+        return true;
+    }
+
+    /**
+     * The tutor's question for one showcase row, with the repeated, long,
+     * special and formatted cases spread through the set.
+     *
+     * @return array{text: string, html: string}
+     */
+    private function showcaseQuestionText(int $index): array
+    {
+        if ($index % 13 === 0) {
+            $pair = self::SHOWCASE_QUESTION_PAIRS[$index % count(self::SHOWCASE_QUESTION_PAIRS)];
+
+            return [
+                'text' => $pair['question'],
+                'html' => '<p>'.e($pair['question']).'</p>',
+            ];
+        }
+
+        if ($index % 23 === 0) {
+            return [
+                'text' => self::LONG_QUESTION,
+                'html' => '<p>'.e(self::LONG_QUESTION).'</p>',
+            ];
+        }
+
+        if ($index % 9 === 0) {
+            $question = self::SPECIAL_QUESTIONS[$index % count(self::SPECIAL_QUESTIONS)];
+
+            return [
+                'text' => $question,
+                'html' => '<p>'.e($question).'</p>',
+            ];
+        }
+
+        if ($index % 37 === 0) {
+            $opening = 'Before we meet, I’d like to know a few things.';
+            $points = [
+                'What time suits you best?',
+                'Where should we meet?',
+                'Is there anything I should bring?',
+            ];
+
+            return [
+                'text' => $opening.' '.implode(' ', $points),
+                'html' => '<p>'.e($opening).'</p><ul>'
+                    .implode('', array_map(fn (string $point): string => '<li>'.e($point).'</li>', $points))
+                    .'</ul>',
+            ];
+        }
+
+        if ($index % 5 === 0) {
+            $question = 'Could you recommend a quiet café near the station?';
+
+            return [
+                'text' => $question,
+                'html' => '<p>Could you <strong>recommend</strong> a quiet café <em>near the station</em>?</p>',
+            ];
+        }
+
+        $question = ucfirst(rtrim(fake()->unique()->sentence(8, false), '.')).'?';
+
+        return [
+            'text' => $question,
+            'html' => '<p>'.e($question).'</p>',
+        ];
+    }
+
+    /**
+     * The natural version for one showcase question, matching the long,
+     * special and formatted cases above.
+     *
+     * @return array{text: string, html: string}
+     */
+    private function showcaseNatural(int $index): array
+    {
+        if ($index % 13 === 0) {
+            $pair = self::SHOWCASE_QUESTION_PAIRS[$index % count(self::SHOWCASE_QUESTION_PAIRS)];
+
+            return [
+                'text' => $pair['natural'],
+                'html' => '<p>'.e($pair['natural']).'</p>',
+            ];
+        }
+
+        if ($index % 23 === 0) {
+            return [
+                'text' => self::LONG_NATURAL,
+                'html' => '<p>'.e(self::LONG_NATURAL).'</p>',
+            ];
+        }
+
+        if ($index % 9 === 0) {
+            $natural = 'A natural way to say it, with the non-English words kept exactly as they are: café, naïve, façade, smörgåsbord, 朝ごはん and 안녕하세요.';
+
+            return [
+                'text' => $natural,
+                'html' => '<p>'.e($natural).'</p>',
+            ];
+        }
+
+        if ($index % 31 === 0) {
+            return [
+                'text' => 'A more natural reply: start with the main point, add one detail, then invite the other person to respond.',
+                'html' => '<p>A more natural reply:</p><ul>'
+                    .'<li>start with the main point,</li>'
+                    .'<li>add one detail,</li>'
+                    .'<li>then invite the other person to respond.</li></ul>',
+            ];
+        }
+
+        if ($index % 5 === 0) {
+            $natural = 'I’d say it more simply: could you suggest a quiet café close to the station?';
+
+            return [
+                'text' => $natural,
+                'html' => '<p>I’d say it more simply: could you suggest a <strong>quiet</strong> café <em>close to the station</em>?</p>',
+            ];
+        }
+
+        $natural = ucfirst(rtrim(fake()->sentence(12, false), '.')).'.';
+
+        return [
+            'text' => $natural,
+            'html' => '<p>'.e($natural).'</p>',
+        ];
+    }
+
+    /**
+     * One question kept in an archived session and one still waiting in an
+     * unfinished one, both with a natural version, so the review proves it
+     * only ever offers finished, visible sessions. Added once.
+     *
+     * @param  Collection<int, Topic>  $topics
+     */
+    private function seedExcludedQuestions(Collection $topics): void
+    {
+        if (! PracticeQuestion::query()
+            ->where('question_text', self::EXCLUDED_ARCHIVED_QUESTION)
+            ->exists()) {
+            $finishedAt = $this->notInTheFuture(
+                now()->subDays(45)->setTime(18, 0),
+            );
+
+            $archived = PracticeSession::factory()
+                ->for($topics->random())
+                ->create([
+                    'status' => PracticeSession::STATUS_FINISHED,
+                    'created_at' => $finishedAt->subMinutes(60),
+                    'updated_at' => $finishedAt,
+                    'finished_at' => $finishedAt,
+                    'last_changed_at' => $finishedAt,
+                    'archived_at' => $finishedAt->addDays(3),
+                ]);
+
+            $this->createExcludedQuestion($archived, self::EXCLUDED_ARCHIVED_QUESTION);
+        }
+
+        if (! PracticeQuestion::query()
+            ->where('question_text', self::EXCLUDED_UNFINISHED_QUESTION)
+            ->exists()) {
+            $createdAt = $this->notInTheFuture(
+                now()->subDays(20)->setTime(20, 0),
+            );
+
+            $unfinished = PracticeSession::factory()
+                ->for($topics->random())
+                ->create([
+                    'status' => PracticeSession::STATUS_UNFINISHED,
+                    'created_at' => $createdAt,
+                    'updated_at' => $createdAt,
+                    'finished_at' => null,
+                    'last_changed_at' => $createdAt,
+                ]);
+
+            $this->createExcludedQuestion($unfinished, self::EXCLUDED_UNFINISHED_QUESTION);
+        }
+    }
+
+    private function createExcludedQuestion(PracticeSession $session, string $question): void
+    {
+        $stored = PracticeQuestion::factory()->for($session)->create([
+            'position' => 1,
+            'question_text' => $question,
+            'question_html' => '<p>'.e($question).'</p>',
+            'answer_text' => '',
+            'answer_html' => '',
+        ]);
+
+        $natural = 'This natural version is real, but the session itself is out of reach.';
+
+        PracticeFeedbackEntry::factory()->for($stored)->create([
+            'type' => FeedbackType::NaturalVersion,
+            'position' => 0,
+            'content_text' => $natural,
+            'content_html' => '<p>'.e($natural).'</p>',
+        ]);
     }
 
     private function createSession(Topic $topic): void

@@ -110,6 +110,7 @@ export interface CollectionItem {
     notes_version?: number;
     /** Where the search found it, when a search is narrowing the list. */
     match?: CollectionMatch | null;
+    /** The open panel receives every appearance; a list carries only the newest. */
     appearances: CollectionAppearance[];
 }
 
@@ -191,6 +192,7 @@ export interface CollectionMistakeItem {
     notes_version?: number;
     /** Where the search found it, when a search is narrowing the list. */
     match?: CollectionMatch | null;
+    /** The open panel receives every appearance; a list carries only the newest. */
     appearances: CollectionMistakeAppearance[];
 }
 

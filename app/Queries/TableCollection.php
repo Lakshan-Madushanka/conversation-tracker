@@ -24,6 +24,7 @@ use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Database\Query\JoinClause;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 /**
  * One collection, gathered live from the study sessions: the vocabulary and
@@ -702,11 +703,19 @@ final class TableCollection
      * the questions those items appear in are read, so the work stays bounded
      * by the page rather than by the whole collection.
      *
+     * The list needs only the newest appearance of each item, while an opened
+     * item needs every place it was seen. `$withAllAppearances` says which is
+     * being built, so a page of very common items never carries their whole
+     * history.
+     *
      * @param  list<string>  $keys
      * @return list<GroupItem|NoteItem|MistakeItem>
      */
-    private function buildForKeys(FeedbackType $type, array $keys): array
-    {
+    private function buildForKeys(
+        FeedbackType $type,
+        array $keys,
+        bool $withAllAppearances = false,
+    ): array {
         $keys = array_values(array_filter(
             $keys,
             fn (string $key): bool => $key !== '',
@@ -733,33 +742,26 @@ final class TableCollection
                 return [];
             }
 
-            $matching->whereIn('id', $ids);
+            $matching->whereIn('practice_feedback_entries.id', $ids);
         } else {
-            $matching->whereIn('collection_key', $keys);
+            $matching->whereIn('practice_feedback_entries.collection_key', $keys);
         }
 
-        /** @var list<int> $questionIds */
-        $questionIds = (clone $matching)
-            ->distinct()
-            ->pluck('practice_question_id')
-            ->map(fn (mixed $id): int => (int) $id)
-            ->all();
-
-        if ($questionIds === []) {
-            return [];
-        }
-
-        $entries = $this->entryQuery($type)
-            ->whereIn('practice_question_id', $questionIds)
+        $entries = $matching
+            ->join('practice_questions as sort_question', 'sort_question.id', '=', 'practice_feedback_entries.practice_question_id')
+            ->join('practice_sessions as sort_session', 'sort_session.id', '=', 'sort_question.practice_session_id')
+            ->select('practice_feedback_entries.*')
+            ->selectSub($this->entryPositionQuery($type), 'entry_position')
             ->with(['practiceQuestion.practiceSession.topic'])
-            ->get()
-            ->sort($this->compareEntries(...))
-            ->values();
+            ->orderByDesc('sort_session.created_at')
+            ->orderByDesc('practice_feedback_entries.created_at')
+            ->orderByDesc('practice_feedback_entries.id')
+            ->get();
 
         $items = match ($type) {
-            FeedbackType::GrammarNote => $this->notesFromEntries($entries),
-            FeedbackType::Mistake => $this->mistakesFromEntries($entries),
-            default => $this->groupsFromEntries($type, $entries),
+            FeedbackType::GrammarNote => $this->notesFromEntries($entries, $keys),
+            FeedbackType::Mistake => $this->mistakesFromEntries($entries, $keys, $withAllAppearances),
+            default => $this->groupsFromEntries($type, $entries, $keys, $withAllAppearances),
         };
 
         $ordered = [];
@@ -783,7 +785,7 @@ final class TableCollection
      */
     public function find(FeedbackType $type, string $key): ?array
     {
-        return $this->buildForKeys($type, [$key])[0] ?? null;
+        return $this->buildForKeys($type, [$key], true)[0] ?? null;
     }
 
     /**
@@ -804,14 +806,23 @@ final class TableCollection
      */
     public function count(FeedbackType $type): int
     {
+        $query = DB::table('practice_feedback_entries as e')
+            ->join('practice_questions as q', 'q.id', '=', 'e.practice_question_id')
+            ->join('practice_sessions as s', 's.id', '=', 'q.practice_session_id')
+            ->where('e.type', $type->value)
+            ->where('s.status', PracticeSession::STATUS_FINISHED)
+            ->whereNull('s.archived_at');
+
+        $this->applyNonBlank($query, $type);
+
         if ($type === FeedbackType::GrammarNote) {
-            return $this->entryQuery($type)->count();
+            return (int) $query->count();
         }
 
-        return (int) $this->entryQuery($type)
-            ->whereNotNull('collection_key')
+        return (int) $query
+            ->whereNotNull('e.collection_key')
             ->distinct()
-            ->count('collection_key');
+            ->count('e.collection_key');
     }
 
     /**
@@ -825,15 +836,87 @@ final class TableCollection
             return 0;
         }
 
+        return match ($type) {
+            FeedbackType::Vocabulary => $this->countGroupsNeedingAttention(
+                $type,
+                "MAX(CASE WHEN TRIM(e.correction_text) <> '' THEN 1 ELSE 0 END) = 0",
+            ),
+            FeedbackType::Phrase => $this->countGroupsNeedingAttention(
+                $type,
+                'MAX(CASE WHEN e.split_broke = 1 THEN 1 ELSE 0 END) = 1',
+            ),
+            FeedbackType::Mistake => $this->countMistakesNeedingAttention(),
+            default => 0,
+        };
+    }
+
+    /**
+     * Count the words or phrases that need attention, working out the same
+     * group-level rule the list uses but in one pass: a word with no meaning
+     * anywhere, or a phrase with a line that could not be split. Doing this
+     * after grouping keeps the count off the rows themselves.
+     *
+     * @param  literal-string  $having
+     */
+    private function countGroupsNeedingAttention(FeedbackType $type, string $having): int
+    {
+        $query = DB::table('practice_feedback_entries as e')
+            ->join('practice_questions as q', 'q.id', '=', 'e.practice_question_id')
+            ->join('practice_sessions as s', 's.id', '=', 'q.practice_session_id')
+            ->where('e.type', $type->value)
+            ->where('s.status', PracticeSession::STATUS_FINISHED)
+            ->whereNull('s.archived_at')
+            ->groupBy('e.collection_key')
+            ->havingRaw($having);
+
+        $this->applyNonBlank($query, $type);
+
+        return (int) DB::query()->fromSub($query, 'g')->count();
+    }
+
+    /**
+     * Count the mistakes whose newest appearance still needs attention. Each
+     * group is asked once, rather than every row asking about its whole
+     * history.
+     */
+    private function countMistakesNeedingAttention(): int
+    {
+        $query = DB::table('practice_feedback_entries as e')
+            ->join('practice_questions as q', 'q.id', '=', 'e.practice_question_id')
+            ->join('practice_sessions as s', 's.id', '=', 'q.practice_session_id')
+            ->where('e.type', FeedbackType::Mistake->value)
+            ->where('s.status', PracticeSession::STATUS_FINISHED)
+            ->whereNull('s.archived_at')
+            ->groupBy('e.collection_key')
+            ->select('e.collection_key')
+            ->selectSub($this->newestMistakeAttentionQuery(), 'newest_attention');
+
+        $this->applyNonBlank($query, FeedbackType::Mistake);
+
         return (int) DB::query()
-            ->fromSub(
-                $this->groupedQuery(
-                    $type,
-                    CollectionFilters::for($type)->withOnlyNeedsAttention(),
-                ),
-                'g',
-            )
+            ->fromSub($query, 'g')
+            ->whereNotNull('newest_attention')
             ->count();
+    }
+
+    /**
+     * The attention reason of a mistake's newest appearance, used by the
+     * attention count. The list and the item shape still read the same rows.
+     */
+    private function newestMistakeAttentionQuery(): QueryBuilder
+    {
+        return DB::table('practice_feedback_entries as attention_entry')
+            ->select('attention_entry.attention_reason')
+            ->join('practice_questions as attention_question', 'attention_question.id', '=', 'attention_entry.practice_question_id')
+            ->join('practice_sessions as attention_session', 'attention_session.id', '=', 'attention_question.practice_session_id')
+            ->whereColumn('attention_entry.collection_key', 'e.collection_key')
+            ->where('attention_entry.type', FeedbackType::Mistake->value)
+            ->where('attention_session.status', PracticeSession::STATUS_FINISHED)
+            ->whereNull('attention_session.archived_at')
+            ->orderByDesc('attention_session.created_at')
+            ->orderByDesc('attention_entry.created_at')
+            ->orderByDesc('attention_entry.id')
+            ->limit(1);
     }
 
     /**
@@ -893,11 +976,16 @@ final class TableCollection
      * subject. The first row of a group is its newest appearance.
      *
      * @param  Collection<int, PracticeFeedbackEntry>  $entries
+     * @param  list<string>  $keys
      * @return array<string, GroupItem>
      */
-    private function groupsFromEntries(FeedbackType $type, Collection $entries): array
-    {
-        $entryPositions = $this->entryPositions($entries);
+    private function groupsFromEntries(
+        FeedbackType $type,
+        Collection $entries,
+        array $keys,
+        bool $withAllAppearances = false,
+    ): array {
+        $wanted = array_fill_keys($keys, true);
 
         /**
          * One group while it is still being built, before "needs attention" is
@@ -923,13 +1011,13 @@ final class TableCollection
             $subject = trim((string) $entry->content_text);
             $key = SearchText::normalize($subject);
 
-            if ($key === '') {
+            if ($key === '' || ! isset($wanted[$key])) {
                 continue;
             }
 
             $meaning = trim((string) $entry->correction_text);
             $example = trim(EntrySearch::exampleText($entry));
-            $exampleHtml = RichText::inlineExampleHtml($entry->example_html);
+            $exampleHtml = null;
 
             $groups[$key] ??= [
                 'key' => $key,
@@ -962,22 +1050,24 @@ final class TableCollection
 
             if ($group['example'] === '' && $example !== '') {
                 $group['example'] = $example;
-                $group['example_html'] = $exampleHtml;
+                $group['example_html'] = $exampleHtml = RichText::inlineExampleHtml($entry->example_html);
             }
 
-            $group['appearances'][] = [
-                'session_id' => (int) $session->id,
-                'session_date' => $session->created_at,
-                'topic' => (string) $session->topic->name,
-                'question_position' => (int) $question->position,
-                'entry_id' => is_string($entry->client_id) && $entry->client_id !== ''
-                    ? $entry->client_id
-                    : null,
-                'entry_position' => $entryPositions[$entry->id] ?? 0,
-                'meaning' => $meaning,
-                'example' => $example,
-                'example_html' => $exampleHtml,
-            ];
+            if ($withAllAppearances || $group['appearances'] === []) {
+                $group['appearances'][] = [
+                    'session_id' => (int) $session->id,
+                    'session_date' => $session->created_at,
+                    'topic' => (string) $session->topic->name,
+                    'question_position' => (int) $question->position,
+                    'entry_id' => is_string($entry->client_id) && $entry->client_id !== ''
+                        ? $entry->client_id
+                        : null,
+                    'entry_position' => (int) $entry->getAttribute('entry_position'),
+                    'meaning' => $meaning,
+                    'example' => $example,
+                    'example_html' => $exampleHtml ?? RichText::inlineExampleHtml($entry->example_html),
+                ];
+            }
 
             $groups[$key] = $group;
         }
@@ -1034,19 +1124,25 @@ final class TableCollection
      * editor gave it.
      *
      * @param  Collection<int, PracticeFeedbackEntry>  $entries
+     * @param  list<string>  $keys
      * @return array<string, NoteItem>
      */
-    private function notesFromEntries(Collection $entries): array
+    private function notesFromEntries(Collection $entries, array $keys): array
     {
-        $entryPositions = $this->entryPositions($entries);
+        $wanted = array_fill_keys($keys, true);
         $items = [];
 
         foreach ($entries as $entry) {
             $question = $entry->practiceQuestion;
             $session = $question->practiceSession;
+            $key = $this->noteKey($entry);
 
-            $items[$this->noteKey($entry)] = [
-                'key' => $this->noteKey($entry),
+            if (! isset($wanted[$key])) {
+                continue;
+            }
+
+            $items[$key] = [
+                'key' => $key,
                 'text' => (string) $entry->content_text,
                 'preview' => NotePreview::of((string) $entry->content_text),
                 'html' => RichText::clean((string) $entry->content_html),
@@ -1058,7 +1154,7 @@ final class TableCollection
                 'entry_id' => is_string($entry->client_id) && $entry->client_id !== ''
                     ? $entry->client_id
                     : null,
-                'entry_position' => $entryPositions[$entry->id] ?? 0,
+                'entry_position' => (int) $entry->getAttribute('entry_position'),
             ];
         }
 
@@ -1087,11 +1183,15 @@ final class TableCollection
      * "needs attention" by the shared rule, never hidden.
      *
      * @param  Collection<int, PracticeFeedbackEntry>  $entries
+     * @param  list<string>  $keys
      * @return array<string, MistakeItem>
      */
-    private function mistakesFromEntries(Collection $entries): array
-    {
-        $entryPositions = $this->entryPositions($entries);
+    private function mistakesFromEntries(
+        Collection $entries,
+        array $keys,
+        bool $withAllAppearances = false,
+    ): array {
+        $wanted = array_fill_keys($keys, true);
 
         /**
          * One mistake while it is still being built, before it is boiled down
@@ -1105,6 +1205,7 @@ final class TableCollection
          *     reason: string,
          *     latest_at: CarbonImmutable,
          *     seen_questions: array<int, true>,
+         *     sighting_reasons: array<string, true>,
          *     attention: string|null,
          *     appearances: list<MistakeAppearance>
          * }> $groups
@@ -1123,9 +1224,12 @@ final class TableCollection
             }
 
             $key = MistakeIdentity::pairKey($said, $correction);
-            $correctionHtml = RichText::cleanInlineWithText(
-                (string) $entry->correction_html,
-            )['html'];
+
+            if (! isset($wanted[$key])) {
+                continue;
+            }
+
+            $correctionHtml = null;
 
             $groups[$key] ??= [
                 'key' => $key,
@@ -1137,6 +1241,7 @@ final class TableCollection
                 'reason' => '',
                 'latest_at' => $session->created_at ?? CarbonImmutable::now(),
                 'seen_questions' => [],
+                'sighting_reasons' => [],
                 'attention' => RowAttention::reason(
                     FeedbackType::Mistake,
                     $said,
@@ -1152,34 +1257,56 @@ final class TableCollection
             // another session counts again.
             $group['seen_questions'][$question->id] = true;
 
+            // The panel keeps one appearance per question and reason. A row
+            // that repeats a reason already kept for the same box adds nothing
+            // to the places seen or the reasons shown, so it is dropped.
+            $reason = trim((string) $entry->reason);
+            $sightingKey = $question->id.':'.Str::lower($reason);
+            $isNewReasonInQuestion = ! isset($group['sighting_reasons'][$sightingKey]);
+            $group['sighting_reasons'][$sightingKey] = true;
+
             if ($group['correction'] === '' && $correction !== '') {
                 $group['correction'] = $correction;
             }
 
-            if ($group['correction_html'] === '' && $correctionHtml !== '') {
-                $group['correction_html'] = $correctionHtml;
+            if ($group['correction_html'] === '' && $correction !== '') {
+                $correctionHtml = RichText::cleanInlineWithText(
+                    (string) $entry->correction_html,
+                )['html'];
+
+                if ($correctionHtml !== '') {
+                    $group['correction_html'] = $correctionHtml;
+                }
             }
 
             // The reason comes from the most recent appearance that has one;
             // every distinct reason all the same stays with its appearance.
             if ($group['reason'] === '') {
-                $group['reason'] = trim((string) $entry->reason);
+                $group['reason'] = $reason;
             }
 
-            $group['appearances'][] = [
-                'session_id' => (int) $session->id,
-                'session_date' => $session->created_at,
-                'topic' => (string) $session->topic->name,
-                'question_position' => (int) $question->position,
-                'entry_id' => is_string($entry->client_id) && $entry->client_id !== ''
-                    ? $entry->client_id
-                    : null,
-                'entry_position' => $entryPositions[$entry->id] ?? 0,
-                'said' => $said,
-                'correction' => $correction,
-                'correction_html' => $correctionHtml,
-                'reason' => trim((string) $entry->reason),
-            ];
+            // A list keeps the newest appearance; the panel keeps each new
+            // reason of a question, so every place and every reason stays.
+            if ($withAllAppearances ? $isNewReasonInQuestion : $group['appearances'] === []) {
+                $correctionHtml ??= RichText::cleanInlineWithText(
+                    (string) $entry->correction_html,
+                )['html'];
+
+                $group['appearances'][] = [
+                    'session_id' => (int) $session->id,
+                    'session_date' => $session->created_at,
+                    'topic' => (string) $session->topic->name,
+                    'question_position' => (int) $question->position,
+                    'entry_id' => is_string($entry->client_id) && $entry->client_id !== ''
+                        ? $entry->client_id
+                        : null,
+                    'entry_position' => (int) $entry->getAttribute('entry_position'),
+                    'said' => $said,
+                    'correction' => $correction,
+                    'correction_html' => $correctionHtml,
+                    'reason' => $reason,
+                ];
+            }
 
             $groups[$key] = $group;
         }
@@ -1236,57 +1363,41 @@ final class TableCollection
     }
 
     /**
-     * The place of every row inside its own box, zero-based, matching the
-     * order the reading page shows. A target can then name a row by its id or,
-     * when an older row has no id, by this place.
+     * The place of a row inside its own box, zero-based, matching the order
+     * the reading page shows. A target can then name a row by its id or, when
+     * an older row has no id, by this place.
      *
-     * @param  Collection<int, PracticeFeedbackEntry>  $entries
-     * @return array<int, int>
+     * The place is counted in the database so the collection does not have to
+     * read every other row of the same question just to number this one.
      */
-    private function entryPositions(Collection $entries): array
+    private function entryPositionQuery(FeedbackType $type): QueryBuilder
     {
-        /** @var array<int, int> $positions */
-        $positions = [];
+        $query = DB::table('practice_feedback_entries as earlier')
+            ->selectRaw('COUNT(*)')
+            ->whereColumn('earlier.practice_question_id', 'practice_feedback_entries.practice_question_id')
+            ->whereColumn('earlier.type', 'practice_feedback_entries.type')
+            ->where(function (QueryBuilder $before): void {
+                $before
+                    ->whereColumn('earlier.position', '<', 'practice_feedback_entries.position')
+                    ->orWhere(function (QueryBuilder $same): void {
+                        $same
+                            ->whereColumn('earlier.position', '=', 'practice_feedback_entries.position')
+                            ->whereColumn('earlier.id', '<', 'practice_feedback_entries.id');
+                    });
+            });
 
-        $byQuestion = $entries->groupBy(
-            fn (PracticeFeedbackEntry $entry): int => $entry->practice_question_id,
-        );
-
-        foreach ($byQuestion as $rows) {
-            $ordered = $rows
-                ->sortBy([
-                    ['position', 'asc'],
-                    ['id', 'asc'],
-                ])
-                ->values();
-
-            foreach ($ordered as $index => $row) {
-                $positions[$row->id] = $index;
-            }
+        // Count the same rows the collection gathered: a blank row is not a
+        // sighting and never took a place in the list.
+        if ($type === FeedbackType::Mistake) {
+            $query->where(function (QueryBuilder $instead): void {
+                $instead
+                    ->whereRaw("TRIM(earlier.content_text) <> ''")
+                    ->orWhereRaw("TRIM(earlier.correction_text) <> ''");
+            });
+        } else {
+            $query->whereRaw("TRIM(earlier.content_text) <> ''");
         }
 
-        return $positions;
-    }
-
-    /** Rows newest first, so the first row of a group is its latest appearance. */
-    private function compareEntries(
-        PracticeFeedbackEntry $left,
-        PracticeFeedbackEntry $right,
-    ): int {
-        $bySession = $this->sessionTimestamp($right) <=> $this->sessionTimestamp($left);
-
-        if ($bySession !== 0) {
-            return $bySession;
-        }
-
-        $byCreated = ($right->created_at?->getTimestamp() ?? 0)
-            <=> ($left->created_at?->getTimestamp() ?? 0);
-
-        return $byCreated !== 0 ? $byCreated : $right->id <=> $left->id;
-    }
-
-    private function sessionTimestamp(PracticeFeedbackEntry $entry): int
-    {
-        return $entry->practiceQuestion->practiceSession->created_at?->getTimestamp() ?? 0;
+        return $query;
     }
 }

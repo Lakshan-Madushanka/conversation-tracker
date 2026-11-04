@@ -202,7 +202,14 @@ describe('vocabulary', function (): void {
             ->assertOk()
             ->assertInertia(fn (Assert $page): Assert => $page
                 ->where('items.0.seen_count', 2)
-                ->count('items.0.appearances', 3));
+                // The list carries only the newest appearance; the panel
+                // carries every place the word was seen.
+                ->count('items.0.appearances', 1));
+
+        $this->get(route('collections.index', ['item' => 'soup']))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page): Assert => $page
+                ->count('open_item.appearances', 3));
     });
 
     it('leaves out blank words, unfinished sessions, archived sessions and other boxes', function (): void {
@@ -539,7 +546,19 @@ describe('my mistakes', function (): void {
             ->assertInertia(fn (Assert $page): Assert => $page
                 ->where('total', 1)
                 ->where('items.0.seen_count', 2)
-                ->count('items.0.appearances', 3));
+                ->count('items.0.appearances', 1));
+
+        $key = $this->getJson(route('collections.index', ['tab' => 'mistakes']))
+            ->assertOk()
+            ->json('items.0.key');
+
+        $this->get(route('collections.index', ['tab' => 'mistakes', 'item' => $key]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page): Assert => $page
+                // The two rows saved in the first box are one sighting with
+                // the same reason, so the panel shows the two places it was
+                // seen, not the repeated row.
+                ->count('open_item.appearances', 2));
     });
 
     it('stays one group when the same mistake carried different reasons', function (): void {

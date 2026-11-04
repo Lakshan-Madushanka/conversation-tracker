@@ -25,6 +25,9 @@ final class ReviewSettings
     /** How long one fix-the-mistake item takes, for the estimate. */
     public const int MISTAKE_SECONDS = 60;
 
+    /** How long one say-it-again question takes, for the estimate. */
+    public const int SAY_IT_AGAIN_SECONDS = 75;
+
     /**
      * The target share of every planned exercise kind. Only built kinds with
      * candidates take part; the rest are dropped and the remaining shares are

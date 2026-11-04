@@ -19,22 +19,22 @@ describe('the mix description', function (): void {
     });
 
     it('grows automatically when a new exercise kind is added', function (): void {
-        // A test double for the kinds Steps 4 and 5 will add.
+        // A test double for the kind Step 5 will add.
         $kinds = [
             ...ReviewExercises::all(),
-            new ExerciseKind('say_it_again', 'question to say again', 'questions to say again', 'Say it again', 'mic', 40),
+            new ExerciseKind('fill_in_the_blank', 'blank to fill in', 'blanks to fill in', 'Fill in the blank', 'pencil', 40),
         ];
 
         $description = ReviewExercises::describe(
-            ['flashcard' => 3, 'mistake' => 3, 'say_it_again' => 2],
+            ['flashcard' => 3, 'mistake' => 3, 'fill_in_the_blank' => 2],
             $kinds,
         );
 
-        expect($description)->toBe('3 flashcards, 3 mistakes to fix, 2 questions to say again');
+        expect($description)->toBe('3 flashcards, 3 mistakes to fix, 2 blanks to fill in');
 
-        $description = ReviewExercises::describe(['flashcard' => 1, 'say_it_again' => 1], $kinds);
+        $description = ReviewExercises::describe(['flashcard' => 1, 'fill_in_the_blank' => 1], $kinds);
 
-        expect($description)->toBe('1 flashcard, 1 question to say again');
+        expect($description)->toBe('1 flashcard, 1 blank to fill in');
     });
 
     it('describes a count it does not know by its key rather than dropping it', function (): void {
@@ -43,16 +43,25 @@ describe('the mix description', function (): void {
 });
 
 describe('the registry', function (): void {
-    it('maps vocabulary and phrases to flashcards and mistakes to their own step', function (): void {
+    it('maps vocabulary and phrases to flashcards, mistakes and questions to their own steps', function (): void {
         expect(ReviewExercises::kindOf(FeedbackType::Vocabulary))->toBe('flashcard')
             ->and(ReviewExercises::kindOf(FeedbackType::Phrase))->toBe('flashcard')
-            ->and(ReviewExercises::kindOf(FeedbackType::Mistake))->toBe('mistake');
+            ->and(ReviewExercises::kindOf(FeedbackType::Mistake))->toBe('mistake')
+            ->and(ReviewExercises::kindOf(FeedbackType::Question))->toBe('say_it_again');
     });
 
     it('finds each built kind by its key and nothing for an unbuilt one', function (): void {
         expect(ReviewExercises::find('flashcard')?->label)->toBe('Flashcards')
             ->and(ReviewExercises::find('mistake')?->label)->toBe('Fix the mistake')
-            ->and(ReviewExercises::find('say_it_again'))->toBeNull();
+            ->and(ReviewExercises::find('say_it_again')?->label)->toBe('Say it again')
+            ->and(ReviewExercises::find('fill_in_the_blank'))->toBeNull();
+    });
+
+    it('keeps the built kinds in the friendly stepper order', function (): void {
+        expect(array_map(
+            fn (ExerciseKind $kind): string => $kind->key,
+            ReviewExercises::all(),
+        ))->toBe(['flashcard', 'mistake', 'say_it_again']);
     });
 });
 
@@ -73,13 +82,15 @@ describe('the estimate', function (): void {
     });
 
     it('counts each kind at its own pace', function (): void {
-        $kinds = [
-            ...ReviewExercises::all(),
-            new ExerciseKind('say_it_again', 'question to say again', 'questions to say again', 'Say it again', 'mic', 90),
-        ];
+        // 2 minutes for two flashcards (70s) and 3 minutes for two questions
+        // (150s): 220 seconds in total, rounded up.
+        expect(ReviewExercises::minutes(['flashcard' => 2, 'say_it_again' => 2]))->toBe(4);
+    });
 
-        // 2 minutes for two flashcards (70s) and 3 minutes for two say-it-agains (180s):
-        // 250 seconds in total, rounded up.
-        expect(ReviewExercises::minutes(['flashcard' => 2, 'say_it_again' => 2], $kinds))->toBe(5);
+    it('gives a single question its own honest estimate', function (): void {
+        // 75 seconds rounds up to two minutes; a question takes longer to
+        // answer out loud than a flashcard does.
+        expect(ReviewExercises::minutes(['say_it_again' => 1]))->toBe(2)
+            ->and(ReviewExercises::minutes(['say_it_again' => 4]))->toBe(5);
     });
 });

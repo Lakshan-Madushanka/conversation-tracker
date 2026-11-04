@@ -53,7 +53,20 @@ export interface MistakeCard {
     session_url: string | null;
 }
 
-export type ReviewCard = FlashcardCard | MistakeCard;
+/** One say-it-again card: the tutor's question and its natural version. */
+export interface SayItAgainCard {
+    kind: 'question';
+    exercise: 'say_it_again';
+    item_identity: string;
+    label: string;
+    question_html: string;
+    question_text: string;
+    natural_html: string;
+    natural_text: string;
+    session_url: string | null;
+}
+
+export type ReviewCard = FlashcardCard | MistakeCard | SayItAgainCard;
 
 export interface ReviewCounts {
     hard: number;

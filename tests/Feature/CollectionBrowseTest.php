@@ -247,7 +247,7 @@ describe('filtering a collection', function (): void {
                 ->where('items.1.needs_attention', true));
     });
 
-    it('narrows by topic while keeping every appearance of a matching item', function (): void {
+    it('narrows by topic while the panel keeps every appearance of a matching item', function (): void {
         $cooking = Topic::factory()->create(['name' => 'Cooking']);
         $travel = Topic::factory()->create(['name' => 'Travel']);
 
@@ -268,8 +268,17 @@ describe('filtering a collection', function (): void {
                 ->where('items.0.key', 'soup')
                 ->where('items.0.seen_count', 2)
                 ->where('items.0.meaning', 'a warm dish')
-                ->count('items.0.appearances', 2)
+                // The list needs only the newest place it was seen.
+                ->count('items.0.appearances', 1)
                 ->where('filters.topics', [$cooking->id]));
+
+        $this->get(route('collections.index', [
+            'topics' => (string) $cooking->id,
+            'item' => 'soup',
+        ]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page): Assert => $page
+                ->count('open_item.appearances', 2));
 
         $this->get(route('collections.index', [
             'topics' => $cooking->id.','.$travel->id,

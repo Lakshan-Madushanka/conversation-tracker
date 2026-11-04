@@ -555,7 +555,7 @@ function itemHasMoved(): void {
             </template>
         </PageHeader>
 
-        <div class="mx-auto max-w-3xl">
+        <div class="mx-auto max-w-5xl">
             <Alert v-if="isArchived" class="mb-6">
                 <ArchiveIcon aria-hidden="true" />
                 <AlertTitle>This session is archived</AlertTitle>

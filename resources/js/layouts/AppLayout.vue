@@ -46,10 +46,12 @@ const { collapsed: sidebarCollapsed } = useSidebar();
                 <main
                     id="main-content"
                     tabindex="-1"
-                    class="mx-auto w-full max-w-5xl flex-1 px-4 py-6 md:px-8 md:pb-10"
+                    class="mx-auto w-full flex-1 py-6"
                     :class="{
                         'pb-48 md:pb-44': bottomNavHidden,
                         'pb-24 md:pb-10': !bottomNavHidden,
+                        'px-4 max-w-6xl': sidebarCollapsed,
+                        'px-4 md:px-8 max-w-5xl': !sidebarCollapsed,
                     }"
                 >
                     <slot />

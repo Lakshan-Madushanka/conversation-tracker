@@ -62,6 +62,7 @@ const statusWord = computed(() =>
                     aria-hidden="true"
                     class="size-5 cursor-pointer"
                 />
+                <span class="sr-only">Has notes</span>
             </PopoverTrigger>
             <PopoverContent>
                 <div v-html="item.notes_html"></div>

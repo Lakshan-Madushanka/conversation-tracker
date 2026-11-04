@@ -519,10 +519,10 @@ export function useCollection(initial: CollectionPage) {
         openItem.value =
             openItemKey === null
                 ? null
-                : (saved.items.find((item) => item.key === openItemKey) ??
-                  (initial.open_item?.key === openItemKey
-                      ? initial.open_item
-                      : null));
+                : initial.open_item?.key === openItemKey
+                  ? initial.open_item
+                  : (saved.items.find((item) => item.key === openItemKey) ??
+                    null);
     }
 
     /**

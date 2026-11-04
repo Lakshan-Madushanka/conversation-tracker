@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 import { router } from '@inertiajs/vue3';
 import { useCollection } from '@/composables/useCollection';
+import { isCollectionItem } from '@/lib/collections';
 import type {
     CollectionItem,
     CollectionNoteItem,
@@ -221,5 +222,56 @@ describe('the collection on screen', () => {
         ]);
         expect(collection.total.value).toBe(2);
         expect(collection.hasMore.value).toBe(false);
+    });
+
+    it('brings the full opened item back after a trip to a session', () => {
+        const listed = item();
+        const opened = item({
+            appearances: [
+                {
+                    session_id: 1,
+                    session_date: '2026-10-19T10:14:55.000000Z',
+                    topic: 'Ordering at a restaurant',
+                    question_position: 2,
+                    entry_id: 'soup-newest',
+                    entry_position: 0,
+                    meaning: 'a warm dish',
+                    example: 'I want a soup.',
+                    example_html: '',
+                },
+                {
+                    session_id: 2,
+                    session_date: '2026-10-18T10:14:55.000000Z',
+                    topic: 'Cooking',
+                    question_position: 1,
+                    entry_id: 'soup-older',
+                    entry_position: 1,
+                    meaning: 'a liquid food',
+                    example: '',
+                    example_html: '',
+                },
+            ],
+        });
+
+        const collection = useCollection(
+            page({ items: [listed], open_item: opened }),
+        );
+
+        collection.restore({
+            tab: 'vocabulary',
+            items: [listed],
+            nextCursor: null,
+            hasMore: false,
+            total: 1,
+            openItemKey: 'soup',
+            scrollY: 0,
+            savedAt: Date.now(),
+        });
+
+        const restored = collection.openItem.value;
+
+        expect(
+            isCollectionItem(restored) ? restored.appearances : null,
+        ).toHaveLength(2);
     });
 });

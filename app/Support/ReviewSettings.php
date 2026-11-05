@@ -28,6 +28,9 @@ final class ReviewSettings
     /** How long one say-it-again question takes, for the estimate. */
     public const int SAY_IT_AGAIN_SECONDS = 75;
 
+    /** How long one fill-in-the-blank item takes, for the estimate. */
+    public const int FILL_IN_THE_BLANK_SECONDS = 40;
+
     /**
      * The target share of every planned exercise kind. Only built kinds with
      * candidates take part; the rest are dropped and the remaining shares are

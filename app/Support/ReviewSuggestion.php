@@ -14,8 +14,8 @@ use App\Enums\FeedbackType;
 final readonly class ReviewSuggestion
 {
     /**
-     * @param  list<array{kind: FeedbackType, identity: string}>  $items
-     *                                                                    the items to review, in the order the learner meets them
+     * @param  list<array{kind: FeedbackType, identity: string, exercise: string}>  $items
+     *                                                                                      the items to review, in the order the learner meets them
      */
     public function __construct(public array $items) {}
 
@@ -25,8 +25,9 @@ final readonly class ReviewSuggestion
     }
 
     /**
-     * How many items of each exercise kind are in the review. Vocabulary and
-     * phrases share the flashcard step; a mistake has its own.
+     * How many items of each exercise kind are in the review. The exercise is
+     * the one chosen for this sitting, so a word counted as a blank is not
+     * also counted as a flashcard.
      *
      * @return array<string, int>
      */
@@ -35,8 +36,7 @@ final readonly class ReviewSuggestion
         $counts = [];
 
         foreach ($this->items as $item) {
-            $key = ReviewExercises::kindOf($item['kind']);
-            $counts[$key] = ($counts[$key] ?? 0) + 1;
+            $counts[$item['exercise']] = ($counts[$item['exercise']] ?? 0) + 1;
         }
 
         return $counts;

@@ -13,6 +13,7 @@ use App\Http\Requests\StartReviewRequest;
 use App\Http\Requests\UndoReviewItemRequest;
 use App\Models\Rating;
 use App\Models\Review;
+use App\Queries\ReviewCandidates;
 use App\Queries\ReviewSections;
 use App\Queries\TableCollection;
 use App\Queries\TodaysReview;
@@ -39,6 +40,7 @@ class ReviewController extends Controller
         Request $request,
         TodaysReview $todaysReview,
         TableCollection $collection,
+        ReviewCandidates $candidates,
     ): Response {
         return Inertia::render('review/Index', [
             'todayReview' => $todaysReview->card($request),
@@ -48,6 +50,11 @@ class ReviewController extends Controller
                 'vocabulary' => $collection->attentionCount(FeedbackType::Vocabulary),
                 'phrases' => $collection->attentionCount(FeedbackType::Phrase),
                 'mistakes' => $collection->attentionCount(FeedbackType::Mistake),
+            ],
+            // Grammar notes with nothing to blank yet keep their own friendly
+            // nudge, separate from the fix-the-mistake group.
+            'grammarNotesTip' => [
+                'count' => $candidates->unusableGrammarNotesCount(),
             ],
         ]);
     }

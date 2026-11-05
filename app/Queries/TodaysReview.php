@@ -50,6 +50,12 @@ use Illuminate\Http\Request;
  */
 final readonly class TodaysReview
 {
+    /** The registry key of the exercise built from leftovers and notes. */
+    private const string FILL_EXERCISE = 'fill_in_the_blank';
+
+    /** The natural kinds whose unpicked items can still become blanks. */
+    private const array NATURAL_KINDS = ['flashcard', 'mistake', 'say_it_again'];
+
     public function __construct(
         private ReviewCandidates $candidates,
         private LearnerDay $day,
@@ -70,6 +76,17 @@ final readonly class TodaysReview
             return new ReviewSuggestion([]);
         }
 
+        /** @var list<array{kind: FeedbackType, identity: string}> $pairs */
+        $pairs = array_map(fn (array $row): array => [
+            'kind' => FeedbackType::from($row['type']),
+            'identity' => $row['collection_key'],
+        ], $rows);
+
+        // Which current items can build a blank, read in one bulk pass and
+        // used both to skip unusable notes and to decide whether the blank
+        // step joins the sitting at all.
+        $blankable = $this->candidates->blankableKeys($pairs);
+
         $schedules = $this->schedulesFor();
         $marks = $this->marksFor();
         $ratedToday = $excludingRatedToday ? $this->ratedToday($today) : [];
@@ -88,6 +105,12 @@ final readonly class TodaysReview
             }
 
             if (isset($ratedToday[$key])) {
+                continue;
+            }
+
+            // A grammar note has no other exercise, so one that cannot make a
+            // blank is skipped rather than shown as a broken card.
+            if ($kind === FeedbackType::GrammarNote && ! isset($blankable[$key])) {
                 continue;
             }
 
@@ -133,7 +156,38 @@ final readonly class TodaysReview
             ];
         }
 
+        $grammarNoteCandidates = isset($pools[self::FILL_EXERCISE])
+            ? count($pools[self::FILL_EXERCISE]['due']) + count($pools[self::FILL_EXERCISE]['new'])
+            : 0;
+
+        $blankableNatural = 0;
+
+        foreach ($pairs as $pair) {
+            if ($pair['kind'] === FeedbackType::GrammarNote) {
+                continue;
+            }
+
+            if (isset($blankable[$this->candidates->key($pair['kind'], $pair['identity'])])) {
+                $blankableNatural += 1;
+            }
+        }
+
+        // Blanks share the sitting when a grammar note can make one, or when
+        // the natural exercises will leave blankable items behind. Otherwise a
+        // small review keeps the old mix, with no empty fourth step.
+        $blankActive = $grammarNoteCandidates > 0 || $blankableNatural > $size;
+
+        if ($blankActive && ! isset($pools[self::FILL_EXERCISE])) {
+            $pools[self::FILL_EXERCISE] = ['due' => [], 'new' => []];
+        }
+
         $active = $this->activeKeys($pools);
+
+        if ($blankActive && ! in_array(self::FILL_EXERCISE, $active, true)) {
+            // A blank step made only of leftovers has no pool rows of its own.
+            $pools[self::FILL_EXERCISE] = ['due' => [], 'new' => []];
+            $active[] = self::FILL_EXERCISE;
+        }
 
         if ($active === []) {
             return new ReviewSuggestion([]);
@@ -162,7 +216,15 @@ final readonly class TodaysReview
             $pools[$exercise]['new'] = [...$boosted, ...$plain];
         }
 
-        $quotas = ReviewAllocation::quotas($active, $size, ReviewSettings::TARGET_SHARES);
+        // A leftover-only blank step must not take the guaranteed slot from a
+        // natural exercise in a tiny review; a grammar-note-backed one may.
+        $mustFill = array_values(array_filter(
+            $active,
+            fn (string $exercise): bool => $exercise !== self::FILL_EXERCISE
+                || $grammarNoteCandidates > 0,
+        ));
+
+        $quotas = ReviewAllocation::quotas($active, $size, ReviewSettings::TARGET_SHARES, $mustFill);
 
         $dueAvailable = 0;
         $candidateTotal = 0;
@@ -179,14 +241,16 @@ final readonly class TodaysReview
             ? ReviewSettings::MAX_NEW_ITEMS
             : max(0, $size - $dueAvailable);
 
-        /** @var array<string, list<array{kind: FeedbackType, identity: string}>> $pickedDue */
+        /** @var array<string, list<array{kind: FeedbackType, identity: string, exercise: string}>> $pickedDue */
         $pickedDue = [];
-        /** @var array<string, list<array{kind: FeedbackType, identity: string}>> $pickedNew */
+        /** @var array<string, list<array{kind: FeedbackType, identity: string, exercise: string}>> $pickedNew */
         $pickedNew = [];
         /** @var array<string, int> $dueIndex */
         $dueIndex = [];
         /** @var array<string, int> $newIndex */
         $newIndex = [];
+        /** @var array<string, true> $pickedKeys */
+        $pickedKeys = [];
 
         foreach ($active as $exercise) {
             $pickedDue[$exercise] = [];
@@ -208,8 +272,10 @@ final readonly class TodaysReview
                 }
 
                 if (isset($pools[$exercise]['due'][$dueIndex[$exercise]])) {
-                    $pickedDue[$exercise][] = $this->brief($pools[$exercise]['due'][$dueIndex[$exercise]]);
+                    $item = $pools[$exercise]['due'][$dueIndex[$exercise]];
+                    $pickedDue[$exercise][] = $this->brief($item, $exercise);
                     $dueIndex[$exercise] += 1;
+                    $this->markPicked($pickedKeys, $item);
                     $picked += 1;
 
                     continue;
@@ -217,13 +283,17 @@ final readonly class TodaysReview
 
                 if ($newPicked < $newAllowance
                     && isset($pools[$exercise]['new'][$newIndex[$exercise]])) {
-                    $pickedNew[$exercise][] = $this->brief($pools[$exercise]['new'][$newIndex[$exercise]]);
+                    $item = $pools[$exercise]['new'][$newIndex[$exercise]];
+                    $pickedNew[$exercise][] = $this->brief($item, $exercise);
                     $newIndex[$exercise] += 1;
+                    $this->markPicked($pickedKeys, $item);
                     $picked += 1;
                     $newPicked += 1;
                 }
             }
         }
+
+        $naturalKinds = array_values(array_intersect($active, self::NATURAL_KINDS));
 
         // Each kind fills its share, due items first.
         foreach ($active as $exercise) {
@@ -231,24 +301,59 @@ final readonly class TodaysReview
 
             while (count($pickedDue[$exercise]) < $quota
                 && isset($pools[$exercise]['due'][$dueIndex[$exercise]])) {
-                $pickedDue[$exercise][] = $this->brief($pools[$exercise]['due'][$dueIndex[$exercise]]);
+                $item = $pools[$exercise]['due'][$dueIndex[$exercise]];
+                $pickedDue[$exercise][] = $this->brief($item, $exercise);
                 $dueIndex[$exercise] += 1;
+                $this->markPicked($pickedKeys, $item);
                 $picked += 1;
             }
 
             while (count($pickedDue[$exercise]) + count($pickedNew[$exercise]) < $quota
                 && $newPicked < $newAllowance
                 && isset($pools[$exercise]['new'][$newIndex[$exercise]])) {
-                $pickedNew[$exercise][] = $this->brief($pools[$exercise]['new'][$newIndex[$exercise]]);
+                $item = $pools[$exercise]['new'][$newIndex[$exercise]];
+                $pickedNew[$exercise][] = $this->brief($item, $exercise);
                 $newIndex[$exercise] += 1;
+                $this->markPicked($pickedKeys, $item);
                 $picked += 1;
                 $newPicked += 1;
+            }
+
+            // The blank step also takes the items its natural exercises left
+            // behind, due before new and within the sitting's new allowance.
+            if ($exercise !== self::FILL_EXERCISE) {
+                continue;
+            }
+
+            while (count($pickedDue[$exercise]) + count($pickedNew[$exercise]) < $quota) {
+                $leftover = $this->takeLeftover(
+                    $naturalKinds,
+                    $pools,
+                    $dueIndex,
+                    $newIndex,
+                    $blankable,
+                    $pickedKeys,
+                    $newAllowance,
+                    $newPicked,
+                );
+
+                if ($leftover === null) {
+                    break;
+                }
+
+                if ($leftover['bucket'] === 'due') {
+                    $pickedDue[$exercise][] = $leftover['item'];
+                } else {
+                    $pickedNew[$exercise][] = $leftover['item'];
+                }
+
+                $picked += 1;
             }
         }
 
         // A kind with fewer candidates than its share leaves a gap. Fill it
-        // from the other kinds: due work first, then new work within the
-        // sitting's new limit.
+        // from the other kinds first — due work, then new work within the
+        // sitting's new limit — and then from the blanks left over.
         $limit = min($size, $candidateTotal);
 
         while ($picked < $limit) {
@@ -260,31 +365,57 @@ final readonly class TodaysReview
                 }
 
                 if (isset($pools[$exercise]['due'][$dueIndex[$exercise]])) {
-                    $pickedDue[$exercise][] = $this->brief($pools[$exercise]['due'][$dueIndex[$exercise]]);
+                    $item = $pools[$exercise]['due'][$dueIndex[$exercise]];
+                    $pickedDue[$exercise][] = $this->brief($item, $exercise);
                     $dueIndex[$exercise] += 1;
+                    $this->markPicked($pickedKeys, $item);
                     $picked += 1;
                     $added = true;
                 }
             }
 
-            if ($picked >= $limit || $newPicked >= $newAllowance) {
-                if (! $added) {
-                    break;
-                }
+            if ($picked < $limit && $newPicked < $newAllowance) {
+                foreach ($active as $exercise) {
+                    if ($picked >= $limit || $newPicked >= $newAllowance) {
+                        break;
+                    }
 
-                continue;
+                    if (isset($pools[$exercise]['new'][$newIndex[$exercise]])) {
+                        $item = $pools[$exercise]['new'][$newIndex[$exercise]];
+                        $pickedNew[$exercise][] = $this->brief($item, $exercise);
+                        $newIndex[$exercise] += 1;
+                        $this->markPicked($pickedKeys, $item);
+                        $picked += 1;
+                        $newPicked += 1;
+                        $added = true;
+                    }
+                }
             }
 
-            foreach ($active as $exercise) {
-                if ($picked >= $limit || $newPicked >= $newAllowance) {
-                    break;
-                }
+            if ($picked < $limit && $blankActive) {
+                while ($picked < $limit) {
+                    $leftover = $this->takeLeftover(
+                        $naturalKinds,
+                        $pools,
+                        $dueIndex,
+                        $newIndex,
+                        $blankable,
+                        $pickedKeys,
+                        $newAllowance,
+                        $newPicked,
+                    );
 
-                if (isset($pools[$exercise]['new'][$newIndex[$exercise]])) {
-                    $pickedNew[$exercise][] = $this->brief($pools[$exercise]['new'][$newIndex[$exercise]]);
-                    $newIndex[$exercise] += 1;
+                    if ($leftover === null) {
+                        break;
+                    }
+
+                    if ($leftover['bucket'] === 'due') {
+                        $pickedDue[self::FILL_EXERCISE][] = $leftover['item'];
+                    } else {
+                        $pickedNew[self::FILL_EXERCISE][] = $leftover['item'];
+                    }
+
                     $picked += 1;
-                    $newPicked += 1;
                     $added = true;
                 }
             }
@@ -362,7 +493,7 @@ final readonly class TodaysReview
 
     /**
      * Distinct type + identity candidates, the shared definition of what can
-     * be reviewed at all.
+     * be reviewed at all, plus the grammar notes that can make a blank.
      *
      * @return list<array{type: string, collection_key: string}>
      */
@@ -388,7 +519,17 @@ final readonly class TodaysReview
             ])
             ->all());
 
-        return [...$entries, ...$questions];
+        $notes = array_values($this->candidates->grammarNotesBase()
+            ->select('entries.collection_key as collection_key')
+            ->distinct()
+            ->get()
+            ->map(fn (object $row): array => [
+                'type' => FeedbackType::GrammarNote->value,
+                'collection_key' => (string) $row->collection_key,
+            ])
+            ->all());
+
+        return [...$entries, ...$questions, ...$notes];
     }
 
     /**
@@ -448,7 +589,7 @@ final readonly class TodaysReview
     {
         $found = [];
 
-        foreach (FeedbackType::tableTypes() as $kind) {
+        foreach (FeedbackType::collectable() as $kind) {
             $storage = CollectionItemMark::query()
                 ->where('kind', $kind->value)
                 ->get(['item_key', 'starred', 'status', 'group_key']);
@@ -493,23 +634,91 @@ final readonly class TodaysReview
     }
 
     /**
-     * Just the two fields the review needs, without the ordering helpers.
+     * Take the next blankable item the natural pools left behind, due before
+     * new and within the sitting's new allowance. The natural pool's own
+     * cursor advances, so the natural loops never see the item again.
+     *
+     * @param  list<string>  $naturalKinds
+     * @param  array<string, array{due: list<array{priority?: int, due_on?: int, kind: FeedbackType, identity: string, boosted?: bool}>, new: list<array{kind: FeedbackType, identity: string, boosted: bool}>}>  $pools
+     * @param  array<string, int>  $dueIndex
+     * @param  array<string, int>  $newIndex
+     * @param  array<string, true>  $blankable
+     * @param  array<string, true>  $pickedKeys
+     * @return array{item: array{kind: FeedbackType, identity: string, exercise: string}, bucket: 'due'|'new'}|null
+     */
+    private function takeLeftover(
+        array $naturalKinds,
+        array $pools,
+        array &$dueIndex,
+        array &$newIndex,
+        array $blankable,
+        array &$pickedKeys,
+        int $newAllowance,
+        int &$newPicked,
+    ): ?array {
+        foreach ($naturalKinds as $exercise) {
+            while (isset($pools[$exercise]['due'][$dueIndex[$exercise]])) {
+                $item = $pools[$exercise]['due'][$dueIndex[$exercise]];
+                $dueIndex[$exercise] += 1;
+                $key = $this->candidates->key($item['kind'], $item['identity']);
+
+                if (isset($pickedKeys[$key]) || ! isset($blankable[$key])) {
+                    continue;
+                }
+
+                $pickedKeys[$key] = true;
+
+                return ['item' => $this->brief($item, self::FILL_EXERCISE), 'bucket' => 'due'];
+            }
+        }
+
+        foreach ($naturalKinds as $exercise) {
+            while ($newPicked < $newAllowance && isset($pools[$exercise]['new'][$newIndex[$exercise]])) {
+                $item = $pools[$exercise]['new'][$newIndex[$exercise]];
+                $newIndex[$exercise] += 1;
+                $key = $this->candidates->key($item['kind'], $item['identity']);
+
+                if (isset($pickedKeys[$key]) || ! isset($blankable[$key])) {
+                    continue;
+                }
+
+                $pickedKeys[$key] = true;
+                $newPicked += 1;
+
+                return ['item' => $this->brief($item, self::FILL_EXERCISE), 'bucket' => 'new'];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<string, true>  $pickedKeys
+     * @param  array{kind: FeedbackType, identity: string}  $item
+     */
+    private function markPicked(array &$pickedKeys, array $item): void
+    {
+        $pickedKeys[$this->candidates->key($item['kind'], $item['identity'])] = true;
+    }
+
+    /**
+     * The fields the review needs, without the ordering helpers.
      *
      * @param  array{kind: FeedbackType, identity: string}  $item
-     * @return array{kind: FeedbackType, identity: string}
+     * @return array{kind: FeedbackType, identity: string, exercise: string}
      */
-    private function brief(array $item): array
+    private function brief(array $item, string $exercise): array
     {
-        return ['kind' => $item['kind'], 'identity' => $item['identity']];
+        return ['kind' => $item['kind'], 'identity' => $item['identity'], 'exercise' => $exercise];
     }
 
     /**
      * Spread the new items evenly through the due items, keeping each
      * group's own order.
      *
-     * @param  list<array{kind: FeedbackType, identity: string}>  $due
-     * @param  list<array{kind: FeedbackType, identity: string}>  $new
-     * @return list<array{kind: FeedbackType, identity: string}>
+     * @param  list<array{kind: FeedbackType, identity: string, exercise: string}>  $due
+     * @param  list<array{kind: FeedbackType, identity: string, exercise: string}>  $new
+     * @return list<array{kind: FeedbackType, identity: string, exercise: string}>
      */
     private function interleave(array $due, array $new): array
     {

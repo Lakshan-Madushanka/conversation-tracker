@@ -54,6 +54,7 @@ final readonly class StartReview
                     'review_id' => $review->id,
                     'position' => $position + 1,
                     'kind' => $item['kind'],
+                    'exercise' => $item['exercise'],
                     'item_identity' => $item['identity'],
                 ]);
             }

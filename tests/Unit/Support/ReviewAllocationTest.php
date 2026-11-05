@@ -65,6 +65,57 @@ describe('splitting a sitting between the available kinds', function (): void {
         ]);
     });
 
+    it('leaves a kind out when the caller does not ask it to fill a slot', function (): void {
+        // A blank step built only from leftovers has no candidates of its own,
+        // so it must not take a slot from the exercise its items belong to.
+        $quotas = ReviewAllocation::quotas(
+            ['flashcard', 'mistake', 'say_it_again', 'fill_in_the_blank'],
+            4,
+            ReviewSettings::TARGET_SHARES,
+            ['flashcard', 'mistake', 'say_it_again'],
+        );
+
+        expect($quotas)->toBe([
+            'flashcard' => 2,
+            'mistake' => 1,
+            'say_it_again' => 1,
+            'fill_in_the_blank' => 0,
+        ]);
+    });
+
+    it('protects a kind the caller asks to fill', function (): void {
+        // A grammar note can always make a blank, so the blank step may earn
+        // its slot the same way the natural kinds do.
+        $quotas = ReviewAllocation::quotas(
+            ['flashcard', 'mistake', 'say_it_again', 'fill_in_the_blank'],
+            4,
+            ReviewSettings::TARGET_SHARES,
+            ['flashcard', 'mistake', 'say_it_again', 'fill_in_the_blank'],
+        );
+
+        expect($quotas)->toBe([
+            'flashcard' => 1,
+            'mistake' => 1,
+            'say_it_again' => 1,
+            'fill_in_the_blank' => 1,
+        ]);
+    });
+
+    it('protects every active kind when the caller names none', function (): void {
+        $quotas = ReviewAllocation::quotas(
+            ['flashcard', 'mistake', 'say_it_again', 'fill_in_the_blank'],
+            4,
+            ReviewSettings::TARGET_SHARES,
+        );
+
+        expect($quotas)->toBe([
+            'flashcard' => 1,
+            'mistake' => 1,
+            'say_it_again' => 1,
+            'fill_in_the_blank' => 1,
+        ]);
+    });
+
     it('does not force a kind in when the sitting cannot hold them all', function (): void {
         $quotas = ReviewAllocation::quotas(
             ['flashcard', 'mistake', 'say_it_again'],

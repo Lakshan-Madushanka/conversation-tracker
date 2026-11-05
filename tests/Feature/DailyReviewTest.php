@@ -1066,12 +1066,14 @@ describe('the daily review at scale', function (): void {
 
         expect($queries)->toBeLessThanOrEqual(20);
 
-        // And the suggestion at this size is full and honest, in both kinds.
+        // And the suggestion at this size is full and honest: the natural
+        // exercises take their shares, and the blank step draws a leftover
+        // mistake because the pool has far more of them than the sitting.
         $this->get(route('home'))
             ->assertInertia(fn (Assert $page): Assert => $page
                 ->where('todayReview.state', 'suggest')
                 ->where('todayReview.count', 8)
-                ->where('todayReview.mix', '5 flashcards, 3 mistakes to fix'));
+                ->where('todayReview.mix', '5 flashcards, 2 mistakes to fix, 1 blank to fill in'));
     });
 
     it('keeps the same bounded number of queries for a small pool', function (): void {

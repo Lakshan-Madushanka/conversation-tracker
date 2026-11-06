@@ -42,7 +42,7 @@ const canAdd = computed(() => props.selectedCount > 0 && !props.busy);
 
 <template>
     <section
-        aria-label="Basket actions"
+        aria-label="Review actions"
         class="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:bottom-4 md:left-1/2 md:max-w-3xl md:-translate-x-1/2 md:rounded-xl md:border md:shadow-lg"
     >
         <div class="mx-auto flex max-w-3xl flex-col gap-2 p-3">
@@ -83,7 +83,7 @@ const canAdd = computed(() => props.selectedCount > 0 && !props.busy);
             </p>
 
             <p v-else class="text-xs text-muted-foreground">
-                The chosen items join the basket; nothing else changes.
+                The chosen items join a review; nothing else changes.
             </p>
 
             <Button

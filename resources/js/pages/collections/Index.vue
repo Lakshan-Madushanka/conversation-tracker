@@ -9,7 +9,6 @@ import {
 } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import { InfoIcon, TriangleAlertIcon } from '@lucide/vue';
-import BasketBar from '@/components/BasketBar.vue';
 import CollectionFilterBar from '@/components/CollectionFilterBar.vue';
 import CollectionItemPanel from '@/components/CollectionItemPanel.vue';
 import CollectionList from '@/components/CollectionList.vue';
@@ -17,6 +16,7 @@ import CollectionMistakePanel from '@/components/CollectionMistakePanel.vue';
 import CollectionSearch from '@/components/CollectionSearch.vue';
 import CollectionSelectionBar from '@/components/CollectionSelectionBar.vue';
 import PageHeader from '@/components/PageHeader.vue';
+import ReviewAddDialogs from '@/components/ReviewAddDialogs.vue';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -24,7 +24,11 @@ import { useCollection } from '@/composables/useCollection';
 import { useCollectionSelection } from '@/composables/useCollectionSelection';
 import { useSelectionBar } from '@/composables/useSelectionBar';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { addToBasket, basketCount, currentBasketReturn } from '@/lib/basket';
+import {
+    addItemsToReview,
+    currentReviewReturn,
+    reviewPageUrl,
+} from '@/lib/custom-review';
 import { collectionTabConfig } from '@/lib/collection-tabs';
 import { toast } from 'vue-sonner';
 import {
@@ -53,13 +57,13 @@ import {
     type CollectionSnapshot,
 } from '@/lib/collections';
 import { jsonRequest } from '@/lib/http';
-import { index as basketIndex } from '@/routes/basket';
 import {
     index as collectionsIndex,
     selection as collectionsSelection,
 } from '@/routes/collections';
 import type {
-    AddBasketResult,
+    AddReviewOutcome,
+    AddedReviewAnswer,
     CollectionItemStatusValue,
     CollectionMistakeItem,
     CollectionOpenedItem,
@@ -498,58 +502,76 @@ async function selectAllMatching(): Promise<void> {
     }
 }
 
-/** Keeps the list and the open panel showing the same basket state. */
-function applyBasketState(itemKey: string, inBasket: boolean): void {
+/** Keeps the list and the open panel showing the same review state. */
+function applyReviewState(itemKey: string, inReview: boolean): void {
     items.value = items.value.map((item) =>
-        item.key === itemKey ? { ...item, in_basket: inBasket } : item,
+        item.key === itemKey ? { ...item, in_review: inReview } : item,
     );
 
     const open = openItem.value;
 
     if (open !== null && open.key === itemKey) {
-        openItem.value = { ...open, in_basket: inBasket };
+        openItem.value = { ...open, in_review: inReview };
     }
 }
 
-/** What actually changed, in a calm sentence with the counts in it. */
-function addMessage(result: AddBasketResult): string {
-    if (result.added_count === 0) {
-        return result.already_count === 1
-            ? 'That item is already in your basket.'
-            : `Those ${result.already_count} items are already in your basket.`;
+/** What actually changed, named by the review it went into. */
+function addMessage(answer: AddedReviewAnswer): string {
+    const { review } = answer;
+
+    if (answer.added_count === 0) {
+        return answer.already_count === 1
+            ? `That item is already in ${review.name}.`
+            : `Those ${answer.already_count} items are already in ${review.name}.`;
     }
 
-    const added = `Added ${result.added_count} ${
-        result.added_count === 1 ? 'item' : 'items'
-    }`;
+    const added = `Added ${answer.added_count} ${
+        answer.added_count === 1 ? 'item' : 'items'
+    } to ${review.name}`;
 
-    if (result.already_count === 0) {
-        return `${added} to your basket.`;
+    if (answer.already_count === 0) {
+        return `${added}.`;
     }
 
-    return `${added}; ${result.already_count} ${
-        result.already_count === 1 ? 'was' : 'were'
+    return `${added}; ${answer.already_count} ${
+        answer.already_count === 1 ? 'was' : 'were'
     } already there.`;
 }
 
-/** The confirmation, with a way straight to the basket. */
-function showAddMessage(result: AddBasketResult): void {
-    toast.success(addMessage(result), {
+/** The confirmation, with a way straight to the review. */
+function showAddMessage(answer: AddedReviewAnswer): void {
+    toast.success(`${addMessage(answer)} · ${answer.review.item_count_label}`, {
         duration: 6000,
         action: {
-            label: 'View basket',
+            label: 'Open review',
             onClick: () => {
                 router.visit(
-                    basketIndex.url({
-                        query: { from: currentBasketReturn() },
-                    }),
+                    reviewPageUrl(answer.review.id, currentReviewReturn()),
                 );
             },
         },
     });
 }
 
-/** One item put into the basket without leaving the list. */
+/** Marks every identity the review now holds, and says what came to pass. */
+function finishAdd(outcome: AddReviewOutcome): boolean {
+    if (outcome.status !== 'added') {
+        return false;
+    }
+
+    for (const identity of [
+        ...outcome.answer.added_identities,
+        ...outcome.answer.already_identities,
+    ]) {
+        applyReviewState(identity, true);
+    }
+
+    showAddMessage(outcome.answer);
+
+    return true;
+}
+
+/** One item put into a review without leaving the list. */
 async function addItem(item: CollectionOpenedItem): Promise<void> {
     if (addingKey.value !== null || bulkBusy.value) {
         return;
@@ -557,18 +579,19 @@ async function addItem(item: CollectionOpenedItem): Promise<void> {
 
     addingKey.value = item.key;
 
-    try {
-        const result = await addToBasket(markKindForTab(tab.value), [item.key]);
+    const outcome = await addItemsToReview(markKindForTab(tab.value), [
+        item.key,
+    ]);
 
-        applyBasketState(item.key, true);
-        showAddMessage(result);
-    } catch {
+    if (outcome.status === 'failed') {
         toast.error(
             'That item was not added. Nothing changed — check your connection and try again.',
         );
-    } finally {
-        addingKey.value = null;
+    } else {
+        finishAdd(outcome);
     }
+
+    addingKey.value = null;
 }
 
 /** Every chosen item of this collection, in one request. */
@@ -582,22 +605,17 @@ async function addSelection(): Promise<void> {
     bulkBusy.value = true;
     selectionNotice.value = '';
 
-    try {
-        const result = await addToBasket(markKindForTab(tab.value), chosen);
+    const outcome = await addItemsToReview(markKindForTab(tab.value), chosen);
 
-        for (const key of chosen) {
-            applyBasketState(key, true);
-        }
-
-        endSelection();
-        showAddMessage(result);
-    } catch {
+    if (outcome.status === 'failed') {
         selectionNotice.value =
             'Those items were not added. Nothing changed — check your connection and try again.';
         announceSelection(selectionNotice.value);
-    } finally {
-        bulkBusy.value = false;
+    } else if (finishAdd(outcome)) {
+        endSelection();
     }
+
+    bulkBusy.value = false;
 }
 
 /** A short friendly line under the tabs, for the tabs that have one. */
@@ -747,7 +765,7 @@ onBeforeUnmount(() => {
     <div>
         <Head title="Collections" />
 
-        <BasketBar v-if="!selectionActive" />
+        <ReviewAddDialogs />
 
         <p class="sr-only" role="status" aria-live="polite" aria-atomic="true">
             {{ markNotice }}
@@ -898,7 +916,7 @@ onBeforeUnmount(() => {
             v-if="tab === 'mistakes'"
             :item="openItem as CollectionMistakeItem | null"
             tab="mistakes"
-            :basket-busy="addingKey === openItem?.key"
+            :review-busy="addingKey === openItem?.key"
             @close="closePanel"
             @see-session="rememberForReturn"
             @mark-saved="onMarkSaved"
@@ -909,18 +927,11 @@ onBeforeUnmount(() => {
             v-else
             :item="openItem"
             :tab="tab"
-            :basket-busy="addingKey === openItem?.key"
+            :review-busy="addingKey === openItem?.key"
             @close="closePanel"
             @see-session="rememberForReturn"
             @mark-saved="onMarkSaved"
             @add="addItem"
-        />
-
-        <!-- Keeps the end of the list above the basket bar on a phone. -->
-        <div
-            v-if="basketCount > 0 && !selectionActive"
-            class="h-16 md:hidden"
-            aria-hidden="true"
         />
 
         <CollectionSelectionBar

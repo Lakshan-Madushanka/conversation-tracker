@@ -1,8 +1,10 @@
 import { computed, onBeforeUnmount, ref } from 'vue';
-import type { CollectionOpenedItem } from '@/types';
+
+/** Anything a selection can name a row by. */
+type Selectable = { key: string };
 
 /**
- * The collection items the learner has chosen to add to the basket.
+ * The items the learner has chosen to add to a review.
  *
  * Selection is a fixed set of keys, kept only while the page is open: changing
  * the tab or the filters drops it, so the learner never adds items they can no
@@ -41,7 +43,7 @@ export function useCollectionSelection() {
     function begin(): void {
         active.value = true;
         clear();
-        announce('Selection mode. Choose items to add to the basket.');
+        announce('Selection mode. Choose items to add to a review.');
     }
 
     function end(): void {
@@ -57,8 +59,8 @@ export function useCollectionSelection() {
 
     /** Chooses one item, or with Shift the run from the previous one. */
     function toggle(
-        item: CollectionOpenedItem,
-        items: CollectionOpenedItem[],
+        item: Selectable,
+        items: Selectable[],
         shiftKey = false,
     ): void {
         const next = new Set(selectedKeys.value);

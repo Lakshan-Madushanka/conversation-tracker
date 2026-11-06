@@ -2,7 +2,6 @@
 import { computed } from 'vue';
 import { Head, Link } from '@inertiajs/vue3';
 import { InfoIcon, LightbulbIcon, SlidersHorizontalIcon } from '@lucide/vue';
-import BasketBar from '@/components/BasketBar.vue';
 import PageHeader from '@/components/PageHeader.vue';
 import ReviewRecentResults from '@/components/ReviewRecentResults.vue';
 import ReviewRulesDialog from '@/components/review/ReviewRulesDialog.vue';
@@ -10,7 +9,6 @@ import ReviewSuggestionCard from '@/components/ReviewSuggestionCard.vue';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { basketCount, hydrateBasketCount } from '@/lib/basket';
 import { index as collectionsIndex } from '@/routes/collections';
 import { custom as customReview } from '@/routes/review';
 import type {
@@ -34,11 +32,7 @@ const props = defineProps<{
     recentReviews: RecentReviewData[];
     /** The rules the info button explains, as the app runs them. */
     reviewRules: ReviewRulesData;
-    /** How many items are gathered for a custom review. */
-    basketCount?: number;
 }>();
-
-hydrateBasketCount(props.basketCount);
 
 const waitingGroups = computed(() =>
     [
@@ -109,8 +103,6 @@ const grammarNotesLink = computed(() =>
     <div>
         <Head title="Review" />
 
-        <BasketBar />
-
         <PageHeader
             title="Review"
             description="A calm few minutes with the words, phrases and mistakes you want to keep."
@@ -178,8 +170,5 @@ const grammarNotesLink = computed(() =>
                 </p>
             </AlertDescription>
         </Alert>
-
-        <!-- Keeps the end of the page above the basket bar on a phone. -->
-        <div v-if="basketCount > 0" class="h-16 md:hidden" aria-hidden="true" />
     </div>
 </template>

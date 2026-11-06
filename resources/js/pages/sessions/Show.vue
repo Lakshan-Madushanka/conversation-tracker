@@ -11,10 +11,11 @@ import {
     PencilIcon,
 } from '@lucide/vue';
 import { toast } from 'vue-sonner';
-import AddToBasketButton from '@/components/AddToBasketButton.vue';
+import AddToReviewButton from '@/components/AddToReviewButton.vue';
 import BackToCollections from '@/components/BackToCollections.vue';
 import BackToLibrary from '@/components/BackToLibrary.vue';
 import PageHeader from '@/components/PageHeader.vue';
+import ReviewAddDialogs from '@/components/ReviewAddDialogs.vue';
 import ReadingQuestion from '@/components/ReadingQuestion.vue';
 import SessionDeleteDialog from '@/components/SessionDeleteDialog.vue';
 import SessionMenu from '@/components/SessionMenu.vue';
@@ -29,7 +30,11 @@ import {
     CollapsibleTrigger,
 } from '@/components/ui/collapsible';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { addToBasket } from '@/lib/basket';
+import {
+    addItemsToReview,
+    hydrateReviewTarget,
+    reviewPageUrl,
+} from '@/lib/custom-review';
 import { cameFromCollections } from '@/lib/collections';
 import { shortDate } from '@/lib/format';
 import {
@@ -51,9 +56,9 @@ import {
 } from '@/lib/search-target';
 import { restoreSession, archiveSession } from '@/lib/session-archive';
 import { archivedSessionMessage } from '@/lib/session-selection';
-import { index as basketIndex } from '@/routes/basket';
 import { edit as sessionsEdit } from '@/routes/sessions';
 import type {
+    CustomReviewSummary,
     FeedbackType,
     PracticeQuestionData,
     PracticeSessionData,
@@ -72,23 +77,27 @@ const props = withDefaults(
     defineProps<{
         /** A saved session, in the same shape the editor opens it. */
         session: PracticeSessionData;
-        /** The questions already gathered for a custom review. */
-        basketQuestionIds?: number[];
+        /** The questions a review already holds. */
+        reviewQuestionIds?: number[];
+        /** The review being built, or none when several are. */
+        reviewTarget?: CustomReviewSummary | null;
     }>(),
-    { basketQuestionIds: () => [] },
+    { reviewQuestionIds: () => [], reviewTarget: null },
 );
 
-/** The questions in the basket, so each one can say it is already there. */
-const basketQuestions = ref<Set<number>>(new Set(props.basketQuestionIds));
+hydrateReviewTarget(props.reviewTarget);
+
+/** The questions in a review, so each one can say it is already there. */
+const reviewQuestions = ref<Set<number>>(new Set(props.reviewQuestionIds));
 
 /** The question whose add request is on its way, so only it waits. */
 const addingQuestionId = ref<number | null>(null);
 
-function isInBasket(questionId: number): boolean {
-    return basketQuestions.value.has(questionId);
+function isInReview(questionId: number): boolean {
+    return reviewQuestions.value.has(questionId);
 }
 
-/** Adds one question by its own identifier and says what changed. */
+/** Adds one question by its own id, and says which review it went into. */
 async function addQuestion(question: PracticeQuestionData): Promise<void> {
     if (addingQuestionId.value !== null) {
         return;
@@ -96,33 +105,35 @@ async function addQuestion(question: PracticeQuestionData): Promise<void> {
 
     addingQuestionId.value = question.id;
 
-    try {
-        const result = await addToBasket('question', [String(question.id)]);
+    const outcome = await addItemsToReview('question', [String(question.id)]);
 
-        basketQuestions.value = new Set([
-            ...basketQuestions.value,
+    if (outcome.status === 'added') {
+        reviewQuestions.value = new Set([
+            ...reviewQuestions.value,
             question.id,
         ]);
 
+        const { review } = outcome.answer;
+
         toast.success(
-            result.added_count === 0
-                ? 'That question is already in your basket.'
-                : 'Added this question to your basket.',
+            outcome.answer.added_count === 0
+                ? `That question is already in ${review.name}.`
+                : `Added this question to ${review.name}.`,
             {
                 duration: 6000,
                 action: {
-                    label: 'View basket',
-                    onClick: () => router.visit(basketIndex.url()),
+                    label: 'Open review',
+                    onClick: () => router.visit(reviewPageUrl(review.id)),
                 },
             },
         );
-    } catch {
+    } else if (outcome.status === 'failed') {
         toast.error(
             'That question was not added. Nothing changed — check your connection and try again.',
         );
-    } finally {
-        addingQuestionId.value = null;
     }
+
+    addingQuestionId.value = null;
 }
 
 /**
@@ -567,6 +578,8 @@ function itemHasMoved(): void {
     <div>
         <Head :title="props.session.topic.name" />
 
+        <ReviewAddDialogs />
+
         <BackToCollections v-if="fromCollection" />
         <BackToLibrary v-else :archived="isArchived" />
 
@@ -750,9 +763,9 @@ function itemHasMoved(): void {
                                     <span class="text-xs text-muted-foreground">
                                         Add this question to a custom review.
                                     </span>
-                                    <AddToBasketButton
+                                    <AddToReviewButton
                                         :name="`question ${index + 1}`"
-                                        :added="isInBasket(card.question.id)"
+                                        :added="isInReview(card.question.id)"
                                         :busy="
                                             addingQuestionId ===
                                             card.question.id

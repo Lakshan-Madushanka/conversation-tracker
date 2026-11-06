@@ -1,24 +1,37 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import {
+    computed,
+    nextTick,
+    onBeforeUnmount,
+    onMounted,
+    ref,
+    watch,
+} from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import { InfoIcon, TriangleAlertIcon } from '@lucide/vue';
+import BasketBar from '@/components/BasketBar.vue';
 import CollectionFilterBar from '@/components/CollectionFilterBar.vue';
 import CollectionItemPanel from '@/components/CollectionItemPanel.vue';
 import CollectionList from '@/components/CollectionList.vue';
 import CollectionMistakePanel from '@/components/CollectionMistakePanel.vue';
 import CollectionSearch from '@/components/CollectionSearch.vue';
+import CollectionSelectionBar from '@/components/CollectionSelectionBar.vue';
 import PageHeader from '@/components/PageHeader.vue';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useCollection } from '@/composables/useCollection';
+import { useCollectionSelection } from '@/composables/useCollectionSelection';
+import { useSelectionBar } from '@/composables/useSelectionBar';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { addToBasket, basketCount, currentBasketReturn } from '@/lib/basket';
 import { collectionTabConfig } from '@/lib/collection-tabs';
 import { toast } from 'vue-sonner';
 import {
     attentionCountLabel,
     collectionActiveFilterCount,
     collectionCountLabel,
+    collectionFiltersToQuery,
     hasCollectionFilters,
     hasCollectionSearch,
     normalizeCollectionFilters,
@@ -39,8 +52,14 @@ import {
     saveCollectionSnapshot,
     type CollectionSnapshot,
 } from '@/lib/collections';
-import { index as collectionsIndex } from '@/routes/collections';
+import { jsonRequest } from '@/lib/http';
+import { index as basketIndex } from '@/routes/basket';
+import {
+    index as collectionsIndex,
+    selection as collectionsSelection,
+} from '@/routes/collections';
 import type {
+    AddBasketResult,
     CollectionItemStatusValue,
     CollectionMistakeItem,
     CollectionOpenedItem,
@@ -86,6 +105,51 @@ const {
     restore,
     syncFromPage,
 } = useCollection(props);
+
+const {
+    active: selectionActive,
+    keys: selectedKeys,
+    count: selectedCount,
+    announcement: selectionAnnouncement,
+    begin: beginSelection,
+    end: endSelection,
+    toggle: toggleSelected,
+    selectAll: selectAllKeys,
+    clearBecauseListChanged,
+    announce: announceSelection,
+} = useCollectionSelection();
+
+// On a phone the selection bar takes the place of the bottom navigation.
+useSelectionBar(selectionActive);
+
+/** A calm, persistent explanation, such as a failed add. */
+const selectionNotice = ref('');
+
+/** True while "Select all" is asking for every matching item. */
+const selectingAll = ref(false);
+
+/** True while a bulk add is on its way. */
+const bulkBusy = ref(false);
+
+/** The item whose own add is on its way, so only it waits. */
+const addingKey = ref<string | null>(null);
+
+/** Changing the tab or the filters drops a choice that no longer fits. */
+watch(tab, () => {
+    if (selectionActive.value) {
+        endSelection();
+    }
+});
+
+watch(
+    filters,
+    () => {
+        if (selectionActive.value) {
+            clearBecauseListChanged();
+        }
+    },
+    { deep: true },
+);
 
 const activeConfig = computed(() => collectionTabConfig(tab.value));
 
@@ -363,6 +427,179 @@ function toggleAttention(): void {
     );
 }
 
+/** Switch selection mode on or off. */
+function toggleSelectionMode(): void {
+    selectionNotice.value = '';
+
+    if (selectionActive.value) {
+        endSelection();
+
+        return;
+    }
+
+    beginSelection();
+}
+
+/** One row chosen or unchosen; Shift chooses the run from the last one. */
+function toggleItemSelection(
+    item: CollectionOpenedItem,
+    shiftKey: boolean,
+): void {
+    toggleSelected(item, items.value, shiftKey);
+}
+
+/**
+ * Every item matching the current tab, search and filters, not only the ones
+ * loaded so far. The request names the same view the list names.
+ */
+async function selectAllMatching(): Promise<void> {
+    if (selectingAll.value || bulkBusy.value) {
+        return;
+    }
+
+    selectingAll.value = true;
+    selectionNotice.value = '';
+
+    try {
+        const response = await jsonRequest(
+            collectionsSelection.url({
+                query: {
+                    tab: tab.value,
+                    ...collectionFiltersToQuery(filters.value, tab.value),
+                },
+            }),
+        );
+
+        if (!response.ok) {
+            throw new Error('Selecting every item failed.');
+        }
+
+        const body: unknown = await response.json();
+        const keys =
+            typeof body === 'object' &&
+            body !== null &&
+            Array.isArray((body as { keys?: unknown }).keys)
+                ? (body as { keys: unknown[] }).keys.filter(
+                      (key): key is string => typeof key === 'string',
+                  )
+                : null;
+
+        if (keys === null) {
+            throw new Error('Selecting every item returned no list.');
+        }
+
+        selectAllKeys(keys);
+    } catch {
+        selectionNotice.value =
+            'Could not select every item. Check your connection and try again.';
+        announceSelection(selectionNotice.value);
+    } finally {
+        selectingAll.value = false;
+    }
+}
+
+/** Keeps the list and the open panel showing the same basket state. */
+function applyBasketState(itemKey: string, inBasket: boolean): void {
+    items.value = items.value.map((item) =>
+        item.key === itemKey ? { ...item, in_basket: inBasket } : item,
+    );
+
+    const open = openItem.value;
+
+    if (open !== null && open.key === itemKey) {
+        openItem.value = { ...open, in_basket: inBasket };
+    }
+}
+
+/** What actually changed, in a calm sentence with the counts in it. */
+function addMessage(result: AddBasketResult): string {
+    if (result.added_count === 0) {
+        return result.already_count === 1
+            ? 'That item is already in your basket.'
+            : `Those ${result.already_count} items are already in your basket.`;
+    }
+
+    const added = `Added ${result.added_count} ${
+        result.added_count === 1 ? 'item' : 'items'
+    }`;
+
+    if (result.already_count === 0) {
+        return `${added} to your basket.`;
+    }
+
+    return `${added}; ${result.already_count} ${
+        result.already_count === 1 ? 'was' : 'were'
+    } already there.`;
+}
+
+/** The confirmation, with a way straight to the basket. */
+function showAddMessage(result: AddBasketResult): void {
+    toast.success(addMessage(result), {
+        duration: 6000,
+        action: {
+            label: 'View basket',
+            onClick: () => {
+                router.visit(
+                    basketIndex.url({
+                        query: { from: currentBasketReturn() },
+                    }),
+                );
+            },
+        },
+    });
+}
+
+/** One item put into the basket without leaving the list. */
+async function addItem(item: CollectionOpenedItem): Promise<void> {
+    if (addingKey.value !== null || bulkBusy.value) {
+        return;
+    }
+
+    addingKey.value = item.key;
+
+    try {
+        const result = await addToBasket(markKindForTab(tab.value), [item.key]);
+
+        applyBasketState(item.key, true);
+        showAddMessage(result);
+    } catch {
+        toast.error(
+            'That item was not added. Nothing changed — check your connection and try again.',
+        );
+    } finally {
+        addingKey.value = null;
+    }
+}
+
+/** Every chosen item of this collection, in one request. */
+async function addSelection(): Promise<void> {
+    if (bulkBusy.value || selectedCount.value === 0) {
+        return;
+    }
+
+    const chosen = selectedKeys.value;
+
+    bulkBusy.value = true;
+    selectionNotice.value = '';
+
+    try {
+        const result = await addToBasket(markKindForTab(tab.value), chosen);
+
+        for (const key of chosen) {
+            applyBasketState(key, true);
+        }
+
+        endSelection();
+        showAddMessage(result);
+    } catch {
+        selectionNotice.value =
+            'Those items were not added. Nothing changed — check your connection and try again.';
+        announceSelection(selectionNotice.value);
+    } finally {
+        bulkBusy.value = false;
+    }
+}
+
 /** A short friendly line under the tabs, for the tabs that have one. */
 const intro = computed(() => activeConfig.value.intro);
 
@@ -510,8 +747,14 @@ onBeforeUnmount(() => {
     <div>
         <Head title="Collections" />
 
+        <BasketBar v-if="!selectionActive" />
+
         <p class="sr-only" role="status" aria-live="polite" aria-atomic="true">
             {{ markNotice }}
+        </p>
+
+        <p class="sr-only" role="status" aria-live="polite" aria-atomic="true">
+            {{ selectionAnnouncement }}
         </p>
 
         <PageHeader
@@ -593,18 +836,31 @@ onBeforeUnmount(() => {
                         {{ countLabel }}
                     </p>
 
-                    <Button
-                        v-if="showAttention"
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        class="min-h-11 md:min-h-8"
-                        :aria-pressed="filters.attention"
-                        @click="toggleAttention"
-                    >
-                        <TriangleAlertIcon aria-hidden="true" />
-                        {{ attentionLabel }}
-                    </Button>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <Button
+                            v-if="showAttention"
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            class="min-h-11 md:min-h-8"
+                            :aria-pressed="filters.attention"
+                            @click="toggleAttention"
+                        >
+                            <TriangleAlertIcon aria-hidden="true" />
+                            {{ attentionLabel }}
+                        </Button>
+
+                        <Button
+                            v-if="items.length > 0 && !selectionActive"
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            class="min-h-11 md:min-h-8"
+                            @click="toggleSelectionMode"
+                        >
+                            Select
+                        </Button>
+                    </div>
                 </div>
 
                 <!-- The gathered collections: list, loading, empty and error
@@ -622,6 +878,9 @@ onBeforeUnmount(() => {
                     :has-search="hasCollectionSearch(filters)"
                     :filter-error="filterError"
                     :has-finished-sessions="hasFinishedSessions"
+                    :selection-mode="selectionActive"
+                    :selected-keys="selectedKeys"
+                    :busy-key="addingKey"
                     @open="openItemPanel"
                     @load-more="loadMore"
                     @star="changeStar"
@@ -629,6 +888,8 @@ onBeforeUnmount(() => {
                     @clear-search="clearSearchAndFocus"
                     @clear-filters="clearFiltersAndFocus"
                     @retry-filters="retryFilters"
+                    @select="toggleItemSelection"
+                    @add="addItem"
                 />
             </div>
         </Tabs>
@@ -637,18 +898,40 @@ onBeforeUnmount(() => {
             v-if="tab === 'mistakes'"
             :item="openItem as CollectionMistakeItem | null"
             tab="mistakes"
+            :basket-busy="addingKey === openItem?.key"
             @close="closePanel"
             @see-session="rememberForReturn"
             @mark-saved="onMarkSaved"
+            @add="addItem"
         />
 
         <CollectionItemPanel
             v-else
             :item="openItem"
             :tab="tab"
+            :basket-busy="addingKey === openItem?.key"
             @close="closePanel"
             @see-session="rememberForReturn"
             @mark-saved="onMarkSaved"
+            @add="addItem"
+        />
+
+        <!-- Keeps the end of the list above the basket bar on a phone. -->
+        <div
+            v-if="basketCount > 0 && !selectionActive"
+            class="h-16 md:hidden"
+            aria-hidden="true"
+        />
+
+        <CollectionSelectionBar
+            v-if="selectionActive"
+            :selected-count="selectedCount"
+            :busy="bulkBusy"
+            :selecting-all="selectingAll"
+            :notice="selectionNotice"
+            @cancel="endSelection"
+            @select-all="selectAllMatching"
+            @add="addSelection"
         />
     </div>
 </template>

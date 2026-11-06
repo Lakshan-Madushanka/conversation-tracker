@@ -3,6 +3,7 @@ import { computed, nextTick, ref, watch } from 'vue';
 import { Link } from '@inertiajs/vue3';
 import { useMediaQuery } from '@vueuse/core';
 import { ArrowUpRightIcon, TriangleAlertIcon } from '@lucide/vue';
+import AddToBasketButton from '@/components/AddToBasketButton.vue';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
@@ -35,8 +36,10 @@ const props = withDefaults(
     defineProps<{
         item: CollectionMistakeItem | null;
         tab?: CollectionTabKey;
+        /** True while this mistake's add request is on its way. */
+        basketBusy?: boolean;
     }>(),
-    { tab: 'mistakes' },
+    { tab: 'mistakes', basketBusy: false },
 );
 
 const emit = defineEmits<{
@@ -49,6 +52,8 @@ const emit = defineEmits<{
         item: CollectionMistakeItem,
         mark: ItemMarkData,
     ): void;
+    /** The learner asked to put this mistake into the basket. */
+    (event: 'add', item: CollectionMistakeItem): void;
 }>();
 
 /** Passes a saved mark up only while a mistake is really open. */
@@ -389,6 +394,18 @@ function seeOriginal(event: MouseEvent): void {
                             </li>
                         </ul>
                     </section>
+
+                    <div
+                        class="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3"
+                    >
+                        <span class="text-sm font-medium">Custom review</span>
+                        <AddToBasketButton
+                            :name="markItemName(props.item)"
+                            :added="props.item.in_basket === true"
+                            :busy="props.basketBusy"
+                            @add="emit('add', props.item)"
+                        />
+                    </div>
 
                     <CollectionMarksSection
                         :key="props.item.key"

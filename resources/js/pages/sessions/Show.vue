@@ -11,6 +11,7 @@ import {
     PencilIcon,
 } from '@lucide/vue';
 import { toast } from 'vue-sonner';
+import AddToBasketButton from '@/components/AddToBasketButton.vue';
 import BackToCollections from '@/components/BackToCollections.vue';
 import BackToLibrary from '@/components/BackToLibrary.vue';
 import PageHeader from '@/components/PageHeader.vue';
@@ -28,6 +29,7 @@ import {
     CollapsibleTrigger,
 } from '@/components/ui/collapsible';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { addToBasket } from '@/lib/basket';
 import { cameFromCollections } from '@/lib/collections';
 import { shortDate } from '@/lib/format';
 import {
@@ -49,6 +51,7 @@ import {
 } from '@/lib/search-target';
 import { restoreSession, archiveSession } from '@/lib/session-archive';
 import { archivedSessionMessage } from '@/lib/session-selection';
+import { index as basketIndex } from '@/routes/basket';
 import { edit as sessionsEdit } from '@/routes/sessions';
 import type {
     FeedbackType,
@@ -65,10 +68,62 @@ interface QuestionCard {
     sections: ReadingSection[];
 }
 
-const props = defineProps<{
-    /** A saved session, in the same shape the editor opens it. */
-    session: PracticeSessionData;
-}>();
+const props = withDefaults(
+    defineProps<{
+        /** A saved session, in the same shape the editor opens it. */
+        session: PracticeSessionData;
+        /** The questions already gathered for a custom review. */
+        basketQuestionIds?: number[];
+    }>(),
+    { basketQuestionIds: () => [] },
+);
+
+/** The questions in the basket, so each one can say it is already there. */
+const basketQuestions = ref<Set<number>>(new Set(props.basketQuestionIds));
+
+/** The question whose add request is on its way, so only it waits. */
+const addingQuestionId = ref<number | null>(null);
+
+function isInBasket(questionId: number): boolean {
+    return basketQuestions.value.has(questionId);
+}
+
+/** Adds one question by its own identifier and says what changed. */
+async function addQuestion(question: PracticeQuestionData): Promise<void> {
+    if (addingQuestionId.value !== null) {
+        return;
+    }
+
+    addingQuestionId.value = question.id;
+
+    try {
+        const result = await addToBasket('question', [String(question.id)]);
+
+        basketQuestions.value = new Set([
+            ...basketQuestions.value,
+            question.id,
+        ]);
+
+        toast.success(
+            result.added_count === 0
+                ? 'That question is already in your basket.'
+                : 'Added this question to your basket.',
+            {
+                duration: 6000,
+                action: {
+                    label: 'View basket',
+                    onClick: () => router.visit(basketIndex.url()),
+                },
+            },
+        );
+    } catch {
+        toast.error(
+            'That question was not added. Nothing changed — check your connection and try again.',
+        );
+    } finally {
+        addingQuestionId.value = null;
+    }
+}
 
 /**
  * The questions worth showing. An unfinished session can still hold a card
@@ -689,6 +744,23 @@ function itemHasMoved(): void {
 
                         <CollapsibleContent>
                             <CardContent class="px-4 pb-5 sm:px-5">
+                                <div
+                                    class="mb-3 flex flex-wrap items-center justify-between gap-2 border-b pb-3"
+                                >
+                                    <span class="text-xs text-muted-foreground">
+                                        Add this question to a custom review.
+                                    </span>
+                                    <AddToBasketButton
+                                        :name="`question ${index + 1}`"
+                                        :added="isInBasket(card.question.id)"
+                                        :busy="
+                                            addingQuestionId ===
+                                            card.question.id
+                                        "
+                                        @add="addQuestion(card.question)"
+                                    />
+                                </div>
+
                                 <ReadingQuestion
                                     :question="card.question"
                                     :sections="card.sections"

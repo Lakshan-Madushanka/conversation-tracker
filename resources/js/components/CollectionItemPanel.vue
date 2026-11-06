@@ -3,6 +3,7 @@ import { computed, nextTick, ref, watch } from 'vue';
 import { Link } from '@inertiajs/vue3';
 import { useMediaQuery } from '@vueuse/core';
 import { ArrowUpRightIcon, TriangleAlertIcon } from '@lucide/vue';
+import AddToBasketButton from '@/components/AddToBasketButton.vue';
 import { Badge } from '@/components/ui/badge';
 import {
     Collapsible,
@@ -46,8 +47,10 @@ const props = withDefaults(
     defineProps<{
         item: CollectionOpenedItem | null;
         tab?: CollectionTabKey;
+        /** True while this item's add request is on its way. */
+        basketBusy?: boolean;
     }>(),
-    { tab: 'vocabulary' },
+    { tab: 'vocabulary', basketBusy: false },
 );
 
 const emit = defineEmits<{
@@ -56,6 +59,8 @@ const emit = defineEmits<{
     (event: 'see-session'): void;
     /** A mark was saved; the list keeps the same truth. */
     (event: 'mark-saved', item: CollectionOpenedItem, mark: ItemMarkData): void;
+    /** The learner asked to put this item into the basket. */
+    (event: 'add', item: CollectionOpenedItem): void;
 }>();
 
 /** Passes a saved mark up only while an item is really open. */
@@ -287,6 +292,22 @@ function seeOriginal(event: MouseEvent): void {
                         </Link>
                     </section>
 
+                    <div
+                        class="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3"
+                    >
+                        <span class="text-sm font-medium">Custom review</span>
+                        <AddToBasketButton
+                            :name="
+                                noteItem.preview === ''
+                                    ? noteItem.key
+                                    : noteItem.preview
+                            "
+                            :added="noteItem.in_basket === true"
+                            :busy="props.basketBusy"
+                            @add="emit('add', noteItem)"
+                        />
+                    </div>
+
                     <CollectionMarksSection
                         :key="noteItem.key"
                         :kind="markKindForTab(props.tab)"
@@ -502,6 +523,18 @@ function seeOriginal(event: MouseEvent): void {
                             </li>
                         </ul>
                     </section>
+
+                    <div
+                        class="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3"
+                    >
+                        <span class="text-sm font-medium">Custom review</span>
+                        <AddToBasketButton
+                            :name="wordItem.title"
+                            :added="wordItem.in_basket === true"
+                            :busy="props.basketBusy"
+                            @add="emit('add', wordItem)"
+                        />
+                    </div>
 
                     <CollectionMarksSection
                         :key="wordItem.key"

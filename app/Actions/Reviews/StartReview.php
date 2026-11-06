@@ -7,6 +7,8 @@ namespace App\Actions\Reviews;
 use App\Models\Review;
 use App\Models\ReviewItem;
 use App\Queries\TodaysReview;
+use App\Support\ReviewFilters;
+use App\Support\ReviewSettings;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -20,6 +22,8 @@ use Illuminate\Support\Facades\DB;
  * A review started from the day's suggestion is marked as the daily review,
  * so finishing it can say so warmly. "Review a bit more" starts the same
  * sitting without the daily mark, leaving out the items already rated today.
+ * A custom review names its own scope through `App\Support\ReviewFilters` and
+ * is marked as custom, so it can never be mistaken for the day's suggestion.
  */
 final readonly class StartReview
 {
@@ -33,20 +37,25 @@ final readonly class StartReview
         bool $daily = false,
         bool $excludingRatedToday = false,
         ?Request $request = null,
+        ?ReviewFilters $filters = null,
+        int $size = ReviewSettings::SIZE,
     ): ?Review {
         $suggestion = $this->todaysReview->suggest(
+            size: $size,
             excludingRatedToday: $excludingRatedToday,
             request: $request,
+            filters: $filters,
         );
 
         if ($suggestion->count() === 0) {
             return null;
         }
 
-        return DB::transaction(function () use ($suggestion, $daily): Review {
+        return DB::transaction(function () use ($suggestion, $daily, $filters): Review {
             /** @var Review $review */
             $review = Review::query()->create([
                 'is_daily_review' => $daily,
+                'is_custom_review' => $filters instanceof ReviewFilters && $filters->custom,
             ]);
 
             foreach ($suggestion->items as $position => $item) {

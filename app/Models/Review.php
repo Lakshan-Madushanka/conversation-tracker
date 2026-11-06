@@ -21,13 +21,21 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * so "You've reviewed today" can be worked out. A review left part-way
  * keeps `completed_on` null.
  *
+ * `is_custom_review` marks a sitting the learner chose themselves, and
+ * `finished_at` is the moment the finish screen was reached — every item rated,
+ * or the learner chose to finish early. A sitting that was never finished has
+ * no `finished_at`, so the recent results list only ever holds reviews the
+ * learner actually ended.
+ *
  * @property int $id
  * @property bool $is_daily_review
+ * @property bool $is_custom_review
  * @property CarbonImmutable|null $completed_on
+ * @property CarbonImmutable|null $finished_at
  * @property CarbonImmutable|null $created_at
  * @property CarbonImmutable|null $updated_at
  */
-#[Fillable(['is_daily_review', 'completed_on'])]
+#[Fillable(['is_daily_review', 'is_custom_review', 'completed_on', 'finished_at'])]
 final class Review extends Model
 {
     /** @return array<string, string> */
@@ -35,7 +43,9 @@ final class Review extends Model
     {
         return [
             'is_daily_review' => 'boolean',
+            'is_custom_review' => 'boolean',
             'completed_on' => 'immutable_date',
+            'finished_at' => 'immutable_datetime',
         ];
     }
 

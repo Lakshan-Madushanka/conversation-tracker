@@ -24,6 +24,7 @@ import FillInTheBlankExercise from '@/components/review/FillInTheBlankExercise.v
 import FlashcardExercise from '@/components/review/FlashcardExercise.vue';
 import FixTheMistakeExercise from '@/components/review/FixTheMistakeExercise.vue';
 import SayItAgainExercise from '@/components/review/SayItAgainExercise.vue';
+import StatusSuggestionCard from '@/components/review/StatusSuggestionCard.vue';
 import { Button } from '@/components/ui/button';
 import {
     Card,
@@ -53,6 +54,7 @@ import {
 } from '@/components/ui/stepper';
 import FocusLayout from '@/layouts/FocusLayout.vue';
 import {
+    finishEarly as reviewFinishEarly,
     index as reviewIndex,
     rate as reviewRate,
     store as reviewStore,
@@ -64,6 +66,7 @@ import type {
     ReviewCard,
     ReviewCounts,
     ReviewSection,
+    StatusSuggestionData,
 } from '@/types';
 
 const props = defineProps<{
@@ -85,6 +88,8 @@ const props = defineProps<{
     /** Whether the sitting was started from the day's suggestion. */
     isDailyReview: boolean;
     reviewId: number | null;
+    /** The statuses the finished sitting earned, at most two, never during one. */
+    suggestions: StatusSuggestionData[];
 }>();
 
 const ratingLabels: Record<ReviewRating, string> = {
@@ -313,9 +318,19 @@ function startAnotherReview(): void {
     startAnotherForm.post(reviewStore.url());
 }
 
-/** Leave the sitting early; nothing unrated is rescheduled. */
+/**
+ * Leave the sitting early. What was rated stays and the sitting keeps its
+ * place in the recent results; nothing unrated is rescheduled and the day's
+ * review is not marked done.
+ */
 function finishEarly(): void {
-    router.visit(reviewIndex.url());
+    if (props.reviewId === null) {
+        router.visit(reviewIndex.url());
+
+        return;
+    }
+
+    router.post(reviewFinishEarly.url({ review: props.reviewId }));
 }
 
 function onKeydown(event: KeyboardEvent): void {
@@ -589,6 +604,24 @@ onBeforeUnmount(() => {
                     <p class="mt-0.5 text-sm text-muted-foreground">
                         Nice work — a few minutes today keeps it fresh.
                     </p>
+                </div>
+
+                <!-- At most two status offers, never above the summary, and
+                    never holding the finish screen up. -->
+                <div
+                    v-if="
+                        props.reviewId !== null && props.suggestions.length > 0
+                    "
+                    class="grid gap-3"
+                    aria-label="Suggested marks"
+                >
+                    <StatusSuggestionCard
+                        v-for="(suggestion, index) in props.suggestions"
+                        :key="`${suggestion.kind}-${suggestion.item_identity}`"
+                        :review-id="props.reviewId"
+                        :suggestion="suggestion"
+                        :default-focus="index === 0"
+                    />
                 </div>
             </CardContent>
 

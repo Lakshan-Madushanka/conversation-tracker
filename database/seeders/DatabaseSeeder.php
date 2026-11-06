@@ -6,20 +6,19 @@ namespace Database\Seeders;
 
 use App\Models\PracticeSession;
 use App\Models\User;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
 {
-    use WithoutModelEvents;
-
     /**
      * Seed the application's database.
+     *
+     * Model events stay switched on: the searchable copy and the Collections
+     * identity are worked out as a row saves, so a seed that muted them would
+     * leave rows the Library search and the Collection pages cannot see.
      */
     public function run(): void
     {
-        // User::factory(10)->create();
-
         User::factory()->create([
             'name' => 'Test User',
             'email' => 'test@example.com',

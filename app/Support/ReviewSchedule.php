@@ -47,16 +47,27 @@ final class ReviewSchedule
      * never-reviewed item is "new" and due right away, but no schedule row
      * exists for it.
      *
+     * The same walk also reports the run of identical ratings that ends the
+     * history, so the finish screen's suggestions and the schedule are worked
+     * out from one rule and can never disagree.
+     *
      * @param  iterable<array{rating: ReviewRating, day: CarbonImmutable}>  $history
      */
     public static function rebuild(iterable $history): ?ScheduleState
     {
         $ratedCount = 0;
         $easyRun = 0;
+        $streakCount = 0;
+        $streakRating = null;
         $last = null;
 
         foreach ($history as $entry) {
             $ratedCount += 1;
+
+            // The run the finish screen reads: the same rating, in a row. Any
+            // other rating — an Okay between two Easy ones — starts a new run.
+            $streakCount = $streakRating === $entry['rating'] ? $streakCount + 1 : 1;
+            $streakRating = $entry['rating'];
 
             if ($entry['rating'] === ReviewRating::Easy) {
                 $easyRun += 1;
@@ -86,6 +97,7 @@ final class ReviewSchedule
             lastRating: $lastRating,
             ratedCount: $ratedCount,
             easyRun: $easyRun,
+            streakCount: $streakCount,
         );
     }
 }

@@ -1,14 +1,20 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { Head, Link } from '@inertiajs/vue3';
-import { InfoIcon, LightbulbIcon } from '@lucide/vue';
+import { InfoIcon, LightbulbIcon, SlidersHorizontalIcon } from '@lucide/vue';
 import PageHeader from '@/components/PageHeader.vue';
+import ReviewRecentResults from '@/components/ReviewRecentResults.vue';
+import ReviewRulesDialog from '@/components/review/ReviewRulesDialog.vue';
 import ReviewSuggestionCard from '@/components/ReviewSuggestionCard.vue';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { index as collectionsIndex } from '@/routes/collections';
+import { custom as customReview } from '@/routes/review';
 import type {
     GrammarNotesTipData,
+    RecentReviewData,
+    ReviewRulesData,
     TodayReviewData,
     WaitingForFixData,
 } from '@/types';
@@ -22,6 +28,10 @@ const props = defineProps<{
     waitingForFix: WaitingForFixData;
     /** How many grammar notes cannot make a blank yet. */
     grammarNotesTip: GrammarNotesTipData;
+    /** The last few sittings and what their ratings came to. */
+    recentReviews: RecentReviewData[];
+    /** The rules the info button explains, as the app runs them. */
+    reviewRules: ReviewRulesData;
 }>();
 
 const waitingGroups = computed(() =>
@@ -96,9 +106,30 @@ const grammarNotesLink = computed(() =>
         <PageHeader
             title="Review"
             description="A calm few minutes with the words, phrases and mistakes you want to keep."
-        />
+        >
+            <template #actions>
+                <ReviewRulesDialog :rules="props.reviewRules" />
+            </template>
+        </PageHeader>
 
         <ReviewSuggestionCard :suggestion="props.todayReview" />
+
+        <!-- Choosing what to review is its own page, never a saved profile -->
+        <div class="mt-4">
+            <Button
+                variant="outline"
+                size="lg"
+                class="h-11 cursor-pointer"
+                as-child
+            >
+                <Link :href="customReview.url()">
+                    <SlidersHorizontalIcon aria-hidden="true" />
+                    Custom review
+                </Link>
+            </Button>
+        </div>
+
+        <ReviewRecentResults :reviews="props.recentReviews" />
 
         <!-- Items waiting for a fix, by the same shared rule as the collections -->
         <Alert v-if="waitingCount > 0" class="mt-4">

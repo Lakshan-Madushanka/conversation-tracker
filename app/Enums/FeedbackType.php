@@ -82,10 +82,28 @@ enum FeedbackType: string
         return [self::Vocabulary, self::Phrase, self::GrammarNote, self::Mistake];
     }
 
+    /**
+     * The kinds whose items carry the learner's own star and status. A past
+     * question and a grammar note never do, so nothing can favour them by a
+     * star or suggest a status for them.
+     *
+     * @return list<self>
+     */
+    public static function markable(): array
+    {
+        return [self::Vocabulary, self::Phrase, self::Mistake];
+    }
+
     /** Whether the learner can star, label and annotate this kind of item. */
     public function isCollectable(): bool
     {
         return in_array($this, self::collectable(), true);
+    }
+
+    /** Whether items of this kind carry the learner's star and status. */
+    public function isMarkable(): bool
+    {
+        return in_array($this, self::markable(), true);
     }
 
     /**

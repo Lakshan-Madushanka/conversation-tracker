@@ -441,15 +441,17 @@ The app is built with a modern, single-codebase web stack:
 
 ## F13. Custom reviews ⚪
 
-**Description:** Saved, named practice sets built from items the learner chooses across all collections, with per-kind limits, repeatable attempts, and a full attempt history. Completely separate from the daily review: attempts never change marks, ratings, schedules, statuses, or progress.
+**Description:** Saved, named practice sets built from items the learner chooses across all collections, with a Draft/Finished status, repeatable attempts, and a full attempt history. Completely separate from the daily review: attempts never change marks, ratings, schedules, statuses, or progress.
 
 **What the learner can do**
 
-- Start a review and get a **draft** straight away, named "Custom Review N", that survives refresh like any other review.
-- Add items from any collection with **Add to review**, choosing the draft when there is more than one, or use **+ Add items** on the draft's page to see only items that can be used.
-- Name it, describe it, and set how many words, phrases, fix-the-mistake, say-it-again, and fill-in-the-blank items it uses — all at any time, with no save step.
-- Attempt the review as often as they like, and see every attempt with its date, status, and counts.
-- Search and filter their reviews, and see each review's previous attempt status on its card.
+- Start a review and get it saved straight away, named "Custom Review N", that survives refresh like any other review.
+- Add items from any collection with **Add to review**, choosing which unfinished review takes them, or use **+ Add items** on a review's page to see only items that can be used.
+- Name it and describe it whenever they like — there is no save step, and an attempt uses every item the review holds.
+- Work with three statuses: **Empty** while it holds nothing, **Draft** while it is being built, and **Finished** once they mark it ready. Only a Finished review can be practised.
+- See a friendly **"Too Many Items"** tag, and a warning while adding, once a review grows past the recommended 20 items — with nothing ever refused.
+- Attempt a Finished review as often as they like, and see every attempt with its date, status, and counts.
+- Search and filter their reviews by name and status, and see each review's previous attempt status on its card.
 - Delete a review, which also deletes its attempts, after confirmation.
 
 **Full details:** see `feature-Custom reviews.md`.

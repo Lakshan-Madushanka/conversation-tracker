@@ -20,12 +20,15 @@ use App\Http\Requests\AutosavePracticeSessionRequest;
 use App\Http\Requests\DeletePracticeSessionRequest;
 use App\Http\Requests\SessionDeletionPreviewRequest;
 use App\Http\Requests\StorePracticeSessionRequest;
+use App\Http\Resources\CustomReviewSummaryResource;
 use App\Http\Resources\SessionDeletionPreviewResource;
 use App\Http\Resources\SessionEditorResource;
+use App\Models\CustomReview;
 use App\Models\PracticeSession;
 use App\Models\Topic;
-use App\Queries\BasketItems;
+use App\Queries\CustomReviewItems;
 use App\Queries\SessionDeletionPreview;
+use App\Queries\UnfinishedCustomReviews;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
@@ -37,8 +40,11 @@ class PracticeSessionController extends Controller
      * A saved session to read from start to finish. An unfinished session is
      * sent straight to the editor, because the learner is still working on it.
      */
-    public function show(PracticeSession $session, BasketItems $basket): Response|RedirectResponse
-    {
+    public function show(
+        PracticeSession $session,
+        UnfinishedCustomReviews $unfinished,
+        CustomReviewItems $reviews,
+    ): Response|RedirectResponse {
         if (! $session->isFinished()) {
             return redirect()->route('sessions.edit', $session);
         }
@@ -51,11 +57,18 @@ class PracticeSessionController extends Controller
             $payload['questions'],
         );
 
+        // The review the page marks its questions against, and which ones it
+        // already holds — read in one lookup, never per question.
+        $target = $unfinished->target(null);
+
         return Inertia::render('sessions/Show', [
             'session' => $payload,
-            // Which questions are already in the basket, read in one lookup so
-            // the reading page never asks per question.
-            'basketQuestionIds' => $basket->questions($questionIds),
+            'reviewTarget' => $target instanceof CustomReview
+                ? CustomReviewSummaryResource::make($target, $reviews->count($target))->resolve()
+                : null,
+            'reviewQuestionIds' => $target instanceof CustomReview
+                ? $reviews->questions($target, $questionIds)
+                : [],
         ]);
     }
 

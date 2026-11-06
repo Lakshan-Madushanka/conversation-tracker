@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\PracticeQuestions;
 
+use App\Actions\Basket\MoveBasketAfterEdit;
 use App\Actions\Collections\MoveMarkAfterEdit;
 use App\Enums\FeedbackType;
 use App\Models\PracticeFeedbackEntry;
@@ -26,13 +27,15 @@ use Illuminate\Support\Str;
  *
  * After an edit to a finished, non-archived session, the typo rule in
  * `MoveMarkAfterEdit` moves the learner's marks with an entry whose identity
- * changed, inside the same save. Grammar notes need nothing: their marks
- * belong to the note itself, however its text is edited.
+ * changed, inside the same save. `MoveBasketAfterEdit` follows the same rule
+ * for anything gathered in the custom-review basket. Grammar notes need
+ * nothing: their marks belong to the note itself, however its text is edited.
  */
 final readonly class SavePracticeFeedback
 {
     public function __construct(
         private MoveMarkAfterEdit $moveMarkAfterEdit,
+        private MoveBasketAfterEdit $moveBasketAfterEdit,
     ) {}
 
     /**
@@ -109,6 +112,13 @@ final readonly class SavePracticeFeedback
         // the entries as they are from now on.
         foreach ($marksToMove as $move) {
             $this->moveMarkAfterEdit->handle(
+                $type,
+                $move['from'],
+                $move['to'],
+                $move['entry_id'],
+            );
+
+            $this->moveBasketAfterEdit->handle(
                 $type,
                 $move['from'],
                 $move['to'],

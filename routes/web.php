@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\BasketController;
 use App\Http\Controllers\CollectionController;
 use App\Http\Controllers\CollectionMarkController;
 use App\Http\Controllers\CustomReviewController;
@@ -41,6 +42,17 @@ Route::delete('/sessions/{session}', [PracticeSessionController::class, 'destroy
 Route::get('/sessions/{session}', [PracticeSessionController::class, 'show'])->name('sessions.show');
 
 Route::get('/collections', [CollectionController::class, 'index'])->name('collections.index');
+
+// Every item matching the current collections view, for "Select all" before
+// adding to the basket.
+Route::get('/collections/selection', [CollectionController::class, 'selection'])->name('collections.selection');
+
+// The custom-review basket. It only holds references to items, so adding or
+// removing one never changes an item's marks, ratings, schedule or session.
+Route::get('/basket', [BasketController::class, 'index'])->name('basket.index');
+Route::delete('/basket', [BasketController::class, 'clear'])->name('basket.clear');
+Route::post('/basket/items', [BasketController::class, 'store'])->name('basket.items.store');
+Route::delete('/basket/items', [BasketController::class, 'destroy'])->name('basket.items.destroy');
 
 // The learner's own marks on collection items: a star and status, and the
 // personal notes with the version marker that catches another tab's change.

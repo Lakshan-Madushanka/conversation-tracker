@@ -15,6 +15,7 @@ use App\Http\Requests\UndoReviewItemRequest;
 use App\Http\Resources\RecentReviewResource;
 use App\Models\Rating;
 use App\Models\Review;
+use App\Queries\BasketCount;
 use App\Queries\RecentReviews;
 use App\Queries\ReviewCandidates;
 use App\Queries\ReviewSections;
@@ -54,6 +55,7 @@ class ReviewController extends Controller
         TableCollection $collection,
         ReviewCandidates $candidates,
         RecentReviews $recentReviews,
+        BasketCount $basketCount,
     ): Response {
         return Inertia::render('review/Index', [
             'todayReview' => $todaysReview->card($request),
@@ -77,6 +79,8 @@ class ReviewController extends Controller
             ),
             // The numbers the "how this works" explanation is written around.
             'reviewRules' => ReviewRules::values(),
+            // What the learner has gathered so far; the bar reads only this.
+            'basketCount' => $basketCount->value(),
         ]);
     }
 

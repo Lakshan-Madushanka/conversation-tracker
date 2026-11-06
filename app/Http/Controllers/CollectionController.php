@@ -11,6 +11,8 @@ use App\Http\Resources\CollectionItemResource;
 use App\Http\Resources\CollectionMistakeResource;
 use App\Http\Resources\CollectionNoteResource;
 use App\Models\CollectionItemMark;
+use App\Queries\BasketCount;
+use App\Queries\BasketItems;
 use App\Queries\CollectionMarks;
 use App\Queries\TableCollection;
 use Illuminate\Http\JsonResponse;
@@ -19,7 +21,10 @@ use Inertia\Response;
 
 class CollectionController extends Controller
 {
-    public function __construct(private readonly CollectionMarks $marks) {}
+    public function __construct(
+        private readonly CollectionMarks $marks,
+        private readonly BasketItems $basket,
+    ) {}
 
     /**
      * The four personal collections, gathered live from finished sessions.
@@ -32,6 +37,7 @@ class CollectionController extends Controller
     public function index(
         CollectionRequest $request,
         TableCollection $collection,
+        BasketCount $basketCount,
     ): Response|JsonResponse {
         $tab = $request->tab();
         $type = $tab->feedbackType();
@@ -71,6 +77,7 @@ class CollectionController extends Controller
                     'topic_options' => $topicOptions,
                     'filters' => $filters->toArray(),
                     'has_finished_sessions' => $collection->hasFinishedSessions(),
+                    'basket_count' => $basketCount->value(),
                 ];
             }
 
@@ -91,6 +98,7 @@ class CollectionController extends Controller
             'topic_options' => $topicOptions,
             'filters' => $filters->toArray(),
             'has_finished_sessions' => $collection->hasFinishedSessions(),
+            'basket_count' => $basketCount->value(),
         ];
 
         $item = $request->item();
@@ -109,6 +117,7 @@ class CollectionController extends Controller
                     $this->marks->forItem($type, $item),
                     true,
                     $filters->terms(),
+                    $this->basket->has($type, $item),
                 );
             }
         }
@@ -117,6 +126,28 @@ class CollectionController extends Controller
             ...$payload,
             'open_item' => $openItem,
             'open_item_missing' => $missing,
+        ]);
+    }
+
+    /**
+     * Every item matching the current tab, search and filters, so "Select all"
+     * can add the whole result to the basket in one go.
+     */
+    public function selection(
+        CollectionRequest $request,
+        TableCollection $collection,
+    ): JsonResponse {
+        $type = $request->tab()->feedbackType();
+        $topicOptions = $collection->topicOptions($type);
+        $filters = $request->filters()->restrictTopics(
+            array_column($topicOptions, 'id'),
+        );
+
+        $keys = $collection->keys($type, $filters);
+
+        return response()->json([
+            'keys' => $keys,
+            'total' => count($keys),
         ]);
     }
 
@@ -152,6 +183,11 @@ class CollectionController extends Controller
             array_column($items, 'key'),
         );
 
+        $inBasket = $this->basket->among(
+            $tab->feedbackType(),
+            array_column($items, 'key'),
+        );
+
         return array_map(
             fn (array $item): array => $this->shapeItem(
                 $tab,
@@ -159,6 +195,7 @@ class CollectionController extends Controller
                 $pageMarks[$item['key']] ?? null,
                 false,
                 $terms,
+                isset($inBasket[$item['key']]),
             ),
             $items,
         );
@@ -175,16 +212,18 @@ class CollectionController extends Controller
         ?CollectionItemMark $mark,
         bool $withNotes,
         array $terms = [],
+        bool $inBasket = false,
     ): array {
         return match ($tab->feedbackType()) {
-            FeedbackType::GrammarNote => CollectionNoteResource::make($item, $mark, $withNotes, $terms)->resolve(),
-            FeedbackType::Mistake => CollectionMistakeResource::make($item, $mark, $withNotes, $terms)->resolve(),
+            FeedbackType::GrammarNote => CollectionNoteResource::make($item, $mark, $withNotes, $terms, $inBasket)->resolve(),
+            FeedbackType::Mistake => CollectionMistakeResource::make($item, $mark, $withNotes, $terms, $inBasket)->resolve(),
             default => CollectionItemResource::make(
                 $item,
                 $mark,
                 $withNotes,
                 $terms,
                 $tab->feedbackType(),
+                $inBasket,
             )->resolve(),
         };
     }

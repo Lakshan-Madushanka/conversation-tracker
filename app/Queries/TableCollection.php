@@ -972,6 +972,37 @@ final class TableCollection
     }
 
     /**
+     * Every item key the current view, search and filters match, without
+     * paging. "Select all" can then add the whole result to the basket, not
+     * only the items already loaded on screen.
+     *
+     * @return list<string>
+     */
+    public function keys(FeedbackType $type, CollectionFilters $filters): array
+    {
+        if ($type === FeedbackType::GrammarNote) {
+            /** @var list<string> $keys */
+            $keys = $this->notesQuery($filters)
+                ->select('e.id')
+                ->get()
+                ->map(fn (object $row): string => 'note-'.(int) $row->id)
+                ->all();
+
+            return $keys;
+        }
+
+        /** @var list<string> $keys */
+        $keys = $this->groupedQuery($type, $filters)
+            ->select('e.collection_key')
+            ->pluck('e.collection_key')
+            ->filter(fn (mixed $key): bool => is_string($key) && $key !== '')
+            ->values()
+            ->all();
+
+        return $keys;
+    }
+
+    /**
      * The rows of one box, newest session first, grouped by their normalised
      * subject. The first row of a group is its newest appearance.
      *

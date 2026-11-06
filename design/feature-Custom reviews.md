@@ -224,26 +224,26 @@ This describes the intended approach at a high level, using the agreed stack (La
 
 All interface pieces should come from **shadcn-vue**. Only build a custom piece when shadcn-vue has nothing suitable, and then compose it from shadcn-vue parts with Tailwind. Do not add any other component library.
 
-| Custom reviews need                              | shadcn-vue component to use                            |
-| ------------------------------------------------ | ------------------------------------------------------ |
-| Custom review cards                              | Card                                                   |
-| Search by name and status filter                 | Input, Select, Toggle Group                            |
-| Status label on a card — Empty, Draft, Finished  | Badge, with text                                       |
-| "Too Many Items" tag with the count              | Badge, with text                                       |
-| Draft-or-Finished control on card and page       | Toggle Group, with a clear label                       |
-| Recommended-size warning when adding             | Alert Dialog, with Continue and Cancel                 |
-| "Which review?" picker over unfinished reviews   | Dialog, with Select or Command, the most recent chosen |
-| Review page and grouped items                    | Card, Checkbox, Separator                              |
-| + Add items, filtered to eligible items          | The existing Collections lists, with filter controls   |
-| Name and description                             | Input, Textarea, Label                                 |
-| Not eligible yet line                            | Alert, or Card section                                 |
-| Attempt stepper                                  | The existing Stepper, linear option off                |
-| Attempt history                                  | Table on wide screens, stacked cards on phones         |
-| Deleted indicator and Not available right now    | Badge, with text                                       |
-| Delete and clear confirmations                   | Alert Dialog                                           |
-| Add to review, Start practice, Done, Finish early | Button                                                |
-| Messages                                         | Sonner (toast) and Alert                               |
-| Loading and empty states                         | Skeleton, and the existing empty-state piece           |
+| Custom reviews need                               | shadcn-vue component to use                            |
+| ------------------------------------------------- | ------------------------------------------------------ |
+| Custom review cards                               | Card                                                   |
+| Search by name and status filter                  | Input, Select, Toggle Group                            |
+| Status label on a card — Empty, Draft, Finished   | Badge, with text                                       |
+| "Too Many Items" tag with the count               | Badge, with text                                       |
+| Draft-or-Finished control on card and page        | Toggle Group, with a clear label                       |
+| Recommended-size warning when adding              | Alert Dialog, with Continue and Cancel                 |
+| "Which review?" picker over unfinished reviews    | Dialog, with Select or Command, the most recent chosen |
+| Review page and grouped items                     | Card, Checkbox, Separator                              |
+| + Add items, filtered to eligible items           | The existing Collections lists, with filter controls   |
+| Name and description                              | Input, Textarea, Label                                 |
+| Not eligible yet line                             | Alert, or Card section                                 |
+| Attempt stepper                                   | The existing Stepper, linear option off                |
+| Attempt history                                   | Table on wide screens, stacked cards on phones         |
+| Deleted indicator and Not available right now     | Badge, with text                                       |
+| Delete and clear confirmations                    | Alert Dialog                                           |
+| Add to review, Start practice, Done, Finish early | Button                                                 |
+| Messages                                          | Sonner (toast) and Alert                               |
+| Loading and empty states                          | Skeleton, and the existing empty-state piece           |
 
 ## Implementation Steps
 

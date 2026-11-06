@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
-use App\Actions\Basket\AddBasketItems;
 use App\Actions\Collections\SaveItemMark;
 use App\Actions\Collections\SaveItemNotes;
+use App\Actions\CustomReviews\AddCustomReviewItems;
+use App\Actions\CustomReviews\CreateCustomReview;
 use App\Actions\Reviews\DeclineStatusSuggestion;
 use App\Actions\Reviews\FinishReviewEarly;
 use App\Actions\Reviews\RecordRating;
@@ -15,8 +16,9 @@ use App\Actions\Reviews\UndoRating;
 use App\Enums\CollectionItemStatus;
 use App\Enums\FeedbackType;
 use App\Enums\ReviewRating;
-use App\Models\BasketItem;
 use App\Models\CollectionItemMark;
+use App\Models\CustomReview;
+use App\Models\CustomReviewItem;
 use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeQuestion;
 use App\Models\PracticeSession;
@@ -99,10 +101,10 @@ class LibrarySeeder extends Seeder
     private const int TARGET_RATED_QUESTIONS = 40;
 
     /**
-     * A basket large enough to prove the page reads and scrolls without a
+     * A review large enough to prove its page reads and scrolls without a
      * growing number of queries, with every kind alongside it.
      */
-    private const int TARGET_BASKET_ITEMS = 2000;
+    private const int TARGET_REVIEW_ITEMS = 2000;
 
     /**
      * Distinct items the recent sittings are built from: enough for six
@@ -598,86 +600,66 @@ class LibrarySeeder extends Seeder
             $this->seedReviewRatings();
             $this->seedQuestionRatings();
             $this->seedRecentSittings();
-            $this->seedBasket($topics);
+            $this->seedCustomReviews($topics);
         });
     }
 
     /**
-     * Fills the basket with a few items of every kind, an item that only sits
-     * in an archived session, a reference to an item that no longer exists
-     * (removed the next time the basket opens), and enough words to make the
-     * page work at scale. Clearing it, or removing most of it, is the quickest
-     * way to see the empty and nearly-empty states.
+     * The reviews a learner would build up over a week, in the sizes the
+     * pages have to cope with: one still empty, one holding a single item, and
+     * one holding a little of every collection, an item that only sits in an
+     * archived session, a reference to an item whose session was deleted, and
+     * a couple of thousand words. Clearing the last one is the quickest way to
+     * see the empty state.
      *
      * @param  Collection<int, Topic>  $topics
      */
-    private function seedBasket(Collection $topics): void
+    private function seedCustomReviews(Collection $topics): void
     {
-        if (BasketItem::query()->exists()) {
+        if (CustomReview::query()->exists()) {
             return;
         }
 
-        $add = app(AddBasketItems::class);
+        $create = app(CreateCustomReview::class);
+        $add = app(AddCustomReviewItems::class);
 
-        /** @var list<string> $words */
-        $words = $this->basketEntries(FeedbackType::Vocabulary, 2)
-            ->pluck('collection_key')
-            ->filter()
-            ->values()
-            ->all();
+        // The two sizes a review begins at: nothing in it yet, and one item.
+        $create->handle();
 
-        /** @var list<string> $phrases */
-        $phrases = $this->basketEntries(FeedbackType::Phrase, 1)
-            ->pluck('collection_key')
-            ->filter()
-            ->values()
-            ->all();
-
-        /** @var list<string> $notes */
-        $notes = $this->basketEntries(FeedbackType::GrammarNote, 1)
-            ->pluck('id')
-            ->map(fn (int $id): string => 'note-'.$id)
-            ->values()
-            ->all();
-
-        /** @var list<string> $mistakes */
-        $mistakes = $this->basketEntries(FeedbackType::Mistake, 1, tablePair: true)
-            ->map(fn (PracticeFeedbackEntry $entry): string => MistakeIdentity::pairKey(
-                (string) $entry->content_text,
-                (string) $entry->correction_text,
-            ))
-            ->values()
-            ->all();
-
-        /** @var list<string> $questions */
-        $questions = PracticeQuestion::query()
-            ->whereHas('practiceSession', fn ($query) => $query->study())
-            ->inRandomOrder()
-            ->limit(1)
-            ->pluck('id')
-            ->map(fn (int $id): string => (string) $id)
-            ->values()
-            ->all();
-
-        /** @var list<string> $archived */
-        $archived = $this->basketEntries(
+        $single = $create->handle();
+        $add->handle(
+            $single,
             FeedbackType::Vocabulary,
-            1,
-            archived: true,
-        )->pluck('collection_key')->filter()->values()->all();
+            $this->reviewKeys(FeedbackType::Vocabulary, 1),
+        );
 
-        $add->handle(FeedbackType::Vocabulary, [...$words, ...$archived]);
-        $add->handle(FeedbackType::Phrase, $phrases);
-        $add->handle(FeedbackType::GrammarNote, $notes);
-        $add->handle(FeedbackType::Mistake, $mistakes);
-        $add->handle(FeedbackType::Question, $questions);
+        // A review with something in every group its page shows, one of the
+        // words archived and one reference left by a deleted item.
+        $mixed = $create->handle();
 
-        $scale = $this->basketScaleIdentities($topics->random());
-        $add->handle(FeedbackType::Vocabulary, $scale);
+        $add->handle($mixed, FeedbackType::Vocabulary, [
+            ...$this->reviewKeys(FeedbackType::Vocabulary, 2),
+            ...$this->reviewKeys(FeedbackType::Vocabulary, 1, archived: true),
+        ]);
+        $add->handle(
+            $mixed,
+            FeedbackType::Phrase,
+            $this->reviewKeys(FeedbackType::Phrase, 1),
+        );
+        $add->handle($mixed, FeedbackType::GrammarNote, $this->reviewNoteKeys(1));
+        $add->handle($mixed, FeedbackType::Mistake, $this->reviewMistakeKeys(1));
+        $add->handle($mixed, FeedbackType::Question, $this->reviewQuestionKeys(1));
 
-        // A reference left behind by a deleted item. Opening the basket takes
+        $add->handle(
+            $mixed,
+            FeedbackType::Vocabulary,
+            $this->reviewScaleIdentities($topics->random()),
+        );
+
+        // A reference left behind by a deleted item. Opening the review takes
         // it away, so the seeded state proves the repair.
-        BasketItem::query()->insert([
+        CustomReviewItem::query()->insert([
+            'custom_review_id' => $mixed->id,
             'kind' => FeedbackType::Vocabulary->value,
             'item_identity' => SearchText::normalize('an item whose session was deleted'),
             'added_at' => now(),
@@ -685,13 +667,90 @@ class LibrarySeeder extends Seeder
     }
 
     /**
-     * Entries of one kind that belong to a finished session, optionally the
-     * archived ones only. Mistakes need both halves of the pair to have an
+     * The identities of a few items of one table kind, from a live session or
+     * an archived one.
+     *
+     * @return list<string>
+     */
+    private function reviewKeys(
+        FeedbackType $kind,
+        int $limit,
+        bool $archived = false,
+    ): array {
+        /** @var list<string> $keys */
+        $keys = $this->reviewEntries($kind, $limit, $archived)
+            ->pluck('collection_key')
+            ->filter()
+            ->values()
+            ->all();
+
+        return $keys;
+    }
+
+    /**
+     * The identities of a few grammar notes, each named by its own row.
+     *
+     * @return list<string>
+     */
+    private function reviewNoteKeys(int $limit): array
+    {
+        /** @var list<string> $keys */
+        $keys = $this->reviewEntries(FeedbackType::GrammarNote, $limit)
+            ->pluck('id')
+            ->map(fn (int $id): string => 'note-'.$id)
+            ->values()
+            ->all();
+
+        return $keys;
+    }
+
+    /**
+     * The identities of a few mistakes, each named by the key of its pair.
+     *
+     * @return list<string>
+     */
+    private function reviewMistakeKeys(int $limit): array
+    {
+        /** @var list<string> $keys */
+        $keys = $this->reviewEntries(FeedbackType::Mistake, $limit, tablePair: true)
+            ->map(fn (PracticeFeedbackEntry $entry): string => MistakeIdentity::pairKey(
+                (string) $entry->content_text,
+                (string) $entry->correction_text,
+            ))
+            ->values()
+            ->all();
+
+        return $keys;
+    }
+
+    /**
+     * The identities of a few questions, each named by its own id.
+     *
+     * @return list<string>
+     */
+    private function reviewQuestionKeys(int $limit): array
+    {
+        /** @var list<string> $keys */
+        $keys = PracticeQuestion::query()
+            ->whereHas('practiceSession', fn ($query) => $query->study())
+            ->inRandomOrder()
+            ->limit($limit)
+            ->pluck('id')
+            ->map(fn (int $id): string => (string) $id)
+            ->values()
+            ->all();
+
+        return $keys;
+    }
+
+    /**
+     * Rows of one kind that a review can name, from a live session or, when
+     * asked, an archived one. Mistakes need both halves of the pair to have an
      * identity.
      *
      * @return Collection<int, PracticeFeedbackEntry>
      */
-    private function basketEntries(
+    private function reviewEntries(
         FeedbackType $kind,
         int $limit,
         bool $archived = false,
@@ -717,14 +776,14 @@ class LibrarySeeder extends Seeder
     }
 
     /**
-     * One finished session holding a long list of plain words, so the basket
-     * can hold a couple of thousand items with real sources behind them. Only
+     * One finished session holding a long list of plain words, so a review can
+     * hold a couple of thousand items with real sources behind them. Only
      * the columns the projections need are written; the rest keep their
      * defaults.
      *
      * @return list<string>
      */
-    private function basketScaleIdentities(Topic $topic): array
+    private function reviewScaleIdentities(Topic $topic): array
     {
         /** @var list<string> $existing */
         $existing = PracticeFeedbackEntry::query()
@@ -741,7 +800,7 @@ class LibrarySeeder extends Seeder
             ->values()
             ->all();
 
-        // Clearing the basket is a normal way to see the empty state, so a
+        // Clearing a review is a normal way to see the empty state, so a
         // later run tops the same session back up instead of adding another.
         if ($existing !== []) {
             return $existing;
@@ -760,9 +819,9 @@ class LibrarySeeder extends Seeder
         $words = [];
         $rows = [];
 
-        for ($index = 1; $index <= self::TARGET_BASKET_ITEMS; $index++) {
+        for ($index = 1; $index <= self::TARGET_REVIEW_ITEMS; $index++) {
             $word = sprintf('Scale word %04d', $index);
-            $meaning = 'one of the words that make the basket long';
+            $meaning = 'one of the words that make the review long';
             $words[] = SearchText::normalize($word);
             $rows[] = [
                 'practice_question_id' => $question->id,

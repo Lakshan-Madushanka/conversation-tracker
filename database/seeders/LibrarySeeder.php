@@ -6,7 +6,11 @@ namespace Database\Seeders;
 
 use App\Actions\Collections\SaveItemMark;
 use App\Actions\Collections\SaveItemNotes;
+use App\Actions\Reviews\DeclineStatusSuggestion;
+use App\Actions\Reviews\FinishReviewEarly;
+use App\Actions\Reviews\RecordRating;
 use App\Actions\Reviews\SyncReviewSchedule;
+use App\Actions\Reviews\UndoRating;
 use App\Enums\CollectionItemStatus;
 use App\Enums\FeedbackType;
 use App\Enums\ReviewRating;
@@ -15,8 +19,13 @@ use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeQuestion;
 use App\Models\PracticeSession;
 use App\Models\Rating;
+use App\Models\Review;
+use App\Models\ReviewItem;
 use App\Models\Topic;
+use App\Queries\ReviewCandidates;
 use App\Support\MistakeIdentity;
+use App\Support\ReviewExercises;
+use App\Support\ReviewFilters;
 use App\Support\SearchText;
 use Carbon\CarbonImmutable;
 use Closure;
@@ -30,45 +39,48 @@ use Illuminate\Support\Facades\DB;
  * a later day, archived sessions, several finished on the same day, and a
  * ten-day streak. The words mix plain English with accents, other languages
  * and punctuation, so search can be tried by hand against real variety. The
- * collections are topped up too: a few thousand words, a few thousand
- * phrases and a few thousand grammar notes, with the awkward cases each
- * page has to handle mixed in. It only runs locally and tops up to the
+ * collections are topped up too: enough words, phrases, mistakes and grammar
+ * notes to page through, with the awkward cases each page has to handle mixed
+ * in. One showcase session per collection is the smallest set that still shows
+ * every case, so the seed stays quick. It only runs locally and tops up to the
  * target instead of adding everything again on every run.
  */
 class LibrarySeeder extends Seeder
 {
-    private const int TARGET_SESSIONS = 500;
+    private const int TARGET_SESSIONS = 20;
 
     /**
-     * Enough words to fill a few hundred collection pages, so "Load more" and
-     * the endless list can be tried by hand.
+     * Enough words to page through the Collection more than once, so "Load
+     * more" and the quiet no-meaning rows can be tried by hand. One showcase
+     * session holds 8 questions x 12 rows, and every awkward case the page
+     * handles is keyed to a row number below that, so a single session shows
+     * them all.
      */
-    private const int TARGET_VOCABULARY = 5000;
+    private const int TARGET_VOCABULARY = self::SHOWCASE_ROWS_PER_SESSION;
 
     /**
      * Enough phrases to page through the second tab the same way, with the
      * unsplittable rows and quiet no-meaning rows mixed in.
      */
-    private const int TARGET_PHRASES = 5000;
+    private const int TARGET_PHRASES = self::SHOWCASE_ROWS_PER_SESSION;
 
     /**
      * Enough notes to page through while the twice-saved rules stay apart.
      */
-    private const int TARGET_GRAMMAR_NOTES = 3000;
+    private const int TARGET_GRAMMAR_NOTES = self::SHOWCASE_ROWS_PER_SESSION;
 
     /**
-     * Enough mistakes to practice My mistakes by hand: several thousand
-     * grouped pairs, with the same mistake seen one, two, three and many
-     * times mixed through the tab.
+     * Enough mistakes to practice My mistakes by hand: grouped pairs, with the
+     * same mistake seen one, two, three and many times mixed through the tab.
      */
-    private const int TARGET_MISTAKES = 5000;
+    private const int TARGET_MISTAKES = self::SHOWCASE_ROWS_PER_SESSION;
 
     /**
      * How many distinct words and phrases get a rating history, so the
      * daily suggestion has due, overdue and never-reviewed items to
      * choose from.
      */
-    private const int TARGET_RATED_ITEMS = 900;
+    private const int TARGET_RATED_ITEMS = 90;
 
     /**
      * Enough questions with a natural version to practice Say it again by
@@ -76,18 +88,28 @@ class LibrarySeeder extends Seeder
      * formatted and very long text, and the same question in two sessions
      * mixed through the set.
      */
-    private const int TARGET_SAY_IT_AGAIN = 5000;
+    private const int TARGET_SAY_IT_AGAIN = 48;
 
     /**
      * How many of those questions get a rating history over many days, so
      * the daily suggestion has due, overdue and never-reviewed questions.
      */
-    private const int TARGET_RATED_QUESTIONS = 400;
+    private const int TARGET_RATED_QUESTIONS = 40;
+
+    /**
+     * Distinct items the recent sittings are built from: enough for six
+     * sittings, the runs the finish screen reads, and a few items left out of
+     * every sitting so the library is not all spoken for.
+     */
+    private const int RECENT_POOL = 20;
 
     /** One showcase session: eight questions with twelve rows each. */
     private const int SHOWCASE_QUESTIONS = 8;
 
     private const int SHOWCASE_ROWS = 12;
+
+    /** The rows one showcase session adds, so targets are counted in sessions. */
+    private const int SHOWCASE_ROWS_PER_SESSION = self::SHOWCASE_QUESTIONS * self::SHOWCASE_ROWS;
 
     /** A meaning long enough to wrap over several lines on a phone. */
     private const string LONG_MEANING = 'A feeling of quiet, unhurried contentment that comes from simple things — a warm drink, a familiar chair, a book you have read before, and the knowledge that there is nowhere else you need to be for the next hour.';
@@ -541,29 +563,34 @@ class LibrarySeeder extends Seeder
             ->map(fn (string $name): Topic => Topic::firstOrCreate(['name' => $name]))
             ->values();
 
-        $missing = self::TARGET_SESSIONS - PracticeSession::query()->count();
+        // One transaction for the whole set. Sqlite otherwise pays a disk sync
+        // for every single row, which costs far more time than the rows do.
+        DB::transaction(function () use ($topics): void {
+            $missing = self::TARGET_SESSIONS - PracticeSession::query()->count();
 
-        for ($index = 0; $index < $missing; $index++) {
-            $this->createSession($topics->random());
-        }
+            for ($index = 0; $index < $missing; $index++) {
+                $this->createSession($topics->random());
+            }
 
-        // The extra cases are added once, together. An existing archived
-        // session means an earlier run already added them, so running the
-        // seeder again tops up in silence instead of duplicating the set.
-        if (! PracticeSession::query()->whereNotNull('archived_at')->exists()) {
-            $this->seedArchivedSessions($topics);
-            $this->seedLongStreak($topics);
-            $this->seedSameDaySessions($topics);
-        }
+            // The extra cases are added once, together. An existing archived
+            // session means an earlier run already added them, so running the
+            // seeder again tops up in silence instead of duplicating the set.
+            if (! PracticeSession::query()->whereNotNull('archived_at')->exists()) {
+                $this->seedArchivedSessions($topics);
+                $this->seedLongStreak($topics);
+                $this->seedSameDaySessions($topics);
+            }
 
-        $this->seedVocabularyShowcase($topics);
-        $this->seedPhrasesShowcase($topics);
-        $this->seedGrammarShowcase($topics);
-        $this->seedMistakesShowcase($topics);
-        $this->seedQuestionsShowcase($topics);
-        $this->seedMarks();
-        $this->seedReviewRatings();
-        $this->seedQuestionRatings();
+            $this->seedVocabularyShowcase($topics);
+            $this->seedPhrasesShowcase($topics);
+            $this->seedGrammarShowcase($topics);
+            $this->seedMistakesShowcase($topics);
+            $this->seedQuestionsShowcase($topics);
+            $this->seedMarks();
+            $this->seedReviewRatings();
+            $this->seedQuestionRatings();
+            $this->seedRecentSittings();
+        });
     }
 
     /**
@@ -966,7 +993,312 @@ class LibrarySeeder extends Seeder
     }
 
     /**
-     * Tops the My mistakes tab up to several thousand rows: the same pair of
+     * The last six sittings, left the way the learner walked away from them:
+     * daily and custom reviews worked straight through, one short look stopped
+     * part-way, one rating taken back and given again, and histories that stop
+     * exactly where the finish screen offers a status for one. Recent results,
+     * a past sitting opened as a result and the status offers all read from
+     * these. Runs once; a second run adds nothing.
+     */
+    private function seedRecentSittings(): void
+    {
+        if (Review::query()->whereNotNull('finished_at')->exists()) {
+            return;
+        }
+
+        $pool = $this->recentSittingPool();
+
+        if (count($pool) < self::RECENT_POOL) {
+            return;
+        }
+
+        // The six items whose runs of ratings the finish screen reads, the
+        // plain items one sitting is starred from, and the questions and notes
+        // that keep every exercise kind present.
+        $run = array_slice($pool, 0, 6);
+        [$easyRun, $hardRun, $declinedRun, $alreadyLearned, $brokenRun, $alreadyDifficult] = $run;
+        $marks = array_slice($pool, 6, 6);
+        $mixed = array_slice($pool, 12, 8);
+
+        $at = fn (int $daysAgo): CarbonImmutable => CarbonImmutable::now()->subDays($daysAgo)->setTime(19, 30);
+
+        // Six days ago: the day's sitting, worked straight through. The oldest
+        // of the six, so it falls off the end of the recent list.
+        $first = $this->openSitting([...$marks, $mixed[0], $mixed[1]], daily: true, at: $at(6));
+        $this->rateSitting($first, [
+            ReviewRating::Easy, ReviewRating::Easy, ReviewRating::Okay, ReviewRating::Hard,
+            ReviewRating::Easy, ReviewRating::Okay, ReviewRating::Easy, ReviewRating::Hard,
+        ], $at(6));
+        $this->closeSitting($first, $at(6), daily: true);
+
+        // Five days ago: a custom sitting, chosen down to a few collections.
+        $second = $this->openSitting([...array_slice($marks, 0, 4), $mixed[2], $mixed[3]], daily: false, at: $at(5));
+        $this->rateSitting($second, [
+            ReviewRating::Okay, ReviewRating::Easy, ReviewRating::Hard,
+            ReviewRating::Okay, ReviewRating::Easy, ReviewRating::Okay,
+        ], $at(5));
+        $this->closeSitting($second, $at(5), daily: false);
+
+        // Four days ago: the first Easy of the runs the finish screen reads.
+        $third = $this->openSitting([$easyRun, $declinedRun, $alreadyLearned, $brokenRun, ...array_slice($marks, 2)], daily: true, at: $at(4));
+        $rated = $this->rateSitting($third, [
+            ReviewRating::Easy, ReviewRating::Easy, ReviewRating::Easy, ReviewRating::Easy,
+            ReviewRating::Hard, ReviewRating::Okay, ReviewRating::Easy, ReviewRating::Easy,
+        ], $at(4));
+        $this->closeSitting($third, $at(4), daily: true);
+
+        // Three days ago: a starred-only sitting stopped after two cards.
+        $this->starItems(array_slice($marks, 0, 5));
+        $fourth = $this->openSitting(array_slice($marks, 0, 5), daily: false, at: $at(3));
+        $this->rateSitting($fourth, [ReviewRating::Easy, ReviewRating::Okay], $at(3));
+        $this->stopSittingEarly($fourth, $at(3));
+
+        // Two days ago: the runs grow, and one rating is taken back and given
+        // again, so the sitting shows the second answer and counts it once.
+        $fifth = $this->openSitting([...$run, $mixed[4], $mixed[5]], daily: true, at: $at(2));
+        $this->rateSitting($fifth, [
+            ReviewRating::Easy, ReviewRating::Hard, ReviewRating::Easy, ReviewRating::Easy,
+            ReviewRating::Okay, ReviewRating::Hard, ReviewRating::Easy, ReviewRating::Okay,
+        ], $at(2));
+        $this->rateAgain($fifth, $mixed[4], ReviewRating::Hard, $at(2)->addMinutes(20));
+        $this->closeSitting($fifth, $at(2), daily: true);
+
+        // Yesterday: a custom sitting that ends the runs. Its finish screen
+        // offers Learned for the three Easy in a row and Still difficult for
+        // the two Hard, and stays quiet about everything else.
+        $sixth = $this->openSitting([...$run, $mixed[6]], daily: false, at: $at(1));
+        $this->rateSitting($sixth, [
+            ReviewRating::Easy, ReviewRating::Hard, ReviewRating::Easy, ReviewRating::Easy,
+            ReviewRating::Easy, ReviewRating::Hard, ReviewRating::Okay,
+        ], $at(1));
+        $this->closeSitting($sixth, $at(1), daily: false);
+
+        // The marks the offers are read against: two items carry no status at
+        // all, two already carry the status a run would earn.
+        $saveMark = app(SaveItemMark::class);
+        $saveMark->handle($easyRun['kind'], $easyRun['identity'], null, null);
+        $saveMark->handle($hardRun['kind'], $hardRun['identity'], null, null);
+        $saveMark->handle($declinedRun['kind'], $declinedRun['identity'], null, null);
+        $saveMark->handle($alreadyLearned['kind'], $alreadyLearned['identity'], null, CollectionItemStatus::Learned);
+        $saveMark->handle($alreadyDifficult['kind'], $alreadyDifficult['identity'], null, CollectionItemStatus::StillDifficult);
+
+        // The "Not now" the learner already gave, tied to the run that began
+        // with this item's Easy rating four days ago.
+        $declinedKey = app(ReviewCandidates::class)->key($declinedRun['kind'], $declinedRun['identity']);
+        $declinedRating = $rated[$declinedKey] ?? null;
+
+        if ($declinedRating instanceof Rating) {
+            app(DeclineStatusSuggestion::class)->handle(
+                $declinedRun['kind'],
+                $declinedRun['identity'],
+                CollectionItemStatus::Learned,
+                $declinedRating->id,
+            );
+        }
+
+        // The schedules are rebuilt last, from the history as it now stands.
+        $sync = app(SyncReviewSchedule::class);
+
+        foreach ($pool as $item) {
+            $sync->handle($item['kind'], $item['identity']);
+        }
+    }
+
+    /**
+     * The items the recent sittings are built from: a dozen words, phrases and
+     * mistakes, four questions with a more natural version, and four grammar
+     * notes that can make a blank, each named by the identity a review uses.
+     *
+     * @return list<array{kind: FeedbackType, identity: string}>
+     */
+    private function recentSittingPool(): array
+    {
+        $candidates = app(ReviewCandidates::class);
+        $filters = ReviewFilters::custom();
+
+        $items = [];
+
+        foreach ($candidates->base($filters)
+            ->select(['entries.type', 'entries.collection_key'])
+            ->distinct()
+            ->inRandomOrder()
+            ->limit(self::RECENT_POOL)
+            ->get() as $entry) {
+            $items[] = [
+                'kind' => FeedbackType::from((string) $entry->type),
+                'identity' => (string) $entry->collection_key,
+            ];
+        }
+
+        foreach ($candidates->questionsBase($filters)
+            ->select('questions.id as collection_key')
+            ->distinct()
+            ->inRandomOrder()
+            ->limit(4)
+            ->get() as $question) {
+            $items[] = [
+                'kind' => FeedbackType::Question,
+                'identity' => (string) $question->collection_key,
+            ];
+        }
+
+        $notes = [];
+
+        foreach ($candidates->grammarNotesBase($filters)
+            ->select('entries.collection_key as collection_key')
+            ->distinct()
+            ->limit(30)
+            ->get() as $note) {
+            $notes[] = [
+                'kind' => FeedbackType::GrammarNote,
+                'identity' => (string) $note->collection_key,
+            ];
+        }
+
+        // A note that cannot make a blank has no card to show, so only the
+        // usable ones join the sittings.
+        $blankable = $candidates->blankableKeys($notes);
+
+        foreach ($notes as $note) {
+            if (isset($blankable[$candidates->key($note['kind'], $note['identity'])])) {
+                $items[] = $note;
+            }
+        }
+
+        return array_slice($items, 0, self::RECENT_POOL);
+    }
+
+    /**
+     * A sitting the learner started: its items, in the order they meet them,
+     * kept from the moment they started it.
+     *
+     * @param  list<array{kind: FeedbackType, identity: string}>  $items
+     */
+    private function openSitting(array $items, bool $daily, CarbonImmutable $at): Review
+    {
+        /** @var Review $review */
+        $review = Review::query()->create([
+            'is_daily_review' => $daily,
+            'is_custom_review' => ! $daily,
+        ]);
+
+        foreach ($items as $position => $item) {
+            ReviewItem::query()->create([
+                'review_id' => $review->id,
+                'position' => $position + 1,
+                'kind' => $item['kind'],
+                'exercise' => ReviewExercises::kindOf($item['kind']),
+                'item_identity' => $item['identity'],
+            ]);
+        }
+
+        $review->created_at = $at;
+        $review->updated_at = $at;
+        $review->save();
+
+        return $review;
+    }
+
+    /**
+     * The ratings given as the learner went through a sitting, one per item in
+     * the order they met them. A sitting stopped early has fewer ratings than
+     * it has items, and the rest are left unrated. Each rating is kept from the
+     * minute it was given.
+     *
+     * @param  list<ReviewRating>  $ratings
+     * @return array<string, Rating> the saved ratings, keyed by kind and identity
+     */
+    private function rateSitting(Review $review, array $ratings, CarbonImmutable $startedAt): array
+    {
+        $record = app(RecordRating::class);
+        $candidates = app(ReviewCandidates::class);
+        $saved = [];
+
+        foreach ($review->items()->orderBy('position')->limit(count($ratings))->get() as $position => $item) {
+            $at = $startedAt->addSeconds($position * 40);
+
+            /** @var Rating $rating */
+            $rating = $record->handle($review, $item->kind, $item->item_identity, $ratings[$position]);
+
+            DB::table('ratings')->where('id', $rating->id)->update([
+                'created_at' => $at,
+                'updated_at' => $at,
+            ]);
+
+            $saved[$candidates->key($item->kind, $item->item_identity)] = $rating;
+        }
+
+        return $saved;
+    }
+
+    /**
+     * The rating the learner took back and then gave again, a minute later.
+     * The second answer is the one that stays, and it still counts once.
+     *
+     * @param  array{kind: FeedbackType, identity: string}  $item
+     */
+    private function rateAgain(Review $review, array $item, ReviewRating $rating, CarbonImmutable $at): void
+    {
+        app(UndoRating::class)->handle($review, $item['kind'], $item['identity']);
+
+        /** @var Rating $again */
+        $again = app(RecordRating::class)->handle($review, $item['kind'], $item['identity'], $rating);
+
+        DB::table('ratings')->where('id', $again->id)->update([
+            'created_at' => $at,
+            'updated_at' => $at,
+        ]);
+    }
+
+    /**
+     * The moment the learner reached the finish screen. A daily sitting also
+     * keeps the day it was completed on, the way the finish screen gives it one.
+     */
+    private function closeSitting(Review $review, CarbonImmutable $at, bool $daily): void
+    {
+        $review->finished_at = $at->addMinutes(25);
+        $review->completed_on = $daily ? $at : null;
+        $review->updated_at = $review->finished_at;
+        $review->save();
+    }
+
+    /**
+     * The sitting the learner stopped part-way: what they had rated stays, the
+     * rest is left unrated, and no day is claimed for it.
+     */
+    private function stopSittingEarly(Review $review, CarbonImmutable $at): void
+    {
+        app(FinishReviewEarly::class)->handle($review);
+
+        $review->refresh();
+        $review->finished_at = $at->addMinutes(9);
+        $review->updated_at = $review->finished_at;
+        $review->save();
+    }
+
+    /**
+     * A star on each of these items, keeping any status the learner already
+     * chose for them.
+     *
+     * @param  list<array{kind: FeedbackType, identity: string}>  $items
+     */
+    private function starItems(array $items): void
+    {
+        $saveMark = app(SaveItemMark::class);
+
+        foreach ($items as $item) {
+            /** @var CollectionItemMark|null $mark */
+            $mark = CollectionItemMark::query()
+                ->where('kind', $item['kind']->value)
+                ->where('item_key', CollectionItemMark::keyFor($item['kind'], $item['identity']))
+                ->first();
+
+            $saveMark->handle($item['kind'], $item['identity'], true, $mark?->status);
+        }
+    }
+
+    /**
+     * Tops the My mistakes tab up to the target: the same pair of
      * what was said and the correction written several ways, the same mistake
      * with different reasons, the same correction on two different mistakes,
      * a repeated row in one box, rows with no correction, lines that could
@@ -1173,7 +1505,7 @@ class LibrarySeeder extends Seeder
     }
 
     /**
-     * Tops the vocabulary up to a few thousand rows, so the Collection has
+     * Tops the vocabulary up to the target, so the Collection has
      * enough words to page through by hand.
      *
      * The pool mixes unique terms with the cases the page has to handle:
@@ -1181,7 +1513,7 @@ class LibrarySeeder extends Seeder
      * no meaning, very long meanings and examples, letters from outside
      * English, and a blank row that must never be gathered. The target is
      * counted from the database, so a later run continues where the last one
-     * stopped instead of adding another 5,000 every time.
+     * stopped instead of adding the same set again.
      *
      * @param  Collection<int, Topic>  $topics
      */
@@ -1198,7 +1530,7 @@ class LibrarySeeder extends Seeder
     }
 
     /**
-     * Tops the phrases tab up to a few thousand rows, so the second
+     * Tops the phrases tab up to the target, so the second
      * collection pages like the first: rows written several ways, rows that
      * could not be split, quiet no-meaning rows, and a blank row here and
      * there that must never be gathered.
@@ -1343,7 +1675,7 @@ class LibrarySeeder extends Seeder
     }
 
     /**
-     * Tops the grammar notes tab up to a few thousand rows. Notes are never
+     * Tops the grammar notes tab up to the target. Notes are never
      * merged, so the first box of every session says the same rule twice and
      * the page keeps both entries apart; the rest mix very long rules, rules
      * saved with formatting, rules with accents and quotes, and blank rows
@@ -1439,7 +1771,7 @@ class LibrarySeeder extends Seeder
     }
 
     /**
-     * Tops the say-it-again pool up to a few thousand finished questions, so
+     * Tops the say-it-again pool up to its target of finished questions, so
      * the review screen has real work by hand.
      *
      * The pool mixes unique questions with the cases the card has to handle:
@@ -1889,7 +2221,7 @@ class LibrarySeeder extends Seeder
             return;
         }
 
-        $perSession = self::SHOWCASE_QUESTIONS * self::SHOWCASE_ROWS;
+        $perSession = self::SHOWCASE_ROWS_PER_SESSION;
         $sessions = (int) ceil(
             ($target - $existing) / $perSession,
         );

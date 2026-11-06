@@ -22,6 +22,7 @@ use App\Queries\StatusSuggestions;
 use App\Queries\TableCollection;
 use App\Queries\TodaysReview;
 use App\Support\LearnerDay;
+use App\Support\ReviewRules;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -74,6 +75,8 @@ class ReviewController extends Controller
                 fn (array $row): array => (new RecentReviewResource($row))->resolve(),
                 $recentReviews->list(),
             ),
+            // The numbers the "how this works" explanation is written around.
+            'reviewRules' => ReviewRules::values(),
         ]);
     }
 

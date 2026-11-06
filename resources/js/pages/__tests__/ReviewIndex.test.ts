@@ -4,6 +4,7 @@ import ReviewIndex from '@/pages/review/Index.vue';
 import type {
     GrammarNotesTipData,
     RecentReviewData,
+    ReviewRulesData,
     TodayReviewData,
     WaitingForFixData,
 } from '@/types';
@@ -14,6 +15,17 @@ const todayReview: TodayReviewData = {
     minutes: 6,
     mix: '5 flashcards, 2 mistakes to fix, 1 blank to fill in',
     canReviewMore: null,
+};
+
+const reviewRules: ReviewRulesData = {
+    dailySize: 8,
+    newItems: 4,
+    hardDays: 1,
+    okayDays: 3,
+    easyGaps: [7, 14, 30, 60],
+    learnedRun: 3,
+    difficultRun: 2,
+    maxSuggestions: 2,
 };
 
 const waitingForFix: WaitingForFixData = {
@@ -29,6 +41,7 @@ function mountPage(grammarNotesTip: GrammarNotesTipData) {
             waitingForFix,
             grammarNotesTip,
             recentReviews: [] as RecentReviewData[],
+            reviewRules,
         },
     });
 }

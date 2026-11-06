@@ -93,6 +93,29 @@ export interface GrammarNotesTipData {
     count: number;
 }
 
+/**
+ * The review rules, as the numbers the Review Home explanation is written
+ * around. They come from the settings and the schedule the app actually uses.
+ */
+export interface ReviewRulesData {
+    /** How many items a day's sitting holds. */
+    dailySize: number;
+    /** How few of those may be items never reviewed before. */
+    newItems: number;
+    /** Days until an item rated Hard comes back. */
+    hardDays: number;
+    /** Days until an item rated Okay comes back. */
+    okayDays: number;
+    /** Days until an item rated Easy comes back, further out each time. */
+    easyGaps: number[];
+    /** Easy ratings in a row that can offer Learned. */
+    learnedRun: number;
+    /** Hard ratings in a row that can offer Still difficult. */
+    difficultRun: number;
+    /** How many offers one finish screen ever shows. */
+    maxSuggestions: number;
+}
+
 export interface ReviewCounts {
     hard: number;
     okay: number;

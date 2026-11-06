@@ -4,6 +4,7 @@ import { Head, Link } from '@inertiajs/vue3';
 import { InfoIcon, LightbulbIcon, SlidersHorizontalIcon } from '@lucide/vue';
 import PageHeader from '@/components/PageHeader.vue';
 import ReviewRecentResults from '@/components/ReviewRecentResults.vue';
+import ReviewRulesDialog from '@/components/review/ReviewRulesDialog.vue';
 import ReviewSuggestionCard from '@/components/ReviewSuggestionCard.vue';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -13,6 +14,7 @@ import { custom as customReview } from '@/routes/review';
 import type {
     GrammarNotesTipData,
     RecentReviewData,
+    ReviewRulesData,
     TodayReviewData,
     WaitingForFixData,
 } from '@/types';
@@ -28,6 +30,8 @@ const props = defineProps<{
     grammarNotesTip: GrammarNotesTipData;
     /** The last few sittings and what their ratings came to. */
     recentReviews: RecentReviewData[];
+    /** The rules the info button explains, as the app runs them. */
+    reviewRules: ReviewRulesData;
 }>();
 
 const waitingGroups = computed(() =>
@@ -102,7 +106,11 @@ const grammarNotesLink = computed(() =>
         <PageHeader
             title="Review"
             description="A calm few minutes with the words, phrases and mistakes you want to keep."
-        />
+        >
+            <template #actions>
+                <ReviewRulesDialog :rules="props.reviewRules" />
+            </template>
+        </PageHeader>
 
         <ReviewSuggestionCard :suggestion="props.todayReview" />
 

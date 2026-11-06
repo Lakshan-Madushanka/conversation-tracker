@@ -38,6 +38,7 @@ final class CollectionMistakeResource extends JsonResource
         public readonly ?CollectionItemMark $mark = null,
         public readonly bool $withNotes = false,
         public readonly array $terms = [],
+        public readonly bool $inBasket = false,
     ) {
         parent::__construct($item);
     }
@@ -57,6 +58,7 @@ final class CollectionMistakeResource extends JsonResource
      *     starred: bool,
      *     status: string|null,
      *     has_notes: bool,
+     *     in_basket: bool,
      *     notes_html?: string,
      *     notes_version?: int,
      *     match: array{label: string, segments: list<array{text: string, match: bool}>}|null,
@@ -93,6 +95,7 @@ final class CollectionMistakeResource extends JsonResource
             'starred' => $this->mark->starred ?? false,
             'status' => $this->mark?->status?->value,
             'has_notes' => $this->mark?->hasNotes() ?? false,
+            'in_basket' => $this->inBasket,
             ...($this->withNotes ? $this->learnerNotes() : []),
             'match' => CollectionMatch::forMistake($item, $this->mark, $this->terms),
             'appearances' => array_map(

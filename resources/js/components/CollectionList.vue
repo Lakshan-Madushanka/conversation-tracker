@@ -8,6 +8,7 @@ import {
     SearchIcon,
     TriangleAlertIcon,
 } from '@lucide/vue';
+import AddToBasketButton from '@/components/AddToBasketButton.vue';
 import EmptyState from '@/components/EmptyState.vue';
 import CollectionMarksCluster from '@/components/CollectionMarksCluster.vue';
 import CollectionMatchHint from '@/components/CollectionMatchHint.vue';
@@ -15,6 +16,8 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
     Table,
@@ -62,6 +65,12 @@ const props = withDefaults(
         /** True when applying a search or filter failed and can be tried again. */
         filterError?: boolean;
         hasFinishedSessions?: boolean;
+        /** True while the learner is choosing items to add to the basket. */
+        selectionMode?: boolean;
+        /** The keys chosen so far. */
+        selectedKeys?: string[];
+        /** The item whose add request is on its way, so only it waits. */
+        busyKey?: string | null;
     }>(),
     {
         tab: 'vocabulary',
@@ -75,6 +84,9 @@ const props = withDefaults(
         hasSearch: false,
         filterError: false,
         hasFinishedSessions: false,
+        selectionMode: false,
+        selectedKeys: () => [],
+        busyKey: null,
     },
 );
 
@@ -90,6 +102,10 @@ const emit = defineEmits<{
     (event: 'clear-search'): void;
     (event: 'clear-filters'): void;
     (event: 'retry-filters'): void;
+    /** One item chosen or unchosen; Shift chooses a run of items. */
+    (event: 'select', item: CollectionOpenedItem, shiftKey: boolean): void;
+    /** One item put into the basket without leaving the list. */
+    (event: 'add', item: CollectionOpenedItem): void;
 }>();
 
 /** How many placeholder rows the list shows while it is busy. */
@@ -210,6 +226,44 @@ function open(item: CollectionOpenedItem): void {
     emit('open', item);
 }
 
+/** Clicking a row opens it, or chooses it while a selection is being made. */
+function activate(item: CollectionOpenedItem, event?: MouseEvent): void {
+    if (props.selectionMode) {
+        emit('select', item, event?.shiftKey === true);
+
+        return;
+    }
+
+    open(item);
+}
+
+const selectedSet = computed(() => new Set(props.selectedKeys));
+
+function isSelected(item: CollectionOpenedItem): boolean {
+    return selectedSet.value.has(item.key);
+}
+
+const selectNoun = computed(() => config.value.unit);
+
+/** An id safe for a word with spaces or punctuation in its key. */
+function selectId(scope: string, item: CollectionOpenedItem): string {
+    return `collection-${scope}-select-${encodeURIComponent(item.key)}`;
+}
+
+/** The checkbox's name holds the item, so the choice is never ambiguous. */
+function selectLabel(item: CollectionOpenedItem): string {
+    return `Select the ${selectNoun.value} ${itemName(item)}`;
+}
+
+/** What the item is called in words, for the basket's controls. */
+function itemName(item: CollectionOpenedItem): string {
+    if (isCollectionNoteItem(item)) {
+        return noteMarkName(item);
+    }
+
+    return markItemName(item);
+}
+
 /**
  * The name a mark's accessible label uses for a note: the preview the
  * server already cut, never the whole note.
@@ -288,7 +342,11 @@ function exampleHtml(item: CollectionItem): string {
                                 <TableHead class="w-[20%]">Topic</TableHead>
                                 <TableHead class="w-[16%]">Date</TableHead>
                                 <TableHead class="w-[20%] text-right">
-                                    <span class="sr-only">Star and status</span>
+                                    <span class="sr-only">{{
+                                        selectionMode
+                                            ? 'Select'
+                                            : 'Basket, star and status'
+                                    }}</span>
                                 </TableHead>
                             </TableRow>
                         </TableHeader>
@@ -298,14 +356,14 @@ function exampleHtml(item: CollectionItem): string {
                                 v-for="note in noteItems"
                                 :key="note.key"
                                 class="cursor-pointer"
-                                @click="open(note)"
+                                @click="activate(note, $event)"
                             >
                                 <TableCell class="whitespace-normal">
                                     <button
                                         type="button"
                                         class="rounded text-left hover:underline focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
                                         :data-collection-open="note.key"
-                                        @click.stop="open(note)"
+                                        @click.stop="activate(note, $event)"
                                     >
                                         {{ note.preview }}
                                     </button>
@@ -328,13 +386,42 @@ function exampleHtml(item: CollectionItem): string {
                                 </TableCell>
 
                                 <TableCell class="text-right align-top">
-                                    <CollectionMarksCluster
-                                        :item="note"
-                                        :name="noteMarkName(note)"
-                                        :unit="config.unit"
-                                        @star="emit('star', note, $event)"
-                                        @status="emit('status', note, $event)"
-                                    />
+                                    <span
+                                        v-if="selectionMode"
+                                        class="inline-flex"
+                                        @click.stop
+                                    >
+                                        <Checkbox
+                                            :id="selectId('note', note)"
+                                            :model-value="isSelected(note)"
+                                            :aria-label="selectLabel(note)"
+                                            @update:model-value="
+                                                emit('select', note, false)
+                                            "
+                                        />
+                                    </span>
+                                    <div
+                                        v-else
+                                        class="flex flex-wrap items-center justify-end gap-1"
+                                        @click.stop
+                                    >
+                                        <AddToBasketButton
+                                            compact
+                                            :name="itemName(note)"
+                                            :added="note.in_basket === true"
+                                            :busy="props.busyKey === note.key"
+                                            @add="emit('add', note)"
+                                        />
+                                        <CollectionMarksCluster
+                                            :item="note"
+                                            :name="noteMarkName(note)"
+                                            :unit="config.unit"
+                                            @star="emit('star', note, $event)"
+                                            @status="
+                                                emit('status', note, $event)
+                                            "
+                                        />
+                                    </div>
                                 </TableCell>
                             </TableRow>
                         </TableBody>
@@ -362,7 +449,11 @@ function exampleHtml(item: CollectionItem): string {
                                     <span class="sr-only">Times seen</span>
                                 </TableHead>
                                 <TableHead class="w-[16%] text-right">
-                                    <span class="sr-only">Star and status</span>
+                                    <span class="sr-only">{{
+                                        selectionMode
+                                            ? 'Select'
+                                            : 'Basket, star and status'
+                                    }}</span>
                                 </TableHead>
                             </TableRow>
                         </TableHeader>
@@ -373,7 +464,7 @@ function exampleHtml(item: CollectionItem): string {
                                 :key="mistake.key"
                                 class="cursor-pointer"
                                 :aria-label="`Mistake: ${mistakeName(mistake)}`"
-                                @click="open(mistake)"
+                                @click="activate(mistake, $event)"
                             >
                                 <TableCell class="whitespace-normal">
                                     <button
@@ -381,7 +472,7 @@ function exampleHtml(item: CollectionItem): string {
                                         class="min-h-11 w-full rounded text-left font-medium hover:underline focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
                                         :aria-label="`Open mistake: ${mistakeName(mistake)}`"
                                         :data-collection-open="mistake.key"
-                                        @click.stop="open(mistake)"
+                                        @click.stop="activate(mistake, $event)"
                                     >
                                         {{ mistake.title }}
                                     </button>
@@ -441,15 +532,46 @@ function exampleHtml(item: CollectionItem): string {
                                 </TableCell>
 
                                 <TableCell class="text-right align-top">
-                                    <CollectionMarksCluster
-                                        :item="mistake"
-                                        :name="markItemName(mistake)"
-                                        :unit="config.unit"
-                                        @star="emit('star', mistake, $event)"
-                                        @status="
-                                            emit('status', mistake, $event)
-                                        "
-                                    />
+                                    <span
+                                        v-if="selectionMode"
+                                        class="inline-flex"
+                                        @click.stop
+                                    >
+                                        <Checkbox
+                                            :id="selectId('mistake', mistake)"
+                                            :model-value="isSelected(mistake)"
+                                            :aria-label="selectLabel(mistake)"
+                                            @update:model-value="
+                                                emit('select', mistake, false)
+                                            "
+                                        />
+                                    </span>
+                                    <div
+                                        v-else
+                                        class="flex flex-wrap items-center justify-end gap-1"
+                                        @click.stop
+                                    >
+                                        <AddToBasketButton
+                                            compact
+                                            :name="itemName(mistake)"
+                                            :added="mistake.in_basket === true"
+                                            :busy="
+                                                props.busyKey === mistake.key
+                                            "
+                                            @add="emit('add', mistake)"
+                                        />
+                                        <CollectionMarksCluster
+                                            :item="mistake"
+                                            :name="markItemName(mistake)"
+                                            :unit="config.unit"
+                                            @star="
+                                                emit('star', mistake, $event)
+                                            "
+                                            @status="
+                                                emit('status', mistake, $event)
+                                            "
+                                        />
+                                    </div>
                                 </TableCell>
                             </TableRow>
                         </TableBody>
@@ -476,7 +598,11 @@ function exampleHtml(item: CollectionItem): string {
                                     <span class="sr-only">Times seen</span>
                                 </TableHead>
                                 <TableHead class="w-[16%] text-right">
-                                    <span class="sr-only">Star and status</span>
+                                    <span class="sr-only">{{
+                                        selectionMode
+                                            ? 'Select'
+                                            : 'Basket, star and status'
+                                    }}</span>
                                 </TableHead>
                             </TableRow>
                         </TableHeader>
@@ -486,14 +612,14 @@ function exampleHtml(item: CollectionItem): string {
                                 v-for="item in groupedItems"
                                 :key="item.key"
                                 class="cursor-pointer"
-                                @click="open(item)"
+                                @click="activate(item, $event)"
                             >
                                 <TableCell class="whitespace-normal">
                                     <button
                                         type="button"
                                         class="rounded text-left font-medium hover:underline focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
                                         :data-collection-open="item.key"
-                                        @click.stop="open(item)"
+                                        @click.stop="activate(item, $event)"
                                     >
                                         {{ item.title }}
                                     </button>
@@ -560,13 +686,42 @@ function exampleHtml(item: CollectionItem): string {
                                 </TableCell>
 
                                 <TableCell class="text-right align-middle">
-                                    <CollectionMarksCluster
-                                        :item="item"
-                                        :name="markItemName(item)"
-                                        :unit="config.unit"
-                                        @star="emit('star', item, $event)"
-                                        @status="emit('status', item, $event)"
-                                    />
+                                    <span
+                                        v-if="selectionMode"
+                                        class="inline-flex"
+                                        @click.stop
+                                    >
+                                        <Checkbox
+                                            :id="selectId('item', item)"
+                                            :model-value="isSelected(item)"
+                                            :aria-label="selectLabel(item)"
+                                            @update:model-value="
+                                                emit('select', item, false)
+                                            "
+                                        />
+                                    </span>
+                                    <div
+                                        v-else
+                                        class="flex flex-wrap items-center justify-end gap-1"
+                                        @click.stop
+                                    >
+                                        <AddToBasketButton
+                                            compact
+                                            :name="itemName(item)"
+                                            :added="item.in_basket === true"
+                                            :busy="props.busyKey === item.key"
+                                            @add="emit('add', item)"
+                                        />
+                                        <CollectionMarksCluster
+                                            :item="item"
+                                            :name="markItemName(item)"
+                                            :unit="config.unit"
+                                            @star="emit('star', item, $event)"
+                                            @status="
+                                                emit('status', item, $event)
+                                            "
+                                        />
+                                    </div>
                                 </TableCell>
                             </TableRow>
                         </TableBody>
@@ -586,7 +741,7 @@ function exampleHtml(item: CollectionItem): string {
                                 type="button"
                                 class="w-full p-4 text-left focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
                                 :data-collection-open="note.key"
-                                @click="open(note)"
+                                @click="activate(note, $event)"
                             >
                                 <span class="block text-sm break-words">
                                     {{ note.preview }}
@@ -602,15 +757,51 @@ function exampleHtml(item: CollectionItem): string {
                                 />
                             </button>
                             <div
-                                class="flex items-center justify-end border-t px-4 py-1"
+                                class="flex min-h-12 items-center justify-between gap-2 border-t px-4 py-1"
                             >
-                                <CollectionMarksCluster
-                                    :item="note"
-                                    :name="noteMarkName(note)"
-                                    :unit="config.unit"
-                                    @star="emit('star', note, $event)"
-                                    @status="emit('status', note, $event)"
-                                />
+                                <span
+                                    v-if="selectionMode"
+                                    class="flex items-center gap-2 pl-1"
+                                    @click.stop
+                                >
+                                    <Checkbox
+                                        :id="selectId('note-card', note)"
+                                        :model-value="isSelected(note)"
+                                        :aria-label="selectLabel(note)"
+                                        @update:model-value="
+                                            emit('select', note, false)
+                                        "
+                                    />
+                                    <Label
+                                        :for="selectId('note-card', note)"
+                                        class="text-xs text-muted-foreground"
+                                    >
+                                        Select
+                                    </Label>
+                                </span>
+                                <template v-else>
+                                    <div
+                                        class="ml-auto flex items-center gap-1"
+                                        @click.stop
+                                    >
+                                        <AddToBasketButton
+                                            compact
+                                            :name="itemName(note)"
+                                            :added="note.in_basket === true"
+                                            :busy="props.busyKey === note.key"
+                                            @add="emit('add', note)"
+                                        />
+                                        <CollectionMarksCluster
+                                            :item="note"
+                                            :name="noteMarkName(note)"
+                                            :unit="config.unit"
+                                            @star="emit('star', note, $event)"
+                                            @status="
+                                                emit('status', note, $event)
+                                            "
+                                        />
+                                    </div>
+                                </template>
                             </div>
                         </Card>
                     </template>
@@ -628,7 +819,7 @@ function exampleHtml(item: CollectionItem): string {
                                 class="min-h-11 w-full p-4 text-left focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
                                 :aria-label="`Open mistake: ${mistakeName(mistake)}`"
                                 :data-collection-open="mistake.key"
-                                @click="open(mistake)"
+                                @click="activate(mistake, $event)"
                             >
                                 <span
                                     class="block text-xs text-muted-foreground"
@@ -705,15 +896,55 @@ function exampleHtml(item: CollectionItem): string {
                                 />
                             </button>
                             <div
-                                class="flex items-center justify-end border-t px-4 py-1"
+                                class="flex min-h-12 items-center justify-between gap-2 border-t px-4 py-1"
                             >
-                                <CollectionMarksCluster
-                                    :item="mistake"
-                                    :name="markItemName(mistake)"
-                                    :unit="config.unit"
-                                    @star="emit('star', mistake, $event)"
-                                    @status="emit('status', mistake, $event)"
-                                />
+                                <span
+                                    v-if="selectionMode"
+                                    class="flex items-center gap-2 pl-1"
+                                    @click.stop
+                                >
+                                    <Checkbox
+                                        :id="selectId('mistake-card', mistake)"
+                                        :model-value="isSelected(mistake)"
+                                        :aria-label="selectLabel(mistake)"
+                                        @update:model-value="
+                                            emit('select', mistake, false)
+                                        "
+                                    />
+                                    <Label
+                                        :for="selectId('mistake-card', mistake)"
+                                        class="text-xs text-muted-foreground"
+                                    >
+                                        Select
+                                    </Label>
+                                </span>
+                                <template v-else>
+                                    <div
+                                        class="ml-auto flex items-center gap-1"
+                                        @click.stop
+                                    >
+                                        <AddToBasketButton
+                                            compact
+                                            :name="itemName(mistake)"
+                                            :added="mistake.in_basket === true"
+                                            :busy="
+                                                props.busyKey === mistake.key
+                                            "
+                                            @add="emit('add', mistake)"
+                                        />
+                                        <CollectionMarksCluster
+                                            :item="mistake"
+                                            :name="markItemName(mistake)"
+                                            :unit="config.unit"
+                                            @star="
+                                                emit('star', mistake, $event)
+                                            "
+                                            @status="
+                                                emit('status', mistake, $event)
+                                            "
+                                        />
+                                    </div>
+                                </template>
                             </div>
                         </Card>
                     </template>
@@ -728,7 +959,7 @@ function exampleHtml(item: CollectionItem): string {
                                 type="button"
                                 class="w-full p-4 text-left focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
                                 :data-collection-open="item.key"
-                                @click="open(item)"
+                                @click="activate(item, $event)"
                             >
                                 <span class="flex flex-wrap items-center gap-2">
                                     <span class="font-semibold">{{
@@ -784,15 +1015,51 @@ function exampleHtml(item: CollectionItem): string {
                                 />
                             </button>
                             <div
-                                class="flex items-center justify-end border-t px-4 py-1"
+                                class="flex min-h-12 items-center justify-between gap-2 border-t px-4 py-1"
                             >
-                                <CollectionMarksCluster
-                                    :item="item"
-                                    :name="markItemName(item)"
-                                    :unit="config.unit"
-                                    @star="emit('star', item, $event)"
-                                    @status="emit('status', item, $event)"
-                                />
+                                <span
+                                    v-if="selectionMode"
+                                    class="flex items-center gap-2 pl-1"
+                                    @click.stop
+                                >
+                                    <Checkbox
+                                        :id="selectId('item-card', item)"
+                                        :model-value="isSelected(item)"
+                                        :aria-label="selectLabel(item)"
+                                        @update:model-value="
+                                            emit('select', item, false)
+                                        "
+                                    />
+                                    <Label
+                                        :for="selectId('item-card', item)"
+                                        class="text-xs text-muted-foreground"
+                                    >
+                                        Select
+                                    </Label>
+                                </span>
+                                <template v-else>
+                                    <div
+                                        class="ml-auto flex items-center gap-1"
+                                        @click.stop
+                                    >
+                                        <AddToBasketButton
+                                            compact
+                                            :name="itemName(item)"
+                                            :added="item.in_basket === true"
+                                            :busy="props.busyKey === item.key"
+                                            @add="emit('add', item)"
+                                        />
+                                        <CollectionMarksCluster
+                                            :item="item"
+                                            :name="markItemName(item)"
+                                            :unit="config.unit"
+                                            @star="emit('star', item, $event)"
+                                            @status="
+                                                emit('status', item, $event)
+                                            "
+                                        />
+                                    </div>
+                                </template>
                             </div>
                         </Card>
                     </template>

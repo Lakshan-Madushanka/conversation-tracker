@@ -24,6 +24,7 @@ use App\Http\Resources\SessionDeletionPreviewResource;
 use App\Http\Resources\SessionEditorResource;
 use App\Models\PracticeSession;
 use App\Models\Topic;
+use App\Queries\BasketItems;
 use App\Queries\SessionDeletionPreview;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -36,14 +37,25 @@ class PracticeSessionController extends Controller
      * A saved session to read from start to finish. An unfinished session is
      * sent straight to the editor, because the learner is still working on it.
      */
-    public function show(PracticeSession $session): Response|RedirectResponse
+    public function show(PracticeSession $session, BasketItems $basket): Response|RedirectResponse
     {
         if (! $session->isFinished()) {
             return redirect()->route('sessions.edit', $session);
         }
 
+        $payload = $this->payload($session);
+
+        /** @var list<int> $questionIds */
+        $questionIds = array_map(
+            fn (array $question): int => (int) $question['id'],
+            $payload['questions'],
+        );
+
         return Inertia::render('sessions/Show', [
-            'session' => $this->payload($session),
+            'session' => $payload,
+            // Which questions are already in the basket, read in one lookup so
+            // the reading page never asks per question.
+            'basketQuestionIds' => $basket->questions($questionIds),
         ]);
     }
 

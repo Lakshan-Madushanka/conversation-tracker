@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
+use App\Actions\Basket\AddBasketItems;
 use App\Actions\Collections\SaveItemMark;
 use App\Actions\Collections\SaveItemNotes;
 use App\Actions\Reviews\DeclineStatusSuggestion;
@@ -14,6 +15,7 @@ use App\Actions\Reviews\UndoRating;
 use App\Enums\CollectionItemStatus;
 use App\Enums\FeedbackType;
 use App\Enums\ReviewRating;
+use App\Models\BasketItem;
 use App\Models\CollectionItemMark;
 use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeQuestion;
@@ -95,6 +97,12 @@ class LibrarySeeder extends Seeder
      * the daily suggestion has due, overdue and never-reviewed questions.
      */
     private const int TARGET_RATED_QUESTIONS = 40;
+
+    /**
+     * A basket large enough to prove the page reads and scrolls without a
+     * growing number of queries, with every kind alongside it.
+     */
+    private const int TARGET_BASKET_ITEMS = 2000;
 
     /**
      * Distinct items the recent sittings are built from: enough for six
@@ -590,7 +598,200 @@ class LibrarySeeder extends Seeder
             $this->seedReviewRatings();
             $this->seedQuestionRatings();
             $this->seedRecentSittings();
+            $this->seedBasket($topics);
         });
+    }
+
+    /**
+     * Fills the basket with a few items of every kind, an item that only sits
+     * in an archived session, a reference to an item that no longer exists
+     * (removed the next time the basket opens), and enough words to make the
+     * page work at scale. Clearing it, or removing most of it, is the quickest
+     * way to see the empty and nearly-empty states.
+     *
+     * @param  Collection<int, Topic>  $topics
+     */
+    private function seedBasket(Collection $topics): void
+    {
+        if (BasketItem::query()->exists()) {
+            return;
+        }
+
+        $add = app(AddBasketItems::class);
+
+        /** @var list<string> $words */
+        $words = $this->basketEntries(FeedbackType::Vocabulary, 2)
+            ->pluck('collection_key')
+            ->filter()
+            ->values()
+            ->all();
+
+        /** @var list<string> $phrases */
+        $phrases = $this->basketEntries(FeedbackType::Phrase, 1)
+            ->pluck('collection_key')
+            ->filter()
+            ->values()
+            ->all();
+
+        /** @var list<string> $notes */
+        $notes = $this->basketEntries(FeedbackType::GrammarNote, 1)
+            ->pluck('id')
+            ->map(fn (int $id): string => 'note-'.$id)
+            ->values()
+            ->all();
+
+        /** @var list<string> $mistakes */
+        $mistakes = $this->basketEntries(FeedbackType::Mistake, 1, tablePair: true)
+            ->map(fn (PracticeFeedbackEntry $entry): string => MistakeIdentity::pairKey(
+                (string) $entry->content_text,
+                (string) $entry->correction_text,
+            ))
+            ->values()
+            ->all();
+
+        /** @var list<string> $questions */
+        $questions = PracticeQuestion::query()
+            ->whereHas('practiceSession', fn ($query) => $query->study())
+            ->inRandomOrder()
+            ->limit(1)
+            ->pluck('id')
+            ->map(fn (int $id): string => (string) $id)
+            ->values()
+            ->all();
+
+        /** @var list<string> $archived */
+        $archived = $this->basketEntries(
+            FeedbackType::Vocabulary,
+            1,
+            archived: true,
+        )->pluck('collection_key')->filter()->values()->all();
+
+        $add->handle(FeedbackType::Vocabulary, [...$words, ...$archived]);
+        $add->handle(FeedbackType::Phrase, $phrases);
+        $add->handle(FeedbackType::GrammarNote, $notes);
+        $add->handle(FeedbackType::Mistake, $mistakes);
+        $add->handle(FeedbackType::Question, $questions);
+
+        $scale = $this->basketScaleIdentities($topics->random());
+        $add->handle(FeedbackType::Vocabulary, $scale);
+
+        // A reference left behind by a deleted item. Opening the basket takes
+        // it away, so the seeded state proves the repair.
+        BasketItem::query()->insert([
+            'kind' => FeedbackType::Vocabulary->value,
+            'item_identity' => SearchText::normalize('an item whose session was deleted'),
+            'added_at' => now(),
+        ]);
+    }
+
+    /**
+     * Entries of one kind that belong to a finished session, optionally the
+     * archived ones only. Mistakes need both halves of the pair to have an
+     * identity.
+     *
+     * @return Collection<int, PracticeFeedbackEntry>
+     */
+    private function basketEntries(
+        FeedbackType $kind,
+        int $limit,
+        bool $archived = false,
+        bool $tablePair = false,
+    ): Collection {
+        return PracticeFeedbackEntry::query()
+            ->where('type', $kind->value)
+            ->whereRaw("TRIM(collection_key) <> ''")
+            ->when($archived, fn ($query) => $query->whereHas(
+                'practiceQuestion.practiceSession',
+                fn ($session) => $session->whereNotNull('archived_at'),
+            ))
+            ->when(! $archived, fn ($query) => $query->whereHas(
+                'practiceQuestion.practiceSession',
+                fn ($session) => $session->study(),
+            ))
+            ->when($tablePair, fn ($query) => $query
+                ->whereRaw("TRIM(content_text) <> ''")
+                ->whereRaw("TRIM(correction_text) <> ''"))
+            ->inRandomOrder()
+            ->limit($limit)
+            ->get();
+    }
+
+    /**
+     * One finished session holding a long list of plain words, so the basket
+     * can hold a couple of thousand items with real sources behind them. Only
+     * the columns the projections need are written; the rest keep their
+     * defaults.
+     *
+     * @return list<string>
+     */
+    private function basketScaleIdentities(Topic $topic): array
+    {
+        /** @var list<string> $existing */
+        $existing = PracticeFeedbackEntry::query()
+            ->where('type', FeedbackType::Vocabulary->value)
+            ->whereHas(
+                'practiceQuestion',
+                fn ($query) => $query->where('question_text', 'Scale check'),
+            )
+            ->orderBy('id')
+            ->pluck('collection_key')
+            ->filter()
+            ->map(fn (string $key): string => $key)
+            ->unique()
+            ->values()
+            ->all();
+
+        // Clearing the basket is a normal way to see the empty state, so a
+        // later run tops the same session back up instead of adding another.
+        if ($existing !== []) {
+            return $existing;
+        }
+
+        $session = $this->questionShowcaseSession($topic);
+        $question = PracticeQuestion::factory()->for($session)->create([
+            'position' => 1,
+            'question_text' => 'Scale check',
+            'question_html' => '<p>Scale check</p>',
+            'answer_text' => '',
+            'answer_html' => '',
+        ]);
+
+        $at = $session->created_at;
+        $words = [];
+        $rows = [];
+
+        for ($index = 1; $index <= self::TARGET_BASKET_ITEMS; $index++) {
+            $word = sprintf('Scale word %04d', $index);
+            $meaning = 'one of the words that make the basket long';
+            $words[] = SearchText::normalize($word);
+            $rows[] = [
+                'practice_question_id' => $question->id,
+                'type' => FeedbackType::Vocabulary->value,
+                'position' => $index - 1,
+                'client_id' => sprintf('scale-word-%05d', $index),
+                'content_html' => '',
+                'content_text' => $word,
+                'correction_html' => '',
+                'correction_text' => $meaning,
+                'reason' => '',
+                'is_split' => true,
+                'example' => '',
+                'example_html' => '[]',
+                'search_text' => SearchText::normalize($word.' '.$meaning),
+                'collection_key' => SearchText::normalize($word),
+                'sort_text' => SearchText::normalize($word),
+                'attention_reason' => null,
+                'split_broke' => false,
+                'created_at' => $at,
+                'updated_at' => $at,
+            ];
+        }
+
+        foreach (array_chunk($rows, 300) as $chunk) {
+            DB::table('practice_feedback_entries')->insert($chunk);
+        }
+
+        return $words;
     }
 
     /**

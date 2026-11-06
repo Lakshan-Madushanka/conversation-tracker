@@ -20,6 +20,7 @@ import {
     saveCollectionSnapshot,
     type CollectionSnapshot,
 } from '@/lib/collections';
+import { hydrateBasketCount } from '@/lib/basket';
 import { jsonRequest } from '@/lib/http';
 import { index as collectionsIndex } from '@/routes/collections';
 import type {
@@ -45,6 +46,7 @@ const LIST_PROPS = [
     'topic_options',
     'filters',
     'has_finished_sessions',
+    'basket_count',
 ];
 
 /** The page props that open or close the item panel. */
@@ -77,6 +79,8 @@ export function useCollection(initial: CollectionPage) {
     const hasFinishedSessions = ref(initial.has_finished_sessions);
     const openItem = ref<CollectionOpenedItem | null>(initial.open_item);
     const openItemMissing = ref(initial.open_item_missing);
+
+    hydrateBasketCount(initial.basket_count);
 
     const loading = ref(false);
     const error = ref(false);
@@ -260,6 +264,8 @@ export function useCollection(initial: CollectionPage) {
             if (meta.has_finished_sessions !== undefined) {
                 hasFinishedSessions.value = meta.has_finished_sessions;
             }
+
+            hydrateBasketCount(meta.basket_count);
         }
     }
 
@@ -582,6 +588,7 @@ export function useCollection(initial: CollectionPage) {
         topicOptions.value = [...(page.topic_options ?? topicOptions.value)];
         filters.value = normalizeCollectionFilters(page.filters, page.tab);
         hasFinishedSessions.value = page.has_finished_sessions;
+        hydrateBasketCount(page.basket_count);
         error.value = false;
         filterError.value = false;
     }

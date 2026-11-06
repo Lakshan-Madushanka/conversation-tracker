@@ -445,8 +445,9 @@ The app is built with a modern, single-codebase web stack:
 
 **What the learner can do**
 
-- Gather items from any collection into a basket with **Add to review**. The basket bar stays visible, and the basket survives refresh.
-- Save the basket as a named review, with an optional description, and set how many words, phrases, fix-the-mistake, say-it-again, and fill-in-the-blank items it uses.
+- Start a review and get a **draft** straight away, named "Custom Review N", that survives refresh like any other review.
+- Add items from any collection with **Add to review**, choosing the draft when there is more than one, or use **+ Add items** on the draft's page to see only items that can be used.
+- Name it, describe it, and set how many words, phrases, fix-the-mistake, say-it-again, and fill-in-the-blank items it uses — all at any time, with no save step.
 - Attempt the review as often as they like, and see every attempt with its date, status, and counts.
 - Search and filter their reviews, and see each review's previous attempt status on its card.
 - Delete a review, which also deletes its attempts, after confirmation.

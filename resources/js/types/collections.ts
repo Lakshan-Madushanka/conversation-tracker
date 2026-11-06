@@ -108,6 +108,11 @@ export interface CollectionItem {
     /** The open panel receives these; the list does not need them. */
     notes_html?: string;
     notes_version?: number;
+    /**
+     * Whether the basket already holds this item. A list restored from an
+     * older snapshot may not carry it, so absent means not added.
+     */
+    in_basket?: boolean;
     /** Where the search found it, when a search is narrowing the list. */
     match?: CollectionMatch | null;
     /** The open panel receives every appearance; a list carries only the newest. */
@@ -138,6 +143,8 @@ export interface CollectionNoteItem {
     has_notes: boolean;
     notes_html?: string;
     notes_version?: number;
+    /** Whether the basket already holds this note. */
+    in_basket?: boolean;
     /** Where the search found it, when a search is narrowing the list. */
     match?: CollectionMatch | null;
 }
@@ -190,6 +197,8 @@ export interface CollectionMistakeItem {
     has_notes: boolean;
     notes_html?: string;
     notes_version?: number;
+    /** Whether the basket already holds this mistake. */
+    in_basket?: boolean;
     /** Where the search found it, when a search is narrowing the list. */
     match?: CollectionMatch | null;
     /** The open panel receives every appearance; a list carries only the newest. */
@@ -223,6 +232,8 @@ export interface CollectionPage {
     open_item: CollectionOpenedItem | null;
     /** True when the address names an item that is no longer there. */
     open_item_missing: boolean;
+    /** How many items the basket holds, for the basket bar. */
+    basket_count?: number;
 }
 
 /** One page returned by the "Load more" request. */
@@ -241,6 +252,7 @@ export interface CollectionItemsPage {
     topic_options?: CollectionTopicOption[];
     filters?: CollectionFilters;
     has_finished_sessions?: boolean;
+    basket_count?: number;
 }
 
 /**

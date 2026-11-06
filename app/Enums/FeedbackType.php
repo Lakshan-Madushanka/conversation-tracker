@@ -83,6 +83,37 @@ enum FeedbackType: string
     }
 
     /**
+     * The kinds a basket can hold, in the order its page groups them. A
+     * question joins the four collections even though it is not a feedback
+     * box, because it is added by its own identity from the reading page.
+     *
+     * @return list<self>
+     */
+    public static function basketTypes(): array
+    {
+        return [self::Vocabulary, self::Phrase, self::GrammarNote, self::Mistake, self::Question];
+    }
+
+    /** Whether this kind of item can be gathered in the basket. */
+    public function isBasketType(): bool
+    {
+        return in_array($this, self::basketTypes(), true);
+    }
+
+    /** The heading the basket uses for this kind of item. */
+    public function basketLabel(): string
+    {
+        return match ($this) {
+            self::Vocabulary => 'Words',
+            self::Phrase => 'Phrases',
+            self::GrammarNote => 'Grammar notes',
+            self::Mistake => 'Mistakes',
+            self::Question => 'Questions',
+            self::NaturalVersion => 'Natural versions',
+        };
+    }
+
+    /**
      * The kinds whose items carry the learner's own star and status. A past
      * question and a grammar note never do, so nothing can favour them by a
      * star or suggest a status for them.
@@ -128,6 +159,14 @@ enum FeedbackType: string
     public static function tableValues(): array
     {
         return array_map(fn (self $type): string => $type->value, self::tableTypes());
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function basketValues(): array
+    {
+        return array_map(fn (self $type): string => $type->value, self::basketTypes());
     }
 
     /**

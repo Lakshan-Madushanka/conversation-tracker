@@ -1,5 +1,7 @@
 /** Shapes shared between the Collections page and the backend props. */
 
+import type { CustomReviewSummary } from './custom-review';
+
 /** The four personal collections a learner can browse. */
 export type CollectionTabKey =
     | 'vocabulary'
@@ -109,10 +111,10 @@ export interface CollectionItem {
     notes_html?: string;
     notes_version?: number;
     /**
-     * Whether the basket already holds this item. A list restored from an
-     * older snapshot may not carry it, so absent means not added.
+     * Whether the review being built already holds this item. A list restored
+     * from an older snapshot may not carry it, so absent means not added.
      */
-    in_basket?: boolean;
+    in_review?: boolean;
     /** Where the search found it, when a search is narrowing the list. */
     match?: CollectionMatch | null;
     /** The open panel receives every appearance; a list carries only the newest. */
@@ -143,8 +145,8 @@ export interface CollectionNoteItem {
     has_notes: boolean;
     notes_html?: string;
     notes_version?: number;
-    /** Whether the basket already holds this note. */
-    in_basket?: boolean;
+    /** Whether the review being built already holds this note. */
+    in_review?: boolean;
     /** Where the search found it, when a search is narrowing the list. */
     match?: CollectionMatch | null;
 }
@@ -197,8 +199,8 @@ export interface CollectionMistakeItem {
     has_notes: boolean;
     notes_html?: string;
     notes_version?: number;
-    /** Whether the basket already holds this mistake. */
-    in_basket?: boolean;
+    /** Whether the review being built already holds this mistake. */
+    in_review?: boolean;
     /** Where the search found it, when a search is narrowing the list. */
     match?: CollectionMatch | null;
     /** The open panel receives every appearance; a list carries only the newest. */
@@ -232,8 +234,8 @@ export interface CollectionPage {
     open_item: CollectionOpenedItem | null;
     /** True when the address names an item that is no longer there. */
     open_item_missing: boolean;
-    /** How many items the basket holds, for the basket bar. */
-    basket_count?: number;
+    /** The review the items are marked against, or none to agree on. */
+    review_target?: CustomReviewSummary | null;
 }
 
 /** One page returned by the "Load more" request. */
@@ -252,7 +254,7 @@ export interface CollectionItemsPage {
     topic_options?: CollectionTopicOption[];
     filters?: CollectionFilters;
     has_finished_sessions?: boolean;
-    basket_count?: number;
+    review_target?: CustomReviewSummary | null;
 }
 
 /**

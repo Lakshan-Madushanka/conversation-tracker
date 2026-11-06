@@ -83,25 +83,25 @@ enum FeedbackType: string
     }
 
     /**
-     * The kinds a basket can hold, in the order its page groups them. A
+     * The kinds a custom review can hold, in the order its page groups them. A
      * question joins the four collections even though it is not a feedback
      * box, because it is added by its own identity from the reading page.
      *
      * @return list<self>
      */
-    public static function basketTypes(): array
+    public static function customReviewTypes(): array
     {
         return [self::Vocabulary, self::Phrase, self::GrammarNote, self::Mistake, self::Question];
     }
 
-    /** Whether this kind of item can be gathered in the basket. */
-    public function isBasketType(): bool
+    /** Whether this kind of item can be gathered in a custom review. */
+    public function isCustomReviewType(): bool
     {
-        return in_array($this, self::basketTypes(), true);
+        return in_array($this, self::customReviewTypes(), true);
     }
 
-    /** The heading the basket uses for this kind of item. */
-    public function basketLabel(): string
+    /** The heading a custom review's page uses for this kind of item. */
+    public function customReviewLabel(): string
     {
         return match ($this) {
             self::Vocabulary => 'Words',
@@ -164,9 +164,9 @@ enum FeedbackType: string
     /**
      * @return list<string>
      */
-    public static function basketValues(): array
+    public static function customReviewValues(): array
     {
-        return array_map(fn (self $type): string => $type->value, self::basketTypes());
+        return array_map(fn (self $type): string => $type->value, self::customReviewTypes());
     }
 
     /**

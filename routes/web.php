@@ -1,9 +1,9 @@
 <?php
 
-use App\Http\Controllers\BasketController;
 use App\Http\Controllers\CollectionController;
 use App\Http\Controllers\CollectionMarkController;
 use App\Http\Controllers\CustomReviewController;
+use App\Http\Controllers\CustomReviewsController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\LibraryBulkController;
 use App\Http\Controllers\LibraryController;
@@ -44,15 +44,29 @@ Route::get('/sessions/{session}', [PracticeSessionController::class, 'show'])->n
 Route::get('/collections', [CollectionController::class, 'index'])->name('collections.index');
 
 // Every item matching the current collections view, for "Select all" before
-// adding to the basket.
+// adding to a review.
 Route::get('/collections/selection', [CollectionController::class, 'selection'])->name('collections.selection');
 
-// The custom-review basket. It only holds references to items, so adding or
-// removing one never changes an item's marks, ratings, schedule or session.
-Route::get('/basket', [BasketController::class, 'index'])->name('basket.index');
-Route::delete('/basket', [BasketController::class, 'clear'])->name('basket.clear');
-Route::post('/basket/items', [BasketController::class, 'store'])->name('basket.items.store');
-Route::delete('/basket/items', [BasketController::class, 'destroy'])->name('basket.items.destroy');
+// Custom reviews: the saved sets the learner builds item by item. These are
+// distinct from /review/custom below, the Review feature's Quick review
+// chooser, which starts a sitting straight away and saves nothing.
+//
+// The address names the review being added to, so a request never guesses it:
+// an add with no review asks the server, which answers with the review, the
+// picker, or the size warning.
+Route::post('/custom-reviews', [CustomReviewsController::class, 'store'])->name('customReviews.store');
+Route::post('/custom-reviews/items', [CustomReviewsController::class, 'storeItems'])->name('customReviews.items.store');
+Route::delete('/custom-reviews/{customReview}/items', [CustomReviewsController::class, 'destroyItems'])
+    ->whereNumber('customReview')
+    ->name('customReviews.items.destroy');
+Route::post('/custom-reviews/{customReview}/clear', [CustomReviewsController::class, 'clear'])
+    ->whereNumber('customReview')
+    ->name('customReviews.clear');
+
+// A review is named by its id, so this never answers to a word like "items".
+Route::get('/custom-reviews/{customReview}', [CustomReviewsController::class, 'show'])
+    ->whereNumber('customReview')
+    ->name('customReviews.show');
 
 // The learner's own marks on collection items: a star and status, and the
 // personal notes with the version marker that catches another tab's change.

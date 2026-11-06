@@ -10,11 +10,13 @@ use App\Http\Requests\CollectionRequest;
 use App\Http\Resources\CollectionItemResource;
 use App\Http\Resources\CollectionMistakeResource;
 use App\Http\Resources\CollectionNoteResource;
+use App\Http\Resources\CustomReviewSummaryResource;
 use App\Models\CollectionItemMark;
-use App\Queries\BasketCount;
-use App\Queries\BasketItems;
+use App\Models\CustomReview;
 use App\Queries\CollectionMarks;
+use App\Queries\CustomReviewItems;
 use App\Queries\TableCollection;
+use App\Queries\UnfinishedCustomReviews;
 use Illuminate\Http\JsonResponse;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -23,7 +25,8 @@ class CollectionController extends Controller
 {
     public function __construct(
         private readonly CollectionMarks $marks,
-        private readonly BasketItems $basket,
+        private readonly CustomReviewItems $reviews,
+        private readonly UnfinishedCustomReviews $unfinished,
     ) {}
 
     /**
@@ -37,13 +40,16 @@ class CollectionController extends Controller
     public function index(
         CollectionRequest $request,
         TableCollection $collection,
-        BasketCount $basketCount,
     ): Response|JsonResponse {
         $tab = $request->tab();
         $type = $tab->feedbackType();
         $filters = $request->filters();
         $topicOptions = $collection->topicOptions($type);
         $filters = $filters->restrictTopics(array_column($topicOptions, 'id'));
+
+        // The review this page marks its items against: the only one still
+        // being built, or none when the learner has more than one under way.
+        $target = $this->unfinished->target(null);
 
         $page = $collection->page(
             type: $type,
@@ -54,7 +60,7 @@ class CollectionController extends Controller
             filters: $filters,
         );
 
-        $items = $this->items($tab, $page['items'], $filters->terms());
+        $items = $this->items($tab, $page['items'], $target, $filters->terms());
 
         if ($request->wantsJson()) {
             $payload = [
@@ -77,7 +83,7 @@ class CollectionController extends Controller
                     'topic_options' => $topicOptions,
                     'filters' => $filters->toArray(),
                     'has_finished_sessions' => $collection->hasFinishedSessions(),
-                    'basket_count' => $basketCount->value(),
+                    'review_target' => $this->reviewTarget($target),
                 ];
             }
 
@@ -98,7 +104,7 @@ class CollectionController extends Controller
             'topic_options' => $topicOptions,
             'filters' => $filters->toArray(),
             'has_finished_sessions' => $collection->hasFinishedSessions(),
-            'basket_count' => $basketCount->value(),
+            'review_target' => $this->reviewTarget($target),
         ];
 
         $item = $request->item();
@@ -117,7 +123,7 @@ class CollectionController extends Controller
                     $this->marks->forItem($type, $item),
                     true,
                     $filters->terms(),
-                    $this->basket->has($type, $item),
+                    $target instanceof CustomReview && $this->reviews->has($target, $type, $item),
                 );
             }
         }
@@ -131,7 +137,7 @@ class CollectionController extends Controller
 
     /**
      * Every item matching the current tab, search and filters, so "Select all"
-     * can add the whole result to the basket in one go.
+     * can add the whole result to a review in one go.
      */
     public function selection(
         CollectionRequest $request,
@@ -170,12 +176,30 @@ class CollectionController extends Controller
     }
 
     /**
+     * The review the page marks its items against, and adds to. Null when the
+     * learner has several reviews under way or none yet, because then no item
+     * on the list can honestly say it is added.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function reviewTarget(?CustomReview $target): ?array
+    {
+        return $target instanceof CustomReview
+            ? CustomReviewSummaryResource::make($target, $this->reviews->count($target))->resolve()
+            : null;
+    }
+
+    /**
      * @param  list<array<string, mixed>>  $items
      * @param  list<string>  $terms
      * @return list<array<string, mixed>>
      */
-    private function items(CollectionTab $tab, array $items, array $terms = []): array
-    {
+    private function items(
+        CollectionTab $tab,
+        array $items,
+        ?CustomReview $target,
+        array $terms = [],
+    ): array {
         // Every mark on the page is looked up in one request, so the number
         // of database queries never grows with the number of items.
         $pageMarks = $this->marks->forItems(
@@ -183,10 +207,13 @@ class CollectionController extends Controller
             array_column($items, 'key'),
         );
 
-        $inBasket = $this->basket->among(
-            $tab->feedbackType(),
-            array_column($items, 'key'),
-        );
+        $inReview = $target instanceof CustomReview
+            ? $this->reviews->among(
+                $target,
+                $tab->feedbackType(),
+                array_column($items, 'key'),
+            )
+            : [];
 
         return array_map(
             fn (array $item): array => $this->shapeItem(
@@ -195,7 +222,7 @@ class CollectionController extends Controller
                 $pageMarks[$item['key']] ?? null,
                 false,
                 $terms,
-                isset($inBasket[$item['key']]),
+                isset($inReview[$item['key']]),
             ),
             $items,
         );
@@ -212,18 +239,18 @@ class CollectionController extends Controller
         ?CollectionItemMark $mark,
         bool $withNotes,
         array $terms = [],
-        bool $inBasket = false,
+        bool $inReview = false,
     ): array {
         return match ($tab->feedbackType()) {
-            FeedbackType::GrammarNote => CollectionNoteResource::make($item, $mark, $withNotes, $terms, $inBasket)->resolve(),
-            FeedbackType::Mistake => CollectionMistakeResource::make($item, $mark, $withNotes, $terms, $inBasket)->resolve(),
+            FeedbackType::GrammarNote => CollectionNoteResource::make($item, $mark, $withNotes, $terms, $inReview)->resolve(),
+            FeedbackType::Mistake => CollectionMistakeResource::make($item, $mark, $withNotes, $terms, $inReview)->resolve(),
             default => CollectionItemResource::make(
                 $item,
                 $mark,
                 $withNotes,
                 $terms,
                 $tab->feedbackType(),
-                $inBasket,
+                $inReview,
             )->resolve(),
         };
     }

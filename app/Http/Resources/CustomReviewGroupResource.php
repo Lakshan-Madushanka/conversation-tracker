@@ -8,10 +8,10 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * One collection's items in the basket, with the heading and count the page
- * shows. Empty groups never reach the page.
+ * One collection's items in a custom review, with the heading and count the
+ * review's page shows. Empty groups never reach the page.
  */
-final class BasketGroupResource extends JsonResource
+final class CustomReviewGroupResource extends JsonResource
 {
     /**
      * @return array{
@@ -31,7 +31,7 @@ final class BasketGroupResource extends JsonResource
             'label' => $group['label'],
             'count' => $group['count'],
             'items' => array_map(
-                fn (array $item): array => BasketItemResource::make($item)->resolve(),
+                fn (array $item): array => CustomReviewItemResource::make($item)->resolve(),
                 $group['items'],
             ),
         ];

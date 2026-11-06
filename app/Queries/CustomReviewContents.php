@@ -5,9 +5,10 @@ declare(strict_types=1);
 namespace App\Queries;
 
 use App\Enums\FeedbackType;
-use App\Models\BasketItem;
+use App\Models\CustomReview;
+use App\Models\CustomReviewItem;
 use App\Models\PracticeSession;
-use App\Support\BasketIdentity;
+use App\Support\CustomReviewIdentity;
 use App\Support\MistakeIdentity;
 use App\Support\NotePreview;
 use App\Support\RichText;
@@ -18,19 +19,19 @@ use Illuminate\Support\Facades\DB;
 use stdClass;
 
 /**
- * The basket as the learner sees it: its items grouped by collection, each
- * with the words to show, where it came from, and whether it is available.
+ * A custom review as the learner sees it: its items grouped by collection,
+ * each with the words to show, where it came from, and whether it is available.
  *
- * The basket stores only identities. Everything shown here is read live from
- * the study sessions, so an edited item shows its current words, an archived
- * item says it is not available right now, and a deleted item is gone (its
+ * A review stores only identities. Everything shown here is read live from the
+ * study sessions, so an edited item shows its current words, an archived item
+ * says it is not available right now, and a deleted item is gone (its
  * reference is pruned before this query runs).
  *
- * Reads are done one query per kind whatever the basket holds, and every place
+ * Reads are done one query per kind whatever the review holds, and every place
  * an item appears is read once, so the query count does not grow with the
  * number of items.
  *
- * @phpstan-type BasketSource array{
+ * @phpstan-type CustomReviewSource array{
  *     session_id: int,
  *     session_date: CarbonImmutable|null,
  *     topic: string,
@@ -40,7 +41,7 @@ use stdClass;
  *     field: 'question'|'entry',
  *     type: string|null
  * }
- * @phpstan-type BasketItemData array{
+ * @phpstan-type CustomReviewItemData array{
  *     id: string,
  *     kind: string,
  *     identity: string,
@@ -48,34 +49,35 @@ use stdClass;
  *     correction: string,
  *     correction_html: string,
  *     available: bool,
- *     source: BasketSource
+ *     source: CustomReviewSource
  * }
  */
-final class BasketContents
+final class CustomReviewContents
 {
     /**
-     * Every group with at least one item, in the order the basket page shows:
+     * Every group with at least one item, in the order the review's page shows:
      * Words, Phrases, Grammar notes, Mistakes, Questions.
      *
-     * @return list<array{key: string, label: string, count: int, items: list<BasketItemData>}>
+     * @return list<array{key: string, label: string, count: int, items: list<CustomReviewItemData>}>
      */
-    public function groups(): array
+    public function groups(CustomReview $review): array
     {
-        /** @var Collection<int, BasketItem> $rows */
-        $rows = BasketItem::query()
+        /** @var Collection<int, CustomReviewItem> $rows */
+        $rows = CustomReviewItem::query()
+            ->where('custom_review_id', $review->id)
             ->orderByDesc('added_at')
             ->orderByDesc('id')
             ->get();
 
-        /** @var Collection<string, Collection<int, BasketItem>> $byKind */
+        /** @var Collection<string, Collection<int, CustomReviewItem>> $byKind */
         $byKind = $rows->groupBy(
-            fn (BasketItem $item): string => $item->kind->value,
+            fn (CustomReviewItem $item): string => $item->kind->value,
         );
 
         $groups = [];
 
-        foreach (FeedbackType::basketTypes() as $kind) {
-            /** @var Collection<int, BasketItem> $kindRows */
+        foreach (FeedbackType::customReviewTypes() as $kind) {
+            /** @var Collection<int, CustomReviewItem> $kindRows */
             $kindRows = $byKind->get($kind->value, collect());
 
             /** @var list<string> $identities */
@@ -92,7 +94,7 @@ final class BasketContents
             $found = $this->items($kind, $identities);
             $items = [];
 
-            // The basket's own order is kept: the most recently added first.
+            // The review's own order is kept: the most recently added first.
             foreach ($identities as $identity) {
                 if (isset($found[$identity])) {
                     $items[] = $found[$identity];
@@ -105,7 +107,7 @@ final class BasketContents
 
             $groups[] = [
                 'key' => $kind->value,
-                'label' => $kind->basketLabel(),
+                'label' => $kind->customReviewLabel(),
                 'count' => count($items),
                 'items' => $items,
             ];
@@ -116,7 +118,7 @@ final class BasketContents
 
     /**
      * @param  list<string>  $identities
-     * @return array<string, BasketItemData>
+     * @return array<string, CustomReviewItemData>
      */
     private function items(FeedbackType $kind, array $identities): array
     {
@@ -135,7 +137,7 @@ final class BasketContents
      * archive makes it available.
      *
      * @param  list<string>  $identities
-     * @return array<string, BasketItemData>
+     * @return array<string, CustomReviewItemData>
      */
     private function feedbackItems(FeedbackType $kind, array $identities): array
     {
@@ -143,7 +145,7 @@ final class BasketContents
 
         // The identities are applied outside the positioned rows so the window
         // still numbers every entry in the box, as the reading page does, even
-        // when only some of those entries are in the basket.
+        // when only some of those entries are in the review.
         $rows = DB::query()
             ->fromSub(
                 $this->entryQuery($kind)
@@ -170,7 +172,7 @@ final class BasketContents
             ->orderByDesc('rows.id')
             ->get();
 
-        /** @var array<string, BasketItemData> $items */
+        /** @var array<string, CustomReviewItemData> $items */
         $items = [];
 
         foreach ($rows as $row) {
@@ -194,12 +196,12 @@ final class BasketContents
 
     /**
      * @param  list<string>  $identities
-     * @return array<string, BasketItemData>
+     * @return array<string, CustomReviewItemData>
      */
     private function noteItems(array $identities): array
     {
         $noteIds = array_values(array_filter(array_map(
-            BasketIdentity::noteId(...),
+            CustomReviewIdentity::noteId(...),
             $identities,
         )));
 
@@ -228,11 +230,11 @@ final class BasketContents
             ->whereIn('rows.id', $noteIds)
             ->get();
 
-        /** @var array<string, BasketItemData> $items */
+        /** @var array<string, CustomReviewItemData> $items */
         $items = [];
 
         foreach ($rows as $row) {
-            $identity = BasketIdentity::noteKey((int) $row->id);
+            $identity = CustomReviewIdentity::noteKey((int) $row->id);
             $available = $row->status === PracticeSession::STATUS_FINISHED
                 && $row->archived_at === null;
 
@@ -257,7 +259,7 @@ final class BasketContents
      * archive makes the mistake available.
      *
      * @param  list<string>  $identities
-     * @return array<string, BasketItemData>
+     * @return array<string, CustomReviewItemData>
      */
     private function mistakeItems(array $identities): array
     {
@@ -284,7 +286,7 @@ final class BasketContents
             ->orderByDesc('e.id')
             ->get();
 
-        /** @var array<string, BasketItemData> $items */
+        /** @var array<string, CustomReviewItemData> $items */
         $items = [];
 
         foreach ($rows as $row) {
@@ -339,7 +341,7 @@ final class BasketContents
 
     /**
      * @param  list<string>  $identities
-     * @return array<string, BasketItemData>
+     * @return array<string, CustomReviewItemData>
      */
     private function questionItems(array $identities): array
     {
@@ -360,7 +362,7 @@ final class BasketContents
             ])
             ->get();
 
-        /** @var array<string, BasketItemData> $items */
+        /** @var array<string, CustomReviewItemData> $items */
         $items = [];
 
         foreach ($rows as $row) {
@@ -388,7 +390,7 @@ final class BasketContents
     }
 
     /**
-     * @return BasketItemData
+     * @return CustomReviewItemData
      */
     private function entryItem(
         FeedbackType $kind,
@@ -412,7 +414,7 @@ final class BasketContents
      * Where an item came from, as the reading page names it.
      *
      * @param  'question'|'entry'  $field
-     * @return BasketSource
+     * @return CustomReviewSource
      */
     private function source(stdClass $row, string $field, FeedbackType $kind): array
     {
@@ -451,7 +453,7 @@ final class BasketContents
     /**
      * The place of a row inside its box, counted in one pass and zero-based,
      * in the order the reading page numbers entries. A correlated count per
-     * row would multiply across a large basket, so the window does it once.
+     * row would multiply across a large review, so the window does it once.
      *
      * @return literal-string
      */

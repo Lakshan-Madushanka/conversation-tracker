@@ -5,20 +5,21 @@ declare(strict_types=1);
 namespace App\Http\Requests;
 
 use App\Enums\FeedbackType;
-use App\Support\BasketIdentity;
+use App\Support\CustomReviewIdentity;
 use Closure;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 /**
- * A set of items the learner wants to add to the basket, named by kind and
- * identity.
+ * A set of items the learner wants gathered into a custom review, named by
+ * kind and identity, with the review they chose when they have chosen one and
+ * the answer to the recommended-size warning.
  *
  * The identities are reduced to the same form the Collections use before they
  * are validated, so `Café` and `cafe` are one word and the same item cannot be
  * stored twice under different spellings. Nothing is written here.
  */
-class AddBasketItemsRequest extends FormRequest
+class AddCustomReviewItemsRequest extends FormRequest
 {
     /**
      * @return array<string, list<mixed>>
@@ -27,20 +28,22 @@ class AddBasketItemsRequest extends FormRequest
     {
         $kind = $this->kindOrNull();
 
-        $identityRules = ['required', 'string', 'max:'.BasketIdentity::MAX_LENGTH];
+        $identityRules = ['required', 'string', 'max:'.CustomReviewIdentity::MAX_LENGTH];
 
         if ($kind instanceof FeedbackType) {
             $identityRules[] = function (string $attribute, mixed $value, Closure $fail) use ($kind): void {
-                if (! is_string($value) || ! BasketIdentity::isValid($kind, $value)) {
-                    $fail('One of those items cannot be added to the basket.');
+                if (! is_string($value) || ! CustomReviewIdentity::isValid($kind, $value)) {
+                    $fail('One of those items cannot be added to a review.');
                 }
             };
         }
 
         return [
-            'kind' => ['required', 'string', Rule::in(FeedbackType::basketValues())],
+            'kind' => ['required', 'string', Rule::in(FeedbackType::customReviewValues())],
             'identities' => ['required', 'array', 'min:1'],
             'identities.*' => $identityRules,
+            'review' => ['nullable', 'integer', Rule::exists('custom_reviews', 'id')],
+            'confirmed' => ['boolean'],
         ];
     }
 
@@ -67,7 +70,7 @@ class AddBasketItemsRequest extends FormRequest
                 continue;
             }
 
-            $clean = BasketIdentity::normalize($kind, $identity);
+            $clean = CustomReviewIdentity::normalize($kind, $identity);
 
             if ($clean !== '') {
                 $normalised[] = $clean;
@@ -90,6 +93,26 @@ class AddBasketItemsRequest extends FormRequest
     {
         /** @var list<string> */
         return array_values($this->validated('identities'));
+    }
+
+    /**
+     * The review the learner chose or is standing in, or null when they have
+     * not chosen one and the app should work out whether there is a choice.
+     * The review itself is read where the add is decided, not here.
+     */
+    public function reviewId(): ?int
+    {
+        $id = $this->integer('review');
+
+        return $id > 0
+            ? $id
+            : null;
+    }
+
+    /** Whether the learner has already answered the recommended-size warning. */
+    public function confirmed(): bool
+    {
+        return $this->boolean('confirmed');
     }
 
     private function kindOrNull(): ?FeedbackType

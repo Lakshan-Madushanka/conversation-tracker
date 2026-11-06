@@ -3,15 +3,16 @@ import { CheckIcon, PlusIcon } from '@lucide/vue';
 import { Button } from '@/components/ui/button';
 
 /**
- * One item's place in the basket, shown beside it in a collection list or an
- * opened item. The added state is written as "Added", never colour alone, and
- * says what it belongs to when a screen reader reaches it.
+ * One item's place in a custom review, shown beside it in a collection list,
+ * an opened item or a session's questions. The added state is written as
+ * "Added", never colour alone, and says what it belongs to when a screen
+ * reader reaches it.
  */
 const props = withDefaults(
     defineProps<{
         /** The item's words, so the control names what it acts on. */
         name: string;
-        /** Whether the basket already holds this item. */
+        /** Whether a review already holds this item. */
         added?: boolean;
         /** True while an add is on its way, so it cannot be pressed twice. */
         busy?: boolean;
@@ -53,7 +54,7 @@ const emit = defineEmits<{
 
     <span
         v-else
-        :title="props.compact ? 'In the basket' : undefined"
+        :title="props.compact ? 'In a review' : undefined"
         :class="
             props.compact
                 ? 'inline-flex size-8 shrink-0 items-center justify-center text-muted-foreground'
@@ -64,7 +65,7 @@ const emit = defineEmits<{
             :class="props.compact ? 'size-4' : 'size-3.5'"
             aria-hidden="true"
         />
-        <span class="sr-only">{{ props.name }} is in the basket.</span>
+        <span class="sr-only">{{ props.name }} is in a review.</span>
         <span v-if="!props.compact" aria-hidden="true">Added</span>
     </span>
 </template>

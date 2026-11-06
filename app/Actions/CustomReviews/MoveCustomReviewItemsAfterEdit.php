@@ -2,26 +2,27 @@
 
 declare(strict_types=1);
 
-namespace App\Actions\Basket;
+namespace App\Actions\CustomReviews;
 
 use App\Enums\FeedbackType;
-use App\Models\BasketItem;
+use App\Models\CustomReviewItem;
 use App\Models\PracticeFeedbackEntry;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
 /**
- * The typo rule for the basket: a reference follows the words it was added
+ * The typo rule for custom reviews: a reference follows the words it was added
  * from when an edit changes the item's identity.
  *
- * If the old identity appears nowhere else, its basket reference moves to the
- * new identity. If the new identity is already in the basket the old
- * reference is dropped, so one item never has two rows. Grammar notes and
- * questions keep their identity, so nothing can move for them.
+ * If the old identity appears nowhere else, every review holding it moves that
+ * reference to the new identity. Where a review already holds the new identity
+ * too, its old reference is dropped, so one item never has two rows in the
+ * same review and no review loses an item it did not have before. Grammar
+ * notes and questions keep their identity, so nothing can move for them.
  *
  * Nothing else is touched — no marks, ratings, schedule or session.
  */
-final class MoveBasketAfterEdit
+final class MoveCustomReviewItemsAfterEdit
 {
     public function handle(
         FeedbackType $kind,
@@ -38,30 +39,37 @@ final class MoveBasketAfterEdit
                 return;
             }
 
-            /** @var BasketItem|null $source */
-            $source = BasketItem::query()
+            /** @var list<CustomReviewItem> $rows */
+            $rows = CustomReviewItem::query()
                 ->where('kind', $kind->value)
                 ->where('item_identity', $fromIdentity)
                 ->lockForUpdate()
-                ->first();
+                ->get()
+                ->all();
 
-            if ($source === null) {
+            if ($rows === []) {
                 return;
             }
 
-            $targetExists = BasketItem::query()
+            // The reviews that already hold the new identity. Dropping their
+            // old row leaves each of them with at least one item, so no status
+            // needs following here.
+            $alreadyMoved = CustomReviewItem::query()
                 ->where('kind', $kind->value)
                 ->where('item_identity', $toIdentity)
-                ->exists();
+                ->pluck('custom_review_id')
+                ->flip();
 
-            if ($targetExists) {
-                $source->delete();
+            foreach ($rows as $row) {
+                if ($alreadyMoved->has((int) $row->custom_review_id)) {
+                    $row->delete();
 
-                return;
+                    continue;
+                }
+
+                $row->item_identity = $toIdentity;
+                $row->save();
             }
-
-            $source->item_identity = $toIdentity;
-            $source->save();
         });
     }
 

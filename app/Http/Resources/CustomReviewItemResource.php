@@ -4,25 +4,25 @@ declare(strict_types=1);
 
 namespace App\Http\Resources;
 
-use App\Queries\BasketContents;
+use App\Queries\CustomReviewContents;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * One item in the basket, shaped for the basket page.
+ * One item in a custom review, shaped for the review's page.
  *
  * The words shown are read live from the session, never copied into the
- * basket. `available` is false while every place the item came from is
+ * review. `available` is false while every place the item came from is
  * archived; the item stays listed and says so. `href` opens the original
  * session at the item in a new tab, with the same target the reading page
  * already understands.
  *
- * @phpstan-import-type BasketItemData from BasketContents
+ * @phpstan-import-type CustomReviewItemData from CustomReviewContents
  */
-final class BasketItemResource extends JsonResource
+final class CustomReviewItemResource extends JsonResource
 {
     /**
-     * @param  BasketItemData  $item
+     * @param  CustomReviewItemData  $item
      */
     public function __construct(array $item)
     {
@@ -45,7 +45,7 @@ final class BasketItemResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
-        /** @var BasketItemData $item */
+        /** @var CustomReviewItemData $item */
         $item = $this->resource;
 
         return [
@@ -63,14 +63,14 @@ final class BasketItemResource extends JsonResource
     }
 
     /**
-     * @param  BasketItemData  $item
+     * @param  CustomReviewItemData  $item
      */
     private function href(array $item): string
     {
         $source = $item['source'];
 
         $query = [
-            'from' => 'basket',
+            'from' => 'review',
             'question' => (string) $source['question_position'],
             'field' => $source['field'],
         ];

@@ -3,7 +3,7 @@ import { computed, nextTick, ref, watch } from 'vue';
 import { Link } from '@inertiajs/vue3';
 import { useMediaQuery } from '@vueuse/core';
 import { ArrowUpRightIcon, TriangleAlertIcon } from '@lucide/vue';
-import AddToBasketButton from '@/components/AddToBasketButton.vue';
+import AddToReviewButton from '@/components/AddToReviewButton.vue';
 import { Badge } from '@/components/ui/badge';
 import {
     Collapsible,
@@ -48,9 +48,9 @@ const props = withDefaults(
         item: CollectionOpenedItem | null;
         tab?: CollectionTabKey;
         /** True while this item's add request is on its way. */
-        basketBusy?: boolean;
+        reviewBusy?: boolean;
     }>(),
-    { tab: 'vocabulary', basketBusy: false },
+    { tab: 'vocabulary', reviewBusy: false },
 );
 
 const emit = defineEmits<{
@@ -59,7 +59,7 @@ const emit = defineEmits<{
     (event: 'see-session'): void;
     /** A mark was saved; the list keeps the same truth. */
     (event: 'mark-saved', item: CollectionOpenedItem, mark: ItemMarkData): void;
-    /** The learner asked to put this item into the basket. */
+    /** The learner asked to put this item into a review. */
     (event: 'add', item: CollectionOpenedItem): void;
 }>();
 
@@ -296,14 +296,14 @@ function seeOriginal(event: MouseEvent): void {
                         class="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3"
                     >
                         <span class="text-sm font-medium">Custom review</span>
-                        <AddToBasketButton
+                        <AddToReviewButton
                             :name="
                                 noteItem.preview === ''
                                     ? noteItem.key
                                     : noteItem.preview
                             "
-                            :added="noteItem.in_basket === true"
-                            :busy="props.basketBusy"
+                            :added="noteItem.in_review === true"
+                            :busy="props.reviewBusy"
                             @add="emit('add', noteItem)"
                         />
                     </div>
@@ -528,10 +528,10 @@ function seeOriginal(event: MouseEvent): void {
                         class="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3"
                     >
                         <span class="text-sm font-medium">Custom review</span>
-                        <AddToBasketButton
+                        <AddToReviewButton
                             :name="wordItem.title"
-                            :added="wordItem.in_basket === true"
-                            :busy="props.basketBusy"
+                            :added="wordItem.in_review === true"
+                            :busy="props.reviewBusy"
                             @add="emit('add', wordItem)"
                         />
                     </div>

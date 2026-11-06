@@ -973,7 +973,7 @@ final class TableCollection
 
     /**
      * Every item key the current view, search and filters match, without
-     * paging. "Select all" can then add the whole result to the basket, not
+     * paging. "Select all" can then add the whole result to a review, not
      * only the items already loaded on screen.
      *
      * @return list<string>

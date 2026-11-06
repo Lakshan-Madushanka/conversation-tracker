@@ -2,62 +2,92 @@
 
 declare(strict_types=1);
 
-namespace App\Actions\Basket;
+namespace App\Actions\CustomReviews;
 
 use App\Enums\FeedbackType;
-use App\Models\BasketItem;
+use App\Models\CustomReview;
+use App\Models\CustomReviewItem;
 use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeQuestion;
-use App\Support\BasketIdentity;
+use App\Queries\CustomReviewItems;
+use App\Support\CustomReviewIdentity;
+use App\Support\CustomReviewStatusRules;
 use App\Support\MistakeIdentity;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
- * Removes basket references whose item no longer exists at all.
+ * Removes review references whose item no longer exists at all.
  *
  * An item that is only archived still exists, so it stays and is shown as not
  * available right now. An item whose last session was deleted has nothing left
- * to point at, so its reference is removed for good instead of leaving a
- * ghost row or an empty line.
+ * to point at, so its reference is removed for good from every review that
+ * holds it, instead of leaving a ghost row or an empty line.
  *
- * This is the one repair a basket read performs, called in the controller when
- * the basket page opens, so every view of the basket keeps the same rule.
+ * This is the one repair a review read performs, called when a review's page
+ * opens, so every view of a review keeps the same rule. A review that has lost
+ * its last item this way becomes `Empty` like any other removal.
  */
-final class PruneBasketItems
+final readonly class PruneCustomReviewItems
 {
+    public function __construct(
+        private CustomReviewItems $items,
+    ) {}
+
     /** @return int how many references were removed */
     public function handle(): int
     {
-        /** @var Collection<string, Collection<int, BasketItem>> $byKind */
-        $byKind = BasketItem::query()
-            ->get(['id', 'kind', 'item_identity'])
-            ->groupBy(fn (BasketItem $item): string => $item->kind->value);
-
-        $removed = 0;
-
-        foreach ($byKind as $kindValue => $rows) {
-            $kind = FeedbackType::tryFrom($kindValue);
-
-            /** @var list<string> $identities */
-            $identities = $rows
-                ->map(fn (BasketItem $item): string => $item->item_identity)
+        /** @var Collection<string, list<string>> $grouped */
+        $grouped = CustomReviewItem::query()
+            ->get(['kind', 'item_identity'])
+            ->groupBy(fn (CustomReviewItem $item): string => $item->kind->value)
+            ->map(fn (Collection $rows): array => $rows
+                ->pluck('item_identity')
                 ->unique()
                 ->values()
-                ->all();
+                ->all());
 
-            if ($kind === null || ! $kind->isBasketType()) {
-                $removed += $this->delete($identities, $kindValue);
+        /** @var array<string, list<string>> $dead */
+        $dead = [];
+
+        foreach ($grouped as $kindValue => $identities) {
+            $kind = FeedbackType::tryFrom($kindValue);
+
+            if ($kind === null || ! $kind->isCustomReviewType()) {
+                $dead[$kindValue] = $identities;
 
                 continue;
             }
 
-            $live = $this->liveIdentities($kind, $identities);
-            $missing = array_values(array_diff($identities, $live));
+            $missing = array_values(array_diff($identities, $this->liveIdentities($kind, $identities)));
 
-            $removed += $this->delete($missing, $kindValue);
+            if ($missing !== []) {
+                $dead[$kindValue] = $missing;
+            }
         }
 
-        return $removed;
+        if ($dead === []) {
+            return 0;
+        }
+
+        return DB::transaction(function () use ($dead): int {
+            $affected = [];
+            $removed = 0;
+
+            foreach ($dead as $kindValue => $identities) {
+                $rows = CustomReviewItem::query()
+                    ->where('kind', $kindValue)
+                    ->whereIn('item_identity', $identities);
+
+                $affected = array_merge($affected, $rows->pluck('custom_review_id')->all());
+
+                $removed += $rows->delete();
+            }
+
+            $this->syncStatuses(array_values(array_unique($affected)));
+
+            return $removed;
+        });
     }
 
     /**
@@ -70,13 +100,9 @@ final class PruneBasketItems
      */
     private function liveIdentities(FeedbackType $kind, array $identities): array
     {
-        if ($identities === []) {
-            return [];
-        }
-
         if ($kind === FeedbackType::GrammarNote) {
             $ids = array_values(array_filter(array_map(
-                BasketIdentity::noteId(...),
+                CustomReviewIdentity::noteId(...),
                 $identities,
             )));
 
@@ -88,7 +114,7 @@ final class PruneBasketItems
             $keys = PracticeFeedbackEntry::query()
                 ->whereIn('id', $ids)
                 ->pluck('id')
-                ->map(fn (int $id): string => BasketIdentity::noteKey($id))
+                ->map(fn (int $id): string => CustomReviewIdentity::noteKey($id))
                 ->all();
 
             return $keys;
@@ -147,17 +173,29 @@ final class PruneBasketItems
     }
 
     /**
-     * @param  list<string>  $identities
+     * The reviews that lost a reference, given the status their remaining
+     * items tell them to hold. One grouped count covers them all.
+     *
+     * @param  list<int>  $reviewIds
      */
-    private function delete(array $identities, string $kind): int
+    private function syncStatuses(array $reviewIds): void
     {
-        if ($identities === []) {
-            return 0;
+        if ($reviewIds === []) {
+            return;
         }
 
-        return BasketItem::query()
-            ->where('kind', $kind)
-            ->whereIn('item_identity', $identities)
-            ->delete();
+        $counts = $this->items->counts($reviewIds);
+
+        /** @var Collection<int, CustomReview> $reviews */
+        $reviews = CustomReview::query()
+            ->whereIn('id', $reviewIds)
+            ->get();
+
+        foreach ($reviews as $review) {
+            CustomReviewStatusRules::followItemCount(
+                $review,
+                $counts[$review->id] ?? 0,
+            );
+        }
     }
 }

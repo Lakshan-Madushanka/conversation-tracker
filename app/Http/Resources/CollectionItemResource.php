@@ -40,7 +40,7 @@ final class CollectionItemResource extends JsonResource
         public readonly bool $withNotes = false,
         public readonly array $terms = [],
         public readonly FeedbackType $type = FeedbackType::Vocabulary,
-        public readonly bool $inBasket = false,
+        public readonly bool $inReview = false,
     ) {
         parent::__construct($item);
     }
@@ -59,7 +59,7 @@ final class CollectionItemResource extends JsonResource
      *     starred: bool,
      *     status: string|null,
      *     has_notes: bool,
-     *     in_basket: bool,
+     *     in_review: bool,
      *     notes_html?: string,
      *     notes_version?: int,
      *     match: array{label: string, segments: list<array{text: string, match: bool}>}|null,
@@ -94,7 +94,7 @@ final class CollectionItemResource extends JsonResource
             'starred' => $this->mark->starred ?? false,
             'status' => $this->mark?->status?->value,
             'has_notes' => $this->mark?->hasNotes() ?? false,
-            'in_basket' => $this->inBasket,
+            'in_review' => $this->inReview,
             ...($this->withNotes ? $this->notes() : []),
             'match' => CollectionMatch::forItem(
                 $item,

@@ -2,33 +2,44 @@
 
 declare(strict_types=1);
 
-namespace App\Actions\Basket;
+namespace App\Actions\CustomReviews;
 
 use App\Enums\FeedbackType;
-use App\Models\BasketItem;
+use App\Models\CustomReview;
+use App\Models\CustomReviewItem;
+use App\Queries\CustomReviewItems;
+use App\Support\CustomReviewStatusRules;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Adds items to the learner's basket by their identity.
+ * Adds items to one custom review by their identity.
  *
  * The request always carries the whole set the learner chose, never a toggle,
  * so repeating it — a double press, a retry, a second tab — adds nothing new.
- * The unique constraint on the kind and identity makes that true even when two
+ * The unique pair of review, kind and identity makes that true even when two
  * requests arrive at the same moment.
+ *
+ * The first item to arrive also moves the review from `Empty` to `Draft`: the
+ * learner is building something now. A review already marked `Finished` keeps
+ * that mark, because only the learner moves it.
  *
  * Only references are stored: no text, marks, statuses, ratings or sessions
  * are read or written here.
  */
-final class AddBasketItems
+final readonly class AddCustomReviewItems
 {
     /** How many rows one insert carries; well under every driver's limit. */
     private const int CHUNK = 300;
+
+    public function __construct(
+        private CustomReviewItems $items,
+    ) {}
 
     /**
      * @param  list<string>  $identities
      * @return array{added: list<string>, already: list<string>, total: int}
      */
-    public function handle(FeedbackType $kind, array $identities): array
+    public function handle(CustomReview $review, FeedbackType $kind, array $identities): array
     {
         $identities = array_values(array_unique(array_filter(
             $identities,
@@ -36,12 +47,13 @@ final class AddBasketItems
         )));
 
         if ($identities === []) {
-            return ['added' => [], 'already' => [], 'total' => BasketItem::query()->count()];
+            return ['added' => [], 'already' => [], 'total' => $this->items->count($review)];
         }
 
-        return DB::transaction(function () use ($kind, $identities): array {
+        return DB::transaction(function () use ($review, $kind, $identities): array {
             /** @var list<string> $existing */
-            $existing = BasketItem::query()
+            $existing = CustomReviewItem::query()
+                ->where('custom_review_id', $review->id)
                 ->where('kind', $kind->value)
                 ->whereIn('item_identity', $identities)
                 ->pluck('item_identity')
@@ -54,8 +66,9 @@ final class AddBasketItems
                 $addedAt = now();
 
                 foreach (array_chunk($added, self::CHUNK) as $chunk) {
-                    BasketItem::query()->insertOrIgnore(array_map(
+                    CustomReviewItem::query()->insertOrIgnore(array_map(
                         fn (string $identity): array => [
+                            'custom_review_id' => $review->id,
                             'kind' => $kind->value,
                             'item_identity' => $identity,
                             'added_at' => $addedAt,
@@ -63,12 +76,17 @@ final class AddBasketItems
                         $chunk,
                     ));
                 }
+
+                CustomReviewStatusRules::followItemCount(
+                    $review,
+                    $this->items->count($review),
+                );
             }
 
             return [
                 'added' => $added,
                 'already' => $already,
-                'total' => BasketItem::query()->count(),
+                'total' => $this->items->count($review),
             ];
         });
     }

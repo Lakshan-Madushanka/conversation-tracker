@@ -7,15 +7,15 @@ namespace App\Support;
 use App\Enums\FeedbackType;
 
 /**
- * The identity a basket row stores, by the same rules the Collections and
- * Review already use to name an item.
+ * The identity a custom review's item row stores, by the same rules the
+ * Collections and Review already use to name an item.
  *
  * A word or phrase is its normalised text; a grammar note is `note-` and the
  * saved row's id; a mistake is the opaque pair key; a question is its own id.
- * The same item seen in two sessions therefore has one identity and one
- * basket row.
+ * The same item seen in two sessions therefore has one identity and one row,
+ * here and in every collection.
  */
-final class BasketIdentity
+final class CustomReviewIdentity
 {
     /** The longest identity the stored column and the item indexes allow. */
     public const int MAX_LENGTH = 191;

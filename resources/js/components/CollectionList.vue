@@ -8,7 +8,7 @@ import {
     SearchIcon,
     TriangleAlertIcon,
 } from '@lucide/vue';
-import AddToBasketButton from '@/components/AddToBasketButton.vue';
+import AddToReviewButton from '@/components/AddToReviewButton.vue';
 import EmptyState from '@/components/EmptyState.vue';
 import CollectionMarksCluster from '@/components/CollectionMarksCluster.vue';
 import CollectionMatchHint from '@/components/CollectionMatchHint.vue';
@@ -65,7 +65,7 @@ const props = withDefaults(
         /** True when applying a search or filter failed and can be tried again. */
         filterError?: boolean;
         hasFinishedSessions?: boolean;
-        /** True while the learner is choosing items to add to the basket. */
+        /** True while the learner is choosing items to add to a review. */
         selectionMode?: boolean;
         /** The keys chosen so far. */
         selectedKeys?: string[];
@@ -104,7 +104,7 @@ const emit = defineEmits<{
     (event: 'retry-filters'): void;
     /** One item chosen or unchosen; Shift chooses a run of items. */
     (event: 'select', item: CollectionOpenedItem, shiftKey: boolean): void;
-    /** One item put into the basket without leaving the list. */
+    /** One item put into a review without leaving the list. */
     (event: 'add', item: CollectionOpenedItem): void;
 }>();
 
@@ -255,7 +255,7 @@ function selectLabel(item: CollectionOpenedItem): string {
     return `Select the ${selectNoun.value} ${itemName(item)}`;
 }
 
-/** What the item is called in words, for the basket's controls. */
+/** What the item is called in words, for the review's controls. */
 function itemName(item: CollectionOpenedItem): string {
     if (isCollectionNoteItem(item)) {
         return noteMarkName(item);
@@ -345,7 +345,7 @@ function exampleHtml(item: CollectionItem): string {
                                     <span class="sr-only">{{
                                         selectionMode
                                             ? 'Select'
-                                            : 'Basket, star and status'
+                                            : 'Review, star and status'
                                     }}</span>
                                 </TableHead>
                             </TableRow>
@@ -405,10 +405,10 @@ function exampleHtml(item: CollectionItem): string {
                                         class="flex flex-wrap items-center justify-end gap-1"
                                         @click.stop
                                     >
-                                        <AddToBasketButton
+                                        <AddToReviewButton
                                             compact
                                             :name="itemName(note)"
-                                            :added="note.in_basket === true"
+                                            :added="note.in_review === true"
                                             :busy="props.busyKey === note.key"
                                             @add="emit('add', note)"
                                         />
@@ -452,7 +452,7 @@ function exampleHtml(item: CollectionItem): string {
                                     <span class="sr-only">{{
                                         selectionMode
                                             ? 'Select'
-                                            : 'Basket, star and status'
+                                            : 'Review, star and status'
                                     }}</span>
                                 </TableHead>
                             </TableRow>
@@ -551,10 +551,10 @@ function exampleHtml(item: CollectionItem): string {
                                         class="flex flex-wrap items-center justify-end gap-1"
                                         @click.stop
                                     >
-                                        <AddToBasketButton
+                                        <AddToReviewButton
                                             compact
                                             :name="itemName(mistake)"
-                                            :added="mistake.in_basket === true"
+                                            :added="mistake.in_review === true"
                                             :busy="
                                                 props.busyKey === mistake.key
                                             "
@@ -601,7 +601,7 @@ function exampleHtml(item: CollectionItem): string {
                                     <span class="sr-only">{{
                                         selectionMode
                                             ? 'Select'
-                                            : 'Basket, star and status'
+                                            : 'Review, star and status'
                                     }}</span>
                                 </TableHead>
                             </TableRow>
@@ -705,10 +705,10 @@ function exampleHtml(item: CollectionItem): string {
                                         class="flex flex-wrap items-center justify-end gap-1"
                                         @click.stop
                                     >
-                                        <AddToBasketButton
+                                        <AddToReviewButton
                                             compact
                                             :name="itemName(item)"
-                                            :added="item.in_basket === true"
+                                            :added="item.in_review === true"
                                             :busy="props.busyKey === item.key"
                                             @add="emit('add', item)"
                                         />
@@ -784,10 +784,10 @@ function exampleHtml(item: CollectionItem): string {
                                         class="ml-auto flex items-center gap-1"
                                         @click.stop
                                     >
-                                        <AddToBasketButton
+                                        <AddToReviewButton
                                             compact
                                             :name="itemName(note)"
-                                            :added="note.in_basket === true"
+                                            :added="note.in_review === true"
                                             :busy="props.busyKey === note.key"
                                             @add="emit('add', note)"
                                         />
@@ -923,10 +923,10 @@ function exampleHtml(item: CollectionItem): string {
                                         class="ml-auto flex items-center gap-1"
                                         @click.stop
                                     >
-                                        <AddToBasketButton
+                                        <AddToReviewButton
                                             compact
                                             :name="itemName(mistake)"
-                                            :added="mistake.in_basket === true"
+                                            :added="mistake.in_review === true"
                                             :busy="
                                                 props.busyKey === mistake.key
                                             "
@@ -1042,10 +1042,10 @@ function exampleHtml(item: CollectionItem): string {
                                         class="ml-auto flex items-center gap-1"
                                         @click.stop
                                     >
-                                        <AddToBasketButton
+                                        <AddToReviewButton
                                             compact
                                             :name="itemName(item)"
-                                            :added="item.in_basket === true"
+                                            :added="item.in_review === true"
                                             :busy="props.busyKey === item.key"
                                             @add="emit('add', item)"
                                         />

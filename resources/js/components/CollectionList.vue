@@ -345,7 +345,7 @@ function exampleHtml(item: CollectionItem): string {
                                     <span class="sr-only">{{
                                         selectionMode
                                             ? 'Select'
-                                            : 'Star and status'
+                                            : 'Basket, star and status'
                                     }}</span>
                                 </TableHead>
                             </TableRow>
@@ -371,17 +371,6 @@ function exampleHtml(item: CollectionItem): string {
                                         v-if="note.match"
                                         :match="note.match"
                                     />
-                                    <div
-                                        v-if="!selectionMode"
-                                        class="mt-2 flex"
-                                    >
-                                        <AddToBasketButton
-                                            :name="itemName(note)"
-                                            :added="note.in_basket === true"
-                                            :busy="props.busyKey === note.key"
-                                            @add="emit('add', note)"
-                                        />
-                                    </div>
                                 </TableCell>
 
                                 <TableCell
@@ -411,14 +400,28 @@ function exampleHtml(item: CollectionItem): string {
                                             "
                                         />
                                     </span>
-                                    <CollectionMarksCluster
+                                    <div
                                         v-else
-                                        :item="note"
-                                        :name="noteMarkName(note)"
-                                        :unit="config.unit"
-                                        @star="emit('star', note, $event)"
-                                        @status="emit('status', note, $event)"
-                                    />
+                                        class="flex flex-wrap items-center justify-end gap-1"
+                                        @click.stop
+                                    >
+                                        <AddToBasketButton
+                                            compact
+                                            :name="itemName(note)"
+                                            :added="note.in_basket === true"
+                                            :busy="props.busyKey === note.key"
+                                            @add="emit('add', note)"
+                                        />
+                                        <CollectionMarksCluster
+                                            :item="note"
+                                            :name="noteMarkName(note)"
+                                            :unit="config.unit"
+                                            @star="emit('star', note, $event)"
+                                            @status="
+                                                emit('status', note, $event)
+                                            "
+                                        />
+                                    </div>
                                 </TableCell>
                             </TableRow>
                         </TableBody>
@@ -449,7 +452,7 @@ function exampleHtml(item: CollectionItem): string {
                                     <span class="sr-only">{{
                                         selectionMode
                                             ? 'Select'
-                                            : 'Star and status'
+                                            : 'Basket, star and status'
                                     }}</span>
                                 </TableHead>
                             </TableRow>
@@ -491,19 +494,6 @@ function exampleHtml(item: CollectionItem): string {
                                         v-if="mistake.match"
                                         :match="mistake.match"
                                     />
-                                    <div
-                                        v-if="!selectionMode"
-                                        class="mt-2 flex"
-                                    >
-                                        <AddToBasketButton
-                                            :name="itemName(mistake)"
-                                            :added="mistake.in_basket === true"
-                                            :busy="
-                                                props.busyKey === mistake.key
-                                            "
-                                            @add="emit('add', mistake)"
-                                        />
-                                    </div>
                                 </TableCell>
 
                                 <TableCell
@@ -556,16 +546,32 @@ function exampleHtml(item: CollectionItem): string {
                                             "
                                         />
                                     </span>
-                                    <CollectionMarksCluster
+                                    <div
                                         v-else
-                                        :item="mistake"
-                                        :name="markItemName(mistake)"
-                                        :unit="config.unit"
-                                        @star="emit('star', mistake, $event)"
-                                        @status="
-                                            emit('status', mistake, $event)
-                                        "
-                                    />
+                                        class="flex flex-wrap items-center justify-end gap-1"
+                                        @click.stop
+                                    >
+                                        <AddToBasketButton
+                                            compact
+                                            :name="itemName(mistake)"
+                                            :added="mistake.in_basket === true"
+                                            :busy="
+                                                props.busyKey === mistake.key
+                                            "
+                                            @add="emit('add', mistake)"
+                                        />
+                                        <CollectionMarksCluster
+                                            :item="mistake"
+                                            :name="markItemName(mistake)"
+                                            :unit="config.unit"
+                                            @star="
+                                                emit('star', mistake, $event)
+                                            "
+                                            @status="
+                                                emit('status', mistake, $event)
+                                            "
+                                        />
+                                    </div>
                                 </TableCell>
                             </TableRow>
                         </TableBody>
@@ -595,7 +601,7 @@ function exampleHtml(item: CollectionItem): string {
                                     <span class="sr-only">{{
                                         selectionMode
                                             ? 'Select'
-                                            : 'Star and status'
+                                            : 'Basket, star and status'
                                     }}</span>
                                 </TableHead>
                             </TableRow>
@@ -628,17 +634,6 @@ function exampleHtml(item: CollectionItem): string {
                                         v-if="item.match"
                                         :match="item.match"
                                     />
-                                    <div
-                                        v-if="!selectionMode"
-                                        class="mt-2 flex"
-                                    >
-                                        <AddToBasketButton
-                                            :name="itemName(item)"
-                                            :added="item.in_basket === true"
-                                            :busy="props.busyKey === item.key"
-                                            @add="emit('add', item)"
-                                        />
-                                    </div>
                                 </TableCell>
 
                                 <TableCell
@@ -705,14 +700,28 @@ function exampleHtml(item: CollectionItem): string {
                                             "
                                         />
                                     </span>
-                                    <CollectionMarksCluster
+                                    <div
                                         v-else
-                                        :item="item"
-                                        :name="markItemName(item)"
-                                        :unit="config.unit"
-                                        @star="emit('star', item, $event)"
-                                        @status="emit('status', item, $event)"
-                                    />
+                                        class="flex flex-wrap items-center justify-end gap-1"
+                                        @click.stop
+                                    >
+                                        <AddToBasketButton
+                                            compact
+                                            :name="itemName(item)"
+                                            :added="item.in_basket === true"
+                                            :busy="props.busyKey === item.key"
+                                            @add="emit('add', item)"
+                                        />
+                                        <CollectionMarksCluster
+                                            :item="item"
+                                            :name="markItemName(item)"
+                                            :unit="config.unit"
+                                            @star="emit('star', item, $event)"
+                                            @status="
+                                                emit('status', item, $event)
+                                            "
+                                        />
+                                    </div>
                                 </TableCell>
                             </TableRow>
                         </TableBody>
@@ -771,19 +780,27 @@ function exampleHtml(item: CollectionItem): string {
                                     </Label>
                                 </span>
                                 <template v-else>
-                                    <AddToBasketButton
-                                        :name="itemName(note)"
-                                        :added="note.in_basket === true"
-                                        :busy="props.busyKey === note.key"
-                                        @add="emit('add', note)"
-                                    />
-                                    <CollectionMarksCluster
-                                        :item="note"
-                                        :name="noteMarkName(note)"
-                                        :unit="config.unit"
-                                        @star="emit('star', note, $event)"
-                                        @status="emit('status', note, $event)"
-                                    />
+                                    <div
+                                        class="ml-auto flex items-center gap-1"
+                                        @click.stop
+                                    >
+                                        <AddToBasketButton
+                                            compact
+                                            :name="itemName(note)"
+                                            :added="note.in_basket === true"
+                                            :busy="props.busyKey === note.key"
+                                            @add="emit('add', note)"
+                                        />
+                                        <CollectionMarksCluster
+                                            :item="note"
+                                            :name="noteMarkName(note)"
+                                            :unit="config.unit"
+                                            @star="emit('star', note, $event)"
+                                            @status="
+                                                emit('status', note, $event)
+                                            "
+                                        />
+                                    </div>
                                 </template>
                             </div>
                         </Card>
@@ -902,21 +919,31 @@ function exampleHtml(item: CollectionItem): string {
                                     </Label>
                                 </span>
                                 <template v-else>
-                                    <AddToBasketButton
-                                        :name="itemName(mistake)"
-                                        :added="mistake.in_basket === true"
-                                        :busy="props.busyKey === mistake.key"
-                                        @add="emit('add', mistake)"
-                                    />
-                                    <CollectionMarksCluster
-                                        :item="mistake"
-                                        :name="markItemName(mistake)"
-                                        :unit="config.unit"
-                                        @star="emit('star', mistake, $event)"
-                                        @status="
-                                            emit('status', mistake, $event)
-                                        "
-                                    />
+                                    <div
+                                        class="ml-auto flex items-center gap-1"
+                                        @click.stop
+                                    >
+                                        <AddToBasketButton
+                                            compact
+                                            :name="itemName(mistake)"
+                                            :added="mistake.in_basket === true"
+                                            :busy="
+                                                props.busyKey === mistake.key
+                                            "
+                                            @add="emit('add', mistake)"
+                                        />
+                                        <CollectionMarksCluster
+                                            :item="mistake"
+                                            :name="markItemName(mistake)"
+                                            :unit="config.unit"
+                                            @star="
+                                                emit('star', mistake, $event)
+                                            "
+                                            @status="
+                                                emit('status', mistake, $event)
+                                            "
+                                        />
+                                    </div>
                                 </template>
                             </div>
                         </Card>
@@ -1011,19 +1038,27 @@ function exampleHtml(item: CollectionItem): string {
                                     </Label>
                                 </span>
                                 <template v-else>
-                                    <AddToBasketButton
-                                        :name="itemName(item)"
-                                        :added="item.in_basket === true"
-                                        :busy="props.busyKey === item.key"
-                                        @add="emit('add', item)"
-                                    />
-                                    <CollectionMarksCluster
-                                        :item="item"
-                                        :name="markItemName(item)"
-                                        :unit="config.unit"
-                                        @star="emit('star', item, $event)"
-                                        @status="emit('status', item, $event)"
-                                    />
+                                    <div
+                                        class="ml-auto flex items-center gap-1"
+                                        @click.stop
+                                    >
+                                        <AddToBasketButton
+                                            compact
+                                            :name="itemName(item)"
+                                            :added="item.in_basket === true"
+                                            :busy="props.busyKey === item.key"
+                                            @add="emit('add', item)"
+                                        />
+                                        <CollectionMarksCluster
+                                            :item="item"
+                                            :name="markItemName(item)"
+                                            :unit="config.unit"
+                                            @star="emit('star', item, $event)"
+                                            @status="
+                                                emit('status', item, $event)
+                                            "
+                                        />
+                                    </div>
                                 </template>
                             </div>
                         </Card>

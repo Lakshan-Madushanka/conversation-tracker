@@ -15,10 +15,13 @@ const props = withDefaults(
         added?: boolean;
         /** True while an add is on its way, so it cannot be pressed twice. */
         busy?: boolean;
+        /** The icon-only look used among a row's marks. */
+        compact?: boolean;
     }>(),
     {
         added: false,
         busy: false,
+        compact: false,
     },
 );
 
@@ -31,23 +34,37 @@ const emit = defineEmits<{
     <Button
         v-if="!props.added"
         type="button"
-        variant="outline"
+        :variant="props.compact ? 'ghost' : 'outline'"
         size="sm"
-        class="min-h-9 cursor-pointer gap-1.5"
+        :class="
+            props.compact
+                ? 'size-8 shrink-0 cursor-pointer p-0'
+                : 'min-h-9 cursor-pointer gap-1.5'
+        "
         :disabled="props.busy"
         :aria-label="`Add ${props.name} to review`"
         @click.stop="emit('add')"
     >
         <PlusIcon class="size-4" aria-hidden="true" />
-        {{ props.busy ? 'Adding…' : 'Add' }}
+        <template v-if="!props.compact">
+            {{ props.busy ? 'Adding…' : 'Add' }}
+        </template>
     </Button>
 
     <span
         v-else
-        class="inline-flex min-h-9 items-center gap-1 text-xs font-medium text-muted-foreground"
+        :title="props.compact ? 'In the basket' : undefined"
+        :class="
+            props.compact
+                ? 'inline-flex size-8 shrink-0 items-center justify-center text-muted-foreground'
+                : 'inline-flex min-h-9 items-center gap-1 text-xs font-medium text-muted-foreground'
+        "
     >
-        <CheckIcon class="size-3.5" aria-hidden="true" />
+        <CheckIcon
+            :class="props.compact ? 'size-4' : 'size-3.5'"
+            aria-hidden="true"
+        />
         <span class="sr-only">{{ props.name }} is in the basket.</span>
-        <span aria-hidden="true">Added</span>
+        <span v-if="!props.compact" aria-hidden="true">Added</span>
     </span>
 </template>

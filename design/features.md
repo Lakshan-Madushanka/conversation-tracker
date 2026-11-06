@@ -22,6 +22,7 @@ A plain-language list of everything the app does, written so anyone on the team 
 | F10 | Sharing                                  | ⚪       |
 | F11 | Smart sorting of pasted chats            | ⚪       |
 | F12 | Learning goals and levels                | ⚪       |
+| F13 | Custom reviews                           | ⚪       |
 
 ---
 
@@ -37,6 +38,7 @@ Lets the learner record a practice session by pasting the tutor's questions, the
 - Paste the tutor's feedback into separate boxes: mistakes and corrections, new vocabulary, new phrases, grammar notes, and a more natural version.
 - Leave out any box they do not need.
 - Paste a whole list at once (for example, ten words, one per line) and have it turn into separate entries.
+- See **mistakes in a table** (what I said, the correction, and an optional reason). Pasted lines split at an arrow or a spaced dash, and lines that cannot be split reliably stay whole and are marked **"Needs attention."**
 - Rely on **automatic saving**, so nothing is lost if the page is closed by accident.
 - **Edit** anything later to fix typos or tidy messy pasted text.
 
@@ -65,7 +67,7 @@ _Screen: New Session_
 
 - **Top bar:** topic name (tap to change), a small "Saved" indicator, and a **Finish session** button.
 - **Question cards:** one card per question, stacked down the page. Each card has a large box for the question, a box for the learner's answer, and the feedback boxes underneath. The question, answer, natural version, and grammar notes boxes show a small formatting toolbar (bold, italic, lists).
-- **Feedback boxes:** each has a clear label and a small colored tag (for example red for mistakes, blue for vocabulary) so they are easy to tell apart. Empty boxes are collapsed to keep the page tidy.
+- **Feedback boxes:** each has a clear label and a small colored tag (for example red for mistakes, blue for vocabulary) so they are easy to tell apart. Empty boxes are collapsed to keep the page tidy. Mistakes appear as a three-column table (What I said, Correction, Why) that becomes stacked cards on a phone, and rows needing attention show a clear marker.
 - **Bottom of the page:** a prominent **Add question** button.
 - **Guided mode:** a toggle at the top switches to "Paste in order," which shows one large box at a time with a progress dots row and **Back** and **Next** buttons.
 
@@ -95,7 +97,7 @@ A single place to browse, search, and reopen every saved practice session.
 - Filter by **topic**, **date**, or **type of content** (mistakes, vocabulary, and so on).
 - **Search** for any word, phrase, or mistake ever saved.
 - Open a session and read it again from start to finish in a clean layout.
-- Delete or archive sessions they no longer want.
+- Archive finished sessions they no longer want to see, or delete any session. Unfinished sessions cannot be archived.
 
 **User flow**
 
@@ -104,7 +106,7 @@ A single place to browse, search, and reopen every saved practice session.
 3. To narrow the list, they pick a topic, a date range, or a content type.
 4. To find something specific, they type a word or phrase into the search box. Matching sessions and items appear as they type.
 5. They tap a session to open it and read it from start to finish.
-6. From there, they can edit the session, archive it, or delete it. Deleting asks for confirmation first.
+6. From there, they can edit the session, archive it (finished sessions only), or delete it. Deleting a finished session shows a clear warning first, including the exact effect on totals and streak, and the learner must tick "I understand this cannot be undone" before it goes ahead.
 
 **UI overview**
 
@@ -254,8 +256,8 @@ Shows streaks, learning totals, and weekly summaries so the learner can see how 
 **What the learner can see**
 
 - Number of sessions and practice days.
-- A **streak** of consecutive practice days.
-- How many words, phrases, and grammar points have been learned.
+- A **streak** of consecutive practice days. A practice day is a day on which a session was finished. Unfinished sessions do not count. Archiving never changes the streak, and deleting a finished session can lower it.
+- How many words, phrases, and grammar points have been learned. These totals come from finished sessions, including archived ones. Deleting a finished session lowers them.
 - **Mistakes reduced over time**, showing that repeated errors are fading.
 - A **weekly summary**.
 
@@ -434,6 +436,22 @@ The app is built with a modern, single-codebase web stack:
 | **Tailwind CSS** | Styling. Gives the app a clean, consistent, responsive look on phone, tablet, and computer.                                                                      |
 | **shadcn-vue**   | Free, ready-made interface pieces such as buttons, cards, tabs, dialogs, and forms. Built on Tailwind, so they can be restyled freely to fit the app.            |
 | **Tiptap**       | A free, open-source rich text editor for Vue. Gives the app simple formatting (bold, italic, lists) in longer text boxes, such as questions, answers, and notes. |
+
+---
+
+## F13. Custom reviews ⚪
+
+**Description:** Saved, named practice sets built from items the learner chooses across all collections, with per-kind limits, repeatable attempts, and a full attempt history. Completely separate from the daily review: attempts never change marks, ratings, schedules, statuses, or progress.
+
+**What the learner can do**
+
+- Gather items from any collection into a basket with **Add to review**. The basket bar stays visible, and the basket survives refresh.
+- Save the basket as a named review, with an optional description, and set how many words, phrases, fix-the-mistake, say-it-again, and fill-in-the-blank items it uses.
+- Attempt the review as often as they like, and see every attempt with its date, status, and counts.
+- Search and filter their reviews, and see each review's previous attempt status on its card.
+- Delete a review, which also deletes its attempts, after confirmation.
+
+**Full details:** see `feature-Custom reviews.md`.
 
 ---
 

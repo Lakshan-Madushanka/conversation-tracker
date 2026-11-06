@@ -9,6 +9,7 @@ use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeQuestion;
 use App\Models\PracticeSession;
 use App\Support\BlankExercise;
+use App\Support\ReviewFilters;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Facades\DB;
@@ -51,23 +52,27 @@ final class ReviewCandidates
     }
 
     /** How many distinct items could be reviewed right now. */
-    public function count(): int
+    public function count(?ReviewFilters $filters = null): int
     {
+        $filters ??= ReviewFilters::daily();
+
         $entries = DB::query()
             ->fromSub(
-                $this->base()
+                $this->base($filters)
                     ->select(['entries.type', 'entries.collection_key'])
                     ->distinct(),
                 'reviewable',
             )
             ->count();
 
-        $questions = DB::query()
-            ->fromSub(
-                $this->questionsBase()->select('questions.id as collection_key'),
-                'reviewable_questions',
-            )
-            ->count();
+        $questions = $filters->allows(FeedbackType::Question)
+            ? DB::query()
+                ->fromSub(
+                    $this->questionsBase($filters)->select('questions.id as collection_key'),
+                    'reviewable_questions',
+                )
+                ->count()
+            : 0;
 
         return $entries + $questions;
     }
@@ -294,14 +299,25 @@ final class ReviewCandidates
      * The shared starting point: finished, non-archived sessions and entries
      * that can actually be practiced. A word or phrase needs its meaning; a
      * mistake needs both the sentence the learner said and its correction.
+     *
+     * The learner's choices narrow the same query: their topics and, when they
+     * picked collections, the kinds those collections hold.
      */
-    public function base(): QueryBuilder
+    public function base(ReviewFilters $filters): QueryBuilder
     {
+        $types = $filters->types();
+
         return DB::table('practice_feedback_entries as entries')
             ->join('practice_questions as questions', 'questions.id', '=', 'entries.practice_question_id')
             ->join('practice_sessions as sessions', 'sessions.id', '=', 'questions.practice_session_id')
             ->whereNull('sessions.archived_at')
             ->where('sessions.status', PracticeSession::STATUS_FINISHED)
+            ->when($types !== null, fn (QueryBuilder $query): QueryBuilder => $query->whereIn(
+                'entries.type',
+                array_map(fn (FeedbackType $type): string => $type->value, $types),
+            ))
+            ->when($filters->topicFilter() !== null, fn (QueryBuilder $query): QueryBuilder => $query
+                ->whereIn('sessions.topic_id', $filters->topicFilter()))
             ->where(function (QueryBuilder $reviewable): void {
                 $reviewable
                     ->where(function (QueryBuilder $words): void {
@@ -331,12 +347,14 @@ final class ReviewCandidates
      * A question's identity is its own row id, so the same words in two
      * sessions stay two items and an edit never moves a rating.
      */
-    public function questionsBase(): QueryBuilder
+    public function questionsBase(ReviewFilters $filters): QueryBuilder
     {
         return DB::table('practice_questions as questions')
             ->join('practice_sessions as sessions', 'sessions.id', '=', 'questions.practice_session_id')
             ->whereNull('sessions.archived_at')
             ->where('sessions.status', PracticeSession::STATUS_FINISHED)
+            ->when($filters->topicFilter() !== null, fn (QueryBuilder $query): QueryBuilder => $query
+                ->whereIn('sessions.topic_id', $filters->topicFilter()))
             ->whereRaw("TRIM(questions.question_text) <> ''")
             ->whereExists(function (QueryBuilder $natural): void {
                 $natural
@@ -354,13 +372,15 @@ final class ReviewCandidates
      * its own row id, so two notes with identical text stay two items and an
      * edit never moves a rating.
      */
-    public function grammarNotesBase(): QueryBuilder
+    public function grammarNotesBase(ReviewFilters $filters): QueryBuilder
     {
         return DB::table('practice_feedback_entries as entries')
             ->join('practice_questions as questions', 'questions.id', '=', 'entries.practice_question_id')
             ->join('practice_sessions as sessions', 'sessions.id', '=', 'questions.practice_session_id')
             ->whereNull('sessions.archived_at')
             ->where('sessions.status', PracticeSession::STATUS_FINISHED)
+            ->when($filters->topicFilter() !== null, fn (QueryBuilder $query): QueryBuilder => $query
+                ->whereIn('sessions.topic_id', $filters->topicFilter()))
             ->where('entries.type', FeedbackType::GrammarNote->value)
             ->whereNotNull('entries.collection_key')
             ->where('entries.collection_key', '!=', '')

@@ -2,11 +2,13 @@
 
 use App\Http\Controllers\CollectionController;
 use App\Http\Controllers\CollectionMarkController;
+use App\Http\Controllers\CustomReviewController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\LibraryBulkController;
 use App\Http\Controllers\LibraryController;
 use App\Http\Controllers\PracticeSessionController;
 use App\Http\Controllers\ReviewController;
+use App\Http\Controllers\ReviewSuggestionController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', HomeController::class)->name('home');
@@ -50,9 +52,25 @@ Route::put('/collections/notes', [CollectionMarkController::class, 'storeNotes']
 // shows its summary.
 Route::get('/review', [ReviewController::class, 'index'])->name('review.index');
 Route::post('/review', [ReviewController::class, 'store'])->name('review.store');
+
+// A custom review keeps its choices in the address and never saves them, so the
+// count shown is read the same way the started sitting is built.
+Route::get('/review/custom', [CustomReviewController::class, 'index'])->name('review.custom');
+Route::post('/review/custom', [CustomReviewController::class, 'store'])->name('review.customStore');
+
 Route::get('/review/session', [ReviewController::class, 'show'])->name('review.session');
 Route::post('/review/{review}/rate', [ReviewController::class, 'rate'])->name('review.rate');
+Route::post('/review/{review}/finish-early', [ReviewController::class, 'finishEarly'])->name('review.finishEarly');
+
+// The finish screen's status suggestions. Both answers name the item and the run
+// they were made from, and only ever change the item's own status.
+Route::post('/review/{review}/suggestion/confirm', [ReviewSuggestionController::class, 'confirm'])->name('review.suggestionConfirm');
+Route::post('/review/{review}/suggestion/decline', [ReviewSuggestionController::class, 'decline'])->name('review.suggestionDecline');
 Route::delete('/review/{review}/rating', [ReviewController::class, 'undo'])->name('review.undo');
+
+// A past sitting, read as a result: what it held and how it went, with nothing
+// to rate.
+Route::get('/review/{review}/results', [ReviewController::class, 'results'])->name('review.results');
 
 Route::inertia('/progress', 'progress/Index')->name('progress.index');
 

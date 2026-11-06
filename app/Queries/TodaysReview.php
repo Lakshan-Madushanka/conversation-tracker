@@ -16,6 +16,7 @@ use App\Support\ExerciseKind;
 use App\Support\LearnerDay;
 use App\Support\ReviewAllocation;
 use App\Support\ReviewExercises;
+use App\Support\ReviewFilters;
 use App\Support\ReviewSettings;
 use App\Support\ReviewSuggestion;
 use Carbon\CarbonImmutable;
@@ -47,6 +48,14 @@ use Illuminate\Http\Request;
  * number of queries never grows with the number of items. Items are returned
  * grouped one list per kind, in the fixed friendly order the stepper uses;
  * within each kind due and new items are interleaved evenly.
+ *
+ * A custom review is the same piece with `App\Support\ReviewFilters` naming
+ * what the learner asked for. The topics and collections narrow the candidates
+ * in the database; starred-only and the Learned choice narrow them here; and
+ * because the learner asked for these items, the ones still resting between
+ * reviews join the sitting after the due work instead of staying out. Nothing
+ * else changes: the schedule, the shares, the estimate, the allocation and the
+ * order are the ones above, so a preview and the started review always agree.
  */
 final readonly class TodaysReview
 {
@@ -63,14 +72,21 @@ final readonly class TodaysReview
 
     /**
      * The items worth reviewing right now, grouped by exercise kind.
+     *
+     * The daily suggestion passes no filters. A custom review passes the
+     * learner's choices, and the same shares, times and allocation produce its
+     * fixed list — only the pool the choices name, and the fact that the
+     * learner asked for these items, differ.
      */
     public function suggest(
         int $size = ReviewSettings::SIZE,
         bool $excludingRatedToday = false,
         ?Request $request = null,
+        ?ReviewFilters $filters = null,
     ): ReviewSuggestion {
+        $filters ??= ReviewFilters::daily();
         $today = $this->day->today($request);
-        $rows = $this->candidateRows();
+        $rows = $this->candidateRows($filters);
 
         if ($rows === []) {
             return new ReviewSuggestion([]);
@@ -119,14 +135,24 @@ final readonly class TodaysReview
             $status = $mark?->status;
             $schedule = $schedules[$key] ?? null;
 
+            // Starred-only is the learner asking for what they starred, so an
+            // item without a star has no place in the sitting.
+            if ($filters->starredOnly && ! $starred) {
+                continue;
+            }
+
+            // A Learned item is left out of a custom sitting until the learner
+            // asks for it. The daily suggestion keeps Step 2's rule: a due
+            // Learned item comes back, a never-reviewed one never does.
+            if ($status === CollectionItemStatus::Learned
+                && ! $filters->includeLearned
+                && ($schedule === null || $filters->custom)) {
+                continue;
+            }
+
             $pools[$exercise] ??= ['due' => [], 'new' => []];
 
             if ($schedule === null) {
-                // A never-reviewed Learned item is not suggested.
-                if ($status === CollectionItemStatus::Learned) {
-                    continue;
-                }
-
                 $pools[$exercise]['new'][] = [
                     'kind' => $kind,
                     'identity' => $identity,
@@ -136,12 +162,18 @@ final readonly class TodaysReview
                 continue;
             }
 
-            if ($schedule->due_on->toDateString() > $today->toDateString()) {
+            $isDue = $schedule->due_on->toDateString() <= $today->toDateString();
+
+            if (! $isDue && ! $filters->custom) {
                 // Rated, and not due yet; resting until its day comes.
                 continue;
             }
 
+            // The daily rules decide the order of genuinely due work. Items the
+            // learner asked for but that are still resting join after it, so a
+            // custom sitting never puts resting work ahead of what is due.
             $priority = match (true) {
+                ! $isDue => 5,
                 $schedule->last_rating === ReviewRating::Hard => 1,
                 $status === CollectionItemStatus::StillDifficult => 2,
                 $starred => 3,
@@ -495,11 +527,14 @@ final readonly class TodaysReview
      * Distinct type + identity candidates, the shared definition of what can
      * be reviewed at all, plus the grammar notes that can make a blank.
      *
+     * The choices narrow the same queries: topics and collections in the
+     * database, and the kinds a sitting cannot hold are not read at all.
+     *
      * @return list<array{type: string, collection_key: string}>
      */
-    private function candidateRows(): array
+    private function candidateRows(ReviewFilters $filters): array
     {
-        $entries = array_values($this->candidates->base()
+        $entries = array_values($this->candidates->base($filters)
             ->select(['entries.type', 'entries.collection_key'])
             ->distinct()
             ->get()
@@ -509,25 +544,29 @@ final readonly class TodaysReview
             ])
             ->all());
 
-        $questions = array_values($this->candidates->questionsBase()
-            ->select('questions.id as collection_key')
-            ->distinct()
-            ->get()
-            ->map(fn (object $row): array => [
-                'type' => FeedbackType::Question->value,
-                'collection_key' => (string) $row->collection_key,
-            ])
-            ->all());
+        $questions = $filters->allows(FeedbackType::Question)
+            ? array_values($this->candidates->questionsBase($filters)
+                ->select('questions.id as collection_key')
+                ->distinct()
+                ->get()
+                ->map(fn (object $row): array => [
+                    'type' => FeedbackType::Question->value,
+                    'collection_key' => (string) $row->collection_key,
+                ])
+                ->all())
+            : [];
 
-        $notes = array_values($this->candidates->grammarNotesBase()
-            ->select('entries.collection_key as collection_key')
-            ->distinct()
-            ->get()
-            ->map(fn (object $row): array => [
-                'type' => FeedbackType::GrammarNote->value,
-                'collection_key' => (string) $row->collection_key,
-            ])
-            ->all());
+        $notes = $filters->allows(FeedbackType::GrammarNote)
+            ? array_values($this->candidates->grammarNotesBase($filters)
+                ->select('entries.collection_key as collection_key')
+                ->distinct()
+                ->get()
+                ->map(fn (object $row): array => [
+                    'type' => FeedbackType::GrammarNote->value,
+                    'collection_key' => (string) $row->collection_key,
+                ])
+                ->all())
+            : [];
 
         return [...$entries, ...$questions, ...$notes];
     }

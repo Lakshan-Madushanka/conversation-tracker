@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vite-plus/test';
 import ReviewIndex from '@/pages/review/Index.vue';
 import type {
     GrammarNotesTipData,
+    RecentReviewData,
     TodayReviewData,
     WaitingForFixData,
 } from '@/types';
@@ -23,7 +24,12 @@ const waitingForFix: WaitingForFixData = {
 
 function mountPage(grammarNotesTip: GrammarNotesTipData) {
     return mount(ReviewIndex, {
-        props: { todayReview, waitingForFix, grammarNotesTip },
+        props: {
+            todayReview,
+            waitingForFix,
+            grammarNotesTip,
+            recentReviews: [] as RecentReviewData[],
+        },
     });
 }
 

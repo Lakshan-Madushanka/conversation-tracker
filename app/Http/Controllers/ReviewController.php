@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Actions\Reviews\FinishReviewEarly;
 use App\Actions\Reviews\RecordRating;
 use App\Actions\Reviews\StartReview;
 use App\Actions\Reviews\UndoRating;
@@ -11,13 +12,17 @@ use App\Enums\FeedbackType;
 use App\Http\Requests\RateReviewItemRequest;
 use App\Http\Requests\StartReviewRequest;
 use App\Http\Requests\UndoReviewItemRequest;
+use App\Http\Resources\RecentReviewResource;
 use App\Models\Rating;
 use App\Models\Review;
+use App\Queries\RecentReviews;
 use App\Queries\ReviewCandidates;
 use App\Queries\ReviewSections;
+use App\Queries\StatusSuggestions;
 use App\Queries\TableCollection;
 use App\Queries\TodaysReview;
 use App\Support\LearnerDay;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -33,6 +38,12 @@ use Inertia\Response;
  * button return to the same sitting and to the next item still to rate. A
  * missing or unknown review shows a calm "couldn't find that review" instead
  * of an error.
+ *
+ * Review Home also keeps the last few results, and a result opens as its own
+ * read-only page: what was looked at, how it went, and the same links back to
+ * the session each item came from.
+ *
+ * @phpstan-import-type Section from ReviewSections
  */
 class ReviewController extends Controller
 {
@@ -41,6 +52,7 @@ class ReviewController extends Controller
         TodaysReview $todaysReview,
         TableCollection $collection,
         ReviewCandidates $candidates,
+        RecentReviews $recentReviews,
     ): Response {
         return Inertia::render('review/Index', [
             'todayReview' => $todaysReview->card($request),
@@ -56,6 +68,12 @@ class ReviewController extends Controller
             'grammarNotesTip' => [
                 'count' => $candidates->unusableGrammarNotesCount(),
             ],
+            // What the last few sittings actually came to, counted from the
+            // saved ratings rather than any separate tally.
+            'recentReviews' => array_map(
+                fn (array $row): array => (new RecentReviewResource($row))->resolve(),
+                $recentReviews->list(),
+            ),
         ]);
     }
 
@@ -86,13 +104,15 @@ class ReviewController extends Controller
     /**
      * Every section of this review, with the section and item named in the
      * address (or the first one still to rate) shown as a card. Once every
-     * item has a rating the finish screen takes over.
+     * item has a rating the finish screen takes over, keeping the moment the
+     * sitting ended and any status the ratings have earned.
      */
     public function show(
         Request $request,
         ReviewSections $sectionsQuery,
         TodaysReview $todaysReview,
         LearnerDay $day,
+        StatusSuggestions $statusSuggestions,
     ): Response {
         $review = $this->reviewFrom($request);
 
@@ -109,12 +129,19 @@ class ReviewController extends Controller
         $counts = $ratings->countBy(fn (Rating $rating): string => $rating->rating->value);
         $latest = $ratings->sortByDesc('id')->first();
 
-        // Reaching the finish screen completes a daily review. The learner's
-        // local day is recorded so the card can say "You've reviewed today"
-        // without keeping anything else. A review left part-way never
-        // completes, and the card never nags.
-        if ($finished && $review->is_daily_review && $review->completed_on === null) {
-            $review->completed_on = $day->today($request);
+        // Reaching the end is recorded here, in one place, so every way of
+        // finishing keeps the same behaviour. The moment the sitting ended is
+        // what recent results read; for a daily review the learner's own local
+        // day is also kept so the card can say "You've reviewed today" without
+        // storing anything else. A review left part-way records nothing, and the
+        // card never nags.
+        if ($finished && $review->finished_at === null) {
+            $review->finished_at = CarbonImmutable::now();
+
+            if ($review->is_daily_review && $review->completed_on === null) {
+                $review->completed_on = $day->today($request);
+            }
+
             $review->save();
         }
 
@@ -147,6 +174,11 @@ class ReviewController extends Controller
         $canReviewMore = $finished
             && $todaysReview->suggest(excludingRatedToday: true, request: $request)->count() > 0;
 
+        // A status is only ever offered once the sitting is over, never while
+        // the learner is still rating, and never in a way that holds the
+        // finish screen up.
+        $suggestions = $finished ? $statusSuggestions->for($review, $request) : [];
+
         return Inertia::render('review/Session', [
             'notFound' => false,
             'finished' => $finished,
@@ -170,6 +202,7 @@ class ReviewController extends Controller
                 ]
                 : null,
             'canReviewMore' => $canReviewMore,
+            'suggestions' => $suggestions,
         ]);
     }
 
@@ -237,6 +270,48 @@ class ReviewController extends Controller
     }
 
     /**
+     * End a sitting before every item has a rating. What was rated stays, the
+     * moment it ended is kept so the result can be found again, and the review
+     * never becomes the day's — the card still says nothing happened today.
+     */
+    public function finishEarly(Review $review, FinishReviewEarly $finishReviewEarly): RedirectResponse
+    {
+        $finishReviewEarly->handle($review);
+
+        return to_route('review.index');
+    }
+
+    /**
+     * A past sitting as a result. The items are the ones the review was fixed
+     * with, shown as they read today and with the rating the learner gave them,
+     * each keeping its own link back to the session it came from. Nothing here
+     * can be rated, taken back or started again, and opening it changes nothing.
+     */
+    public function results(Review $review, ReviewSections $sectionsQuery): Response
+    {
+        $review->load(['items', 'ratings']);
+        $sections = $sectionsQuery->for($review);
+        $counts = $review->ratings->countBy(fn (Rating $rating): string => $rating->rating->value);
+
+        return Inertia::render('review/Results', [
+            'review' => [
+                'id' => $review->id,
+                'type' => $review->is_custom_review ? 'custom' : 'daily',
+                'type_label' => $review->is_custom_review ? 'Custom review' : 'Daily review',
+                'finished_at' => $review->finished_at?->toISOString(),
+                'rated' => $review->ratings->count(),
+                'total' => array_sum(array_column($sections, 'total')),
+                'counts' => [
+                    'hard' => $counts->get('hard', 0),
+                    'okay' => $counts->get('okay', 0),
+                    'easy' => $counts->get('easy', 0),
+                ],
+            ],
+            'sections' => array_map($this->resultsSection(...), $sections),
+        ]);
+    }
+
+    /**
      * The summary the stepper shows: name, icon, progress and its own address,
      * without the items themselves.
      *
@@ -298,6 +373,42 @@ class ReviewController extends Controller
     }
 
     /**
+     * One section as a result shows it: its own tally and every item it held,
+     * with the rating the learner gave it. The stepper's addresses are left out
+     * — a result is something to read, not a sitting to walk through.
+     *
+     * @param  Section  $section
+     * @return array{
+     *     key: string,
+     *     label: string,
+     *     icon: string,
+     *     number: int,
+     *     total: int,
+     *     rated: int,
+     *     counts: array{hard: int, okay: int, easy: int},
+     *     items: list<array{kind: string, identity: string, card: array<string, mixed>, rating: string|null}>
+     * }
+     */
+    private function resultsSection(array $section): array
+    {
+        return [
+            'key' => $section['key'],
+            'label' => $section['label'],
+            'icon' => $section['icon'],
+            'number' => $section['number'],
+            'total' => $section['total'],
+            'rated' => $section['rated'],
+            'counts' => $section['counts'],
+            'items' => array_map(fn (array $item): array => [
+                'kind' => $item['kind']->value,
+                'identity' => $item['identity'],
+                'card' => $item['card'],
+                'rating' => $item['rating'],
+            ], $section['items']),
+        ];
+    }
+
+    /**
      * The review named in the address, or null when the address is stale,
      * hand-made or points at nothing.
      */
@@ -328,7 +439,8 @@ class ReviewController extends Controller
      *     undo: null,
      *     canReviewMore: bool,
      *     isDailyReview: bool,
-     *     reviewId: null
+     *     reviewId: null,
+     *     suggestions: list<array<string, string|int>>
      * }
      */
     private function emptyPayload(bool $notFound): array
@@ -347,6 +459,7 @@ class ReviewController extends Controller
             'canReviewMore' => false,
             'isDailyReview' => false,
             'reviewId' => null,
+            'suggestions' => [],
         ];
     }
 }

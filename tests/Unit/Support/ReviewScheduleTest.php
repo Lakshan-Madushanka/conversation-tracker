@@ -176,3 +176,51 @@ describe('the schedule rule', function (): void {
             ->and(ReviewSchedule::EASY_GAPS)->toBe([7, 14, 30, 60]);
     });
 });
+
+describe('the run of ratings that ends a history', function (): void {
+    it('counts the identical ratings the learner has just been giving', function (): void {
+        $state = ReviewSchedule::rebuild([
+            historyEntry(ReviewRating::Hard, '2026-09-01'),
+            historyEntry(ReviewRating::Easy, '2026-10-01'),
+            historyEntry(ReviewRating::Easy, '2026-10-08'),
+            historyEntry(ReviewRating::Easy, '2026-10-15'),
+        ]);
+
+        expect($state->streakCount)->toBe(3)
+            ->and($state->lastRating)->toBe(ReviewRating::Easy);
+    });
+
+    it('starts again when the rating changes', function (): void {
+        $state = ReviewSchedule::rebuild([
+            historyEntry(ReviewRating::Easy, '2026-10-01'),
+            historyEntry(ReviewRating::Easy, '2026-10-08'),
+            historyEntry(ReviewRating::Hard, '2026-10-15'),
+        ]);
+
+        expect($state->streakCount)->toBe(1)
+            ->and($state->lastRating)->toBe(ReviewRating::Hard);
+    });
+
+    it('is broken by an Okay between two Easy ratings', function (): void {
+        // The gap above still grows through an Okay, so the schedule and the
+        // finish screen read different things from the same history.
+        $state = ReviewSchedule::rebuild([
+            historyEntry(ReviewRating::Easy, '2026-10-01'),
+            historyEntry(ReviewRating::Okay, '2026-10-08'),
+            historyEntry(ReviewRating::Easy, '2026-10-15'),
+        ]);
+
+        expect($state->streakCount)->toBe(1)
+            ->and($state->easyRun)->toBe(2);
+    });
+
+    it('is one for the first rating an item ever earns', function (): void {
+        $state = ReviewSchedule::rebuild([historyEntry(ReviewRating::Hard, '2026-11-03')]);
+
+        expect($state->streakCount)->toBe(1);
+    });
+
+    it('has no run at all when nothing has been rated', function (): void {
+        expect(ReviewSchedule::rebuild([]))->toBeNull();
+    });
+});

@@ -23,5 +23,11 @@ final readonly class ScheduleState
         public int $ratedCount,
         /** How many Easy ratings in a row end the history. */
         public int $easyRun,
+        /**
+         * How many ratings in a row the last one has been — an Okay breaks a
+         * run of Easy ratings here, even though the gap above grows through it.
+         * The finish screen's status suggestions read this.
+         */
+        public int $streakCount,
     ) {}
 }

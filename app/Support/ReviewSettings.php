@@ -31,6 +31,32 @@ final class ReviewSettings
     /** How long one fill-in-the-blank item takes, for the estimate. */
     public const int FILL_IN_THE_BLANK_SECONDS = 40;
 
+    /** The sizes a custom review offers, with the daily default among them. */
+    public const array CUSTOM_SIZES = [5, self::SIZE, 10, 15, 20];
+
+    /**
+     * How many items the learner may still be short of before a custom review
+     * gently says so. A match this size or bigger is a fine sitting, however
+     * many items were asked for.
+     */
+    public const int MIN_COMFORTABLE_MATCH = 4;
+
+    /** How many recent results Review Home lists. */
+    public const int RECENT_RESULTS = 5;
+
+    /**
+     * How many Easy ratings in a row make the finish screen suggest marking an
+     * item Learned, and how many Hard ratings in a row suggest Still difficult.
+     * The learner always confirms either one.
+     */
+    public const int LEARNED_EASY_RUN = 3;
+
+    /** @see self::LEARNED_EASY_RUN */
+    public const int STILL_DIFFICULT_HARD_RUN = 2;
+
+    /** The most the finish screen ever raises at once. */
+    public const int MAX_STATUS_SUGGESTIONS = 2;
+
     /**
      * The target share of every planned exercise kind. Only built kinds with
      * candidates take part; the rest are dropped and the remaining shares are

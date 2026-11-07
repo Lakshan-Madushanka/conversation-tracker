@@ -8,12 +8,14 @@ use App\Actions\Collections\SaveItemMark;
 use App\Actions\Collections\SaveItemNotes;
 use App\Actions\CustomReviews\AddCustomReviewItems;
 use App\Actions\CustomReviews\CreateCustomReview;
+use App\Actions\CustomReviews\SetCustomReviewStatus;
 use App\Actions\Reviews\DeclineStatusSuggestion;
 use App\Actions\Reviews\FinishReviewEarly;
 use App\Actions\Reviews\RecordRating;
 use App\Actions\Reviews\SyncReviewSchedule;
 use App\Actions\Reviews\UndoRating;
 use App\Enums\CollectionItemStatus;
+use App\Enums\CustomReviewStatus;
 use App\Enums\FeedbackType;
 use App\Enums\ReviewRating;
 use App\Models\CollectionItemMark;
@@ -105,6 +107,73 @@ class LibrarySeeder extends Seeder
      * growing number of queries, with every kind alongside it.
      */
     private const int TARGET_REVIEW_ITEMS = 2000;
+
+    /**
+     * Enough custom reviews to page through the listing several times, with
+     * every status, an oversized review, an all-archived review and names and
+     * descriptions that search has to cope with.
+     */
+    private const int TARGET_CUSTOM_REVIEWS = 300;
+
+    /** A description long enough to be shortened on a card. */
+    private const string LONG_REVIEW_DESCRIPTION = 'A set I keep coming back to when I want to sound more natural: the words I actually use at the café, the phrases that make a request sound polite rather than abrupt, and the small corrections that took me years to notice. Read it slowly, say each line out loud, and add anything new that still feels awkward.';
+
+    /**
+     * Names that exercise search: accents, other languages, punctuation and
+     * spaces. Most reviews take one of these and a number, so every name stays
+     * tellable apart while the set still looks lived in.
+     *
+     * @var list<string>
+     */
+    private const array CUSTOM_REVIEW_NAMES = [
+        'Café conversations',
+        'Résumé and cover letters',
+        'Reise nach Berlin',
+        'Conversación en la estación',
+        'Les petits riens',
+        'Kleine Dinge',
+        '¿Cómo estás?',
+        '日本語の練習',
+        '한국어 회화',
+        'Gespräche beim Arzt',
+        'Rendez-vous au café',
+        'Smörgåsbord of phrases',
+        'Naïve questions',
+        'Crème brûlée evening',
+        'Façade and first impressions',
+        'Gemütlich at home',
+        'Piñata party',
+        'Jalapeño kitchen',
+        'Doppelgänger stories',
+        'Zeitgeist reading',
+        'Wanderlust and trains',
+        'Entrepreneur small talk',
+        'Rendezvous at the station',
+        'Bouquet of thanks',
+        'Liaison at work',
+        'Soufflé Sunday',
+        'Crêpe afternoon',
+        'Mêlée at the market',
+        'Tsunami of questions',
+        'Karaoke night',
+    ];
+
+    /**
+     * The descriptions the listing's search is tried against: none, short
+     * everyday lines, and one long enough to be shortened on a card.
+     *
+     * @var list<string|null>
+     */
+    private const array CUSTOM_REVIEW_DESCRIPTIONS = [
+        null,
+        'Phrases for the airport and the train station.',
+        'Ordering food at a restaurant, politely.',
+        self::LONG_REVIEW_DESCRIPTION,
+        'Words and phrases I keep mixing up on the phone.',
+        'Small talk before a meeting.',
+        'Doctor’s appointment vocabulary.',
+        'Things I want to say without hesitating.',
+    ];
 
     /**
      * Distinct items the recent sittings are built from: enough for six
@@ -605,6 +674,19 @@ class LibrarySeeder extends Seeder
     }
 
     /**
+     * The reviews a learner would build up over a week: the handful whose
+     * every detail each page has to cope with, then enough ordinary reviews to
+     * page, search, filter and sort the listing by hand.
+     *
+     * @param  Collection<int, Topic>  $topics
+     */
+    private function seedCustomReviews(Collection $topics): void
+    {
+        $this->seedStartingReviews($topics);
+        $this->seedListingReviews();
+    }
+
+    /**
      * The reviews a learner would build up over a week, in the sizes the
      * pages have to cope with: one still empty, one holding a single item, and
      * one holding a little of every collection, an item that only sits in an
@@ -614,7 +696,7 @@ class LibrarySeeder extends Seeder
      *
      * @param  Collection<int, Topic>  $topics
      */
-    private function seedCustomReviews(Collection $topics): void
+    private function seedStartingReviews(Collection $topics): void
     {
         if (CustomReview::query()->exists()) {
             return;
@@ -664,6 +746,169 @@ class LibrarySeeder extends Seeder
             'item_identity' => SearchText::normalize('an item whose session was deleted'),
             'added_at' => now(),
         ]);
+    }
+
+    /**
+     * Enough ordinary reviews to page, search, filter and sort the listing by
+     * hand. Most are empty; a few carry items so Draft, Finished and the
+     * unavailable note all appear, one is far past the recommended size, and
+     * the names and descriptions mix accents, other scripts and long text.
+     */
+    private function seedListingReviews(): void
+    {
+        $missing = self::TARGET_CUSTOM_REVIEWS - CustomReview::query()->count();
+
+        if ($missing <= 0) {
+            return;
+        }
+
+        $now = CarbonImmutable::now();
+        $names = self::CUSTOM_REVIEW_NAMES;
+        $descriptions = self::CUSTOM_REVIEW_DESCRIPTIONS;
+        $rows = [];
+
+        for ($index = 0; $index < $missing; $index++) {
+            $name = $names[$index % count($names)].' '.($index + 1);
+            $description = $descriptions[$index % count($descriptions)];
+            $at = $now->subDays($index % 330)->subMinutes($index);
+
+            $rows[] = [
+                'name' => $name,
+                'description' => $description,
+                'search_text' => SearchText::normalize(
+                    trim($name.' '.($description)),
+                ),
+                'status' => CustomReviewStatus::Empty->value,
+                'created_at' => $at,
+                'updated_at' => $at,
+            ];
+        }
+
+        foreach (array_chunk($rows, 100) as $chunk) {
+            DB::table('custom_reviews')->insert($chunk);
+        }
+
+        /** @var Collection<string, CustomReview> $byName */
+        $byName = CustomReview::query()
+            ->whereIn('name', array_column($rows, 'name'))
+            ->get()
+            ->keyBy('name');
+
+        $add = app(AddCustomReviewItems::class);
+        $setStatus = app(SetCustomReviewStatus::class);
+
+        foreach ($this->listingReviewPlans($missing) as $index => $plan) {
+            $row = $rows[$index] ?? null;
+
+            if ($row === null) {
+                continue;
+            }
+
+            $review = $byName->get($row['name']);
+
+            if (! $review instanceof CustomReview) {
+                continue;
+            }
+
+            foreach ($plan['items'] as [$kind, $limit, $archived]) {
+                $add->handle(
+                    $review,
+                    $kind,
+                    $this->listingReviewKeys($kind, $limit, $archived),
+                );
+            }
+
+            $total = CustomReviewItem::query()
+                ->where('custom_review_id', $review->id)
+                ->count();
+
+            if ($plan['status'] === CustomReviewStatus::Finished && $total > 0) {
+                $setStatus->handle($review, CustomReviewStatus::Finished);
+            }
+        }
+    }
+
+    /**
+     * Which of the ordinary reviews hold items, and how many. The first is
+     * past the recommended size, the second is finished with nothing usable
+     * right now, and the rest show the everyday Draft and Finished cases.
+     *
+     * @return array<int, array{
+     *     status: CustomReviewStatus,
+     *     items: list<array{0: FeedbackType, 1: int, 2: bool}>
+     * }>
+     */
+    private function listingReviewPlans(int $available): array
+    {
+        $plans = [
+            0 => $this->listingReviewPlan(
+                CustomReviewStatus::Finished,
+                [[FeedbackType::Vocabulary, 25, false]],
+            ),
+            1 => $this->listingReviewPlan(
+                CustomReviewStatus::Finished,
+                [[FeedbackType::Vocabulary, 5, true]],
+            ),
+            2 => $this->listingReviewPlan(CustomReviewStatus::Draft, [
+                [FeedbackType::Vocabulary, 3, false],
+                [FeedbackType::Phrase, 2, false],
+            ]),
+            3 => $this->listingReviewPlan(CustomReviewStatus::Finished, [
+                [FeedbackType::Vocabulary, 1, false],
+                [FeedbackType::GrammarNote, 1, false],
+                [FeedbackType::Mistake, 1, false],
+                [FeedbackType::Question, 1, false],
+            ]),
+            4 => $this->listingReviewPlan(
+                CustomReviewStatus::Finished,
+                [[FeedbackType::Phrase, 2, false]],
+            ),
+        ];
+
+        for ($index = 5; $index <= 10; $index++) {
+            $plans[$index] = $this->listingReviewPlan(
+                CustomReviewStatus::Draft,
+                [[FeedbackType::Vocabulary, 1 + $index % 3, false]],
+            );
+        }
+
+        return array_filter(
+            $plans,
+            fn (int $index): bool => $index < $available,
+            ARRAY_FILTER_USE_KEY,
+        );
+    }
+
+    /**
+     * One review's status and the items it should gather.
+     *
+     * @param  list<array{0: FeedbackType, 1: int, 2: bool}>  $items
+     * @return array{status: CustomReviewStatus, items: list<array{0: FeedbackType, 1: int, 2: bool}>}
+     */
+    private function listingReviewPlan(
+        CustomReviewStatus $status,
+        array $items,
+    ): array {
+        return ['status' => $status, 'items' => $items];
+    }
+
+    /**
+     * The identities one seeded review should hold, read by kind so notes and
+     * questions get their own identity and the table kinds share one helper.
+     *
+     * @return list<string>
+     */
+    private function listingReviewKeys(
+        FeedbackType $kind,
+        int $limit,
+        bool $archived,
+    ): array {
+        return match ($kind) {
+            FeedbackType::GrammarNote => $this->reviewNoteKeys($limit),
+            FeedbackType::Mistake => $this->reviewMistakeKeys($limit),
+            FeedbackType::Question => $this->reviewQuestionKeys($limit),
+            default => $this->reviewKeys($kind, $limit, $archived),
+        };
     }
 
     /**

@@ -79,4 +79,19 @@ describe('the Review Home grammar-notes tip', () => {
             'Bold the key part of a note to turn it into an exercise.',
         );
     });
+
+    it('offers the saved custom reviews beside the Quick review chooser', () => {
+        const wrapper = mountPage({ count: 0 });
+        const link = wrapper
+            .findAll('a')
+            .find((anchor) => anchor.text() === 'Custom reviews');
+
+        expect(link?.attributes('href')).toContain('/custom-reviews');
+
+        const chooser = wrapper
+            .findAll('a')
+            .find((anchor) => anchor.text() === 'Custom review');
+
+        expect(chooser).toBeDefined();
+    });
 });

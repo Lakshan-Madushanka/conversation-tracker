@@ -13,14 +13,17 @@ use App\Actions\CustomReviews\SetCustomReviewStatus;
 use App\Actions\CustomReviews\UpdateCustomReview;
 use App\Enums\CustomReviewAddOutcome;
 use App\Http\Requests\AddCustomReviewItemsRequest;
+use App\Http\Requests\CustomReviewsRequest;
 use App\Http\Requests\RemoveCustomReviewItemsRequest;
 use App\Http\Requests\UpdateCustomReviewRequest;
 use App\Http\Requests\UpdateCustomReviewStatusRequest;
+use App\Http\Resources\CustomReviewCardResource;
 use App\Http\Resources\CustomReviewGroupResource;
 use App\Http\Resources\CustomReviewSummaryResource;
 use App\Models\CustomReview;
 use App\Queries\CustomReviewContents;
 use App\Queries\CustomReviewItems;
+use App\Queries\CustomReviewsListing;
 use App\Support\CustomReviewReturn;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -43,10 +46,66 @@ use Inertia\Response;
 final class CustomReviewsController extends Controller
 {
     /**
+     * Every custom review, unfinished ones included, as cards.
+     *
+     * The search, statuses and order travel in the address, so a refresh, a
+     * bookmark or the Back button return to exactly the list the learner was
+     * reading. A JSON request returns the next page for Load more.
+     *
+     * This is a read-only visit: the card's counts and availability are read
+     * in bulk, and no review, item, attempt, mark or session is changed.
+     */
+    public function index(
+        CustomReviewsRequest $request,
+        CustomReviewsListing $listing,
+        CustomReviewItems $items,
+        CustomReviewContents $contents,
+    ): Response|JsonResponse {
+        $filters = $request->filters();
+        $paginator = $listing->paginate(
+            filters: $filters,
+            cursor: $request->cursor(),
+            perPage: $request->perPage(),
+        );
+
+        /** @var list<CustomReview> $reviews */
+        $reviews = $paginator->items();
+        $reviewIds = array_map(
+            fn (CustomReview $review): int => (int) $review->id,
+            $reviews,
+        );
+        $counts = $items->counts($reviewIds);
+        $eligible = $contents->eligibleReviewIds($reviewIds);
+
+        $page = [
+            'reviews' => array_map(
+                fn (CustomReview $review): array => CustomReviewCardResource::make(
+                    $review,
+                    $counts[(int) $review->id] ?? 0,
+                    isset($eligible[(int) $review->id]),
+                )->resolve(),
+                $reviews,
+            ),
+            'next_cursor' => $paginator->nextCursor()?->encode(),
+            'has_more' => $paginator->hasMorePages(),
+            'total' => $listing->total($filters),
+            'all_total' => $listing->allTotal(),
+            'per_page' => $request->perPage(),
+            'filters' => $filters->toArray(),
+        ];
+
+        if ($request->wantsJson()) {
+            return response()->json($page);
+        }
+
+        return Inertia::render('custom-reviews/Index', $page);
+    }
+
+    /**
      * Start a review, which is saved and named at once, and open it.
      *
-     * The button that calls this arrives with the listing in Step 3; "Add to
-     * review" reaches the same action when nothing is being built yet.
+     * The button that calls this lives on the listing; "Add to review" reaches
+     * the same action when nothing is being built yet.
      */
     public function store(CreateCustomReview $createCustomReview): RedirectResponse
     {

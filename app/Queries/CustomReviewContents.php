@@ -122,6 +122,67 @@ final class CustomReviewContents
     }
 
     /**
+     * Which of these reviews hold at least one item that can be attempted now.
+     *
+     * The eligibility rules are the review page's, read once per kind for
+     * every identity on the page, so the number of queries does not grow with
+     * the number of reviews.
+     *
+     * @param  list<int>  $reviewIds
+     * @return array<int, true>
+     */
+    public function eligibleReviewIds(array $reviewIds): array
+    {
+        $reviewIds = array_values(array_unique(array_filter(
+            $reviewIds,
+            fn (int $reviewId): bool => $reviewId > 0,
+        )));
+
+        if ($reviewIds === []) {
+            return [];
+        }
+
+        /** @var Collection<int, CustomReviewItem> $rows */
+        $rows = CustomReviewItem::query()
+            ->whereIn('custom_review_id', $reviewIds)
+            ->get(['custom_review_id', 'kind', 'item_identity']);
+
+        /** @var array<string, array<string, string>> $identitiesByKind */
+        $identitiesByKind = [];
+
+        foreach ($rows as $row) {
+            $identitiesByKind[$row->kind->value][$row->item_identity] = $row->item_identity;
+        }
+
+        /** @var array<string, array<string, true>> $eligibleByIdentity */
+        $eligibleByIdentity = [];
+
+        foreach (FeedbackType::customReviewTypes() as $kind) {
+            $identities = array_values($identitiesByKind[$kind->value] ?? []);
+
+            if ($identities === []) {
+                continue;
+            }
+
+            foreach ($this->items($kind, $identities) as $identity => $item) {
+                if ($item['eligible']) {
+                    $eligibleByIdentity[$kind->value][$identity] = true;
+                }
+            }
+        }
+
+        $eligibleReviewIds = [];
+
+        foreach ($rows as $row) {
+            if (isset($eligibleByIdentity[$row->kind->value][$row->item_identity])) {
+                $eligibleReviewIds[(int) $row->custom_review_id] = true;
+            }
+        }
+
+        return $eligibleReviewIds;
+    }
+
+    /**
      * @param  list<string>  $identities
      * @return array<string, CustomReviewItemData>
      */

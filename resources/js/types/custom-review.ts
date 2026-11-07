@@ -53,6 +53,52 @@ export interface CustomReviewGroupData {
     items: CustomReviewItemData[];
 }
 
+/** The orders the Custom reviews listing can be read in. */
+export type CustomReviewSortValue = 'recently_attempted' | 'name' | 'created';
+
+/** What the listing is narrowed and ordered by, as the address keeps it. */
+export interface CustomReviewFiltersState {
+    /** The search as typed, or an empty string. */
+    q: string;
+    /** The statuses chosen; any of them matches. */
+    statuses: CustomReviewStatusValue[];
+    sort: CustomReviewSortValue;
+}
+
+/** One custom review as a card on the listing. */
+export interface CustomReviewCardData extends CustomReviewSummary {
+    /** The description only as far as a card should show it. */
+    description_excerpt: string | null;
+    created_at: string | null;
+    attempt_count: number;
+    has_attempts: boolean;
+    /** "No attempts yet", or the latest attempt in words. */
+    attempt_number_label: string;
+    previous_attempt_status: string | null;
+    previous_attempt_label: string | null;
+    /** The attempt history line, such as "3 attempts · last on 12 Oct". */
+    attempt_summary_label: string;
+    /** Where View history goes, only when there is history to see. */
+    view_history_url: string | null;
+    /** Finished with at least one item that can be used right now. */
+    can_start: boolean;
+    /** What still stands between the review and practice, or null. */
+    practice_note: string | null;
+}
+
+/** The page props the Custom reviews listing receives. */
+export interface CustomReviewsPageData {
+    reviews: CustomReviewCardData[];
+    next_cursor: string | null;
+    has_more: boolean;
+    /** How many reviews match the search and statuses. */
+    total: number;
+    /** How many reviews exist in all. */
+    all_total: number;
+    per_page: number;
+    filters: CustomReviewFiltersState;
+}
+
 /** The page props a review's page receives. */
 export interface CustomReviewPageData {
     review: CustomReviewSummary;

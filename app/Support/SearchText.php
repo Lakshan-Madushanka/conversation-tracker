@@ -45,6 +45,33 @@ final class SearchText
     }
 
     /**
+     * Keep a search that can actually find something: trimmed, with its spaces
+     * collapsed, at most the app's limit, and at least two non-space
+     * characters. Anything shorter is ignored, so typing one letter never
+     * searches the whole list.
+     */
+    public static function keptSearch(mixed $value): string
+    {
+        if (! is_string($value)) {
+            return '';
+        }
+
+        $search = trim((string) preg_replace('/\s+/u', ' ', $value));
+
+        if ($search === '') {
+            return '';
+        }
+
+        if (mb_strlen($search) > self::MAX_LENGTH) {
+            $search = mb_substr($search, 0, self::MAX_LENGTH);
+        }
+
+        $meaningful = (string) preg_replace('/\s+/u', '', $search);
+
+        return mb_strlen($meaningful) >= self::MIN_LENGTH ? $search : '';
+    }
+
+    /**
      * The separate words a search asks for, already normalised. A word that
      * appears twice is asked for once.
      *

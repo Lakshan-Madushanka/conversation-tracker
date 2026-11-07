@@ -17,10 +17,17 @@
  */
 
 import { ref } from 'vue';
+import type {
+    AutoSaveFunction,
+    AutoSaveMarker,
+    AutoSaveOutcome,
+} from '@/composables/useAutoSave';
 import { jsonRequest } from '@/lib/http';
 import {
     clear as reviewClear,
     show as reviewShow,
+    status as reviewStatus,
+    update as reviewUpdate,
 } from '@/routes/customReviews';
 import {
     destroy as reviewItemsDestroy,
@@ -30,6 +37,7 @@ import type {
     AddReviewAnswer,
     AddReviewOutcome,
     CustomReviewKind,
+    CustomReviewStatusValue,
     CustomReviewSummary,
     RemoveReviewResult,
 } from '@/types';
@@ -123,6 +131,172 @@ export function reviewItemCountLabel(count: number): string {
 /** The warning's line, naming the size the review would reach. */
 export function reviewSizeMessage(count: number): string {
     return `This review will hold ${count} items. Long reviews take a while to practise.`;
+}
+
+/**
+ * Whether a review holding this many items carries the size tag. The server
+ * asks the same question in `CustomReviewRules::isTooMany`, so the number and
+ * the boundary are the same on both sides.
+ */
+export function reviewIsTooMany(count: number): boolean {
+    return count > RECOMMENDED_ITEMS;
+}
+
+/** The size tag's words, written the way the server writes them. */
+export function reviewTooManyLabel(count: number): string {
+    return `Too Many Items · ${reviewItemCountLabel(count)}`;
+}
+
+/** The status as the learner sees it, capitalised once. */
+export function reviewStatusLabel(status: CustomReviewStatusValue): string {
+    return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
+/** What a status means, in the words the page shows under the control. */
+export function reviewStatusExplanation(
+    status: CustomReviewStatusValue,
+): string {
+    switch (status) {
+        case 'empty':
+            return 'Empty: nothing in it yet.';
+        case 'draft':
+            return 'Draft: still being built.';
+        case 'finished':
+            return 'Finished: ready to practise.';
+    }
+}
+
+/** Why an Empty review cannot be marked finished, said once for both sides. */
+export const REVIEW_EMPTY_REASON =
+    'Add items before marking this review finished.';
+
+/** What identifies a review after one of its fields is saved. */
+export interface ReviewMarker extends AutoSaveMarker {
+    review: CustomReviewSummary;
+}
+
+/** The name on screen, as it travels to the server. */
+export interface ReviewNameSnapshot {
+    name: string;
+}
+
+/** The description on screen, as it travels to the server. */
+export interface ReviewDescriptionSnapshot {
+    description: string;
+}
+
+/** Laravel lists validation mistakes per field as one or more messages. */
+function firstError(values: Record<string, unknown>): Record<string, string> {
+    const errors: Record<string, string> = {};
+
+    for (const [field, value] of Object.entries(values)) {
+        if (typeof value === 'string' && value !== '') {
+            errors[field] = value;
+        } else if (
+            Array.isArray(value) &&
+            typeof value[0] === 'string' &&
+            value[0] !== ''
+        ) {
+            errors[field] = value[0];
+        }
+    }
+
+    return errors;
+}
+
+/** Sends one field, and reads the review as the server saved it. */
+async function saveReviewField(
+    reviewId: number,
+    field: { name: string } | { description: string },
+    keepalive: boolean,
+): Promise<AutoSaveOutcome<ReviewMarker>> {
+    const response = await jsonRequest(reviewUpdate.url(reviewId), {
+        method: 'PUT',
+        body: JSON.stringify(field),
+        keepalive,
+    });
+
+    if (response.status === 200) {
+        const body = (await response.json()) as ReviewMarker;
+
+        return {
+            outcome: 'saved',
+            saved: body,
+            savedAt: new Date().toISOString(),
+        };
+    }
+
+    if (response.status === 422) {
+        const body = (await response.json()) as {
+            errors?: Record<string, unknown>;
+        };
+
+        return { outcome: 'invalid', errors: firstError(body.errors ?? {}) };
+    }
+
+    return { outcome: 'failed' };
+}
+
+/**
+ * The name save the page's autosave rules run. The field is sent on its own,
+ * so a refused name never holds back a description that can be saved.
+ */
+export function createReviewNameSaver(
+    reviewId: number,
+): AutoSaveFunction<ReviewNameSnapshot, ReviewMarker> {
+    return (request, options) =>
+        saveReviewField(
+            reviewId,
+            { name: request.name },
+            options?.keepalive ?? false,
+        );
+}
+
+/** The description save, sent apart from the name for the same reason. */
+export function createReviewDescriptionSaver(
+    reviewId: number,
+): AutoSaveFunction<ReviewDescriptionSnapshot, ReviewMarker> {
+    return (request, options) =>
+        saveReviewField(
+            reviewId,
+            { description: request.description },
+            options?.keepalive ?? false,
+        );
+}
+
+/**
+ * The learner's own Draft-or-Finished move. Only the review's items decide
+ * whether it can be made, so a refusal arrives with the server's own words.
+ */
+export async function updateReviewStatus(
+    reviewId: number,
+    status: 'draft' | 'finished',
+): Promise<CustomReviewSummary> {
+    const response = await jsonRequest(reviewStatus.url(reviewId), {
+        method: 'PUT',
+        body: JSON.stringify({ status }),
+    });
+
+    if (response.status === 200) {
+        const body = (await response.json()) as {
+            review: CustomReviewSummary;
+        };
+
+        return body.review;
+    }
+
+    if (response.status === 422) {
+        const body = (await response.json()) as {
+            errors?: Record<string, unknown>;
+        };
+        const errors = firstError(body.errors ?? {});
+
+        throw new Error(
+            errors.status ?? 'This review could not be moved just now.',
+        );
+    }
+
+    throw new Error('This review could not be moved just now.');
 }
 
 /**

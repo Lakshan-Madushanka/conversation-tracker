@@ -7,7 +7,7 @@ import {
     ref,
     watch,
 } from 'vue';
-import { Head, router } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import { InfoIcon, TriangleAlertIcon } from '@lucide/vue';
 import CollectionFilterBar from '@/components/CollectionFilterBar.vue';
 import CollectionItemPanel from '@/components/CollectionItemPanel.vue';
@@ -46,8 +46,10 @@ import {
     saveItemMark,
 } from '@/lib/collection-marks';
 import {
+    collectionReviewQuery,
     readCollectionFilters,
     readCollectionQuery,
+    readCollectionReview,
 } from '@/lib/collection-query';
 import {
     consumeCollectionRestore,
@@ -68,6 +70,7 @@ import type {
     CollectionMistakeItem,
     CollectionOpenedItem,
     CollectionPage,
+    CollectionReviewContext,
     CollectionTabKey,
     ItemMarkData,
 } from '@/types';
@@ -87,6 +90,7 @@ const {
     attentionCount,
     filters,
     topicOptions,
+    reviewContext,
     hasFinishedSessions,
     openItem,
     openItemMissing,
@@ -156,6 +160,31 @@ watch(
 );
 
 const activeConfig = computed(() => collectionTabConfig(tab.value));
+
+/**
+ * The review whose + Add items narrowed this list, as every request and
+ * address names it. Null on an ordinary visit, so nothing changes there.
+ */
+const activeReview = computed<CollectionReviewContext | null>(
+    () => reviewContext.value ?? null,
+);
+
+/** The review as the address writes it, for the requests made by hand. */
+const reviewQuery = computed(() =>
+    activeReview.value === null
+        ? null
+        : {
+              review: activeReview.value.id,
+              eligible: activeReview.value.eligible,
+          },
+);
+
+/** Where "Back to the review" goes, keeping this list as its own way back. */
+const reviewBackUrl = computed(() =>
+    activeReview.value === null
+        ? ''
+        : reviewPageUrl(activeReview.value.id, currentReviewReturn()),
+);
 
 /** How much is shown, in the collection's own words. */
 const countLabel = computed(() =>
@@ -470,6 +499,7 @@ async function selectAllMatching(): Promise<void> {
                 query: {
                     tab: tab.value,
                     ...collectionFiltersToQuery(filters.value, tab.value),
+                    ...collectionReviewQuery(reviewQuery.value),
                 },
             }),
         );
@@ -676,11 +706,15 @@ function matchesSnapshot(snapshot: CollectionSnapshot, url: string): boolean {
         snapshot.tab,
     );
     const targetFilters = readCollectionFilters(url, target.tab);
+    const savedReview = snapshot.reviewContext ?? null;
+    const targetReview = readCollectionReview(url);
 
     return (
         snapshot.tab === target.tab &&
         snapshot.openItemKey === target.item &&
         JSON.stringify(savedFilters) === JSON.stringify(targetFilters) &&
+        targetReview.review === (savedReview?.id ?? null) &&
+        targetReview.eligible === (savedReview?.eligible ?? false) &&
         snapshot.items.length > 0
     );
 }
@@ -754,6 +788,7 @@ onBeforeUnmount(() => {
         topicOptions: [...topicOptions.value],
         allTotal: allTotal.value,
         attentionCount: attentionCount.value,
+        reviewContext: reviewContext.value,
     });
 
     stopListeningToHistory?.();
@@ -779,6 +814,27 @@ onBeforeUnmount(() => {
             title="Collections"
             description="Vocabulary, phrases, grammar notes and your common mistakes, gathered from every finished session."
         />
+
+        <Alert v-if="activeReview !== null" class="mb-4">
+            <InfoIcon aria-hidden="true" />
+            <AlertTitle>Adding to “{{ activeReview.name }}”</AlertTitle>
+            <AlertDescription>
+                <p>
+                    Only items this review can use are shown. Anything you add
+                    here goes straight into it — no need to choose the review
+                    again.
+                </p>
+
+                <Button
+                    variant="outline"
+                    size="sm"
+                    class="mt-3 min-h-11 md:min-h-9"
+                    as-child
+                >
+                    <Link :href="reviewBackUrl">Back to the review</Link>
+                </Button>
+            </AlertDescription>
+        </Alert>
 
         <Tabs :model-value="tab" @update:model-value="changeTab">
             <!-- A phone scrolls the four tabs sideways rather than squeezing

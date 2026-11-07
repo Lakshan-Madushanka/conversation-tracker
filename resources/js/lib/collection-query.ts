@@ -80,15 +80,58 @@ export function readCollectionFilters(
 }
 
 /**
- * The address for one tab, optionally with an opened panel and its search and
- * filters. The item is left out when there is none, so closing the panel has
- * no empty `item=`. Defaults are left out too, so an untouched collection
- * keeps the short address it always had.
+ * The review a Collections visit is topping up, when its own + Add items
+ * opened the page. `eligible` says the list is narrowed to items the review
+ * can use.
+ */
+export interface CollectionReviewQuery {
+    review: number | null;
+    eligible: boolean;
+}
+
+/**
+ * The review an address asks for. Only a positive whole number counts, so a
+ * stale or hand-edited address falls back to the ordinary Collections view.
+ */
+export function readCollectionReview(url: string): CollectionReviewQuery {
+    const [, query = ''] = url.split('?');
+    const parsed = new URLSearchParams(query.split('#')[0]);
+    const review = Number(parsed.get('review'));
+
+    return {
+        review: Number.isInteger(review) && review > 0 ? review : null,
+        eligible: isTruthy(parsed.get('eligible')),
+    };
+}
+
+/**
+ * The query pieces that keep a review context on every Collections address.
+ * A page without a review writes nothing.
+ */
+export function collectionReviewQuery(
+    review: CollectionReviewQuery | null | undefined,
+): Record<string, string> {
+    if (review === null || review === undefined || review.review === null) {
+        return {};
+    }
+
+    return {
+        review: String(review.review),
+        ...(review.eligible ? { eligible: '1' } : {}),
+    };
+}
+
+/**
+ * The address for one tab, optionally with an opened panel, its search and
+ * filters, and the review it is topping up. The item is left out when there
+ * is none, so closing the panel has no empty `item=`. Defaults are left out
+ * too, so an untouched collection keeps the short address it always had.
  */
 export function collectionUrl(
     tab: CollectionTabKey,
     item: string | null = null,
     filters: CollectionFilters | null = null,
+    review: CollectionReviewQuery | null = null,
 ): string {
     const query: Record<string, string> = {
         tab,
@@ -98,6 +141,8 @@ export function collectionUrl(
     if (item !== null) {
         query.item = item;
     }
+
+    Object.assign(query, collectionReviewQuery(review));
 
     return collectionsIndex.url({ query });
 }

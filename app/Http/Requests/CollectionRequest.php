@@ -66,6 +66,34 @@ final class CollectionRequest extends FormRequest
         return $this->query('meta') === '1';
     }
 
+    /**
+     * The review the page is topping up, when the address names one. Only a
+     * positive whole number is accepted, so a stale or hand-edited address
+     * quietly falls back to the ordinary Collections view.
+     */
+    public function reviewId(): ?int
+    {
+        $review = $this->query('review');
+
+        if (! is_string($review) || preg_match('/^\d+$/', $review) !== 1) {
+            return null;
+        }
+
+        $id = (int) $review;
+
+        return $id > 0 ? $id : null;
+    }
+
+    /**
+     * Whether the list should show only items a review can use. The caller
+     * still needs a resolved review before this narrows anything, so `?eligible=1`
+     * on its own never hides the whole page.
+     */
+    public function eligibleOnly(): bool
+    {
+        return in_array($this->query('eligible'), ['1', 'true', 'on'], true);
+    }
+
     public function perPage(): int
     {
         $perPage = (int) $this->validated('per_page', TableCollection::PAGE_SIZE);

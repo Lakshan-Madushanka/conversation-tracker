@@ -24,11 +24,12 @@ use Illuminate\Support\Carbon;
  *
  * @property int $id
  * @property string $name
+ * @property string|null $description
  * @property CustomReviewStatus $status
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['name', 'status'])]
+#[Fillable(['name', 'description', 'status'])]
 final class CustomReview extends Model
 {
     /** @use HasFactory<CustomReviewFactory> */

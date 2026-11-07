@@ -12,10 +12,15 @@ export type CustomReviewStatusValue = 'empty' | 'draft' | 'finished';
 export interface CustomReviewSummary {
     id: number;
     name: string;
+    description: string | null;
     status: CustomReviewStatusValue;
     status_label: string;
     item_count: number;
     item_count_label: string;
+    /** True past the recommended size; advice only, never a limit. */
+    too_many_items: boolean;
+    /** "Too Many Items · 26 items" when the review is above the size. */
+    too_many_label: string | null;
 }
 
 /** One item in a review, read live from the session it came from. */
@@ -30,6 +35,10 @@ export interface CustomReviewItemData {
     correction_html: string;
     /** False while every place it came from is archived. */
     available: boolean;
+    /** Whether the review can use it in an attempt right now. */
+    eligible: boolean;
+    /** Why it cannot be used yet, in the review's own words. */
+    reason: string | null;
     topic: string;
     session_date: string | null;
     /** The reading page address that opens the item in a new tab. */
@@ -50,6 +59,8 @@ export interface CustomReviewPageData {
     groups: CustomReviewGroupData[];
     /** Where "Back" goes. */
     back_url: string;
+    /** Collections narrowed to the items this review can use. */
+    add_items_url: string;
 }
 
 /** An add that went through, with the review it went into. */

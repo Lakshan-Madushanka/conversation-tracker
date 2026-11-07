@@ -20,6 +20,7 @@ class CustomReviewFactory extends Factory
     {
         return [
             'name' => 'Custom Review '.fake()->unique()->numberBetween(1, 50_000),
+            'description' => null,
             'status' => CustomReviewStatus::Empty,
         ];
     }

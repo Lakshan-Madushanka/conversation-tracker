@@ -43,13 +43,21 @@ class CollectionController extends Controller
     ): Response|JsonResponse {
         $tab = $request->tab();
         $type = $tab->feedbackType();
-        $filters = $request->filters();
-        $topicOptions = $collection->topicOptions($type);
-        $filters = $filters->restrictTopics(array_column($topicOptions, 'id'));
 
-        // The review this page marks its items against: the only one still
-        // being built, or none when the learner has more than one under way.
-        $target = $this->unfinished->target(null);
+        // The review this page marks its items against: the one the address
+        // names, or the only one still being built, or none when the learner
+        // has more than one under way. A Finished review is included when the
+        // address names it, because its own + Add items tops it up.
+        $target = $this->unfinished->target($request->reviewId());
+
+        // + Add items opens the page filtered to usable items. Without a
+        // resolved review there is nothing to be eligible for, so the ordinary
+        // list stays whole.
+        $eligibleOnly = $request->eligibleOnly() && $target instanceof CustomReview;
+
+        $filters = $request->filters();
+        $topicOptions = $collection->topicOptions($type, $eligibleOnly);
+        $filters = $filters->restrictTopics(array_column($topicOptions, 'id'));
 
         $page = $collection->page(
             type: $type,
@@ -58,6 +66,7 @@ class CollectionController extends Controller
                 ? $request->perPage()
                 : TableCollection::PAGE_SIZE,
             filters: $filters,
+            eligibleOnly: $eligibleOnly,
         );
 
         $items = $this->items($tab, $page['items'], $target, $filters->terms());
@@ -74,23 +83,24 @@ class CollectionController extends Controller
             // topic picker and the attention marker follow an archive, restore,
             // edit or deletion made in a session.
             if ($request->wantsMeta()) {
-                $counts = $collection->counts();
+                $counts = $collection->counts($eligibleOnly);
 
                 $payload += [
                     'tabs' => $this->tabs($counts),
                     'all_total' => $counts[$tab->value],
-                    'attention_count' => $collection->attentionCount($type),
+                    'attention_count' => $eligibleOnly ? 0 : $collection->attentionCount($type),
                     'topic_options' => $topicOptions,
                     'filters' => $filters->toArray(),
                     'has_finished_sessions' => $collection->hasFinishedSessions(),
                     'review_target' => $this->reviewTarget($target),
+                    'review_context' => $this->reviewContext($target, $eligibleOnly),
                 ];
             }
 
             return response()->json($payload);
         }
 
-        $counts = $collection->counts();
+        $counts = $collection->counts($eligibleOnly);
 
         $payload = [
             'tab' => $tab->value,
@@ -100,11 +110,12 @@ class CollectionController extends Controller
             'has_more' => $page['has_more'],
             'total' => $page['total'],
             'all_total' => $counts[$tab->value],
-            'attention_count' => $collection->attentionCount($type),
+            'attention_count' => $eligibleOnly ? 0 : $collection->attentionCount($type),
             'topic_options' => $topicOptions,
             'filters' => $filters->toArray(),
             'has_finished_sessions' => $collection->hasFinishedSessions(),
             'review_target' => $this->reviewTarget($target),
+            'review_context' => $this->reviewContext($target, $eligibleOnly),
         ];
 
         $item = $request->item();
@@ -144,12 +155,14 @@ class CollectionController extends Controller
         TableCollection $collection,
     ): JsonResponse {
         $type = $request->tab()->feedbackType();
-        $topicOptions = $collection->topicOptions($type);
+        $target = $this->unfinished->target($request->reviewId());
+        $eligibleOnly = $request->eligibleOnly() && $target instanceof CustomReview;
+        $topicOptions = $collection->topicOptions($type, $eligibleOnly);
         $filters = $request->filters()->restrictTopics(
             array_column($topicOptions, 'id'),
         );
 
-        $keys = $collection->keys($type, $filters);
+        $keys = $collection->keys($type, $filters, $eligibleOnly);
 
         return response()->json([
             'keys' => $keys,
@@ -187,6 +200,25 @@ class CollectionController extends Controller
         return $target instanceof CustomReview
             ? CustomReviewSummaryResource::make($target, $this->reviews->count($target))->resolve()
             : null;
+    }
+
+    /**
+     * What the page says it is topping up. Only the eligible view carries a
+     * context, because only then is the list narrowed on a review's behalf.
+     *
+     * @return array{id: int, name: string, eligible: bool}|null
+     */
+    private function reviewContext(?CustomReview $target, bool $eligibleOnly): ?array
+    {
+        if (! $eligibleOnly || ! $target instanceof CustomReview) {
+            return null;
+        }
+
+        return [
+            'id' => (int) $target->id,
+            'name' => (string) $target->name,
+            'eligible' => true,
+        ];
     }
 
     /**

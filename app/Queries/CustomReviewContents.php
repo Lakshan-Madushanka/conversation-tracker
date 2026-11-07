@@ -7,7 +7,10 @@ namespace App\Queries;
 use App\Enums\FeedbackType;
 use App\Models\CustomReview;
 use App\Models\CustomReviewItem;
+use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeSession;
+use App\Support\BlankExercise;
+use App\Support\CustomReviewEligibility;
 use App\Support\CustomReviewIdentity;
 use App\Support\MistakeIdentity;
 use App\Support\NotePreview;
@@ -49,6 +52,8 @@ use stdClass;
  *     correction: string,
  *     correction_html: string,
  *     available: bool,
+ *     eligible: bool,
+ *     reason: string|null,
  *     source: CustomReviewSource
  * }
  */
@@ -155,6 +160,8 @@ final class CustomReviewContents
                         'e.created_at',
                         'e.collection_key',
                         'e.content_text',
+                        'e.correction_text',
+                        'e.split_broke',
                         'e.client_id',
                         'q.id as question_id',
                         'q.position as question_position',
@@ -175,6 +182,9 @@ final class CustomReviewContents
         /** @var array<string, CustomReviewItemData> $items */
         $items = [];
 
+        /** @var array<string, array{meaning: bool, split_broke: bool}> $signals */
+        $signals = [];
+
         foreach ($rows as $row) {
             $identity = (string) $row->collection_key;
 
@@ -183,6 +193,12 @@ final class CustomReviewContents
             }
 
             $available = $row->archived_at === null;
+            $meaning = trim((string) $row->correction_text) !== '';
+
+            $signals[$identity] ??= ['meaning' => false, 'split_broke' => false];
+            $signals[$identity]['meaning'] = $signals[$identity]['meaning'] || $meaning;
+            $signals[$identity]['split_broke'] = $signals[$identity]['split_broke']
+                || (bool) $row->split_broke;
 
             if (! isset($items[$identity])) {
                 $items[$identity] = $this->entryItem($kind, $identity, $row, $available);
@@ -191,7 +207,7 @@ final class CustomReviewContents
             }
         }
 
-        return $items;
+        return $this->withEligibility($kind, $items, $signals);
     }
 
     /**
@@ -215,6 +231,7 @@ final class CustomReviewContents
                     ->select([
                         'e.id',
                         'e.content_text',
+                        'e.content_html',
                         'e.client_id',
                         'q.id as question_id',
                         'q.position as question_position',
@@ -237,6 +254,12 @@ final class CustomReviewContents
             $identity = CustomReviewIdentity::noteKey((int) $row->id);
             $available = $row->status === PracticeSession::STATUS_FINISHED
                 && $row->archived_at === null;
+            $usable = $this->noteCanMakeABlank($row);
+            $reason = CustomReviewEligibility::reason(
+                FeedbackType::GrammarNote,
+                $available,
+                $usable,
+            );
 
             $items[$identity] = [
                 'id' => FeedbackType::GrammarNote->value.'|'.$identity,
@@ -246,6 +269,8 @@ final class CustomReviewContents
                 'correction' => '',
                 'correction_html' => '',
                 'available' => $available,
+                'eligible' => $reason === null,
+                'reason' => $reason,
                 'source' => $this->source($row, 'entry', FeedbackType::GrammarNote),
             ];
         }
@@ -272,6 +297,7 @@ final class CustomReviewContents
                 'e.content_text',
                 'e.correction_text',
                 'e.correction_html',
+                'e.split_broke',
                 'e.client_id',
                 'q.id as question_id',
                 'q.position as question_position',
@@ -289,6 +315,9 @@ final class CustomReviewContents
         /** @var array<string, CustomReviewItemData> $items */
         $items = [];
 
+        /** @var array<string, array{meaning: bool, split_broke: bool}> $signals */
+        $signals = [];
+
         foreach ($rows as $row) {
             $said = trim((string) $row->content_text);
             $correction = trim((string) $row->correction_text);
@@ -304,6 +333,12 @@ final class CustomReviewContents
             }
 
             $available = $row->archived_at === null;
+            $usable = $said !== '' && $correction !== '';
+
+            $signals[$identity] ??= ['meaning' => false, 'split_broke' => false];
+            $signals[$identity]['meaning'] = $signals[$identity]['meaning'] || $usable;
+            $signals[$identity]['split_broke'] = $signals[$identity]['split_broke']
+                || (bool) $row->split_broke;
 
             if (! isset($items[$identity])) {
                 $items[$identity] = [
@@ -316,6 +351,8 @@ final class CustomReviewContents
                         ? ''
                         : RichText::cleanInlineWithText((string) $row->correction_html)['html'],
                     'available' => $available,
+                    'eligible' => false,
+                    'reason' => null,
                     'source' => $this->source($row, 'entry', FeedbackType::Mistake),
                 ];
 
@@ -336,7 +373,7 @@ final class CustomReviewContents
             }
         }
 
-        return $items;
+        return $this->withEligibility(FeedbackType::Mistake, $items, $signals);
     }
 
     /**
@@ -360,6 +397,15 @@ final class CustomReviewContents
                 's.archived_at',
                 't.name as topic',
             ])
+            ->selectSub(
+                DB::table('practice_feedback_entries as natural')
+                    ->selectRaw('1')
+                    ->whereColumn('natural.practice_question_id', 'q.id')
+                    ->where('natural.type', FeedbackType::NaturalVersion->value)
+                    ->whereRaw("TRIM(natural.content_text) <> ''")
+                    ->limit(1),
+                'natural_version',
+            )
             ->get();
 
         /** @var array<string, CustomReviewItemData> $items */
@@ -373,6 +419,15 @@ final class CustomReviewContents
                 $title = RichText::toPlainText((string) $row->question_html);
             }
 
+            $available = $row->status === PracticeSession::STATUS_FINISHED
+                && $row->archived_at === null;
+            $usable = $title !== '' && $row->natural_version !== null;
+            $reason = CustomReviewEligibility::reason(
+                FeedbackType::Question,
+                $available,
+                $usable,
+            );
+
             $items[$identity] = [
                 'id' => FeedbackType::Question->value.'|'.$identity,
                 'kind' => FeedbackType::Question->value,
@@ -380,8 +435,9 @@ final class CustomReviewContents
                 'title' => $title === '' ? 'Question '.(int) $row->question_position : $title,
                 'correction' => '',
                 'correction_html' => '',
-                'available' => $row->status === PracticeSession::STATUS_FINISHED
-                    && $row->archived_at === null,
+                'available' => $available,
+                'eligible' => $reason === null,
+                'reason' => $reason,
                 'source' => $this->source($row, 'question', FeedbackType::Question),
             ];
         }
@@ -406,8 +462,50 @@ final class CustomReviewContents
             'correction' => '',
             'correction_html' => '',
             'available' => $available,
+            'eligible' => false,
+            'reason' => null,
             'source' => $this->source($row, 'entry', $kind),
         ];
+    }
+
+    /**
+     * Fill in each item's eligibility from the signals its rows carried. Words
+     * and phrases need a meaning anywhere, and either kind reports a line that
+     * could not be split with the more specific reason.
+     *
+     * @param  array<string, CustomReviewItemData>  $items
+     * @param  array<string, array{meaning: bool, split_broke: bool}>  $signals
+     * @return array<string, CustomReviewItemData>
+     */
+    private function withEligibility(FeedbackType $kind, array $items, array $signals): array
+    {
+        foreach ($items as $identity => $item) {
+            $signal = $signals[$identity] ?? ['meaning' => false, 'split_broke' => false];
+            $reason = CustomReviewEligibility::reason(
+                $kind,
+                $item['available'],
+                $signal['meaning'],
+                $signal['split_broke'],
+            );
+
+            $items[$identity]['eligible'] = $reason === null;
+            $items[$identity]['reason'] = $reason;
+        }
+
+        return $items;
+    }
+
+    /** Whether a grammar note can still make the fill-in-the-blank exercise. */
+    private function noteCanMakeABlank(stdClass $row): bool
+    {
+        $note = new PracticeFeedbackEntry;
+        $note->forceFill([
+            'type' => FeedbackType::GrammarNote,
+            'content_html' => (string) ($row->content_html ?? ''),
+            'content_text' => (string) $row->content_text,
+        ]);
+
+        return BlankExercise::build($note) !== null;
     }
 
     /**

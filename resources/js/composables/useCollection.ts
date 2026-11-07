@@ -11,7 +11,11 @@ import {
     withCollectionSort,
     type CollectionFilters,
 } from '@/lib/collection-filters';
-import { collectionUrl } from '@/lib/collection-query';
+import {
+    collectionReviewQuery,
+    collectionUrl,
+    type CollectionReviewQuery,
+} from '@/lib/collection-query';
 import {
     isCollectionOpenedItem,
     isCollectionItemsPage,
@@ -27,6 +31,7 @@ import type {
     CollectionItemsPage,
     CollectionOpenedItem,
     CollectionPage,
+    CollectionReviewContext,
     CollectionSort,
     CollectionTabData,
     CollectionTabKey,
@@ -47,6 +52,7 @@ const LIST_PROPS = [
     'filters',
     'has_finished_sessions',
     'review_target',
+    'review_context',
 ];
 
 /** The page props that open or close the item panel. */
@@ -80,7 +86,25 @@ export function useCollection(initial: CollectionPage) {
     const openItem = ref<CollectionOpenedItem | null>(initial.open_item);
     const openItemMissing = ref(initial.open_item_missing);
 
+    /**
+     * The review whose + Add items narrowed this list. It travels with every
+     * address the page writes, so a tab switch, a filter, a panel or a reload
+     * never drops back to the whole collection.
+     */
+    const reviewContext = ref<CollectionReviewContext | null>(
+        initial.review_context ?? null,
+    );
+
     hydrateReviewTarget(initial.review_target);
+
+    /** The review context as the address writes it. */
+    function currentReview(): CollectionReviewQuery | null {
+        const context = reviewContext.value;
+
+        return context === null
+            ? null
+            : { review: context.id, eligible: context.eligible };
+    }
 
     const loading = ref(false);
     const error = ref(false);
@@ -108,6 +132,7 @@ export function useCollection(initial: CollectionPage) {
         const query: Record<string, string | number> = {
             tab: activeTab,
             ...collectionFiltersToQuery(activeFilters, activeTab),
+            ...collectionReviewQuery(currentReview()),
         };
 
         if (cursor !== null) {
@@ -266,6 +291,10 @@ export function useCollection(initial: CollectionPage) {
             }
 
             hydrateReviewTarget(meta.review_target);
+
+            if (meta.review_context !== undefined) {
+                reviewContext.value = meta.review_context;
+            }
         }
     }
 
@@ -299,7 +328,7 @@ export function useCollection(initial: CollectionPage) {
         filterError.value = false;
 
         router.get(
-            collectionUrl(next, null, defaults),
+            collectionUrl(next, null, defaults, currentReview()),
             {},
             {
                 preserveState: true,
@@ -387,7 +416,12 @@ export function useCollection(initial: CollectionPage) {
         openItemMissing.value = false;
 
         router.get(
-            collectionUrl(tab.value, openItem.value?.key ?? null, next),
+            collectionUrl(
+                tab.value,
+                openItem.value?.key ?? null,
+                next,
+                currentReview(),
+            ),
             {},
             {
                 replace: true,
@@ -444,7 +478,7 @@ export function useCollection(initial: CollectionPage) {
         openItemMissing.value = false;
 
         router.get(
-            collectionUrl(tab.value, item.key, filters.value),
+            collectionUrl(tab.value, item.key, filters.value, currentReview()),
             {},
             {
                 preserveState: true,
@@ -474,7 +508,7 @@ export function useCollection(initial: CollectionPage) {
         openItemMissing.value = false;
 
         router.get(
-            collectionUrl(tab.value, null, filters.value),
+            collectionUrl(tab.value, null, filters.value, currentReview()),
             {},
             {
                 preserveState: true,
@@ -521,6 +555,7 @@ export function useCollection(initial: CollectionPage) {
         attentionCount.value = saved.attentionCount ?? 0;
         filters.value = normalizeCollectionFilters(saved.filters, saved.tab);
         topicOptions.value = [...(saved.topicOptions ?? [])];
+        reviewContext.value = saved.reviewContext ?? null;
         openItemMissing.value = false;
         openItem.value =
             openItemKey === null
@@ -573,6 +608,7 @@ export function useCollection(initial: CollectionPage) {
             topicOptions: [...topicOptions.value],
             allTotal: allTotal.value,
             attentionCount: attentionCount.value,
+            reviewContext: reviewContext.value,
         };
     }
 
@@ -589,6 +625,11 @@ export function useCollection(initial: CollectionPage) {
         filters.value = normalizeCollectionFilters(page.filters, page.tab);
         hasFinishedSessions.value = page.has_finished_sessions;
         hydrateReviewTarget(page.review_target);
+
+        if (page.review_context !== undefined) {
+            reviewContext.value = page.review_context;
+        }
+
         error.value = false;
         filterError.value = false;
     }
@@ -618,6 +659,7 @@ export function useCollection(initial: CollectionPage) {
         attentionCount,
         filters,
         topicOptions,
+        reviewContext,
         hasFinishedSessions,
         openItem,
         openItemMissing,

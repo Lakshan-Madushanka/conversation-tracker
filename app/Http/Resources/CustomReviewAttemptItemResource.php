@@ -14,6 +14,11 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * The words are the ones the attempt showed, never a newer version of the
  * item, and the link opens the reading page at the place it came from in a new
  * tab. Nothing here can change the attempt or the item.
+ *
+ * An item that has since been deleted keeps its snapshot and its rating and
+ * says so with `deleted`; its link is gone, because the page it came from no
+ * longer holds it. An item that is only archived stays a link and is not
+ * marked, since it is coming back.
  */
 final class CustomReviewAttemptItemResource extends JsonResource
 {
@@ -34,7 +39,8 @@ final class CustomReviewAttemptItemResource extends JsonResource
      *     state: 'rated'|'skipped'|'not_rated',
      *     topic: string,
      *     session_date: string|null,
-     *     href: string|null
+     *     href: string|null,
+     *     deleted: bool
      * }
      */
     public function toArray(Request $request): array
@@ -59,7 +65,8 @@ final class CustomReviewAttemptItemResource extends JsonResource
             'state' => $state,
             'topic' => $item->topic,
             'session_date' => $item->session_date?->toIso8601String(),
-            'href' => $item->source_url,
+            'href' => $item->is_deleted ? null : $item->source_url,
+            'deleted' => $item->is_deleted,
         ];
     }
 }

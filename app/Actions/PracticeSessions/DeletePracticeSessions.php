@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Actions\PracticeSessions;
 
+use App\Actions\CustomReviews\PruneCustomReviewItems;
 use App\Exceptions\SessionDeletionBatchStaleException;
 use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeQuestion;
 use App\Models\PracticeSession;
 use App\Queries\SessionDeletionBatchPreview;
+use App\Support\CustomReviewDeletedIdentities;
 use App\Support\DeletionToken;
 use Illuminate\Support\Facades\DB;
 
@@ -21,12 +23,18 @@ use Illuminate\Support\Facades\DB;
  * passes, every question, feedback entry and session is removed together in
  * one transaction, so nothing is left half-deleted.
  *
+ * The items that lived only in this selection stop existing with it, so the
+ * same transaction tells custom reviews, exactly as deleting one session does.
+ *
  * A selection that is already entirely gone is treated as success, which makes
  * a double click and a retried request safe.
  */
 final readonly class DeletePracticeSessions
 {
-    public function __construct(private SessionDeletionBatchPreview $preview) {}
+    public function __construct(
+        private SessionDeletionBatchPreview $preview,
+        private PruneCustomReviewItems $pruneCustomReviewItems,
+    ) {}
 
     /**
      * @param  list<int>  $sessionIds
@@ -64,7 +72,10 @@ final readonly class DeletePracticeSessions
             $questionIds = PracticeQuestion::query()
                 ->whereIn('practice_session_id', $foundIds)
                 ->pluck('id')
+                ->map(intval(...))
                 ->all();
+
+            $goneIdentities = CustomReviewDeletedIdentities::forQuestions($questionIds);
 
             if ($questionIds !== []) {
                 PracticeFeedbackEntry::query()
@@ -79,6 +90,8 @@ final readonly class DeletePracticeSessions
             PracticeSession::query()
                 ->whereIn('id', $foundIds)
                 ->delete();
+
+            $this->pruneCustomReviewItems->handleFor($goneIdentities);
 
             return new BulkDeleteResult(
                 deletedIds: $foundIds,

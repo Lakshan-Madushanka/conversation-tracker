@@ -71,6 +71,18 @@ final class CustomReview extends Model
         return $this->hasMany(CustomReviewItem::class)->orderByDesc('added_at')->orderByDesc('id');
     }
 
+    /**
+     * Every attempt at this review, the most recent first.
+     *
+     * @return HasMany<CustomReviewAttempt, $this>
+     */
+    public function attempts(): HasMany
+    {
+        return $this->hasMany(CustomReviewAttempt::class)
+            ->orderByDesc('started_at')
+            ->orderByDesc('id');
+    }
+
     /** Whether the learner is still building this review. */
     public function isBeingBuilt(): bool
     {

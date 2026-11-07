@@ -15,11 +15,14 @@ use App\Actions\Reviews\RecordRating;
 use App\Actions\Reviews\SyncReviewSchedule;
 use App\Actions\Reviews\UndoRating;
 use App\Enums\CollectionItemStatus;
+use App\Enums\CustomReviewAttemptStatus;
 use App\Enums\CustomReviewStatus;
 use App\Enums\FeedbackType;
 use App\Enums\ReviewRating;
 use App\Models\CollectionItemMark;
 use App\Models\CustomReview;
+use App\Models\CustomReviewAttempt;
+use App\Models\CustomReviewAttemptItem;
 use App\Models\CustomReviewItem;
 use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeQuestion;
@@ -28,6 +31,7 @@ use App\Models\Rating;
 use App\Models\Review;
 use App\Models\ReviewItem;
 use App\Models\Topic;
+use App\Queries\CustomReviewAttemptList;
 use App\Queries\ReviewCandidates;
 use App\Support\MistakeIdentity;
 use App\Support\ReviewExercises;
@@ -114,6 +118,12 @@ class LibrarySeeder extends Seeder
      * descriptions that search has to cope with.
      */
     private const int TARGET_CUSTOM_REVIEWS = 300;
+
+    /** Attempts per ordinary practice review, so the seed holds about 500. */
+    private const int BULK_ATTEMPTS_PER_REVIEW = 20;
+
+    /** Ordinary reviews that each carry a long practice history. */
+    private const int BULK_ATTEMPT_REVIEWS = 24;
 
     /** A description long enough to be shortened on a card. */
     private const string LONG_REVIEW_DESCRIPTION = 'A set I keep coming back to when I want to sound more natural: the words I actually use at the café, the phrases that make a request sound polite rather than abrupt, and the small corrections that took me years to notice. Read it slowly, say each line out loud, and add anything new that still feels awkward.';
@@ -670,6 +680,7 @@ class LibrarySeeder extends Seeder
             $this->seedQuestionRatings();
             $this->seedRecentSittings();
             $this->seedCustomReviews($topics);
+            $this->seedCustomReviewAttempts();
         });
     }
 
@@ -684,6 +695,303 @@ class LibrarySeeder extends Seeder
     {
         $this->seedStartingReviews($topics);
         $this->seedListingReviews();
+    }
+
+    /**
+     * Practice history for the pages that read it: a few reviews whose attempts
+     * show every status, an attempt left In progress to resume, a Not started
+     * attempt, a review whose items changed after it was practised, and enough
+     * ordinary reviews with long histories to page and load.
+     *
+     * Attempts are written once and never updated, exactly as the app does it,
+     * so an existing attempt means an earlier run already added the set.
+     */
+    private function seedCustomReviewAttempts(): void
+    {
+        if (CustomReviewAttempt::query()->exists()) {
+            return;
+        }
+
+        $this->seedAttemptShowcases();
+        $this->seedBulkAttempts();
+    }
+
+    /**
+     * The handful of histories the pages have to cope with: every attempt
+     * status, a running attempt at the top, a review that is Draft again but
+     * keeps its attempts, a completed attempt with skipped items, and a review
+     * whose words changed after the attempt took its snapshot.
+     */
+    private function seedAttemptShowcases(): void
+    {
+        $this->seedAttemptedReview(
+            name: 'Practice log',
+            reviewStatus: CustomReviewStatus::Finished,
+            kinds: [
+                [FeedbackType::Vocabulary, 8],
+                [FeedbackType::Phrase, 4],
+                [FeedbackType::GrammarNote, 2],
+                [FeedbackType::Mistake, 2],
+                [FeedbackType::Question, 2],
+            ],
+            states: [
+                CustomReviewAttemptStatus::Completed,
+                CustomReviewAttemptStatus::FinishedEarly,
+                CustomReviewAttemptStatus::Completed,
+                CustomReviewAttemptStatus::NotStarted,
+                CustomReviewAttemptStatus::FinishedEarly,
+                CustomReviewAttemptStatus::Completed,
+                CustomReviewAttemptStatus::InProgress,
+            ],
+            firstStartedDaysAgo: 20,
+        );
+
+        // Draft again, but the attempt history stays exactly as it was.
+        $this->seedAttemptedReview(
+            name: 'Words for the week',
+            reviewStatus: CustomReviewStatus::Draft,
+            kinds: [[FeedbackType::Vocabulary, 6]],
+            states: [
+                CustomReviewAttemptStatus::Completed,
+                CustomReviewAttemptStatus::FinishedEarly,
+                CustomReviewAttemptStatus::Completed,
+            ],
+            firstStartedDaysAgo: 12,
+        );
+
+        // Every item settled, with the second half skipped rather than rated.
+        $this->seedAttemptedReview(
+            name: 'Skipped practice',
+            reviewStatus: CustomReviewStatus::Finished,
+            kinds: [[FeedbackType::Vocabulary, 12], [FeedbackType::Phrase, 4]],
+            states: [
+                CustomReviewAttemptStatus::FinishedEarly,
+                CustomReviewAttemptStatus::Completed,
+            ],
+            firstStartedDaysAgo: 9,
+            skipFrom: 8,
+        );
+
+        // The two attempts were taken before one meaning was reworded, so
+        // their snapshots still show the old one while the review shows the new.
+        $edited = $this->seedAttemptedReview(
+            name: 'Edited after practice',
+            reviewStatus: CustomReviewStatus::Finished,
+            kinds: [[FeedbackType::Vocabulary, 5]],
+            states: [
+                CustomReviewAttemptStatus::Completed,
+                CustomReviewAttemptStatus::FinishedEarly,
+            ],
+            firstStartedDaysAgo: 5,
+        );
+
+        $this->editOneAttemptedWord($edited);
+    }
+
+    /**
+     * Enough ordinary reviews with long histories to page through a review's
+     * attempts and to fill the listing's recently attempted order.
+     */
+    private function seedBulkAttempts(): void
+    {
+        for ($index = 0; $index < self::BULK_ATTEMPT_REVIEWS; $index++) {
+            $states = [];
+
+            for ($attempt = 1; $attempt <= self::BULK_ATTEMPTS_PER_REVIEW; $attempt++) {
+                $states[] = match (true) {
+                    $attempt === self::BULK_ATTEMPTS_PER_REVIEW && $index % 4 === 0 => CustomReviewAttemptStatus::InProgress,
+                    $attempt % 6 === 0 => CustomReviewAttemptStatus::FinishedEarly,
+                    default => CustomReviewAttemptStatus::Completed,
+                };
+            }
+
+            $this->seedAttemptedReview(
+                name: 'Practice log '.($index + 1),
+                reviewStatus: CustomReviewStatus::Finished,
+                kinds: [[FeedbackType::Vocabulary, 20]],
+                states: $states,
+                firstStartedDaysAgo: 60,
+            );
+        }
+    }
+
+    /**
+     * Creates a Finished or Draft review holding a little of each chosen kind,
+     * then one attempt per status in `$states`.
+     *
+     * Every attempt copies the snapshot list the review would start with right
+     * now, so its cards have the same shape a real start would write. Ratings
+     * are spread over the items the way a learner's would be: a completed
+     * attempt settles every item, an early finish keeps what was rated, and a
+     * running one stops partway. A Not started attempt keeps its items but no
+     * number and no rating.
+     *
+     * @param  list<array{0: FeedbackType, 1: int}>  $kinds
+     * @param  list<CustomReviewAttemptStatus>  $states
+     */
+    private function seedAttemptedReview(
+        string $name,
+        CustomReviewStatus $reviewStatus,
+        array $kinds,
+        array $states,
+        int $firstStartedDaysAgo,
+        ?int $skipFrom = null,
+    ): CustomReview {
+        $create = app(CreateCustomReview::class);
+        $add = app(AddCustomReviewItems::class);
+        $setStatus = app(SetCustomReviewStatus::class);
+        $list = app(CustomReviewAttemptList::class);
+
+        $review = $create->handle();
+        $review->name = $name;
+        $review->save();
+
+        foreach ($kinds as [$kind, $limit]) {
+            $add->handle(
+                $review,
+                $kind,
+                $this->listingReviewKeys($kind, $limit, false),
+            );
+        }
+
+        if ($reviewStatus === CustomReviewStatus::Finished) {
+            $setStatus->handle($review, CustomReviewStatus::Finished);
+        }
+
+        $items = $list->for($review);
+        $number = 0;
+        $now = CarbonImmutable::now();
+
+        foreach ($states as $index => $state) {
+            $startedAt = $now
+                ->subDays($firstStartedDaysAgo)
+                ->addDays($index * 2)
+                ->addMinutes($index);
+
+            if ($state->isCounted()) {
+                $number += 1;
+            }
+
+            $this->writeSeededAttempt(
+                review: $review,
+                items: $items,
+                number: $state->isCounted() ? $number : null,
+                status: $state,
+                startedAt: $startedAt,
+                skipFrom: $skipFrom,
+            );
+        }
+
+        return $review;
+    }
+
+    /**
+     * Writes one attempt and its snapshot items in two inserts, the way the
+     * start action writes them in one transaction.
+     *
+     * @param  list<array{
+     *     position: int,
+     *     kind: FeedbackType,
+     *     identity: string,
+     *     exercise: string,
+     *     card: array<string, mixed>,
+     *     snapshot_text: string,
+     *     topic: string,
+     *     session_date: CarbonImmutable|null,
+     *     source_session_id: int,
+     *     source_url: string
+     * }>  $items
+     */
+    private function writeSeededAttempt(
+        CustomReview $review,
+        array $items,
+        ?int $number,
+        CustomReviewAttemptStatus $status,
+        CarbonImmutable $startedAt,
+        ?int $skipFrom,
+    ): void {
+        $attempt = CustomReviewAttempt::query()->create([
+            'custom_review_id' => $review->id,
+            'number' => $number,
+            'status' => $status,
+            'started_at' => $status === CustomReviewAttemptStatus::NotStarted ? null : $startedAt,
+            'finished_at' => $status->isFinished() ? $startedAt->addMinutes(12) : null,
+        ]);
+
+        $ratings = [ReviewRating::Hard, ReviewRating::Okay, ReviewRating::Easy];
+        $ratedShare = match ($status) {
+            CustomReviewAttemptStatus::Completed => count($items),
+            CustomReviewAttemptStatus::FinishedEarly => (int) ceil(count($items) / 2),
+            CustomReviewAttemptStatus::InProgress => (int) ceil(count($items) / 3),
+            CustomReviewAttemptStatus::NotStarted => 0,
+        };
+        $rows = [];
+        $takenAt = $status === CustomReviewAttemptStatus::NotStarted
+            ? CarbonImmutable::now()
+            : $startedAt;
+
+        foreach ($items as $index => $item) {
+            $rated = $index < $ratedShare;
+            $skipped = $rated && $skipFrom !== null && $index >= $skipFrom;
+
+            $rows[] = [
+                'custom_review_attempt_id' => $attempt->id,
+                'position' => $item['position'],
+                'kind' => $item['kind']->value,
+                'exercise' => $item['exercise'],
+                'item_identity' => $item['identity'],
+                'snapshot_text' => $item['snapshot_text'],
+                'snapshot' => json_encode($item['card'], JSON_THROW_ON_ERROR),
+                'topic' => $item['topic'],
+                'session_date' => $item['session_date'],
+                'source_session_id' => $item['source_session_id'],
+                'source_url' => $item['source_url'],
+                'snapshot_taken_at' => $takenAt,
+                'rating' => $rated && ! $skipped ? $ratings[$index % 3]->value : null,
+                'rated_at' => $rated && ! $skipped ? $startedAt->addMinutes($index) : null,
+                'rating_key' => CustomReviewAttemptItem::ratingKeyFor(
+                    (int) $attempt->id,
+                    $item['kind'],
+                    $item['identity'],
+                ),
+                'skipped_at' => $skipped ? $startedAt->addMinutes($index) : null,
+            ];
+        }
+
+        foreach (array_chunk($rows, 200) as $chunk) {
+            CustomReviewAttemptItem::query()->insert($chunk);
+        }
+    }
+
+    /**
+     * Rewrites one meaning the edited review already practised. The item's
+     * identity is its word, so the reference still holds, while the attempts
+     * keep the meaning that was on screen when they were taken.
+     */
+    private function editOneAttemptedWord(CustomReview $review): void
+    {
+        $item = CustomReviewItem::query()
+            ->where('custom_review_id', $review->id)
+            ->where('kind', FeedbackType::Vocabulary->value)
+            ->orderBy('id')
+            ->first();
+
+        if (! $item instanceof CustomReviewItem) {
+            return;
+        }
+
+        $entry = PracticeFeedbackEntry::query()
+            ->where('type', FeedbackType::Vocabulary->value)
+            ->where('collection_key', $item->item_identity)
+            ->first();
+
+        if (! $entry instanceof PracticeFeedbackEntry) {
+            return;
+        }
+
+        $entry->correction_text .= ' (reworded after practice)';
+        $entry->correction_html = '<p>'.e($entry->correction_text).'</p>';
+        $entry->save();
     }
 
     /**

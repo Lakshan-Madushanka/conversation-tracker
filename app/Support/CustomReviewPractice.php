@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Support;
 
 use App\Enums\CustomReviewStatus;
+use App\Enums\FeedbackType;
 
 /**
  * The one answer to "can this review be practised", shared by the card, the
@@ -27,6 +28,15 @@ final class CustomReviewPractice
 
     /** The action offered instead of starting while an attempt is running. */
     public const string RESUME = 'Resume attempt';
+
+    /**
+     * What an attempt says about a kind it cannot show anything of right now,
+     * because every item of it sits in an archived session.
+     */
+    public static function leftOut(FeedbackType $kind): string
+    {
+        return $kind->customReviewLabel().' are not in this attempt right now, because their items are archived.';
+    }
 
     /** The start action's words, naming how many items the attempt will hold. */
     public static function startLabel(int $itemCount): string

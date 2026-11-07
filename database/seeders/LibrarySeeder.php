@@ -858,7 +858,7 @@ class LibrarySeeder extends Seeder
             $setStatus->handle($review, CustomReviewStatus::Finished);
         }
 
-        $items = $list->for($review);
+        $items = $list->for($review)['items'];
         $number = 0;
         $now = CarbonImmutable::now();
 

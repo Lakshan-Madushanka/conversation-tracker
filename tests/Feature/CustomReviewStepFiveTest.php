@@ -16,6 +16,7 @@ use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeQuestion;
 use App\Models\PracticeSession;
 use App\Models\Topic;
+use App\Support\CustomReviewPractice;
 use App\Support\SearchText;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -23,13 +24,17 @@ use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia as Assert;
 
 /**
- * A finished session holding the given words, ready to give a review items.
+ * A finished session holding the given items, ready to give a review something
+ * to show — live, or parked in an archived session.
  *
- * @param  list<string>  $words
+ * @param  list<string>  $texts
  * @return array{session: PracticeSession, identities: list<string>}
  */
-function stepFiveSource(array $words, bool $archived = false): array
-{
+function stepFiveSource(
+    array $texts,
+    bool $archived = false,
+    FeedbackType $kind = FeedbackType::Vocabulary,
+): array {
     $at = CarbonImmutable::now();
 
     $session = PracticeSession::factory()
@@ -49,18 +54,18 @@ function stepFiveSource(array $words, bool $archived = false): array
 
     $identities = [];
 
-    foreach ($words as $position => $word) {
+    foreach ($texts as $position => $text) {
         PracticeFeedbackEntry::factory()->for($question)->create([
-            'type' => FeedbackType::Vocabulary->value,
-            'content_text' => $word,
-            'correction_text' => 'the meaning of '.$word,
-            'correction_html' => '<p>the meaning of '.e($word).'</p>',
+            'type' => $kind->value,
+            'content_text' => $text,
+            'correction_text' => 'the meaning of '.$text,
+            'correction_html' => '<p>the meaning of '.e($text).'</p>',
             'client_id' => (string) Str::uuid(),
             'position' => $position,
             'is_split' => true,
         ]);
 
-        $identities[] = SearchText::normalize($word);
+        $identities[] = SearchText::normalize($text);
     }
 
     return ['session' => $session, 'identities' => $identities];
@@ -253,6 +258,133 @@ describe('a deleted item in a past attempt', function (): void {
             ->assertInertia(fn (Assert $page): Assert => $page
                 ->where('attempts.0.counts.rated', 2)
                 ->where('attempts.0.items.0.deleted', false));
+    });
+});
+
+describe('a kind left out of an attempt', function (): void {
+    it('says which kind the attempt started without', function (): void {
+        $words = stepFiveSource(['apple', 'banana']);
+        $phrases = stepFiveSource(['see you soon', 'take care'], archived: true, kind: FeedbackType::Phrase);
+
+        $review = CustomReview::factory()->create([
+            'name' => 'Mixed set',
+            'status' => CustomReviewStatus::Empty,
+        ]);
+        app(AddCustomReviewItems::class)->handle($review, FeedbackType::Vocabulary, $words['identities']);
+        app(AddCustomReviewItems::class)->handle($review, FeedbackType::Phrase, $phrases['identities']);
+        app(SetCustomReviewStatus::class)->handle($review, CustomReviewStatus::Finished);
+
+        $attempt = stepFiveStarted($review);
+
+        expect(CustomReviewAttemptItem::query()->count())->toBe(2)
+            ->and(CustomReviewAttemptItem::query()->where('kind', 'phrase')->count())->toBe(0);
+
+        $this->get(route('customReviews.attempts.show', [
+            'customReview' => $review->id,
+            'attempt' => $attempt->id,
+        ]))
+            ->assertInertia(fn (Assert $page): Assert => $page
+                ->has('notices', 1)
+                ->where('notices.0', CustomReviewPractice::leftOut(FeedbackType::Phrase))
+                ->where('position.total', 2)
+                ->where('finished', false));
+    });
+
+    it('says it once, and not again on the next visit', function (): void {
+        $words = stepFiveSource(['apple']);
+        $phrases = stepFiveSource(['see you soon'], archived: true, kind: FeedbackType::Phrase);
+
+        $review = CustomReview::factory()->create([
+            'name' => 'Mixed set',
+            'status' => CustomReviewStatus::Empty,
+        ]);
+        app(AddCustomReviewItems::class)->handle($review, FeedbackType::Vocabulary, $words['identities']);
+        app(AddCustomReviewItems::class)->handle($review, FeedbackType::Phrase, $phrases['identities']);
+        app(SetCustomReviewStatus::class)->handle($review, CustomReviewStatus::Finished);
+
+        $attempt = stepFiveStarted($review);
+        $url = route('customReviews.attempts.show', [
+            'customReview' => $review->id,
+            'attempt' => $attempt->id,
+        ]);
+
+        $this->get($url)->assertInertia(fn (Assert $page): Assert => $page->has('notices', 1));
+
+        $this->get($url)
+            ->assertInertia(fn (Assert $page): Assert => $page->where('notices', []));
+    });
+});
+
+describe('an item archived during an attempt', function (): void {
+    it('is skipped for the rest of the walk while what was rated stays', function (): void {
+        $first = stepFiveSource(['apple', 'banana']);
+        $second = stepFiveSource(['cherry', 'dates']);
+        $review = stepFiveReview(
+            'Ready set',
+            CustomReviewStatus::Finished,
+            [...$first['identities'], ...$second['identities']],
+        );
+        $attempt = stepFiveStarted($review);
+
+        stepFiveRate($review, $attempt, 'apple', ReviewRating::Easy);
+        stepFiveRate($review, $attempt, 'banana', ReviewRating::Hard);
+
+        $this->postJson(route('sessions.archive', $second['session']))->assertOk();
+
+        expect(CustomReviewAttemptItem::query()->count())->toBe(4)
+            ->and(CustomReviewAttemptItem::query()->whereNotNull('rating')->count())->toBe(2)
+            ->and(CustomReviewAttemptItem::query()->where('is_deleted', true)->count())->toBe(0);
+
+        $this->get(route('customReviews.attempts.show', [
+            'customReview' => $review->id,
+            'attempt' => $attempt->id,
+        ]))
+            ->assertInertia(fn (Assert $page): Assert => $page
+                ->where('finished', true)
+                ->where('position', ['current' => 2, 'total' => 2])
+                ->where('attempt.rated', 2)
+                ->where('attempt.total', 2)
+                ->where('counts.easy', 1)
+                ->where('counts.hard', 1));
+    });
+
+    it('comes back in full when the session is restored', function (): void {
+        $first = stepFiveSource(['apple']);
+        $second = stepFiveSource(['banana']);
+        $third = stepFiveSource(['cherry']);
+        $review = stepFiveReview(
+            'Ready set',
+            CustomReviewStatus::Finished,
+            [...$first['identities'], ...$second['identities'], ...$third['identities']],
+        );
+        $attempt = stepFiveStarted($review);
+
+        stepFiveRate($review, $attempt, 'apple', ReviewRating::Easy);
+
+        // The newest session is met first, so the walk is on its item when a
+        // session behind it is archived; that item is skipped and the walk
+        // carries on to the next one it can still show.
+        $this->postJson(route('sessions.archive', $second['session']))->assertOk();
+
+        $this->get(route('customReviews.attempts.show', [
+            'customReview' => $review->id,
+            'attempt' => $attempt->id,
+        ]))
+            ->assertInertia(fn (Assert $page): Assert => $page
+                ->where('finished', false)
+                ->where('position', ['current' => 1, 'total' => 2])
+                ->where('current.card.front', 'cherry')
+                ->where('notices', []));
+
+        $this->postJson(route('sessions.restore', $second['session']))->assertOk();
+
+        $this->get(route('customReviews.attempts.show', [
+            'customReview' => $review->id,
+            'attempt' => $attempt->id,
+        ]))
+            ->assertInertia(fn (Assert $page): Assert => $page
+                ->where('finished', false)
+                ->where('position', ['current' => 1, 'total' => 3]));
     });
 });
 

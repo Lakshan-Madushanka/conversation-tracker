@@ -9,9 +9,13 @@ use App\Actions\CustomReviews\ClearCustomReview;
 use App\Actions\CustomReviews\CreateCustomReview;
 use App\Actions\CustomReviews\PruneCustomReviewItems;
 use App\Actions\CustomReviews\RemoveCustomReviewItems;
+use App\Actions\CustomReviews\SetCustomReviewStatus;
+use App\Actions\CustomReviews\UpdateCustomReview;
 use App\Enums\CustomReviewAddOutcome;
 use App\Http\Requests\AddCustomReviewItemsRequest;
 use App\Http\Requests\RemoveCustomReviewItemsRequest;
+use App\Http\Requests\UpdateCustomReviewRequest;
+use App\Http\Requests\UpdateCustomReviewStatusRequest;
 use App\Http\Resources\CustomReviewGroupResource;
 use App\Http\Resources\CustomReviewSummaryResource;
 use App\Models\CustomReview;
@@ -73,7 +77,42 @@ final class CustomReviewsController extends Controller
                 $contents->groups($customReview),
             ),
             'back_url' => CustomReviewReturn::url(is_string($back) ? $back : null),
+            // + Add items opens Collections narrowed to the items this review
+            // can use, with the review named in the address so every add lands
+            // in it without asking.
+            'add_items_url' => route('collections.index', [
+                'review' => $customReview->id,
+                'eligible' => 1,
+            ]),
         ]);
+    }
+
+    /**
+     * Save a name or description the learner changed. Each field arrives on
+     * its own from the page's autosave, so a partial request changes only the
+     * field it names.
+     */
+    public function update(
+        UpdateCustomReviewRequest $request,
+        CustomReview $customReview,
+        UpdateCustomReview $updateCustomReview,
+        CustomReviewItems $items,
+    ): JsonResponse {
+        $review = $updateCustomReview->handle($customReview, $request->changes());
+
+        return response()->json($this->savedAnswer($review, $items));
+    }
+
+    /** The learner's own Draft-or-Finished move, with no other field touched. */
+    public function updateStatus(
+        UpdateCustomReviewStatusRequest $request,
+        CustomReview $customReview,
+        SetCustomReviewStatus $setCustomReviewStatus,
+        CustomReviewItems $items,
+    ): JsonResponse {
+        $review = $setCustomReviewStatus->handle($customReview, $request->status());
+
+        return response()->json($this->savedAnswer($review, $items));
     }
 
     /**
@@ -145,6 +184,25 @@ final class CustomReviewsController extends Controller
             'cleared_count' => $clearCustomReview->handle($customReview),
             'total' => 0,
         ]);
+    }
+
+    /**
+     * The shape the autosave rules read: the row, its version, and the review
+     * as it now stands. A custom review has no version column, so the marker
+     * stays at zero.
+     *
+     * @return array{id: int, version: int, review: array<string, mixed>}
+     */
+    private function savedAnswer(CustomReview $review, CustomReviewItems $items): array
+    {
+        return [
+            'id' => (int) $review->id,
+            'version' => 0,
+            'review' => CustomReviewSummaryResource::make(
+                $review,
+                $items->count($review),
+            )->resolve(),
+        ];
     }
 
     /**

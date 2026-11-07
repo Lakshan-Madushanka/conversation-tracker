@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Resources;
 
 use App\Models\CustomReview;
+use App\Support\CustomReviewRules;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -31,26 +32,36 @@ final class CustomReviewSummaryResource extends JsonResource
      * @return array{
      *     id: int,
      *     name: string,
+     *     description: string|null,
      *     status: string,
      *     status_label: string,
      *     item_count: int,
-     *     item_count_label: string
+     *     item_count_label: string,
+     *     too_many_items: bool,
+     *     too_many_label: string|null
      * }
      */
     public function toArray(Request $request): array
     {
         /** @var CustomReview $review */
         $review = $this->resource;
+        $itemCountLabel = $this->itemCount === 1
+            ? '1 item'
+            : $this->itemCount.' items';
+        $tooMany = CustomReviewRules::isTooMany($this->itemCount);
 
         return [
             'id' => (int) $review->id,
             'name' => (string) $review->name,
+            'description' => $review->description,
             'status' => $review->status->value,
             'status_label' => $review->status->label(),
             'item_count' => $this->itemCount,
-            'item_count_label' => $this->itemCount === 1
-                ? '1 item'
-                : $this->itemCount.' items',
+            'item_count_label' => $itemCountLabel,
+            'too_many_items' => $tooMany,
+            'too_many_label' => $tooMany
+                ? 'Too Many Items · '.$itemCountLabel
+                : null,
         ];
     }
 }

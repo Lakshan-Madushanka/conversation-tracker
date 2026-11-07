@@ -20,6 +20,18 @@ final readonly class CustomReviewRules
     /** How many items a review is recommended to hold. */
     public const int RECOMMENDED_ITEMS = 20;
 
+    /** The longest name the learner may give a review. */
+    public const int NAME_MAX_LENGTH = 80;
+
+    /** The longest description a review may carry. */
+    public const int DESCRIPTION_MAX_LENGTH = 500;
+
+    /** Whether a review holding this many items carries the size tag. */
+    public static function isTooMany(int $itemCount): bool
+    {
+        return $itemCount > self::RECOMMENDED_ITEMS;
+    }
+
     /**
      * Whether an add that ends with the given number of items should be
      * explained first.

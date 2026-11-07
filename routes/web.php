@@ -63,6 +63,15 @@ Route::post('/custom-reviews/{customReview}/clear', [CustomReviewsController::cl
     ->whereNumber('customReview')
     ->name('customReviews.clear');
 
+// The review's name, description and the learner's own Draft-or-Finished
+// choice. Each saves on its own, with no other field touched.
+Route::put('/custom-reviews/{customReview}', [CustomReviewsController::class, 'update'])
+    ->whereNumber('customReview')
+    ->name('customReviews.update');
+Route::put('/custom-reviews/{customReview}/status', [CustomReviewsController::class, 'updateStatus'])
+    ->whereNumber('customReview')
+    ->name('customReviews.status');
+
 // A review is named by its id, so this never answers to a word like "items".
 Route::get('/custom-reviews/{customReview}', [CustomReviewsController::class, 'show'])
     ->whereNumber('customReview')

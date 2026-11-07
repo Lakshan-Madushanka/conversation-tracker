@@ -17,36 +17,47 @@ defineProps<{
     };
     /** What the bar measures, in words: a review, or one guided question. */
     progressLabel?: string;
+    /** A quiet line above the progress, such as "My review · 2nd attempt". */
+    title?: string | null;
 }>();
 </script>
 
 <template>
     <div class="flex min-h-dvh flex-col bg-background">
-        <header class="flex items-center gap-3 border-b px-4 py-3 sm:px-6">
-            <!-- A page can take the exit over when leaving means going back
-                into the page itself rather than to another address. -->
-            <slot name="exit">
-                <Button variant="ghost" size="sm" as-child>
-                    <Link :href="exitHref">
-                        <ArrowLeftIcon aria-hidden="true" />
-                        Exit
-                    </Link>
-                </Button>
-            </slot>
-
-            <div class="flex-1">
-                <Progress
-                    :model-value="progress"
-                    :aria-label="progressLabel ?? 'Review progress'"
-                />
-            </div>
-
-            <span
-                v-if="position"
-                class="shrink-0 text-sm text-muted-foreground tabular-nums"
+        <header class="border-b px-4 py-3 sm:px-6">
+            <p
+                v-if="title"
+                class="mb-1.5 truncate text-xs text-muted-foreground"
             >
-                {{ position.current }} of {{ position.total }}
-            </span>
+                {{ title }}
+            </p>
+
+            <div class="flex items-center gap-3">
+                <!-- A page can take the exit over when leaving means going back
+                    into the page itself rather than to another address. -->
+                <slot name="exit">
+                    <Button variant="ghost" size="sm" as-child>
+                        <Link :href="exitHref">
+                            <ArrowLeftIcon aria-hidden="true" />
+                            Exit
+                        </Link>
+                    </Button>
+                </slot>
+
+                <div class="flex-1">
+                    <Progress
+                        :model-value="progress"
+                        :aria-label="progressLabel ?? 'Review progress'"
+                    />
+                </div>
+
+                <span
+                    v-if="position"
+                    class="shrink-0 text-sm text-muted-foreground tabular-nums"
+                >
+                    {{ position.current }} of {{ position.total }}
+                </span>
+            </div>
         </header>
 
         <main class="flex flex-1 flex-col items-center px-4 pt-4 pb-10 sm:px-6">

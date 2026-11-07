@@ -23,6 +23,7 @@ use App\Queries\TableCollection;
 use App\Queries\TodaysReview;
 use App\Support\LearnerDay;
 use App\Support\ReviewRules;
+use App\Support\ReviewSectionBoard;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -44,7 +45,7 @@ use Inertia\Response;
  * read-only page: what was looked at, how it went, and the same links back to
  * the session each item came from.
  *
- * @phpstan-import-type Section from ReviewSections
+ * @phpstan-import-type Section from ReviewSectionBoard
  */
 class ReviewController extends Controller
 {
@@ -113,6 +114,7 @@ class ReviewController extends Controller
     public function show(
         Request $request,
         ReviewSections $sectionsQuery,
+        ReviewSectionBoard $board,
         TodaysReview $todaysReview,
         LearnerDay $day,
         StatusSuggestions $statusSuggestions,
@@ -152,14 +154,14 @@ class ReviewController extends Controller
         $completedSection = null;
 
         if (! $finished) {
-            $opened = $sectionsQuery->open(
+            $opened = $board->open(
                 $sections,
                 $request->query('step'),
                 $request->query('position'),
             );
 
             if ($opened !== null && $opened['item'] === null) {
-                $completedSection = $this->completedSection($opened['section'], $sections);
+                $completedSection = $board->completed($opened['section'], $sections);
             } elseif ($opened !== null) {
                 $index = array_search($opened['item'], $opened['section']['items'], true);
                 $current = [
@@ -185,7 +187,7 @@ class ReviewController extends Controller
         return Inertia::render('review/Session', [
             'notFound' => false,
             'finished' => $finished,
-            'sections' => array_map($this->sectionSummary(...), $sections),
+            'sections' => array_map($board->summary(...), $sections),
             'current' => $current,
             'completedSection' => $completedSection,
             'reviewId' => $review->id,
@@ -219,6 +221,7 @@ class ReviewController extends Controller
         Review $review,
         RecordRating $recordRating,
         ReviewSections $sectionsQuery,
+        ReviewSectionBoard $board,
     ): RedirectResponse {
         abort_unless(
             $review->items()
@@ -237,7 +240,7 @@ class ReviewController extends Controller
 
         $review->load(['items', 'ratings']);
 
-        $next = $sectionsQuery->nextAfterRating(
+        $next = $board->nextAfterRating(
             $sectionsQuery->for($review),
             $request->kind(),
             $request->itemIdentity(),
@@ -257,11 +260,12 @@ class ReviewController extends Controller
         Review $review,
         UndoRating $undoRating,
         ReviewSections $sectionsQuery,
+        ReviewSectionBoard $board,
     ): RedirectResponse {
         $undoRating->handle($review, $request->kind(), $request->itemIdentity());
 
         $review->load(['items', 'ratings']);
-        $place = $sectionsQuery->locate(
+        $place = $board->locate(
             $sectionsQuery->for($review),
             $request->kind(),
             $request->itemIdentity(),
@@ -312,67 +316,6 @@ class ReviewController extends Controller
             ],
             'sections' => array_map($this->resultsSection(...), $sections),
         ]);
-    }
-
-    /**
-     * The summary the stepper shows: name, icon, progress and its own address,
-     * without the items themselves.
-     *
-     * @param  array{key: string, label: string, icon: string, number: int, total: int, rated: int, completed: bool, counts: array{hard: int, okay: int, easy: int}, url: string, items: list<array<string, mixed>>}  $section
-     * @return array{key: string, label: string, icon: string, number: int, total: int, rated: int, completed: bool, counts: array{hard: int, okay: int, easy: int}, url: string}
-     */
-    private function sectionSummary(array $section): array
-    {
-        unset($section['items']);
-
-        return $section;
-    }
-
-    /**
-     * What a finished section shows instead of a card: its own tally and a way
-     * on to the next section still holding unrated items.
-     *
-     * @param  array{key: string, label: string, icon: string, number: int, total: int, rated: int, completed: bool, counts: array{hard: int, okay: int, easy: int}, url: string, items: list<array<string, mixed>>}  $section
-     * @param  list<array{key: string, label: string, icon: string, number: int, total: int, rated: int, completed: bool, counts: array{hard: int, okay: int, easy: int}, url: string, items: list<array<string, mixed>>}>  $sections
-     * @return array{key: string, label: string, total: int, counts: array{hard: int, okay: int, easy: int}, next_url: string|null}
-     */
-    private function completedSection(array $section, array $sections): array
-    {
-        return [
-            'key' => $section['key'],
-            'label' => $section['label'],
-            'total' => $section['total'],
-            'counts' => $section['counts'],
-            'next_url' => $this->nextUnfinishedUrl($section, $sections),
-        ];
-    }
-
-    /**
-     * @param  array{key: string, label: string, icon: string, number: int, total: int, rated: int, completed: bool, counts: array{hard: int, okay: int, easy: int}, url: string, items: list<array<string, mixed>>}  $section
-     * @param  list<array{key: string, label: string, icon: string, number: int, total: int, rated: int, completed: bool, counts: array{hard: int, okay: int, easy: int}, url: string, items: list<array<string, mixed>>}>  $sections
-     */
-    private function nextUnfinishedUrl(array $section, array $sections): ?string
-    {
-        $count = count($sections);
-        $start = 0;
-
-        foreach ($sections as $index => $candidate) {
-            if ($candidate['key'] === $section['key']) {
-                $start = $index;
-
-                break;
-            }
-        }
-
-        for ($offset = 1; $offset <= $count; $offset += 1) {
-            $candidate = $sections[($start + $offset) % $count];
-
-            if (! $candidate['completed']) {
-                return $candidate['url'];
-            }
-        }
-
-        return null;
     }
 
     /**

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Resources;
 
 use App\Queries\CustomReviewContents;
+use App\Support\CustomReviewSourceUrl;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -62,35 +63,7 @@ final class CustomReviewItemResource extends JsonResource
             'reason' => $item['reason'],
             'topic' => $item['source']['topic'],
             'session_date' => $item['source']['session_date']?->toIso8601String(),
-            'href' => $this->href($item),
+            'href' => CustomReviewSourceUrl::of($item['source']),
         ];
-    }
-
-    /**
-     * @param  CustomReviewItemData  $item
-     */
-    private function href(array $item): string
-    {
-        $source = $item['source'];
-
-        $query = [
-            'from' => 'review',
-            'question' => (string) $source['question_position'],
-            'field' => $source['field'],
-        ];
-
-        if ($source['field'] === 'entry') {
-            $query['type'] = (string) $source['type'];
-            $query['position'] = (string) $source['entry_position'];
-
-            if ($source['entry_id'] !== null) {
-                $query['entry'] = $source['entry_id'];
-            }
-        }
-
-        return route('sessions.show', [
-            'session' => $source['session_id'],
-            ...$query,
-        ]);
     }
 }

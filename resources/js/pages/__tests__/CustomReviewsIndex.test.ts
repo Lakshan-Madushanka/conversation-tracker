@@ -34,6 +34,11 @@ function card(
         attempt_summary_label: 'No attempts yet',
         view_history_url: null,
         can_start: false,
+        eligible_count: 0,
+        start_label: null,
+        start_url: null,
+        in_progress: false,
+        resume_url: null,
         practice_note: 'Mark this review Finished to practise it.',
         ...overrides,
     };

@@ -10,6 +10,7 @@ use App\Support\CustomReviewFilters;
 use App\Support\SearchText;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Pagination\CursorPaginator;
+use Illuminate\Support\Facades\DB;
 
 /**
  * The custom reviews that belong on the listing, narrowed by the learner's
@@ -89,9 +90,29 @@ final readonly class CustomReviewsListing
             CustomReviewSort::Created => $query
                 ->orderByDesc('created_at')
                 ->orderByDesc('id'),
-            // Attempts arrive in Step 4. Until then every review is one that
-            // has never been attempted, so the tie-break is the newest first.
+            // The latest attempt's start, joined once for the whole page so
+            // the cursor can continue from the same value it ended on. A
+            // review never attempted sorts after every review that has been.
             default => $query
+                ->leftJoinSub(
+                    // Every review gets a row, so the cursor always compares a
+                    // real value; never attempted sorts after every attempt.
+                    DB::table('custom_reviews as review_clock')
+                        ->leftJoin(
+                            'custom_review_attempts as attempt_clock',
+                            'attempt_clock.custom_review_id',
+                            '=',
+                            'review_clock.id',
+                        )
+                        ->selectRaw("review_clock.id as custom_review_id, coalesce(max(attempt_clock.started_at), '1970-01-01 00:00:00') as last_attempted_at")
+                        ->groupBy('review_clock.id'),
+                    'latest_attempts',
+                    'latest_attempts.custom_review_id',
+                    '=',
+                    'custom_reviews.id',
+                )
+                ->select('custom_reviews.*', 'latest_attempts.last_attempted_at')
+                ->orderByDesc('last_attempted_at')
                 ->orderByDesc('created_at')
                 ->orderByDesc('id'),
         };

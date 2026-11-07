@@ -324,23 +324,7 @@ final class LibraryFilters
      */
     private static function searchFrom(mixed $value): string
     {
-        if (! is_string($value)) {
-            return '';
-        }
-
-        $search = trim((string) preg_replace('/\s+/u', ' ', $value));
-
-        if ($search === '') {
-            return '';
-        }
-
-        if (mb_strlen($search) > self::MAX_SEARCH_LENGTH) {
-            $search = mb_substr($search, 0, self::MAX_SEARCH_LENGTH);
-        }
-
-        $meaningful = (string) preg_replace('/\s+/u', '', $search);
-
-        return mb_strlen($meaningful) >= self::MIN_SEARCH_LENGTH ? $search : '';
+        return SearchText::keptSearch($value);
     }
 
     private static function dateFrom(mixed $value, ?string $from, ?string $to): string

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\CustomReviewStatus;
+use App\Support\SearchText;
 use Database\Factories\CustomReviewFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Scope;
@@ -25,6 +26,7 @@ use Illuminate\Support\Carbon;
  * @property int $id
  * @property string $name
  * @property string|null $description
+ * @property string|null $search_text
  * @property CustomReviewStatus $status
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
@@ -34,6 +36,20 @@ final class CustomReview extends Model
 {
     /** @use HasFactory<CustomReviewFactory> */
     use HasFactory;
+
+    /**
+     * Keep the searchable copy in step with the name and description, so a
+     * renamed review stops matching its old words straight away and a search
+     * never has to read the two columns itself.
+     */
+    protected static function booted(): void
+    {
+        self::saving(function (self $review): void {
+            $review->search_text = SearchText::normalize(
+                trim($review->name.' '.($review->description)),
+            );
+        });
+    }
 
     /**
      * @return array<string, string>

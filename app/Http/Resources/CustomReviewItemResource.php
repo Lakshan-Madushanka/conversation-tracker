@@ -13,7 +13,7 @@ use Illuminate\Http\Resources\Json\JsonResource;
  *
  * The words shown are read live from the session, never copied into the
  * review. `available` is false while every place the item came from is
- * archived; the item stays listed and says so. `href` opens the original
+ * archived, and `reason` says why an item cannot be used yet. `href` opens the original
  * session at the item in a new tab, with the same target the reading page
  * already understands.
  *
@@ -38,6 +38,8 @@ final class CustomReviewItemResource extends JsonResource
      *     correction: string,
      *     correction_html: string,
      *     available: bool,
+     *     eligible: bool,
+     *     reason: string|null,
      *     topic: string,
      *     session_date: string|null,
      *     href: string
@@ -56,6 +58,8 @@ final class CustomReviewItemResource extends JsonResource
             'correction' => $item['correction'],
             'correction_html' => $item['correction_html'],
             'available' => $item['available'],
+            'eligible' => $item['eligible'],
+            'reason' => $item['reason'],
             'topic' => $item['source']['topic'],
             'session_date' => $item['source']['session_date']?->toIso8601String(),
             'href' => $this->href($item),

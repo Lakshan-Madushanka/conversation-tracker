@@ -10,6 +10,7 @@ use App\Enums\CollectionTab;
 use App\Enums\FeedbackType;
 use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeSession;
+use App\Support\BlankExercise;
 use App\Support\CollectionCursor;
 use App\Support\CollectionFilters;
 use App\Support\EntrySearch;
@@ -145,13 +146,14 @@ final class TableCollection
         ?string $cursor = null,
         int $perPage = self::PAGE_SIZE,
         ?CollectionFilters $filters = null,
+        bool $eligibleOnly = false,
     ): array {
         $filters ??= CollectionFilters::for($type);
         $perPage = max(1, $perPage);
 
         return $type === FeedbackType::GrammarNote
-            ? $this->notesPage($type, $filters, $cursor, $perPage)
-            : $this->groupedPage($type, $filters, $cursor, $perPage);
+            ? $this->notesPage($type, $filters, $cursor, $perPage, $eligibleOnly)
+            : $this->groupedPage($type, $filters, $cursor, $perPage, $eligibleOnly);
     }
 
     /**
@@ -165,8 +167,9 @@ final class TableCollection
         CollectionFilters $filters,
         ?string $cursor,
         int $perPage,
+        bool $eligibleOnly = false,
     ): array {
-        $grouped = $this->groupedQuery($type, $filters);
+        $grouped = $this->groupedQuery($type, $filters, $eligibleOnly);
         $page = DB::query()->fromSub($grouped, 'g');
 
         $total = (clone $page)->count();
@@ -217,8 +220,14 @@ final class TableCollection
         CollectionFilters $filters,
         ?string $cursor,
         int $perPage,
+        bool $eligibleOnly = false,
     ): array {
         $base = $this->notesQuery($filters);
+
+        if ($eligibleOnly) {
+            $base->whereIn('e.id', $this->eligibleNoteIds($base));
+        }
+
         $total = (clone $base)->count();
 
         // The cursor and the order both read the moment and the note's place
@@ -265,8 +274,11 @@ final class TableCollection
      * The grouped rows of one collection, narrowed by every filter and search
      * term before anything is counted or ordered.
      */
-    private function groupedQuery(FeedbackType $type, CollectionFilters $filters): QueryBuilder
-    {
+    private function groupedQuery(
+        FeedbackType $type,
+        CollectionFilters $filters,
+        bool $eligibleOnly = false,
+    ): QueryBuilder {
         $query = DB::table('practice_feedback_entries as e')
             ->join('practice_questions as q', 'q.id', '=', 'e.practice_question_id')
             ->join('practice_sessions as s', 's.id', '=', 'q.practice_session_id')
@@ -275,6 +287,11 @@ final class TableCollection
             ->whereNull('s.archived_at');
 
         $this->applyNonBlank($query, $type);
+
+        if ($eligibleOnly) {
+            $this->applyEligibleFilter($query, $type);
+        }
+
         $this->applyMarkJoin($query);
         $this->applyMarkFilters($query, $filters);
         $this->applyTopicFilter($query, $type, $filters);
@@ -347,6 +364,75 @@ final class TableCollection
         }
 
         $query->whereRaw("TRIM(e.content_text) <> ''");
+    }
+
+    /**
+     * Keep only the groups a custom review can actually use: a word or phrase
+     * needs a meaning anywhere in the group, and a mistake needs both what was
+     * said and a correction.
+     *
+     * The check is correlated on `collection_key` instead of narrowing the
+     * rows, so a group that is kept still carries every appearance it has and
+     * its seen count stays whole.
+     */
+    private function applyEligibleFilter(QueryBuilder $query, FeedbackType $type): void
+    {
+        $usable = match ($type) {
+            FeedbackType::Vocabulary, FeedbackType::Phrase => "TRIM(a.correction_text) <> ''",
+            FeedbackType::Mistake => "TRIM(a.content_text) <> '' AND TRIM(a.correction_text) <> ''",
+            default => null,
+        };
+
+        if ($usable === null) {
+            return;
+        }
+
+        $query->whereExists(function (QueryBuilder $exists) use ($type, $usable): void {
+            $exists->selectRaw('1')
+                ->from('practice_feedback_entries as a')
+                ->join('practice_questions as aq', 'aq.id', '=', 'a.practice_question_id')
+                ->join('practice_sessions as ss', 'ss.id', '=', 'aq.practice_session_id')
+                ->whereColumn('a.collection_key', 'e.collection_key')
+                ->where('a.type', $type->value)
+                ->where('ss.status', PracticeSession::STATUS_FINISHED)
+                ->whereNull('ss.archived_at')
+                ->whereRaw($usable);
+        });
+    }
+
+    /**
+     * The grammar notes of the current view that can still make the
+     * fill-in-the-blank exercise. The rule is the one `BlankExercise` owns, so
+     * this reads the note rows, asks it about each, and hands back the ids.
+     *
+     * The base query is cloned, so the caller's filters, search and ordering
+     * stay untouched.
+     *
+     * @return list<int>
+     */
+    private function eligibleNoteIds(QueryBuilder $base): array
+    {
+        $rows = (clone $base)
+            ->select(['e.id', 'e.content_text', 'e.content_html'])
+            ->distinct()
+            ->get();
+
+        $ids = [];
+
+        foreach ($rows as $row) {
+            $note = new PracticeFeedbackEntry;
+            $note->forceFill([
+                'type' => FeedbackType::GrammarNote,
+                'content_html' => (string) ($row->content_html ?? ''),
+                'content_text' => (string) $row->content_text,
+            ]);
+
+            if (BlankExercise::build($note) !== null) {
+                $ids[] = (int) $row->id;
+            }
+        }
+
+        return $ids;
     }
 
     private function applyMarkJoin(QueryBuilder $query): void
@@ -804,8 +890,18 @@ final class TableCollection
      * subject, so a word seen many times is counted once; grammar notes one
      * by one, because they are never merged.
      */
-    public function count(FeedbackType $type): int
+    public function count(FeedbackType $type, bool $eligibleOnly = false): int
     {
+        if ($type === FeedbackType::GrammarNote) {
+            $notes = $this->notesQuery(CollectionFilters::for($type));
+
+            if ($eligibleOnly) {
+                $notes->whereIn('e.id', $this->eligibleNoteIds($notes));
+            }
+
+            return (int) $notes->count();
+        }
+
         $query = DB::table('practice_feedback_entries as e')
             ->join('practice_questions as q', 'q.id', '=', 'e.practice_question_id')
             ->join('practice_sessions as s', 's.id', '=', 'q.practice_session_id')
@@ -815,8 +911,8 @@ final class TableCollection
 
         $this->applyNonBlank($query, $type);
 
-        if ($type === FeedbackType::GrammarNote) {
-            return (int) $query->count();
+        if ($eligibleOnly) {
+            $this->applyEligibleFilter($query, $type);
         }
 
         return (int) $query
@@ -926,8 +1022,14 @@ final class TableCollection
      *
      * @return list<array{id: int, name: string, count: int}>
      */
-    public function topicOptions(FeedbackType $type): array
+    public function topicOptions(FeedbackType $type, bool $eligibleOnly = false): array
     {
+        if ($eligibleOnly && $type === FeedbackType::GrammarNote) {
+            $eligible = $this->eligibleNoteIds(
+                $this->notesQuery(CollectionFilters::for($type)),
+            );
+        }
+
         $query = DB::table('practice_feedback_entries as e')
             ->join('practice_questions as q', 'q.id', '=', 'e.practice_question_id')
             ->join('practice_sessions as s', 's.id', '=', 'q.practice_session_id')
@@ -938,6 +1040,14 @@ final class TableCollection
             ->whereNotNull('e.collection_key');
 
         $this->applyNonBlank($query, $type);
+
+        if ($eligibleOnly) {
+            if ($type === FeedbackType::GrammarNote) {
+                $query->whereIn('e.id', $eligible ?? []);
+            } else {
+                $this->applyEligibleFilter($query, $type);
+            }
+        }
 
         return array_values($query
             ->select([
@@ -961,13 +1071,13 @@ final class TableCollection
      *
      * @return array<string, int>
      */
-    public function counts(): array
+    public function counts(bool $eligibleOnly = false): array
     {
         return [
-            CollectionTab::Vocabulary->value => $this->count(FeedbackType::Vocabulary),
-            CollectionTab::Phrases->value => $this->count(FeedbackType::Phrase),
-            CollectionTab::Grammar->value => $this->count(FeedbackType::GrammarNote),
-            CollectionTab::Mistakes->value => $this->count(FeedbackType::Mistake),
+            CollectionTab::Vocabulary->value => $this->count(FeedbackType::Vocabulary, $eligibleOnly),
+            CollectionTab::Phrases->value => $this->count(FeedbackType::Phrase, $eligibleOnly),
+            CollectionTab::Grammar->value => $this->count(FeedbackType::GrammarNote, $eligibleOnly),
+            CollectionTab::Mistakes->value => $this->count(FeedbackType::Mistake, $eligibleOnly),
         ];
     }
 
@@ -978,11 +1088,20 @@ final class TableCollection
      *
      * @return list<string>
      */
-    public function keys(FeedbackType $type, CollectionFilters $filters): array
-    {
+    public function keys(
+        FeedbackType $type,
+        CollectionFilters $filters,
+        bool $eligibleOnly = false,
+    ): array {
         if ($type === FeedbackType::GrammarNote) {
+            $notes = $this->notesQuery($filters);
+
+            if ($eligibleOnly) {
+                $notes->whereIn('e.id', $this->eligibleNoteIds($notes));
+            }
+
             /** @var list<string> $keys */
-            $keys = $this->notesQuery($filters)
+            $keys = $notes
                 ->select('e.id')
                 ->get()
                 ->map(fn (object $row): string => 'note-'.(int) $row->id)
@@ -992,7 +1111,7 @@ final class TableCollection
         }
 
         /** @var list<string> $keys */
-        $keys = $this->groupedQuery($type, $filters)
+        $keys = $this->groupedQuery($type, $filters, $eligibleOnly)
             ->select('e.collection_key')
             ->pluck('e.collection_key')
             ->filter(fn (mixed $key): bool => is_string($key) && $key !== '')

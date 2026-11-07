@@ -1,6 +1,7 @@
 import { mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 import { router } from '@inertiajs/vue3';
+import { toast } from 'vue-sonner';
 import CustomReviewFilterBar from '@/components/CustomReviewFilterBar.vue';
 import LibrarySearch from '@/components/LibrarySearch.vue';
 import Index from '@/pages/custom-reviews/Index.vue';
@@ -40,6 +41,7 @@ function card(
         in_progress: false,
         resume_url: null,
         practice_note: 'Mark this review Finished to practise it.',
+        delete_url: '/custom-reviews/1',
         ...overrides,
     };
 }
@@ -57,6 +59,7 @@ function pageProps(
         all_total: reviews.length,
         per_page: 20,
         filters: defaultCustomReviewFilters(),
+        notice: null,
         ...overrides,
     };
 }
@@ -236,5 +239,25 @@ describe('the Custom reviews page', () => {
 
         expect(wrapper.text()).toContain('No custom reviews yet');
         expect(wrapper.text()).toContain('0 custom reviews');
+    });
+
+    it('says, in the server’s words, what a delete answered with', () => {
+        const info = vi
+            .spyOn(toast, 'info')
+            .mockImplementation(() => 'notice-1');
+
+        mountPage({ notice: 'Morning set was deleted.' });
+
+        expect(info).toHaveBeenCalledWith('Morning set was deleted.');
+    });
+
+    it('says nothing when no delete just answered', () => {
+        const info = vi
+            .spyOn(toast, 'info')
+            .mockImplementation(() => 'notice-1');
+
+        mountPage();
+
+        expect(info).not.toHaveBeenCalled();
     });
 });

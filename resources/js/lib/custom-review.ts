@@ -191,6 +191,28 @@ export const DELETED_LABEL = 'Deleted';
 export const DELETED_ITEM_NOTE =
     'This item was deleted from your collections. It is kept here for your history.';
 
+/** The delete confirmation's title, naming the review it is about. */
+export function reviewDeleteTitle(name: string): string {
+    return `Delete ${name}?`;
+}
+
+/**
+ * The delete confirmation's own words: what goes for good, what stays where it
+ * is, and that nothing brings the review back.
+ */
+export const REVIEW_DELETE_WARNING =
+    'The review goes for good, with the list of items it gathered. Your items stay in their collections, in their sessions and in any other review that holds them. This cannot be undone.';
+
+/**
+ * The confirmation's line about the attempts that go with the review. Nothing
+ * is said about history when the review never got any.
+ */
+export function reviewDeleteAttemptsLabel(count: number): string {
+    return count === 0
+        ? ''
+        : `This will also delete its ${count} ${count === 1 ? 'attempt' : 'attempts'}.`;
+}
+
 /** What identifies a review after one of its fields is saved. */
 export interface ReviewMarker extends AutoSaveMarker {
     review: CustomReviewSummary;

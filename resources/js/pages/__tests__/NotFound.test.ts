@@ -22,6 +22,19 @@ describe('a page that could not be found', () => {
         expect(wrapper.text()).toContain('Go to Library');
     });
 
+    it('offers the listing when a custom review address is gone', async () => {
+        window.history.replaceState(null, '', '/custom-reviews/7');
+
+        const wrapper = mount(NotFound, { attachTo: document.body });
+
+        await nextTick();
+
+        expect(wrapper.text()).toContain('We couldn’t find that custom review');
+        expect(wrapper.text()).toContain('along with its attempts');
+        expect(wrapper.get('a').attributes('href')).toBe('/custom-reviews');
+        expect(wrapper.text()).toContain('Go to Custom reviews');
+    });
+
     it('keeps the general page for any other address', async () => {
         window.history.replaceState(null, '', '/somewhere-else');
 

@@ -92,6 +92,8 @@ export interface CustomReviewCardData extends CustomReviewSummary {
     resume_url: string | null;
     /** What still stands between the review and practice, or null. */
     practice_note: string | null;
+    /** Where the card's Delete sends the review for good. */
+    delete_url: string;
 }
 
 /** Whether this review can be practised now, and what the button says. */
@@ -185,6 +187,8 @@ export interface CustomReviewsPageData {
     all_total: number;
     per_page: number;
     filters: CustomReviewFiltersState;
+    /** What a deletion just answered with, said once and then forgotten. */
+    notice: string | null;
 }
 
 /** The page props a review's page receives. */
@@ -203,6 +207,8 @@ export interface CustomReviewPageData {
     expanded_attempt: number | null;
     /** Why a start was refused, in the review's calm words, or null. */
     attempt_error: string | null;
+    /** Where the page's Delete sends the review for good. */
+    delete_url: string;
 }
 
 /** An add that went through, with the review it went into. */

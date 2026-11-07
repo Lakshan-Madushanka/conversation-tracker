@@ -13,6 +13,7 @@ import {
 } from '@lucide/vue';
 import { toast } from 'vue-sonner';
 import CustomReviewAttemptItems from '@/components/CustomReviewAttemptItems.vue';
+import CustomReviewDeleteDialog from '@/components/CustomReviewDeleteDialog.vue';
 import CustomReviewStatusControl from '@/components/CustomReviewStatusControl.vue';
 import EmptyState from '@/components/EmptyState.vue';
 import PageHeader from '@/components/PageHeader.vue';
@@ -232,6 +233,9 @@ const busy = ref(false);
 const selectedIds = ref<Set<string>>(new Set());
 
 const clearOpen = ref(false);
+
+/** Whether the warning that takes the whole review for good is on screen. */
+const deleteOpen = ref(false);
 
 const items = computed(() => groups.value.flatMap((group) => group.items));
 
@@ -709,6 +713,18 @@ onBeforeUnmount(() => {
                 >
                     <Trash2Icon aria-hidden="true" />
                     Clear review
+                </Button>
+
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    class="min-h-11 text-muted-foreground hover:text-destructive md:min-h-9"
+                    @click="deleteOpen = true"
+                >
+                    <Trash2Icon aria-hidden="true" />
+                    Delete review
+                    <span class="sr-only"> {{ review.name }}</span>
                 </Button>
             </template>
         </PageHeader>
@@ -1342,6 +1358,13 @@ onBeforeUnmount(() => {
                 </ul>
             </template>
         </section>
+
+        <CustomReviewDeleteDialog
+            v-model:open="deleteOpen"
+            :name="review.name"
+            :attempt-count="props.attempts.length"
+            :delete-url="props.delete_url"
+        />
 
         <AlertDialog v-model:open="clearOpen">
             <AlertDialogContent>

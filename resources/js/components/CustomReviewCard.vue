@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { Link, router } from '@inertiajs/vue3';
-import { PlayIcon } from '@lucide/vue';
+import { PlayIcon, Trash2Icon } from '@lucide/vue';
+import CustomReviewDeleteDialog from '@/components/CustomReviewDeleteDialog.vue';
 import CustomReviewStatusControl from '@/components/CustomReviewStatusControl.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -37,6 +38,9 @@ const createdLabel = computed(() =>
 
 /** True while this card's Start practice is on its way to the server. */
 const starting = ref(false);
+
+/** Whether this card's delete warning is on screen. */
+const deleteOpen = ref(false);
 
 function changeStatus(status: 'draft' | 'finished'): void {
     emit('change-status', props.review, status);
@@ -172,14 +176,37 @@ function start(): void {
                 </Button>
             </div>
 
-            <div class="border-t pt-3">
+            <div
+                class="flex flex-wrap items-center justify-between gap-2 border-t pt-3"
+            >
                 <CustomReviewStatusControl
                     :status="props.review.status"
                     :can-finish="props.review.item_count > 0"
                     :busy="props.busy"
                     @change="changeStatus"
                 />
+
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    class="min-h-11 text-muted-foreground hover:text-destructive md:min-h-9"
+                    @click="deleteOpen = true"
+                >
+                    <Trash2Icon aria-hidden="true" />
+                    Delete
+                    <span class="sr-only">
+                        {{ props.review.name }}
+                    </span>
+                </Button>
             </div>
         </div>
+
+        <CustomReviewDeleteDialog
+            v-model:open="deleteOpen"
+            :name="props.review.name"
+            :attempt-count="props.review.attempt_count"
+            :delete-url="props.review.delete_url"
+        />
     </Card>
 </template>

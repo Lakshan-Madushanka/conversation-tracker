@@ -34,6 +34,7 @@ function card(
         in_progress: false,
         resume_url: null,
         practice_note: 'Mark this review Finished to practise it.',
+        delete_url: '/custom-reviews/1',
         ...overrides,
     };
 }

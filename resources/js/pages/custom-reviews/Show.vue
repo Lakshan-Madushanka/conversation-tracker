@@ -4,12 +4,15 @@ import { Head, Link, router } from '@inertiajs/vue3';
 import {
     ArrowLeftIcon,
     ArrowUpRightIcon,
+    ChevronDownIcon,
     ListChecksIcon,
+    PlayIcon,
     PlusIcon,
     Trash2Icon,
     TriangleAlertIcon,
 } from '@lucide/vue';
 import { toast } from 'vue-sonner';
+import CustomReviewAttemptItems from '@/components/CustomReviewAttemptItems.vue';
 import CustomReviewStatusControl from '@/components/CustomReviewStatusControl.vue';
 import EmptyState from '@/components/EmptyState.vue';
 import PageHeader from '@/components/PageHeader.vue';
@@ -29,8 +32,21 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+    Collapsible,
+    CollapsibleContent,
+    CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import { useAutoSave } from '@/composables/useAutoSave';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -51,6 +67,7 @@ import {
 } from '@/lib/custom-review';
 import { shortDate } from '@/lib/format';
 import type {
+    CustomReviewAttemptHistoryData,
     CustomReviewGroupData,
     CustomReviewItemData,
     CustomReviewKind,
@@ -123,6 +140,85 @@ const descriptionNotice = computed(() => {
 /** True while the learner's Status move is on its way to the server. */
 const statusBusy = ref(false);
 const statusError = ref('');
+
+/** True while Start practice is on its way to the server. */
+const startBusy = ref(false);
+
+function startPractice(): void {
+    if (props.practice.start_url === null || startBusy.value) {
+        return;
+    }
+
+    startBusy.value = true;
+    router.post(
+        props.practice.start_url,
+        {},
+        {
+            onFinish: () => {
+                startBusy.value = false;
+            },
+        },
+    );
+}
+
+/** Which attempt's items are open; the address keeps it across a refresh. */
+const openAttempt = ref<number | null>(props.expanded_attempt);
+
+watch(
+    () => props.expanded_attempt,
+    (value) => {
+        openAttempt.value = value;
+    },
+);
+
+function toggleAttempt(
+    attempt: CustomReviewAttemptHistoryData,
+    open: boolean,
+): void {
+    openAttempt.value = open ? attempt.id : null;
+
+    const url = new URL(window.location.href);
+
+    if (open) {
+        url.searchParams.set('attempt', String(attempt.id));
+    } else {
+        url.searchParams.delete('attempt');
+    }
+
+    window.history.replaceState(window.history.state, '', url);
+}
+
+/** Every item the attempt kept, however it ended. */
+function attemptTotal(attempt: CustomReviewAttemptHistoryData): number {
+    return (
+        attempt.counts.rated + attempt.counts.skipped + attempt.counts.unrated
+    );
+}
+
+function attemptStarted(attempt: CustomReviewAttemptHistoryData): string {
+    return attempt.started_at === null ? '—' : shortDate(attempt.started_at);
+}
+
+function attemptFinished(attempt: CustomReviewAttemptHistoryData): string {
+    return attempt.finished_at === null ? '—' : shortDate(attempt.finished_at);
+}
+
+function attemptStatusVariant(
+    attempt: CustomReviewAttemptHistoryData,
+): 'default' | 'secondary' {
+    return attempt.status === 'in_progress' ? 'default' : 'secondary';
+}
+
+function attemptCounts(attempt: CustomReviewAttemptHistoryData): string {
+    const total = attemptTotal(attempt);
+    const parts = [`${attempt.counts.rated} of ${total} rated`];
+
+    if (attempt.counts.skipped > 0) {
+        parts.push(`${attempt.counts.skipped} skipped`);
+    }
+
+    return parts.join(' · ');
+}
 
 /** The items on screen, read live from their sessions by the server. */
 const groups = ref<CustomReviewGroupData[]>(cloneGroups(props.groups));
@@ -595,6 +691,77 @@ onBeforeUnmount(() => {
             </template>
         </PageHeader>
 
+        <Alert v-if="props.attempt_error" class="mb-6" role="alert">
+            <TriangleAlertIcon aria-hidden="true" />
+            <AlertTitle>Practice could not start</AlertTitle>
+            <AlertDescription>{{ props.attempt_error }}</AlertDescription>
+        </Alert>
+
+        <section aria-labelledby="practice-heading" class="mb-8">
+            <Card class="py-0">
+                <div
+                    class="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-6"
+                >
+                    <div class="grid gap-1">
+                        <h2
+                            id="practice-heading"
+                            class="text-base font-semibold"
+                        >
+                            Practice
+                        </h2>
+                        <p class="text-sm text-muted-foreground">
+                            <template v-if="props.practice.in_progress">
+                                You have an attempt in progress. Pick up where
+                                you left off — nothing is lost.
+                            </template>
+                            <template v-else-if="props.practice.can_start">
+                                Ready when you are. An attempt holds every item
+                                that is available right now.
+                            </template>
+                            <template v-else>
+                                {{
+                                    props.practice.note ??
+                                    'This review is not ready to practise yet.'
+                                }}
+                            </template>
+                        </p>
+                    </div>
+
+                    <div class="flex flex-wrap gap-2">
+                        <Button
+                            v-if="
+                                props.practice.in_progress &&
+                                props.practice.resume_url
+                            "
+                            size="lg"
+                            class="min-h-11 md:min-h-9"
+                            as-child
+                        >
+                            <Link :href="props.practice.resume_url">
+                                <PlayIcon aria-hidden="true" />
+                                Resume attempt
+                            </Link>
+                        </Button>
+
+                        <Button
+                            v-else-if="
+                                props.practice.can_start &&
+                                props.practice.start_url
+                            "
+                            type="button"
+                            size="lg"
+                            class="min-h-11 md:min-h-9"
+                            :disabled="startBusy"
+                            @click="startPractice"
+                        >
+                            <PlayIcon aria-hidden="true" />
+                            {{ props.practice.start_label }}
+                        </Button>
+                    </div>
+                </div>
+            </Card>
+        </section>
+
         <section aria-labelledby="review-details-heading" class="mb-8">
             <h2 id="review-details-heading" class="sr-only">
                 Name, description and status
@@ -949,6 +1116,196 @@ onBeforeUnmount(() => {
                 </ul>
             </section>
         </div>
+
+        <section
+            id="attempts"
+            aria-labelledby="attempt-history-heading"
+            class="mt-10 border-t pt-6"
+        >
+            <h2 id="attempt-history-heading" class="text-base font-semibold">
+                Attempt history
+            </h2>
+            <p class="mt-1 text-sm text-muted-foreground">
+                Every attempt keeps the words it started with. Reading one
+                changes nothing.
+            </p>
+
+            <p
+                v-if="props.attempts.length === 0"
+                class="mt-4 text-sm text-muted-foreground"
+            >
+                No attempts yet. Start practice and the first one will appear
+                here.
+            </p>
+
+            <template v-else>
+                <!-- Wide screens read the history as a table. -->
+                <div class="mt-4 hidden md:block">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Attempt</TableHead>
+                                <TableHead>Started</TableHead>
+                                <TableHead>Finished</TableHead>
+                                <TableHead>Status</TableHead>
+                                <TableHead>Rated</TableHead>
+                                <TableHead class="text-right">
+                                    Items
+                                </TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            <template
+                                v-for="attempt in props.attempts"
+                                :key="attempt.id"
+                            >
+                                <TableRow>
+                                    <TableCell class="font-medium">
+                                        {{ attempt.number_label }}
+                                    </TableCell>
+                                    <TableCell>
+                                        {{ attemptStarted(attempt) }}
+                                    </TableCell>
+                                    <TableCell>
+                                        {{ attemptFinished(attempt) }}
+                                    </TableCell>
+                                    <TableCell>
+                                        <Badge
+                                            :variant="
+                                                attemptStatusVariant(attempt)
+                                            "
+                                        >
+                                            {{ attempt.status_label }}
+                                        </Badge>
+                                    </TableCell>
+                                    <TableCell>
+                                        {{ attemptCounts(attempt) }}
+                                    </TableCell>
+                                    <TableCell class="text-right">
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            class="min-h-9"
+                                            :aria-expanded="
+                                                openAttempt === attempt.id
+                                            "
+                                            @click="
+                                                toggleAttempt(
+                                                    attempt,
+                                                    openAttempt !== attempt.id,
+                                                )
+                                            "
+                                        >
+                                            {{
+                                                openAttempt === attempt.id
+                                                    ? 'Hide items'
+                                                    : 'Show items'
+                                            }}
+                                            <ChevronDownIcon
+                                                class="transition-transform"
+                                                :class="
+                                                    openAttempt === attempt.id
+                                                        ? 'rotate-180'
+                                                        : ''
+                                                "
+                                                aria-hidden="true"
+                                            />
+                                        </Button>
+                                    </TableCell>
+                                </TableRow>
+
+                                <TableRow v-if="openAttempt === attempt.id">
+                                    <TableCell
+                                        :colspan="6"
+                                        class="bg-muted/30 whitespace-normal"
+                                    >
+                                        <CustomReviewAttemptItems
+                                            :attempt="attempt"
+                                        />
+                                    </TableCell>
+                                </TableRow>
+                            </template>
+                        </TableBody>
+                    </Table>
+                </div>
+
+                <!-- Phones read the same history as stacked cards. -->
+                <ul class="mt-4 grid gap-2 md:hidden">
+                    <li v-for="attempt in props.attempts" :key="attempt.id">
+                        <Card class="py-0">
+                            <Collapsible
+                                :open="openAttempt === attempt.id"
+                                @update:open="
+                                    (open) => toggleAttempt(attempt, open)
+                                "
+                            >
+                                <div class="grid gap-2 p-4">
+                                    <div
+                                        class="flex flex-wrap items-center justify-between gap-2"
+                                    >
+                                        <p class="font-medium">
+                                            {{ attempt.number_label }}
+                                        </p>
+                                        <Badge
+                                            :variant="
+                                                attemptStatusVariant(attempt)
+                                            "
+                                        >
+                                            {{ attempt.status_label }}
+                                        </Badge>
+                                    </div>
+
+                                    <p class="text-sm text-muted-foreground">
+                                        Started
+                                        {{ attemptStarted(attempt) }}
+                                        <span aria-hidden="true">·</span>
+                                        Finished
+                                        {{ attemptFinished(attempt) }}
+                                    </p>
+
+                                    <p class="text-sm text-muted-foreground">
+                                        {{ attemptCounts(attempt) }}
+                                    </p>
+
+                                    <CollapsibleTrigger as-child>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            class="min-h-11 justify-self-start md:min-h-9"
+                                        >
+                                            {{
+                                                openAttempt === attempt.id
+                                                    ? 'Hide items'
+                                                    : 'Show items'
+                                            }}
+                                            <ChevronDownIcon
+                                                class="transition-transform"
+                                                :class="
+                                                    openAttempt === attempt.id
+                                                        ? 'rotate-180'
+                                                        : ''
+                                                "
+                                                aria-hidden="true"
+                                            />
+                                        </Button>
+                                    </CollapsibleTrigger>
+                                </div>
+
+                                <CollapsibleContent>
+                                    <div class="border-t p-4">
+                                        <CustomReviewAttemptItems
+                                            :attempt="attempt"
+                                        />
+                                    </div>
+                                </CollapsibleContent>
+                            </Collapsible>
+                        </Card>
+                    </li>
+                </ul>
+            </template>
+        </section>
 
         <AlertDialog v-model:open="clearOpen">
             <AlertDialogContent>

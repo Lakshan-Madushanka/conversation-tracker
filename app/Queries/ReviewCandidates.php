@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace App\Queries;
 
 use App\Enums\FeedbackType;
+use App\Http\Resources\FillInTheBlankCardResource;
+use App\Http\Resources\QuestionCardResource;
+use App\Http\Resources\ReviewCardResource;
 use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeQuestion;
 use App\Models\PracticeSession;
@@ -78,6 +81,44 @@ final class ReviewCandidates
     }
 
     /**
+     * The card each chosen item is shown as, keyed by kind and identity.
+     *
+     * The exercise decides the shape: a blank is built from the entry's current
+     * text, a question shows its natural version, and everything else keeps the
+     * flashcard or mistake shape. An item that can no longer be shown is left
+     * out, so the caller skips it exactly as it would a removed item.
+     *
+     * @param  list<array{kind: FeedbackType, identity: string, exercise: string}>  $items
+     * @return array<string, array<string, mixed>>
+     */
+    public function payloadsFor(array $items): array
+    {
+        if ($items === []) {
+            return [];
+        }
+
+        $pairs = array_map(fn (array $item): array => [
+            'kind' => $item['kind'],
+            'identity' => $item['identity'],
+        ], $items);
+
+        $cards = $this->cardsFor($pairs);
+        $questionCards = $this->questionCardsFor($pairs);
+
+        $payloads = [];
+
+        foreach ($items as $item) {
+            $payload = $this->payload($item, $cards, $questionCards);
+
+            if ($payload !== null) {
+                $payloads[$this->key($item['kind'], $item['identity'])] = $payload;
+            }
+        }
+
+        return $payloads;
+    }
+
+    /**
      * The current entry behind each identity, in one query for the whole
      * review, plus every distinct reason its mistake appearances carry.
      *
@@ -118,6 +159,51 @@ final class ReviewCandidates
         }
 
         return $cards;
+    }
+
+    /**
+     * One item's card, shaped by the exercise chosen for it.
+     *
+     * @param  array{kind: FeedbackType, identity: string, exercise: string}  $item
+     * @param  array<string, array{entry: PracticeFeedbackEntry, reasons: list<string>}>  $cards
+     * @param  array<string, array{question: PracticeQuestion, natural: PracticeFeedbackEntry}>  $questionCards
+     * @return array<string, mixed>|null
+     */
+    private function payload(array $item, array $cards, array $questionCards): ?array
+    {
+        $key = $this->key($item['kind'], $item['identity']);
+
+        if ($item['exercise'] === 'fill_in_the_blank') {
+            $card = $cards[$key] ?? null;
+
+            if ($card === null) {
+                return null;
+            }
+
+            $entry = $card['entry'];
+            $topic = (string) ($entry->practiceQuestion?->practiceSession?->topic->name ?? '');
+            $blank = BlankExercise::build($entry, $topic, $card['reasons'][0] ?? null);
+
+            // An item edited into something that cannot hold a blank is
+            // skipped, exactly like the item it came from being removed.
+            return $blank === null
+                ? null
+                : (new FillInTheBlankCardResource($entry, $blank))->resolve();
+        }
+
+        if ($item['kind'] === FeedbackType::Question) {
+            $card = $questionCards[$key] ?? null;
+
+            return $card === null
+                ? null
+                : (new QuestionCardResource($card['question'], $card['natural']))->resolve();
+        }
+
+        $card = $cards[$key] ?? null;
+
+        return $card === null
+            ? null
+            : (new ReviewCardResource($card['entry'], $card['reasons']))->resolve();
     }
 
     /**

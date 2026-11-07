@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { computed } from 'vue';
-import { Link } from '@inertiajs/vue3';
+import { computed, ref } from 'vue';
+import { Link, router } from '@inertiajs/vue3';
+import { PlayIcon } from '@lucide/vue';
 import CustomReviewStatusControl from '@/components/CustomReviewStatusControl.vue';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { reviewPageUrl } from '@/lib/custom-review';
 import { customReviewCreatedLabel } from '@/lib/custom-review-listing';
@@ -33,8 +35,28 @@ const createdLabel = computed(() =>
     customReviewCreatedLabel(props.review.created_at),
 );
 
+/** True while this card's Start practice is on its way to the server. */
+const starting = ref(false);
+
 function changeStatus(status: 'draft' | 'finished'): void {
     emit('change-status', props.review, status);
+}
+
+function start(): void {
+    if (props.review.start_url === null || starting.value) {
+        return;
+    }
+
+    starting.value = true;
+    router.post(
+        props.review.start_url,
+        {},
+        {
+            onFinish: () => {
+                starting.value = false;
+            },
+        },
+    );
 }
 </script>
 
@@ -118,7 +140,37 @@ function changeStatus(status: 'draft' | 'finished'): void {
                 {{ props.review.practice_note }}
             </p>
 
-            <!-- Start practice arrives with attempts in Step 4. -->
+            <div
+                v-if="
+                    (props.review.in_progress && props.review.resume_url) ||
+                    (props.review.can_start && props.review.start_url)
+                "
+                class="flex flex-wrap gap-2"
+            >
+                <Button
+                    v-if="props.review.in_progress && props.review.resume_url"
+                    size="sm"
+                    class="min-h-11 md:min-h-9"
+                    as-child
+                >
+                    <Link :href="props.review.resume_url">
+                        <PlayIcon aria-hidden="true" />
+                        Resume attempt
+                    </Link>
+                </Button>
+
+                <Button
+                    v-else-if="props.review.can_start && props.review.start_url"
+                    type="button"
+                    size="sm"
+                    class="min-h-11 md:min-h-9"
+                    :disabled="starting"
+                    @click="start"
+                >
+                    <PlayIcon aria-hidden="true" />
+                    {{ props.review.start_label }}
+                </Button>
+            </div>
 
             <div class="border-t pt-3">
                 <CustomReviewStatusControl

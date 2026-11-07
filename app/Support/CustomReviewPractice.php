@@ -25,6 +25,15 @@ final class CustomReviewPractice
     /** What a Finished review says when none of its items can be used. */
     public const string NOT_AVAILABLE = 'Its items are unavailable right now.';
 
+    /** The action offered instead of starting while an attempt is running. */
+    public const string RESUME = 'Resume attempt';
+
+    /** The start action's words, naming how many items the attempt will hold. */
+    public static function startLabel(int $itemCount): string
+    {
+        return 'Start practice · '.$itemCount.' '.($itemCount === 1 ? 'item' : 'items');
+    }
+
     public static function canStart(CustomReviewStatus $status, bool $hasEligibleItem): bool
     {
         return $status === CustomReviewStatus::Finished && $hasEligibleItem;

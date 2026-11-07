@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\CollectionController;
 use App\Http\Controllers\CollectionMarkController;
+use App\Http\Controllers\CustomReviewAttemptController;
 use App\Http\Controllers\CustomReviewController;
 use App\Http\Controllers\CustomReviewsController;
 use App\Http\Controllers\HomeController;
@@ -76,6 +77,29 @@ Route::put('/custom-reviews/{customReview}', [CustomReviewsController::class, 'u
 Route::put('/custom-reviews/{customReview}/status', [CustomReviewsController::class, 'updateStatus'])
     ->whereNumber('customReview')
     ->name('customReviews.status');
+
+// Practising a review. An attempt is started from the review, walked through
+// on the same exercise screen Review uses, and can be left and resumed. The
+// attempt is always named under its review, so the two can never disagree.
+Route::post('/custom-reviews/{customReview}/attempts', [CustomReviewAttemptController::class, 'store'])
+    ->whereNumber('customReview')
+    ->name('customReviews.attempts.store');
+Route::post('/custom-reviews/{customReview}/attempts/{attempt}/rate', [CustomReviewAttemptController::class, 'rate'])
+    ->whereNumber('customReview')
+    ->whereNumber('attempt')
+    ->name('customReviews.attempts.rate');
+Route::post('/custom-reviews/{customReview}/attempts/{attempt}/finish-early', [CustomReviewAttemptController::class, 'finishEarly'])
+    ->whereNumber('customReview')
+    ->whereNumber('attempt')
+    ->name('customReviews.attempts.finishEarly');
+Route::delete('/custom-reviews/{customReview}/attempts/{attempt}/rating', [CustomReviewAttemptController::class, 'undo'])
+    ->whereNumber('customReview')
+    ->whereNumber('attempt')
+    ->name('customReviews.attempts.undo');
+Route::get('/custom-reviews/{customReview}/attempts/{attempt}', [CustomReviewAttemptController::class, 'show'])
+    ->whereNumber('customReview')
+    ->whereNumber('attempt')
+    ->name('customReviews.attempts.show');
 
 // A review is named by its id, so this never answers to a word like "items".
 Route::get('/custom-reviews/{customReview}', [CustomReviewsController::class, 'show'])

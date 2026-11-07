@@ -133,6 +133,30 @@ final class CustomReviewContents
      */
     public function eligibleReviewIds(array $reviewIds): array
     {
+        $found = [];
+
+        foreach ($this->eligibleCounts($reviewIds) as $reviewId => $count) {
+            if ($count > 0) {
+                $found[$reviewId] = true;
+            }
+        }
+
+        return $found;
+    }
+
+    /**
+     * How many items in each of these reviews can be attempted now, so a Start
+     * action can name the size of the attempt it would create.
+     *
+     * The rules and the bulk reads are the same as the review page's and
+     * `eligibleReviewIds()`, so a card can never offer a number the attempt
+     * would not hold.
+     *
+     * @param  list<int>  $reviewIds
+     * @return array<int, int>
+     */
+    public function eligibleCounts(array $reviewIds): array
+    {
         $reviewIds = array_values(array_unique(array_filter(
             $reviewIds,
             fn (int $reviewId): bool => $reviewId > 0,
@@ -171,15 +195,17 @@ final class CustomReviewContents
             }
         }
 
-        $eligibleReviewIds = [];
+        /** @var array<int, int> $counts */
+        $counts = [];
 
         foreach ($rows as $row) {
             if (isset($eligibleByIdentity[$row->kind->value][$row->item_identity])) {
-                $eligibleReviewIds[(int) $row->custom_review_id] = true;
+                $reviewId = (int) $row->custom_review_id;
+                $counts[$reviewId] = ($counts[$reviewId] ?? 0) + 1;
             }
         }
 
-        return $eligibleReviewIds;
+        return $counts;
     }
 
     /**

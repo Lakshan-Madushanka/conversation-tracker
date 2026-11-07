@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Actions\CustomReviewAttempts\PruneEmptyAttempts;
 use App\Actions\CustomReviews\AddItemsToReview;
 use App\Actions\CustomReviews\ClearCustomReview;
 use App\Actions\CustomReviews\CreateCustomReview;
@@ -17,13 +18,18 @@ use App\Http\Requests\CustomReviewsRequest;
 use App\Http\Requests\RemoveCustomReviewItemsRequest;
 use App\Http\Requests\UpdateCustomReviewRequest;
 use App\Http\Requests\UpdateCustomReviewStatusRequest;
+use App\Http\Resources\CustomReviewAttemptHistoryResource;
 use App\Http\Resources\CustomReviewCardResource;
 use App\Http\Resources\CustomReviewGroupResource;
 use App\Http\Resources\CustomReviewSummaryResource;
 use App\Models\CustomReview;
+use App\Models\CustomReviewAttempt;
+use App\Queries\CustomReviewAttemptHistory;
+use App\Queries\CustomReviewAttemptSummaries;
 use App\Queries\CustomReviewContents;
 use App\Queries\CustomReviewItems;
 use App\Queries\CustomReviewsListing;
+use App\Support\CustomReviewPractice;
 use App\Support\CustomReviewReturn;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -60,6 +66,7 @@ final class CustomReviewsController extends Controller
         CustomReviewsListing $listing,
         CustomReviewItems $items,
         CustomReviewContents $contents,
+        CustomReviewAttemptSummaries $attemptSummaries,
     ): Response|JsonResponse {
         $filters = $request->filters();
         $paginator = $listing->paginate(
@@ -75,14 +82,18 @@ final class CustomReviewsController extends Controller
             $reviews,
         );
         $counts = $items->counts($reviewIds);
-        $eligible = $contents->eligibleReviewIds($reviewIds);
+        $eligible = $contents->eligibleCounts($reviewIds);
+        $attempts = $attemptSummaries->for($reviewIds);
 
         $page = [
             'reviews' => array_map(
                 fn (CustomReview $review): array => CustomReviewCardResource::make(
                     $review,
                     $counts[(int) $review->id] ?? 0,
-                    isset($eligible[(int) $review->id]),
+                    $eligible[(int) $review->id] ?? 0,
+                    $attempts[(int) $review->id]['attempt_count'] ?? 0,
+                    $attempts[(int) $review->id]['latest'] ?? null,
+                    $attempts[(int) $review->id]['previous_status'] ?? null,
                 )->resolve(),
                 $reviews,
             ),
@@ -116,18 +127,38 @@ final class CustomReviewsController extends Controller
         Request $request,
         CustomReview $customReview,
         PruneCustomReviewItems $pruneCustomReviewItems,
+        PruneEmptyAttempts $pruneEmptyAttempts,
         CustomReviewItems $items,
         CustomReviewContents $contents,
+        CustomReviewAttemptHistory $history,
     ): Response {
         // A deleted item leaves no trace; an archived one stays but is marked
         // not available by the query. The repair can empty the review, so the
         // page reads its name and status again rather than trusting what it
         // arrived with.
         $pruneCustomReviewItems->handle();
+        // An attempt that was created but never began must not linger as a
+        // phantom history entry.
+        $pruneEmptyAttempts->handle($customReview);
         $customReview->refresh();
 
         $back = $request->query('from');
         $count = $items->count($customReview);
+        $eligibleCount = $contents->eligibleCounts([$customReview->id])[(int) $customReview->id] ?? 0;
+        $attempts = $history->for($customReview);
+
+        $inProgress = null;
+
+        foreach ($attempts as $row) {
+            if ($row['attempt']->isInProgress()) {
+                $inProgress = $row['attempt'];
+
+                break;
+            }
+        }
+
+        $canStart = CustomReviewPractice::canStart($customReview->status, $eligibleCount > 0);
+        $expanded = $request->query('attempt');
 
         return Inertia::render('custom-reviews/Show', [
             'review' => CustomReviewSummaryResource::make($customReview, $count)->resolve(),
@@ -143,7 +174,57 @@ final class CustomReviewsController extends Controller
                 'review' => $customReview->id,
                 'eligible' => 1,
             ]),
+            'practice' => [
+                'can_start' => $canStart,
+                'eligible_count' => $eligibleCount,
+                'start_label' => $canStart && $inProgress === null
+                    ? CustomReviewPractice::startLabel($eligibleCount)
+                    : null,
+                'start_url' => $canStart && $inProgress === null
+                    ? route('customReviews.attempts.store', ['customReview' => $customReview->id])
+                    : null,
+                'in_progress' => $inProgress instanceof CustomReviewAttempt,
+                'resume_url' => $inProgress instanceof CustomReviewAttempt
+                    ? route('customReviews.attempts.show', [
+                        'customReview' => $customReview->id,
+                        'attempt' => $inProgress->id,
+                    ])
+                    : null,
+                'note' => CustomReviewPractice::note($customReview->status, $eligibleCount > 0),
+            ],
+            'attempts' => array_map(
+                fn (array $row): array => CustomReviewAttemptHistoryResource::make(
+                    $row['attempt'],
+                    $row['items'],
+                )->resolve(),
+                $attempts,
+            ),
+            'expanded_attempt' => $this->expandedAttempt($expanded, $attempts),
+            // A refused start says why in the review's own calm words, then
+            // disappears on the next visit.
+            'attempt_error' => $request->session()->get('attempt_error'),
         ]);
+    }
+
+    /**
+     * The attempt named by `?attempt=`, when it belongs to this review's
+     * history; anything else leaves every row closed.
+     *
+     * @param  list<array{attempt: CustomReviewAttempt, items: mixed}>  $attempts
+     */
+    private function expandedAttempt(mixed $value, array $attempts): ?int
+    {
+        if (! is_numeric($value)) {
+            return null;
+        }
+
+        foreach ($attempts as $row) {
+            if ((int) $row['attempt']->id === (int) $value) {
+                return (int) $value;
+            }
+        }
+
+        return null;
     }
 
     /**

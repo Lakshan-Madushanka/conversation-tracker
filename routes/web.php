@@ -51,6 +51,11 @@ Route::get('/collections/selection', [CollectionController::class, 'selection'])
 // distinct from /review/custom below, the Review feature's Quick review
 // chooser, which starts a sitting straight away and saves nothing.
 //
+// The listing comes before the parameterised routes, so /custom-reviews is
+// never mistaken for a review id. Search, statuses and the order travel in the
+// address, and a JSON request returns the next page for "Load more".
+Route::get('/custom-reviews', [CustomReviewsController::class, 'index'])->name('customReviews.index');
+
 // The address names the review being added to, so a request never guesses it:
 // an add with no review asks the server, which answers with the review, the
 // picker, or the size warning.

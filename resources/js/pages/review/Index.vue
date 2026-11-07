@@ -1,7 +1,12 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { Head, Link } from '@inertiajs/vue3';
-import { InfoIcon, LightbulbIcon, SlidersHorizontalIcon } from '@lucide/vue';
+import {
+    InfoIcon,
+    LightbulbIcon,
+    ListChecksIcon,
+    SlidersHorizontalIcon,
+} from '@lucide/vue';
 import PageHeader from '@/components/PageHeader.vue';
 import ReviewRecentResults from '@/components/ReviewRecentResults.vue';
 import ReviewRulesDialog from '@/components/review/ReviewRulesDialog.vue';
@@ -10,6 +15,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { index as collectionsIndex } from '@/routes/collections';
+import { index as customReviewsIndex } from '@/routes/customReviews';
 import { custom as customReview } from '@/routes/review';
 import type {
     GrammarNotesTipData,
@@ -114,8 +120,9 @@ const grammarNotesLink = computed(() =>
 
         <ReviewSuggestionCard :suggestion="props.todayReview" />
 
-        <!-- Choosing what to review is its own page, never a saved profile -->
-        <div class="mt-4">
+        <!-- Choosing what to review is its own page, never a saved profile.
+             The saved custom reviews the learner keeps live on their own page. -->
+        <div class="mt-4 flex flex-wrap gap-2">
             <Button
                 variant="outline"
                 size="lg"
@@ -125,6 +132,18 @@ const grammarNotesLink = computed(() =>
                 <Link :href="customReview.url()">
                     <SlidersHorizontalIcon aria-hidden="true" />
                     Custom review
+                </Link>
+            </Button>
+
+            <Button
+                variant="outline"
+                size="lg"
+                class="h-11 cursor-pointer"
+                as-child
+            >
+                <Link :href="customReviewsIndex.url()">
+                    <ListChecksIcon aria-hidden="true" />
+                    Custom reviews
                 </Link>
             </Button>
         </div>

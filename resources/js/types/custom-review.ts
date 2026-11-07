@@ -123,6 +123,8 @@ export interface CustomReviewAttemptItemData {
     session_date: string | null;
     /** The reading page at the item, opened in a new tab. */
     href: string | null;
+    /** True when the item was deleted; its snapshot stays, its link does not. */
+    deleted: boolean;
 }
 
 /** An attempt's counts, read from its own ratings every time. */

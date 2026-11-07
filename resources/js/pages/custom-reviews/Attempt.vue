@@ -24,6 +24,11 @@ const props = defineProps<{
     /** The attempt has nothing to show, or no longer exists. */
     notFound: boolean;
     finished: boolean;
+    /**
+     * What the attempt cannot show right now, each kind said once: the ones
+     * archived since it started, and the ones it started without.
+     */
+    notices: string[];
     sections: ReviewSection[];
     current: CurrentReviewItem | null;
     completedSection: CompletedSection | null;
@@ -51,6 +56,7 @@ function startAnother(): void {
     <ReviewExerciseShell
         :not-found="props.notFound"
         :finished="props.finished"
+        :notices="props.notices"
         :sections="props.sections"
         :current="props.current"
         :completed-section="props.completedSection"

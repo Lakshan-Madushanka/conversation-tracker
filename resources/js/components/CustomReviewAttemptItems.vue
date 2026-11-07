@@ -2,6 +2,7 @@
 import { ArrowUpRightIcon } from '@lucide/vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { DELETED_ITEM_NOTE, DELETED_LABEL } from '@/lib/custom-review';
 import { shortDate } from '@/lib/format';
 import type {
     CustomReviewAttemptHistoryData,
@@ -36,10 +37,17 @@ function stateLabel(item: CustomReviewAttemptItemData): string {
         >
             <div class="flex flex-wrap items-center gap-2">
                 <Badge variant="secondary">{{ item.kind_label }}</Badge>
+                <Badge v-if="item.deleted" variant="outline">
+                    {{ DELETED_LABEL }}
+                </Badge>
                 <span class="text-xs text-muted-foreground">
                     {{ stateLabel(item) }}
                 </span>
             </div>
+
+            <p v-if="item.deleted" class="text-xs text-muted-foreground">
+                {{ DELETED_ITEM_NOTE }}
+            </p>
 
             <p class="text-sm break-words whitespace-pre-line">
                 {{ item.text }}

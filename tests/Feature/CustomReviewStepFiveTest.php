@@ -16,6 +16,7 @@ use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeQuestion;
 use App\Models\PracticeSession;
 use App\Models\Topic;
+use App\Support\CustomReviewDeletion;
 use App\Support\CustomReviewPractice;
 use App\Support\SearchText;
 use Carbon\CarbonImmutable;
@@ -417,5 +418,105 @@ describe('an item removed in the editor', function (): void {
             ->and(CustomReviewItem::query()->sole()->item_identity)
             ->toBe($source['identities'][1])
             ->and($review->refresh()->status)->toBe(CustomReviewStatus::Draft);
+    });
+});
+
+describe('deleting a review', function (): void {
+    it('takes the review, its items and its attempts in one go', function (): void {
+        $source = stepFiveSource(['apple', 'banana', 'cherry']);
+        $keeping = stepFiveReview('Other set', CustomReviewStatus::Draft, [$source['identities'][0]]);
+        $review = stepFiveReview('Ready set', CustomReviewStatus::Finished, $source['identities']);
+        $attempt = stepFiveStarted($review);
+
+        stepFiveRate($review, $attempt, 'apple', ReviewRating::Easy);
+
+        $this->delete(route('customReviews.destroy', ['customReviewId' => $review->id]))
+            ->assertRedirect(route('customReviews.index'))
+            ->assertSessionHas('review_notice', 'Ready set was deleted.');
+
+        expect(CustomReview::query()->whereKey($review->id)->exists())->toBeFalse()
+            ->and(CustomReviewAttempt::query()->count())->toBe(0)
+            ->and(CustomReviewAttemptItem::query()->count())->toBe(0)
+            // The items themselves go nowhere: they stay in their session and
+            // in every review that still holds them.
+            ->and(PracticeFeedbackEntry::query()->count())->toBe(3)
+            ->and(CustomReviewItem::query()->count())->toBe(1)
+            ->and(CustomReviewItem::query()->sole()->custom_review_id)->toBe($keeping->id);
+    });
+
+    it('empties the listing of it and says so once, with no way back', function (): void {
+        $source = stepFiveSource(['apple']);
+        $review = stepFiveReview('Ready set', CustomReviewStatus::Draft, $source['identities']);
+
+        $this->get(route('customReviews.index'))
+            ->assertInertia(fn (Assert $page): Assert => $page
+                ->where('reviews.0.delete_url', route('customReviews.destroy', ['customReviewId' => $review->id])));
+
+        $this->get(route('customReviews.show', $review))
+            ->assertInertia(fn (Assert $page): Assert => $page
+                ->where('delete_url', route('customReviews.destroy', ['customReviewId' => $review->id])));
+
+        $this->delete(route('customReviews.destroy', ['customReviewId' => $review->id]))
+            ->assertRedirect(route('customReviews.index'));
+
+        $this->get(route('customReviews.index'))
+            ->assertInertia(fn (Assert $page): Assert => $page
+                ->where('notice', 'Ready set was deleted.')
+                ->where('total', 0)
+                ->where('reviews', []));
+
+        $this->get(route('customReviews.index'))
+            ->assertInertia(fn (Assert $page): Assert => $page->where('notice', null));
+    });
+
+    it('answers the same calm line when the review is already gone', function (): void {
+        $source = stepFiveSource(['apple']);
+        $review = stepFiveReview('Ready set', CustomReviewStatus::Draft, $source['identities']);
+        $url = route('customReviews.destroy', ['customReviewId' => $review->id]);
+
+        $this->delete($url)->assertRedirect(route('customReviews.index'));
+
+        $this->delete($url)
+            ->assertRedirect(route('customReviews.index'))
+            ->assertSessionHas('review_notice', CustomReviewDeletion::GONE);
+    });
+
+    it('shows a friendly page for the address of a review that is gone', function (): void {
+        $source = stepFiveSource(['apple']);
+        $review = stepFiveReview('Ready set', CustomReviewStatus::Draft, $source['identities']);
+
+        $this->delete(route('customReviews.destroy', ['customReviewId' => $review->id]));
+
+        $this->get(route('customReviews.show', $review))
+            ->assertStatus(404)
+            ->assertInertia(fn (Assert $page): Assert => $page->component('errors/404'));
+    });
+
+    it('refuses the next save of an attempt left open in another tab', function (): void {
+        $source = stepFiveSource(['apple', 'banana']);
+        $review = stepFiveReview('Ready set', CustomReviewStatus::Finished, $source['identities']);
+        $attempt = stepFiveStarted($review);
+
+        stepFiveRate($review, $attempt, 'apple', ReviewRating::Easy);
+
+        $this->delete(route('customReviews.destroy', ['customReviewId' => $review->id]));
+
+        expect(CustomReviewAttemptItem::query()->count())->toBe(0);
+
+        $this->post(route('customReviews.attempts.rate', [
+            'customReview' => $review->id,
+            'attempt' => $attempt->id,
+        ]), [
+            'kind' => FeedbackType::Vocabulary->value,
+            'item_identity' => $source['identities'][1],
+            'rating' => ReviewRating::Hard->value,
+        ])->assertStatus(404);
+
+        $this->get(route('customReviews.attempts.show', [
+            'customReview' => $review->id,
+            'attempt' => $attempt->id,
+        ]))
+            ->assertStatus(404)
+            ->assertInertia(fn (Assert $page): Assert => $page->component('errors/404'));
     });
 });

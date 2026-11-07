@@ -78,6 +78,13 @@ Route::put('/custom-reviews/{customReview}/status', [CustomReviewsController::cl
     ->whereNumber('customReview')
     ->name('customReviews.status');
 
+// Deleting a review for good. The id travels unbound: the review may already be
+// gone by the time the request arrives, and then the answer is a calm line on
+// the listing rather than a missing record.
+Route::delete('/custom-reviews/{customReviewId}', [CustomReviewsController::class, 'destroy'])
+    ->whereNumber('customReviewId')
+    ->name('customReviews.destroy');
+
 // Practising a review. An attempt is started from the review, walked through
 // on the same exercise screen Review uses, and can be left and resumed. The
 // attempt is always named under its review, so the two can never disagree.

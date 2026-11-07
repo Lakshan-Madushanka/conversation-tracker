@@ -8,6 +8,7 @@ use App\Actions\CustomReviewAttempts\PruneEmptyAttempts;
 use App\Actions\CustomReviews\AddItemsToReview;
 use App\Actions\CustomReviews\ClearCustomReview;
 use App\Actions\CustomReviews\CreateCustomReview;
+use App\Actions\CustomReviews\DeleteCustomReview;
 use App\Actions\CustomReviews\PruneCustomReviewItems;
 use App\Actions\CustomReviews\RemoveCustomReviewItems;
 use App\Actions\CustomReviews\SetCustomReviewStatus;
@@ -29,6 +30,7 @@ use App\Queries\CustomReviewAttemptSummaries;
 use App\Queries\CustomReviewContents;
 use App\Queries\CustomReviewItems;
 use App\Queries\CustomReviewsListing;
+use App\Support\CustomReviewDeletion;
 use App\Support\CustomReviewPractice;
 use App\Support\CustomReviewReturn;
 use Illuminate\Http\JsonResponse;
@@ -109,7 +111,11 @@ final class CustomReviewsController extends Controller
             return response()->json($page);
         }
 
-        return Inertia::render('custom-reviews/Index', $page);
+        return Inertia::render('custom-reviews/Index', [
+            ...$page,
+            // What a deletion just answered with, said once and then forgotten.
+            'notice' => $request->session()->get('review_notice'),
+        ]);
     }
 
     /**
@@ -203,6 +209,8 @@ final class CustomReviewsController extends Controller
             // A refused start says why in the review's own calm words, then
             // disappears on the next visit.
             'attempt_error' => $request->session()->get('attempt_error'),
+            // The page's own Delete asks first, then answers on the listing.
+            'delete_url' => route('customReviews.destroy', ['customReviewId' => $customReview->id]),
         ]);
     }
 
@@ -324,6 +332,30 @@ final class CustomReviewsController extends Controller
             'cleared_count' => $clearCustomReview->handle($customReview),
             'total' => 0,
         ]);
+    }
+
+    /**
+     * Delete one review and everything it recorded, and answer on the listing
+     * with what just happened.
+     *
+     * The address carries the id rather than the record, because a review that
+     * is gone cannot be bound: a second tab or a stale bookmark then hears the
+     * same calm line instead of an error. Both cards and the review's own page
+     * ask first, and neither offers an undo — the items stay in their
+     * collections, but the review and its attempts do not come back.
+     */
+    public function destroy(
+        string $customReviewId,
+        DeleteCustomReview $deleteCustomReview,
+    ): RedirectResponse {
+        $deleted = $deleteCustomReview->handle((int) $customReviewId);
+
+        return to_route('customReviews.index')->with(
+            'review_notice',
+            $deleted === null
+                ? CustomReviewDeletion::GONE
+                : CustomReviewDeletion::deleted($deleted['name']),
+        );
     }
 
     /**

@@ -236,6 +236,18 @@ export interface CollectionPage {
     open_item_missing: boolean;
     /** The review the items are marked against, or none to agree on. */
     review_target?: CustomReviewSummary | null;
+    /** The review whose + Add items opened this filtered view. */
+    review_context?: CollectionReviewContext | null;
+}
+
+/**
+ * The review a Collections visit is topping up. Only the eligible view carries
+ * one, because only then is the list narrowed on that review's behalf.
+ */
+export interface CollectionReviewContext {
+    id: number;
+    name: string;
+    eligible: boolean;
 }
 
 /** One page returned by the "Load more" request. */
@@ -255,6 +267,7 @@ export interface CollectionItemsPage {
     filters?: CollectionFilters;
     has_finished_sessions?: boolean;
     review_target?: CustomReviewSummary | null;
+    review_context?: CollectionReviewContext | null;
 }
 
 /**

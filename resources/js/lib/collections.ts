@@ -10,6 +10,7 @@ import type {
     CollectionNoteItem,
     CollectionOpenedItem,
     CollectionPage,
+    CollectionReviewContext,
     CollectionRow,
     CollectionTabKey,
     CollectionTopicOption,
@@ -35,6 +36,8 @@ export interface CollectionSnapshot {
     topicOptions?: CollectionTopicOption[];
     allTotal?: number;
     attentionCount?: number;
+    /** The review whose + Add items narrowed the list, when one did. */
+    reviewContext?: CollectionReviewContext | null;
 }
 
 const SNAPSHOT_KEY = 'collections:snapshot';
@@ -401,13 +404,21 @@ export function consumeCollectionRestore(): boolean {
 export function collectionReturnUrl(): string {
     const snapshot = readCollectionSnapshot();
 
-    return snapshot === null
-        ? collectionUrl('vocabulary')
-        : collectionUrl(
-              snapshot.tab,
-              snapshot.openItemKey,
-              snapshot.filters ?? null,
-          );
+    if (snapshot === null) {
+        return collectionUrl('vocabulary');
+    }
+
+    return collectionUrl(
+        snapshot.tab,
+        snapshot.openItemKey,
+        snapshot.filters ?? null,
+        snapshot.reviewContext === undefined || snapshot.reviewContext === null
+            ? null
+            : {
+                  review: snapshot.reviewContext.id,
+                  eligible: snapshot.reviewContext.eligible,
+              },
+    );
 }
 
 /** Whether a session address came from a collection item. */
@@ -627,6 +638,15 @@ function isStoredSnapshot(value: unknown): value is CollectionSnapshot {
         (snapshot.allTotal === undefined ||
             typeof snapshot.allTotal === 'number') &&
         (snapshot.attentionCount === undefined ||
-            typeof snapshot.attentionCount === 'number')
+            typeof snapshot.attentionCount === 'number') &&
+        (snapshot.reviewContext === undefined ||
+            snapshot.reviewContext === null ||
+            (typeof snapshot.reviewContext === 'object' &&
+                typeof (snapshot.reviewContext as Record<string, unknown>)
+                    .id === 'number' &&
+                typeof (snapshot.reviewContext as Record<string, unknown>)
+                    .name === 'string' &&
+                typeof (snapshot.reviewContext as Record<string, unknown>)
+                    .eligible === 'boolean'))
     );
 }

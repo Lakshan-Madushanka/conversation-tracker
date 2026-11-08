@@ -13,6 +13,7 @@ import {
 } from '@lucide/vue';
 import { toast } from 'vue-sonner';
 import CustomReviewAttemptItems from '@/components/CustomReviewAttemptItems.vue';
+import CustomReviewDeleteDialog from '@/components/CustomReviewDeleteDialog.vue';
 import CustomReviewStatusControl from '@/components/CustomReviewStatusControl.vue';
 import EmptyState from '@/components/EmptyState.vue';
 import PageHeader from '@/components/PageHeader.vue';
@@ -51,11 +52,14 @@ import { Textarea } from '@/components/ui/textarea';
 import { useAutoSave } from '@/composables/useAutoSave';
 import AppLayout from '@/layouts/AppLayout.vue';
 import {
+    ARCHIVED_ITEM_NOTE,
     clearReview,
     createReviewDescriptionSaver,
     createReviewNameSaver,
+    NOT_AVAILABLE_LABEL,
     removeItemsFromReview,
     REVIEW_EMPTY_REASON,
+    REVIEW_EMPTIED_NOTE,
     reviewIsTooMany,
     reviewItemCountLabel,
     reviewItemName,
@@ -230,18 +234,40 @@ const selectedIds = ref<Set<string>>(new Set());
 
 const clearOpen = ref(false);
 
+/** Whether the warning that takes the whole review for good is on screen. */
+const deleteOpen = ref(false);
+
 const items = computed(() => groups.value.flatMap((group) => group.items));
 
 const count = computed(() => items.value.length);
+
+/**
+ * Whether this review has held an item as far as the page can tell: it holds
+ * some now, lost its last one during this visit, or has an attempt history
+ * that could only have been made from items. Losing an item to a deletion or
+ * an archive is not the same as never having had one, and the page says so.
+ */
+const everHeldItems = ref(
+    props.review.item_count > 0 || props.attempts.length > 0,
+);
+
+watch(count, (value) => {
+    if (value > 0) {
+        everHeldItems.value = true;
+    }
+});
 
 /** The size tag follows the items on screen, so a removal clears it at once. */
 const tooMany = computed(() => reviewIsTooMany(count.value));
 
 const tooManyLabel = computed(() => reviewTooManyLabel(count.value));
 
-/** What cannot be practised yet, and why, in the review's own wording. */
+/**
+ * Items the learner can still fix: an archived item is not waiting for
+ * anything, so it carries its own marker instead of joining this list.
+ */
 const notEligible = computed(() =>
-    items.value.filter((item) => !item.eligible),
+    items.value.filter((item) => !item.eligible && item.available),
 );
 
 const notEligibleLabel = computed(() =>
@@ -688,6 +714,18 @@ onBeforeUnmount(() => {
                     <Trash2Icon aria-hidden="true" />
                     Clear review
                 </Button>
+
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    class="min-h-11 text-muted-foreground hover:text-destructive md:min-h-9"
+                    @click="deleteOpen = true"
+                >
+                    <Trash2Icon aria-hidden="true" />
+                    Delete review
+                    <span class="sr-only"> {{ review.name }}</span>
+                </Button>
             </template>
         </PageHeader>
 
@@ -945,8 +983,16 @@ onBeforeUnmount(() => {
         <EmptyState
             v-if="count === 0"
             :icon="ListChecksIcon"
-            title="Nothing in this review yet"
-            description="Choose words, phrases, notes, mistakes or questions that are ready to practise. They will wait here until you are ready."
+            :title="
+                everHeldItems
+                    ? 'This review is empty now'
+                    : 'Nothing in this review yet'
+            "
+            :description="
+                everHeldItems
+                    ? REVIEW_EMPTIED_NOTE
+                    : 'Choose words, phrases, notes, mistakes or questions that are ready to practise. They will wait here until you are ready.'
+            "
         >
             <template #actions>
                 <Button size="lg" as-child>
@@ -1048,26 +1094,32 @@ onBeforeUnmount(() => {
                                     </p>
 
                                     <div
-                                        v-if="!item.eligible"
+                                        v-if="!item.eligible && item.available"
                                         class="flex flex-wrap items-center gap-1.5"
                                     >
                                         <Badge variant="secondary">
                                             Needs attention
                                         </Badge>
                                         <span
-                                            v-if="item.available"
                                             class="text-xs text-muted-foreground"
                                         >
                                             {{ item.reason }}
                                         </span>
                                     </div>
 
-                                    <p
-                                        v-if="!item.available"
-                                        class="text-xs font-medium"
+                                    <div
+                                        v-else-if="!item.available"
+                                        class="flex flex-wrap items-center gap-1.5"
                                     >
-                                        Not available right now
-                                    </p>
+                                        <Badge variant="outline">
+                                            {{ NOT_AVAILABLE_LABEL }}
+                                        </Badge>
+                                        <span
+                                            class="text-xs text-muted-foreground"
+                                        >
+                                            {{ ARCHIVED_ITEM_NOTE }}
+                                        </span>
+                                    </div>
 
                                     <div
                                         class="flex flex-wrap items-center gap-2 pt-1"
@@ -1306,6 +1358,13 @@ onBeforeUnmount(() => {
                 </ul>
             </template>
         </section>
+
+        <CustomReviewDeleteDialog
+            v-model:open="deleteOpen"
+            :name="review.name"
+            :attempt-count="props.attempts.length"
+            :delete-url="props.delete_url"
+        />
 
         <AlertDialog v-model:open="clearOpen">
             <AlertDialogContent>

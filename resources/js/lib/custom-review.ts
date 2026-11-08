@@ -170,6 +170,49 @@ export function reviewStatusExplanation(
 export const REVIEW_EMPTY_REASON =
     'Add items before marking this review finished.';
 
+/**
+ * What the page of a review that has just lost its last item says instead of
+ * the fresh-empty words: the items were here, and something took them away.
+ */
+export const REVIEW_EMPTIED_NOTE =
+    'This review no longer has items. Add items to use it again.';
+
+/** The badge on an item whose every session is archived. */
+export const NOT_AVAILABLE_LABEL = 'Not available right now';
+
+/** Why an archived item still sits in the review, and what brings it back. */
+export const ARCHIVED_ITEM_NOTE =
+    'This item is in an archived session. It will come back when the session is restored.';
+
+/** The badge on a past attempt's item whose item no longer exists. */
+export const DELETED_LABEL = 'Deleted';
+
+/** Why a deleted item is still read in a past attempt, and why it opens nowhere. */
+export const DELETED_ITEM_NOTE =
+    'This item was deleted from your collections. It is kept here for your history.';
+
+/** The delete confirmation's title, naming the review it is about. */
+export function reviewDeleteTitle(name: string): string {
+    return `Delete ${name}?`;
+}
+
+/**
+ * The delete confirmation's own words: what goes for good, what stays where it
+ * is, and that nothing brings the review back.
+ */
+export const REVIEW_DELETE_WARNING =
+    'The review goes for good, with the list of items it gathered. Your items stay in their collections, in their sessions and in any other review that holds them. This cannot be undone.';
+
+/**
+ * The confirmation's line about the attempts that go with the review. Nothing
+ * is said about history when the review never got any.
+ */
+export function reviewDeleteAttemptsLabel(count: number): string {
+    return count === 0
+        ? ''
+        : `This will also delete its ${count} ${count === 1 ? 'attempt' : 'attempts'}.`;
+}
+
 /** What identifies a review after one of its fields is saved. */
 export interface ReviewMarker extends AutoSaveMarker {
     review: CustomReviewSummary;

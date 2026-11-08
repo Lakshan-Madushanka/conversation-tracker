@@ -6,10 +6,12 @@ namespace App\Actions\PracticeQuestions;
 
 use App\Actions\Collections\MoveMarkAfterEdit;
 use App\Actions\CustomReviews\MoveCustomReviewItemsAfterEdit;
+use App\Actions\CustomReviews\PruneCustomReviewItems;
 use App\Enums\FeedbackType;
 use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeQuestion;
 use App\Models\PracticeSession;
+use App\Support\CustomReviewDeletedIdentities;
 use App\Support\FeedbackTable;
 use App\Support\ListEntries;
 use App\Support\MistakeIdentity;
@@ -30,12 +32,17 @@ use Illuminate\Support\Str;
  * changed, inside the same save. `MoveCustomReviewItemsAfterEdit` follows the
  * same rule for anything gathered into a custom review. Grammar notes need
  * nothing: their marks belong to the note itself, however its text is edited.
+ *
+ * A row the box no longer holds is deleted, so it is named to
+ * `PruneCustomReviewItems` like any other deletion: nothing else here decides
+ * what a deletion means.
  */
 final readonly class SavePracticeFeedback
 {
     public function __construct(
         private MoveMarkAfterEdit $moveMarkAfterEdit,
         private MoveCustomReviewItemsAfterEdit $moveCustomReviewItems,
+        private PruneCustomReviewItems $pruneCustomReviewItems,
     ) {}
 
     /**
@@ -102,10 +109,19 @@ final readonly class SavePracticeFeedback
             $stored[] = $row;
         }
 
+        $deleted = [];
+
         foreach ($rows as $row) {
             if (! isset($claimed[spl_object_id($row)])) {
                 $row->delete();
+                $deleted[] = $row;
             }
+        }
+
+        if ($deleted !== []) {
+            $this->pruneCustomReviewItems->handleFor(
+                CustomReviewDeletedIdentities::grouped($deleted, []),
+            );
         }
 
         // Run after the box is in its new shape, so "appears elsewhere" reads

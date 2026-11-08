@@ -41,6 +41,9 @@ final class CustomReviewAttemptController extends Controller
      * Start an attempt, or resume the one already running. A start that the
      * review cannot support says why in the review's own words and changes
      * nothing.
+     *
+     * A start that left a whole kind out carries the reason to the attempt's
+     * screen, where it is said once and then stays said.
      */
     public function store(
         CustomReview $customReview,
@@ -57,7 +60,7 @@ final class CustomReviewAttemptController extends Controller
         return to_route('customReviews.attempts.show', [
             'customReview' => $customReview->id,
             'attempt' => $attempt->id,
-        ]);
+        ])->with('attempt_notices', $result['notices']);
     }
 
     /**
@@ -79,15 +82,21 @@ final class CustomReviewAttemptController extends Controller
         $this->ensureBelongsTo($customReview, $attempt);
 
         $attempt->load('items');
-        $sections = $sectionsQuery->for($attempt);
+        $walk = $sectionsQuery->walk($attempt);
+        $sections = $walk['sections'];
         $total = array_sum(array_column($sections, 'total'));
         $rated = array_sum(array_column($sections, 'rated'));
         $settled = array_sum(array_column($sections, 'settled'));
-        // Every item rated or skipped is the end, whatever status a stale row
-        // still carries; a finished attempt is shown as finished either way.
-        $finished = $attempt->isFinished() || ($total > 0 && $settled === $total);
-        $counts = $sectionsQuery->counts($attempt->items);
-        $latest = $attempt->items
+        // Every item still met is rated or skipped — or, in a running attempt
+        // whose sessions have all been archived since it started, there is
+        // nothing left to meet at all. Either way the walk has reached its end;
+        // a finished attempt is shown as finished whatever happened after.
+        $nothingLeft = $attempt->isInProgress()
+            && $walk['items']->isEmpty()
+            && $attempt->items->isNotEmpty();
+        $finished = $attempt->isFinished() || ($total > 0 && $settled === $total) || $nothingLeft;
+        $counts = $sectionsQuery->counts($walk['items']);
+        $latest = $walk['items']
             ->filter(fn (CustomReviewAttemptItem $item): bool => $item->isRated())
             ->sortByDesc('id')
             ->first();
@@ -127,8 +136,12 @@ final class CustomReviewAttemptController extends Controller
         ];
 
         return Inertia::render('custom-reviews/Attempt', [
-            'notFound' => $sections === [],
+            'notFound' => $sections === [] && ! $finished,
             'finished' => $finished,
+            // The kinds this attempt cannot show anything of: those whose
+            // items were archived while it ran, and those it was started
+            // without. Each is said once, in the attempt's own calm words.
+            'notices' => $this->notices($request, $walk['notices']),
             'sections' => array_map($board->summary(...), $sections),
             'current' => $current,
             'completedSection' => $completedSection,
@@ -198,7 +211,7 @@ final class CustomReviewAttemptController extends Controller
         $attempt->load('items');
 
         $next = $board->nextAfterRating(
-            $sectionsQuery->for($attempt),
+            $sectionsQuery->walk($attempt)['sections'],
             $request->kind(),
             $request->itemIdentity(),
         );
@@ -228,7 +241,7 @@ final class CustomReviewAttemptController extends Controller
         $attempt->load('items');
 
         $place = $board->locate(
-            $sectionsQuery->for($attempt),
+            $sectionsQuery->walk($attempt)['sections'],
             $request->kind(),
             $request->itemIdentity(),
         );
@@ -277,5 +290,24 @@ final class CustomReviewAttemptController extends Controller
     private function ensureBelongsTo(CustomReview $customReview, CustomReviewAttempt $attempt): void
     {
         abort_unless((int) $attempt->custom_review_id === (int) $customReview->id, 404);
+    }
+
+    /**
+     * The kinds left out, each said once: the ones read from the attempt's own
+     * items, then the ones the start carried across.
+     *
+     * @param  list<string>  $walkNotices
+     * @return list<string>
+     */
+    private function notices(Request $request, array $walkNotices): array
+    {
+        $started = $request->session()->get('attempt_notices');
+
+        $lines = is_array($started)
+            ? array_values(array_filter($started, is_string(...)))
+            : [];
+
+        /** @var list<string> $lines */
+        return array_values(array_unique([...$walkNotices, ...$lines]));
     }
 }

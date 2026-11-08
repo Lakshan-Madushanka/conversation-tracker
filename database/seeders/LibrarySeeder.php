@@ -9,6 +9,7 @@ use App\Actions\Collections\SaveItemNotes;
 use App\Actions\CustomReviews\AddCustomReviewItems;
 use App\Actions\CustomReviews\CreateCustomReview;
 use App\Actions\CustomReviews\SetCustomReviewStatus;
+use App\Actions\PracticeSessions\DeletePracticeSession;
 use App\Actions\Reviews\DeclineStatusSuggestion;
 use App\Actions\Reviews\FinishReviewEarly;
 use App\Actions\Reviews\RecordRating;
@@ -33,6 +34,8 @@ use App\Models\ReviewItem;
 use App\Models\Topic;
 use App\Queries\CustomReviewAttemptList;
 use App\Queries\ReviewCandidates;
+use App\Queries\SessionDeletionPreview;
+use App\Support\DeletionToken;
 use App\Support\MistakeIdentity;
 use App\Support\ReviewExercises;
 use App\Support\ReviewFilters;
@@ -681,6 +684,7 @@ class LibrarySeeder extends Seeder
             $this->seedRecentSittings();
             $this->seedCustomReviews($topics);
             $this->seedCustomReviewAttempts();
+            $this->seedAvailabilityShowcases($topics);
         });
     }
 
@@ -858,7 +862,7 @@ class LibrarySeeder extends Seeder
             $setStatus->handle($review, CustomReviewStatus::Finished);
         }
 
-        $items = $list->for($review);
+        $items = $list->for($review)['items'];
         $number = 0;
         $now = CarbonImmutable::now();
 
@@ -1054,6 +1058,180 @@ class LibrarySeeder extends Seeder
             'item_identity' => SearchText::normalize('an item whose session was deleted'),
             'added_at' => now(),
         ]);
+    }
+
+    /**
+     * The availability cases the pages have to cope with: a review whose
+     * phrases all sit in an archived session, so practice starts without that
+     * kind and says so; and a review whose words were then deleted from the
+     * collections, which leaves the review empty while the attempt that
+     * recorded them keeps every word, marked as deleted.
+     *
+     * Both are built on their own sessions carrying wording nothing else in the
+     * library shares, because an identity is what availability is judged by: an
+     * item that also lives in a session the learner can study would show as
+     * available, and an item another session still holds would not be deleted.
+     *
+     * Added once, like the other showcases, so seeding again tops the library
+     * up in silence.
+     *
+     * @param  Collection<int, Topic>  $topics
+     */
+    private function seedAvailabilityShowcases(Collection $topics): void
+    {
+        $names = ['Station small talk', 'Words that left'];
+
+        if (CustomReview::query()->whereIn('name', $names)->exists()) {
+            return;
+        }
+
+        $topic = $topics->random();
+
+        $this->seedArchivedKindReview($topic);
+        $this->seedDeletedWordsReview($topic);
+    }
+
+    /**
+     * A Finished review holding live words and phrases whose only session is
+     * archived. Its card offers practice, an attempt starts with the words
+     * alone and says the phrases are left out, and restoring that session
+     * brings them back.
+     */
+    private function seedArchivedKindReview(Topic $topic): void
+    {
+        $create = app(CreateCustomReview::class);
+        $add = app(AddCustomReviewItems::class);
+        $setStatus = app(SetCustomReviewStatus::class);
+
+        $review = $create->handle();
+        $review->name = 'Station small talk';
+        $review->save();
+
+        $add->handle(
+            $review,
+            FeedbackType::Vocabulary,
+            $this->showcaseEntries(
+                $this->showcaseSession($topic),
+                FeedbackType::Vocabulary,
+                'signal box',
+                4,
+            ),
+        );
+        $add->handle(
+            $review,
+            FeedbackType::Phrase,
+            $this->showcaseEntries(
+                $this->showcaseSession($topic, archived: true),
+                FeedbackType::Phrase,
+                'which line does',
+                3,
+            ),
+        );
+
+        $setStatus->handle($review, CustomReviewStatus::Finished);
+    }
+
+    /**
+     * A review practised to the end and then emptied by a deletion. Its words
+     * came from one session and nowhere else, so the deletion touches nothing
+     * else in the library: the review becomes Empty with its note, the attempt
+     * keeps its snapshot, its counts and its ratings, and every word in it says
+     * it was deleted.
+     */
+    private function seedDeletedWordsReview(Topic $topic): void
+    {
+        $create = app(CreateCustomReview::class);
+        $add = app(AddCustomReviewItems::class);
+        $setStatus = app(SetCustomReviewStatus::class);
+        $list = app(CustomReviewAttemptList::class);
+
+        $session = $this->showcaseSession($topic);
+        $identities = $this->showcaseEntries($session, FeedbackType::Vocabulary, 'a word that left', 4);
+
+        $review = $create->handle();
+        $review->name = 'Words that left';
+        $review->save();
+
+        $add->handle($review, FeedbackType::Vocabulary, $identities);
+        $setStatus->handle($review, CustomReviewStatus::Finished);
+
+        $this->writeSeededAttempt(
+            review: $review,
+            items: $list->for($review)['items'],
+            number: 1,
+            status: CustomReviewAttemptStatus::Completed,
+            startedAt: CarbonImmutable::now()->subDays(2),
+            skipFrom: null,
+        );
+
+        // The learner deletes the session these words came from, which is the
+        // deletion the app itself answers with: the references leave every
+        // review and the attempt that recorded them gains its Deleted marker.
+        $preview = app(SessionDeletionPreview::class)->for($session, 'UTC');
+
+        app(DeletePracticeSession::class)->handle(
+            (int) $session->id,
+            DeletionToken::sign($preview->fingerprint()),
+            'UTC',
+        );
+    }
+
+    /**
+     * A finished session made to hold nothing but the showcase rows below, so
+     * an availability case shows exactly what it is meant to show. When it is
+     * archived its rows are what a learner sees as not available right now.
+     */
+    private function showcaseSession(Topic $topic, bool $archived = false): PracticeSession
+    {
+        $finishedAt = $this->notInTheFuture(CarbonImmutable::now()->subDays(fake()->numberBetween(30, 200)));
+        $createdAt = $this->notInTheFuture($finishedAt->subMinutes(fake()->numberBetween(20, 120)));
+        $lastChangedAt = $this->lastChangedAt($createdAt, $finishedAt);
+
+        return PracticeSession::factory()
+            ->for($topic)
+            ->create([
+                'status' => PracticeSession::STATUS_FINISHED,
+                'created_at' => $createdAt,
+                'updated_at' => $lastChangedAt,
+                'finished_at' => $finishedAt,
+                'last_changed_at' => $lastChangedAt,
+                'archived_at' => $archived ? $this->notInTheFuture($finishedAt->addDays(3)) : null,
+            ]);
+    }
+
+    /**
+     * A few rows whose wording only this session carries, each one an identity
+     * a review can name, and no other row anywhere shares.
+     *
+     * @return list<string>
+     */
+    private function showcaseEntries(
+        PracticeSession $session,
+        FeedbackType $kind,
+        string $prefix,
+        int $count,
+    ): array {
+        $question = PracticeQuestion::factory()->for($session)->create(['position' => 1]);
+
+        /** @var list<string> $identities */
+        $identities = [];
+
+        for ($index = 1; $index <= $count; $index++) {
+            $text = sprintf('%s %04d', $prefix, $index);
+
+            PracticeFeedbackEntry::factory()->for($question)->create([
+                'type' => $kind->value,
+                'content_text' => $text,
+                'correction_text' => 'the showcase meaning behind “'.$text.'”',
+                'client_id' => sprintf('showcase-%s-%04d', $kind->value, $index),
+                'position' => $index - 1,
+                'is_split' => true,
+            ]);
+
+            $identities[] = SearchText::normalize($text);
+        }
+
+        return $identities;
     }
 
     /**
@@ -1301,6 +1479,10 @@ class LibrarySeeder extends Seeder
      * asked, an archived one. Mistakes need both halves of the pair to have an
      * identity.
      *
+     * An archived pick is only worth making when the item lives nowhere else:
+     * availability is judged by the identity, so a word the learner can still
+     * study in another session would not show as unavailable.
+     *
      * @return Collection<int, PracticeFeedbackEntry>
      */
     private function reviewEntries(
@@ -1312,10 +1494,18 @@ class LibrarySeeder extends Seeder
         return PracticeFeedbackEntry::query()
             ->where('type', $kind->value)
             ->whereRaw("TRIM(collection_key) <> ''")
-            ->when($archived, fn ($query) => $query->whereHas(
-                'practiceQuestion.practiceSession',
-                fn ($session) => $session->whereNotNull('archived_at'),
-            ))
+            ->when($archived, fn ($query) => $query
+                ->whereHas(
+                    'practiceQuestion.practiceSession',
+                    fn ($session) => $session->whereNotNull('archived_at'),
+                )
+                ->whereNotIn('collection_key', PracticeFeedbackEntry::query()
+                    ->where('type', $kind->value)
+                    ->whereHas(
+                        'practiceQuestion.practiceSession',
+                        fn ($session) => $session->study(),
+                    )
+                    ->select('collection_key')))
             ->when(! $archived, fn ($query) => $query->whereHas(
                 'practiceQuestion.practiceSession',
                 fn ($session) => $session->study(),

@@ -28,7 +28,9 @@ use stdClass;
  * A review stores only identities. Everything shown here is read live from the
  * study sessions, so an edited item shows its current words, an archived item
  * says it is not available right now, and a deleted item is gone (its
- * reference is pruned before this query runs).
+ * reference is pruned before this query runs). Availability itself is answered
+ * by `CustomReviewAvailability`, the same place the card, the attempt start and
+ * a running attempt ask.
  *
  * Reads are done one query per kind whatever the review holds, and every place
  * an item appears is read once, so the query count does not grow with the
@@ -57,8 +59,10 @@ use stdClass;
  *     source: CustomReviewSource
  * }
  */
-final class CustomReviewContents
+final readonly class CustomReviewContents
 {
+    public function __construct(private CustomReviewAvailability $availability) {}
+
     /**
      * Every group with at least one item, in the order the review's page shows:
      * Words, Phrases, Grammar notes, Mistakes, Questions.
@@ -225,8 +229,8 @@ final class CustomReviewContents
 
     /**
      * The words and phrases, newest appearance first. The first row of an
-     * identity gives its current spelling and source; any row outside the
-     * archive makes it available.
+     * identity gives its current spelling and source; availability comes from
+     * every session that holds the identity, not just the newest one.
      *
      * @param  list<string>  $identities
      * @return array<string, CustomReviewItemData>
@@ -234,6 +238,7 @@ final class CustomReviewContents
     private function feedbackItems(FeedbackType $kind, array $identities): array
     {
         $wanted = array_fill_keys($identities, true);
+        $available = $this->availability->available($kind, $identities);
 
         // The identities are applied outside the positioned rows so the window
         // still numbers every entry in the box, as the reading page does, even
@@ -254,7 +259,6 @@ final class CustomReviewContents
                         'q.position as question_position',
                         's.id as session_id',
                         's.created_at as session_date',
-                        's.archived_at',
                         't.name as topic',
                     ])
                     ->selectRaw($this->entryPositionExpression()),
@@ -279,7 +283,6 @@ final class CustomReviewContents
                 continue;
             }
 
-            $available = $row->archived_at === null;
             $meaning = trim((string) $row->correction_text) !== '';
 
             $signals[$identity] ??= ['meaning' => false, 'split_broke' => false];
@@ -287,11 +290,12 @@ final class CustomReviewContents
             $signals[$identity]['split_broke'] = $signals[$identity]['split_broke']
                 || (bool) $row->split_broke;
 
-            if (! isset($items[$identity])) {
-                $items[$identity] = $this->entryItem($kind, $identity, $row, $available);
-            } elseif ($available) {
-                $items[$identity]['available'] = true;
-            }
+            $items[$identity] ??= $this->entryItem(
+                $kind,
+                $identity,
+                $row,
+                isset($available[$identity]),
+            );
         }
 
         return $this->withEligibility($kind, $items, $signals);
@@ -312,6 +316,8 @@ final class CustomReviewContents
             return [];
         }
 
+        $available = $this->availability->available(FeedbackType::GrammarNote, $identities);
+
         $rows = DB::query()
             ->fromSub(
                 $this->entryQuery(FeedbackType::GrammarNote)
@@ -324,8 +330,6 @@ final class CustomReviewContents
                         'q.position as question_position',
                         's.id as session_id',
                         's.created_at as session_date',
-                        's.status',
-                        's.archived_at',
                         't.name as topic',
                     ])
                     ->selectRaw($this->entryPositionExpression()),
@@ -339,12 +343,11 @@ final class CustomReviewContents
 
         foreach ($rows as $row) {
             $identity = CustomReviewIdentity::noteKey((int) $row->id);
-            $available = $row->status === PracticeSession::STATUS_FINISHED
-                && $row->archived_at === null;
+            $isAvailable = isset($available[$identity]);
             $usable = $this->noteCanMakeABlank($row);
             $reason = CustomReviewEligibility::reason(
                 FeedbackType::GrammarNote,
-                $available,
+                $isAvailable,
                 $usable,
             );
 
@@ -355,7 +358,7 @@ final class CustomReviewContents
                 'title' => NotePreview::of((string) $row->content_text),
                 'correction' => '',
                 'correction_html' => '',
-                'available' => $available,
+                'available' => $isAvailable,
                 'eligible' => $reason === null,
                 'reason' => $reason,
                 'source' => $this->source($row, 'entry', FeedbackType::GrammarNote),
@@ -367,8 +370,8 @@ final class CustomReviewContents
 
     /**
      * The mistakes, by the same normalised pair the collection groups with.
-     * The newest appearance gives the words; any appearance outside the
-     * archive makes the mistake available.
+     * The newest appearance gives the words; availability comes from every
+     * session that holds the pair.
      *
      * @param  list<string>  $identities
      * @return array<string, CustomReviewItemData>
@@ -376,6 +379,7 @@ final class CustomReviewContents
     private function mistakeItems(array $identities): array
     {
         $wanted = array_fill_keys($identities, true);
+        $available = $this->availability->available(FeedbackType::Mistake, $identities);
 
         $rows = $this->entryQuery(FeedbackType::Mistake)
             ->where('s.status', PracticeSession::STATUS_FINISHED)
@@ -390,7 +394,6 @@ final class CustomReviewContents
                 'q.position as question_position',
                 's.id as session_id',
                 's.created_at as session_date',
-                's.archived_at',
                 't.name as topic',
             ])
             ->selectRaw($this->entryPositionExpression())
@@ -419,7 +422,6 @@ final class CustomReviewContents
                 continue;
             }
 
-            $available = $row->archived_at === null;
             $usable = $said !== '' && $correction !== '';
 
             $signals[$identity] ??= ['meaning' => false, 'split_broke' => false];
@@ -427,37 +429,33 @@ final class CustomReviewContents
             $signals[$identity]['split_broke'] = $signals[$identity]['split_broke']
                 || (bool) $row->split_broke;
 
-            if (! isset($items[$identity])) {
-                $items[$identity] = [
-                    'id' => FeedbackType::Mistake->value.'|'.$identity,
-                    'kind' => FeedbackType::Mistake->value,
-                    'identity' => $identity,
-                    'title' => $said,
-                    'correction' => $correction,
-                    'correction_html' => $correction === ''
-                        ? ''
-                        : RichText::cleanInlineWithText((string) $row->correction_html)['html'],
-                    'available' => $available,
-                    'eligible' => false,
-                    'reason' => null,
-                    'source' => $this->source($row, 'entry', FeedbackType::Mistake),
-                ];
+            if (isset($items[$identity])) {
+                // A newer appearance may have gained a correction that an older
+                // one had left empty; the most recent non-empty one is shown.
+                if ($items[$identity]['correction'] === '' && $correction !== '') {
+                    $items[$identity]['correction'] = $correction;
+                    $items[$identity]['correction_html'] = RichText::cleanInlineWithText(
+                        (string) $row->correction_html,
+                    )['html'];
+                }
 
                 continue;
             }
 
-            if ($available) {
-                $items[$identity]['available'] = true;
-            }
-
-            // A newer appearance may have gained a correction that an older
-            // one had left empty; the most recent non-empty one is shown.
-            if ($items[$identity]['correction'] === '' && $correction !== '') {
-                $items[$identity]['correction'] = $correction;
-                $items[$identity]['correction_html'] = RichText::cleanInlineWithText(
-                    (string) $row->correction_html,
-                )['html'];
-            }
+            $items[$identity] = [
+                'id' => FeedbackType::Mistake->value.'|'.$identity,
+                'kind' => FeedbackType::Mistake->value,
+                'identity' => $identity,
+                'title' => $said,
+                'correction' => $correction,
+                'correction_html' => $correction === ''
+                    ? ''
+                    : RichText::cleanInlineWithText((string) $row->correction_html)['html'],
+                'available' => isset($available[$identity]),
+                'eligible' => false,
+                'reason' => null,
+                'source' => $this->source($row, 'entry', FeedbackType::Mistake),
+            ];
         }
 
         return $this->withEligibility(FeedbackType::Mistake, $items, $signals);
@@ -469,6 +467,8 @@ final class CustomReviewContents
      */
     private function questionItems(array $identities): array
     {
+        $available = $this->availability->available(FeedbackType::Question, $identities);
+
         $rows = DB::table('practice_questions as q')
             ->join('practice_sessions as s', 's.id', '=', 'q.practice_session_id')
             ->join('topics as t', 't.id', '=', 's.topic_id')
@@ -480,8 +480,6 @@ final class CustomReviewContents
                 'q.question_text',
                 's.id as session_id',
                 's.created_at as session_date',
-                's.status',
-                's.archived_at',
                 't.name as topic',
             ])
             ->selectSub(
@@ -506,12 +504,11 @@ final class CustomReviewContents
                 $title = RichText::toPlainText((string) $row->question_html);
             }
 
-            $available = $row->status === PracticeSession::STATUS_FINISHED
-                && $row->archived_at === null;
+            $isAvailable = isset($available[$identity]);
             $usable = $title !== '' && $row->natural_version !== null;
             $reason = CustomReviewEligibility::reason(
                 FeedbackType::Question,
-                $available,
+                $isAvailable,
                 $usable,
             );
 
@@ -522,7 +519,7 @@ final class CustomReviewContents
                 'title' => $title === '' ? 'Question '.(int) $row->question_position : $title,
                 'correction' => '',
                 'correction_html' => '',
-                'available' => $available,
+                'available' => $isAvailable,
                 'eligible' => $reason === null,
                 'reason' => $reason,
                 'source' => $this->source($row, 'question', FeedbackType::Question),

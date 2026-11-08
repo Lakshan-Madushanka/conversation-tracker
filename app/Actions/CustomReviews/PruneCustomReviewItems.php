@@ -5,14 +5,13 @@ declare(strict_types=1);
 namespace App\Actions\CustomReviews;
 
 use App\Enums\FeedbackType;
+use App\Enums\ItemAvailability;
 use App\Models\CustomReview;
+use App\Models\CustomReviewAttemptItem;
 use App\Models\CustomReviewItem;
-use App\Models\PracticeFeedbackEntry;
-use App\Models\PracticeQuestion;
+use App\Queries\CustomReviewAvailability;
 use App\Queries\CustomReviewItems;
-use App\Support\CustomReviewIdentity;
 use App\Support\CustomReviewStatusRules;
-use App\Support\MistakeIdentity;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -24,20 +23,31 @@ use Illuminate\Support\Facades\DB;
  * to point at, so its reference is removed for good from every review that
  * holds it, instead of leaving a ghost row or an empty line.
  *
- * This is the one repair a review read performs, called when a review's page
- * opens, so every view of a review keeps the same rule. A review that has lost
- * its last item this way becomes `Empty` like any other removal.
+ * Whether an item is gone comes from `CustomReviewAvailability`, the same read
+ * the review's page, its card and its attempts use, so a deletion is never
+ * judged by a second rule.
+ *
+ * Two entries lead here. `handle()` sweeps every reference at once and is the
+ * repair a review read performs, so a view opened after the app was offline
+ * still catches up. `handleFor()` covers the deletion that is happening right
+ * now, called inside the delete transaction by the actions that remove items,
+ * so every feature reacts to a deletion at the moment it happens.
+ *
+ * Both leave the same marks: the references are removed, the attempts that
+ * recorded the item get their history's Deleted marker, and a review that has
+ * lost its last item becomes `Empty` like any other removal.
  */
 final readonly class PruneCustomReviewItems
 {
     public function __construct(
         private CustomReviewItems $items,
+        private CustomReviewAvailability $availability,
     ) {}
 
     /** @return int how many references were removed */
     public function handle(): int
     {
-        /** @var Collection<string, list<string>> $grouped */
+        /** @var array<string, list<string>> $grouped */
         $grouped = CustomReviewItem::query()
             ->get(['kind', 'item_identity'])
             ->groupBy(fn (CustomReviewItem $item): string => $item->kind->value)
@@ -45,12 +55,36 @@ final readonly class PruneCustomReviewItems
                 ->pluck('item_identity')
                 ->unique()
                 ->values()
-                ->all());
+                ->all())
+            ->all();
 
+        return $this->remove($grouped);
+    }
+
+    /**
+     * The references to items that have just been deleted, removed at once.
+     *
+     * @param  array<string, list<string>>  $identitiesByKind  keyed by `FeedbackType` value
+     * @return int how many references were removed
+     */
+    public function handleFor(array $identitiesByKind): int
+    {
+        return $this->remove($identitiesByKind);
+    }
+
+    /**
+     * Removing every candidate that the availability read calls gone, and
+     * marking the attempts that recorded it.
+     *
+     * @param  array<string, list<string>>  $candidatesByKind
+     * @return int how many references were removed
+     */
+    private function remove(array $candidatesByKind): int
+    {
         /** @var array<string, list<string>> $dead */
         $dead = [];
 
-        foreach ($grouped as $kindValue => $identities) {
+        foreach ($candidatesByKind as $kindValue => $identities) {
             $kind = FeedbackType::tryFrom($kindValue);
 
             if ($kind === null || ! $kind->isCustomReviewType()) {
@@ -59,7 +93,14 @@ final readonly class PruneCustomReviewItems
                 continue;
             }
 
-            $missing = array_values(array_diff($identities, $this->liveIdentities($kind, $identities)));
+            $states = $this->availability->states($kind, array_values(array_unique($identities)));
+
+            // The identities the availability read calls gone, in the order
+            // they were asked for.
+            $missing = array_keys(array_filter(
+                $states,
+                fn (ItemAvailability $state): bool => $state->isMissing(),
+            ));
 
             if ($missing !== []) {
                 $dead[$kindValue] = $missing;
@@ -82,94 +123,20 @@ final readonly class PruneCustomReviewItems
                 $affected = array_merge($affected, $rows->pluck('custom_review_id')->all());
 
                 $removed += $rows->delete();
+
+                // Every attempt that recorded this item keeps its snapshot and
+                // gains the marker, whether or not a review still holds it.
+                CustomReviewAttemptItem::query()
+                    ->where('kind', $kindValue)
+                    ->whereIn('item_identity', $identities)
+                    ->where('is_deleted', false)
+                    ->update(['is_deleted' => true]);
             }
 
             $this->syncStatuses(array_values(array_unique($affected)));
 
             return $removed;
         });
-    }
-
-    /**
-     * The identities of one kind that still have a source row, including rows
-     * in archived sessions. Availability is decided later; here only existence
-     * matters.
-     *
-     * @param  list<string>  $identities
-     * @return list<string>
-     */
-    private function liveIdentities(FeedbackType $kind, array $identities): array
-    {
-        if ($kind === FeedbackType::GrammarNote) {
-            $ids = array_values(array_filter(array_map(
-                CustomReviewIdentity::noteId(...),
-                $identities,
-            )));
-
-            if ($ids === []) {
-                return [];
-            }
-
-            /** @var list<string> $keys */
-            $keys = PracticeFeedbackEntry::query()
-                ->whereIn('id', $ids)
-                ->pluck('id')
-                ->map(fn (int $id): string => CustomReviewIdentity::noteKey($id))
-                ->all();
-
-            return $keys;
-        }
-
-        if ($kind === FeedbackType::Mistake) {
-            $wanted = array_fill_keys($identities, true);
-            $live = [];
-
-            // The pair key is derived from both columns, so the rows of this
-            // kind are read and matched by the same rule the collections use.
-            PracticeFeedbackEntry::query()
-                ->where('type', FeedbackType::Mistake->value)
-                ->select(['id', 'content_text', 'correction_text'])
-                ->chunkById(500, function (Collection $rows) use ($wanted, &$live): void {
-                    foreach ($rows as $row) {
-                        $said = trim((string) $row->content_text);
-                        $correction = trim((string) $row->correction_text);
-
-                        if (MistakeIdentity::isBlank($said, $correction)) {
-                            continue;
-                        }
-
-                        $key = MistakeIdentity::pairKey($said, $correction);
-
-                        if (isset($wanted[$key])) {
-                            $live[$key] = true;
-                        }
-                    }
-                });
-
-            return array_keys($live);
-        }
-
-        if ($kind === FeedbackType::Question) {
-            /** @var list<string> $ids */
-            $ids = PracticeQuestion::query()
-                ->whereIn('id', array_map(intval(...), $identities))
-                ->pluck('id')
-                ->map(fn (int $id): string => (string) $id)
-                ->all();
-
-            return $ids;
-        }
-
-        /** @var list<string> $keys */
-        $keys = PracticeFeedbackEntry::query()
-            ->where('type', $kind->value)
-            ->whereIn('collection_key', $identities)
-            ->pluck('collection_key')
-            ->unique()
-            ->values()
-            ->all();
-
-        return $keys;
     }
 
     /**

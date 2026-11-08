@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Actions\PracticeSessions;
 
+use App\Actions\CustomReviews\PruneCustomReviewItems;
 use App\Exceptions\SessionDeletionStaleException;
 use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeQuestion;
 use App\Models\PracticeSession;
 use App\Queries\SessionDeletionPreview;
+use App\Support\CustomReviewDeletedIdentities;
 use App\Support\DeletionToken;
 use Illuminate\Support\Facades\DB;
 
@@ -21,12 +23,20 @@ use Illuminate\Support\Facades\DB;
  * passes, questions, feedback entries and the session are removed together in
  * one transaction, so nothing is left half-deleted.
  *
+ * The items that lived only here stop existing the moment this transaction
+ * commits, so the same transaction tells custom reviews: their references to
+ * those items leave every review and the attempts that recorded them gain their
+ * Deleted marker.
+ *
  * A session that is already gone is treated as success, which makes a double
  * click and a retried request safe.
  */
 final readonly class DeletePracticeSession
 {
-    public function __construct(private SessionDeletionPreview $preview) {}
+    public function __construct(
+        private SessionDeletionPreview $preview,
+        private PruneCustomReviewItems $pruneCustomReviewItems,
+    ) {}
 
     public function handle(
         int $sessionId,
@@ -64,7 +74,10 @@ final readonly class DeletePracticeSession
             $questionIds = PracticeQuestion::query()
                 ->where('practice_session_id', $session->id)
                 ->pluck('id')
+                ->map(intval(...))
                 ->all();
+
+            $goneIdentities = CustomReviewDeletedIdentities::forQuestions($questionIds);
 
             if ($questionIds !== []) {
                 PracticeFeedbackEntry::query()
@@ -77,6 +90,8 @@ final readonly class DeletePracticeSession
             }
 
             $session->delete();
+
+            $this->pruneCustomReviewItems->handleFor($goneIdentities);
 
             return new DeletePracticeSessionResult(
                 sessionId: $sessionId,

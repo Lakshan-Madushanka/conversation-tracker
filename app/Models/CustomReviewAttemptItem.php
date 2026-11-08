@@ -23,6 +23,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * The rating lives on this row alone, keyed so a repeated request counts once.
  * It is never a Review rating.
  *
+ * `is_deleted` is the history's own marker: set once when the item this
+ * snapshot was taken from stops existing, and never set back. The snapshot
+ * itself is never rewritten.
+ *
  * @property int $id
  * @property int $custom_review_attempt_id
  * @property int $position
@@ -40,6 +44,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property CarbonImmutable|null $rated_at
  * @property string|null $rating_key
  * @property CarbonImmutable|null $skipped_at
+ * @property bool $is_deleted
  */
 #[Fillable([
     'custom_review_attempt_id',
@@ -58,6 +63,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'rated_at',
     'rating_key',
     'skipped_at',
+    'is_deleted',
 ])]
 final class CustomReviewAttemptItem extends Model
 {
@@ -77,6 +83,7 @@ final class CustomReviewAttemptItem extends Model
             'rating' => ReviewRating::class,
             'rated_at' => 'immutable_datetime',
             'skipped_at' => 'immutable_datetime',
+            'is_deleted' => 'boolean',
         ];
     }
 

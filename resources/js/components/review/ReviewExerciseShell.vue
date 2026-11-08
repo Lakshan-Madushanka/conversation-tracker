@@ -32,6 +32,7 @@ import {
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -105,12 +106,18 @@ const props = withDefaults(
         finishEarlyUrl: string;
         /** The word on the finish buttons: "Finish review" or "Finish attempt". */
         finishLabel?: string;
+        /**
+         * Lines the page has to say about what it cannot show, said once above
+         * the cards. Only an attempt uses them; Review never has any.
+         */
+        notices?: string[];
     }>(),
     {
         title: null,
         progressLabel: 'Review progress',
         subject: 'review',
         finishLabel: 'Finish review',
+        notices: () => [],
     },
 );
 
@@ -418,6 +425,12 @@ onBeforeUnmount(() => {
         :exit-href="props.exitHref"
     >
         <p class="sr-only" aria-live="polite">{{ announcement }}</p>
+
+        <div v-if="props.notices.length > 0" class="mb-4 grid gap-2">
+            <Alert v-for="notice in props.notices" :key="notice">
+                <AlertDescription>{{ notice }}</AlertDescription>
+            </Alert>
+        </div>
 
         <template #above>
             <section

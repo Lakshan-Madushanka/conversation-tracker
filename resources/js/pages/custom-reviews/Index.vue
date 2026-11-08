@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { Head, Link } from '@inertiajs/vue3';
 import { PlusIcon } from '@lucide/vue';
 import { toast } from 'vue-sonner';
@@ -50,6 +50,17 @@ const busyId = ref<number | null>(null);
 
 /** A calm line a screen reader hears after a status change. */
 const statusNotice = ref('');
+
+/**
+ * A delete answers here, in the server's own words, because the review leaves
+ * the listing the moment it is confirmed. Said once, on arrival, and never
+ * again: the message is not re-shown by a later refresh of the list.
+ */
+onMounted(() => {
+    if (props.notice !== null) {
+        toast.info(props.notice);
+    }
+});
 
 const search = ref<InstanceType<typeof LibrarySearch> | null>(null);
 const filterBar = ref<InstanceType<typeof CustomReviewFilterBar> | null>(null);

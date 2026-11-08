@@ -26,13 +26,17 @@ use Illuminate\Support\Facades\DB;
  * Only starting is refused by the review's status. An attempt already running
  * is resumed whatever the review's status has become since, because a learner
  * halfway through the practice must never be cut short.
+ *
+ * A kind the review holds nothing usable of, because its items are archived,
+ * is left out of the attempt and named in the notes that come back with it, so
+ * the practice screen never looks shorter than the review without saying why.
  */
 final readonly class StartCustomReviewAttempt
 {
     public function __construct(private CustomReviewAttemptList $list) {}
 
     /**
-     * @return array{attempt: CustomReviewAttempt|null, note: string|null}
+     * @return array{attempt: CustomReviewAttempt|null, note: string|null, notices: list<string>}
      */
     public function handle(CustomReview $review): array
     {
@@ -48,20 +52,26 @@ final readonly class StartCustomReviewAttempt
                 ->first();
 
             if ($running instanceof CustomReviewAttempt) {
-                return ['attempt' => $running, 'note' => null];
+                return ['attempt' => $running, 'note' => null, 'notices' => []];
             }
 
             if ($locked->status !== CustomReviewStatus::Finished) {
                 return [
                     'attempt' => null,
                     'note' => CustomReviewPractice::note($locked->status, true),
+                    'notices' => [],
                 ];
             }
 
-            $items = $this->list->for($locked);
+            $built = $this->list->for($locked);
+            $items = $built['items'];
 
             if ($items === []) {
-                return ['attempt' => null, 'note' => CustomReviewPractice::NOT_AVAILABLE];
+                return [
+                    'attempt' => null,
+                    'note' => CustomReviewPractice::NOT_AVAILABLE,
+                    'notices' => [],
+                ];
             }
 
             /** @var CustomReviewAttempt $attempt */
@@ -96,7 +106,7 @@ final readonly class StartCustomReviewAttempt
                 ]);
             }
 
-            return ['attempt' => $attempt, 'note' => null];
+            return ['attempt' => $attempt, 'note' => null, 'notices' => $built['notices']];
         });
     }
 

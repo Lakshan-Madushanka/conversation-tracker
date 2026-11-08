@@ -6,6 +6,7 @@ namespace App\Queries;
 
 use App\Enums\FeedbackType;
 use App\Models\CustomReview;
+use App\Support\CustomReviewPractice;
 use App\Support\CustomReviewSourceUrl;
 use App\Support\ReviewAllocation;
 use App\Support\ReviewExercises;
@@ -27,6 +28,10 @@ use Carbon\CarbonImmutable;
  *
  * Each item is turned into its card once, here, and the card is stored with the
  * attempt. Later edits to the item, its session or the review cannot reach it.
+ *
+ * A kind whose every item sits in an archived session has nothing to give the
+ * attempt, so it is named in the notices the attempt starts with — the attempt
+ * never drops a kind without saying so.
  *
  * @phpstan-import-type CustomReviewItemData from CustomReviewContents
  *
@@ -62,18 +67,28 @@ final readonly class CustomReviewAttemptList
     ) {}
 
     /**
-     * @return list<AttemptListItem>
+     * @return array{items: list<AttemptListItem>, notices: list<string>}
      */
     public function for(CustomReview $review): array
     {
         /** @var list<array{kind: FeedbackType, identity: string, exercise: string, item: CustomReviewItemData}> $wanted */
         $wanted = [];
 
+        /** @var array<string, array{held: int, archived: int}> $kinds */
+        $kinds = [];
+
         foreach ($this->contents->groups($review) as $group) {
             $kind = FeedbackType::from($group['key']);
             $exercise = ReviewExercises::kindOf($kind);
 
             foreach ($group['items'] as $item) {
+                $kinds[$kind->value] ??= ['held' => 0, 'archived' => 0];
+                $kinds[$kind->value]['held'] += 1;
+
+                if (! $item['available']) {
+                    $kinds[$kind->value]['archived'] += 1;
+                }
+
                 if (! $item['eligible']) {
                     continue;
                 }
@@ -87,8 +102,10 @@ final readonly class CustomReviewAttemptList
             }
         }
 
+        $notices = $this->notices($kinds);
+
         if ($wanted === []) {
-            return [];
+            return ['items' => [], 'notices' => $notices];
         }
 
         $payloads = $this->candidates->payloadsFor(array_map(
@@ -129,7 +146,27 @@ final readonly class CustomReviewAttemptList
             ];
         }
 
-        return $this->ordered($pools);
+        return ['items' => $this->ordered($pools), 'notices' => $notices];
+    }
+
+    /**
+     * The kinds the attempt can hold nothing of because every item of theirs
+     * sits in an archived session, in the order the review's page meets them.
+     *
+     * @param  array<string, array{held: int, archived: int}>  $kinds
+     * @return list<string>
+     */
+    private function notices(array $kinds): array
+    {
+        $notices = [];
+
+        foreach ($kinds as $kindValue => $count) {
+            if ($count['archived'] === $count['held']) {
+                $notices[] = CustomReviewPractice::leftOut(FeedbackType::from($kindValue));
+            }
+        }
+
+        return $notices;
     }
 
     /**

@@ -32,6 +32,7 @@ function card(
         in_progress: false,
         resume_url: null,
         practice_note: 'Mark this review Finished to practise it.',
+        delete_url: '/custom-reviews/7',
         ...overrides,
     };
 }
@@ -101,7 +102,7 @@ describe('a custom review card', () => {
         );
     });
 
-    it('offers no Start practice or Delete action yet', () => {
+    it('offers no Start practice when there is no address to start from', () => {
         const wrapper = mountCard({
             status: 'finished',
             status_label: 'Finished',
@@ -110,7 +111,15 @@ describe('a custom review card', () => {
         });
 
         expect(wrapper.text()).not.toContain('Start practice');
-        expect(wrapper.text()).not.toContain('Delete');
+    });
+
+    it('offers a Delete that names this review', () => {
+        const wrapper = mountCard();
+        const deleteButton = wrapper
+            .findAll('button')
+            .find((button) => button.text().includes('Delete'));
+
+        expect(deleteButton?.text()).toContain('Morning set');
     });
 
     it('asks for the chosen status, naming this review', async () => {

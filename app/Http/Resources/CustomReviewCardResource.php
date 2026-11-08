@@ -64,7 +64,8 @@ final class CustomReviewCardResource extends JsonResource
      *     start_label: string|null,
      *     start_url: string|null,
      *     resume_url: string|null,
-     *     practice_note: string|null
+     *     practice_note: string|null,
+     *     delete_url: string
      * }
      */
     public function toArray(Request $request): array
@@ -121,6 +122,8 @@ final class CustomReviewCardResource extends JsonResource
                 $review->status,
                 $this->eligibleCount > 0,
             ),
+            // The card's own Delete asks first, then answers on the listing.
+            'delete_url' => route('customReviews.destroy', ['customReviewId' => $review->id]),
         ];
     }
 

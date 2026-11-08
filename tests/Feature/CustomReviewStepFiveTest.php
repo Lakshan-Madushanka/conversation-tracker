@@ -188,6 +188,20 @@ describe('a deleted item', function (): void {
         expect(CustomReviewAttempt::query()->count())->toBe(0);
     });
 
+    it('comes back as a draft when it is filled again, never finished', function (): void {
+        $source = stepFiveSource(['apple']);
+        $review = stepFiveReview('Ready set', CustomReviewStatus::Finished, $source['identities']);
+
+        stepFiveDeleteSession($source['session']);
+
+        expect($review->refresh()->status)->toBe(CustomReviewStatus::Empty);
+
+        $again = stepFiveSource(['apple']);
+        app(AddCustomReviewItems::class)->handle($review, FeedbackType::Vocabulary, $again['identities']);
+
+        expect($review->refresh()->status)->toBe(CustomReviewStatus::Draft);
+    });
+
     it('is gone for good, even when the same words come back', function (): void {
         $source = stepFiveSource(['apple']);
         $review = stepFiveReview('Fruit words', CustomReviewStatus::Draft, $source['identities']);

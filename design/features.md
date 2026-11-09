@@ -449,8 +449,9 @@ The app is built with a modern, single-codebase web stack:
 - Add items from any collection with **Add to review**, choosing which unfinished review takes them, or use **+ Add items** on a review's page to see only items that can be used.
 - Name it and describe it whenever they like — there is no save step, and an attempt uses every item the review holds.
 - Work with three statuses: **Empty** while it holds nothing, **Draft** while it is being built, and **Finished** once they mark it ready. Only a Finished review can be practised.
-- See a friendly **"Too Many Items"** tag, and a warning while adding, once a review grows past the recommended 20 items — with nothing ever refused.
-- Attempt a Finished review as often as they like, and see every attempt with its date, status, and counts.
+- See a friendly **"Too Many Items"** tag, and a warning while adding, once a review grows past the recommended 20 items — the warning never blocks. A review holds at most **50 items**, and an add that would cross the maximum is refused with the room left named.
+- Choose which kinds of items a review allows — all kinds by default — see the choice on the review, and change it later; a kind the review still holds items of cannot be turned off until those items are removed.
+- Attempt a Finished review as often as they like, and see every attempt with its date, status, and counts, a page at a time.
 - Search and filter their reviews by name and status, and see each review's previous attempt status on its card.
 - Delete a review, which also deletes its attempts, after confirmation.
 

@@ -17,9 +17,10 @@ This is different from the **Quick review** described in the Review feature. Qui
 - **There is no basket.** The reviews themselves are the staging area, and every item reaches one through **Add to review** in a collection or through that review's own page. There is no "save as custom review" step, because the review already exists.
 - A custom review stores **references to items** (their identities), not their text. Attempts keep a **snapshot** of the text they were attempted with.
 - Every review carries exactly one of three statuses — **Empty**, **Draft**, or **Finished** — and only **Finished** can be practised. **Empty** follows the item count automatically, **Draft** is what a review becomes automatically when its first item arrives, and **Finished** is chosen only by the learner.
-- **There are no exercise limits.** An attempt uses every eligible item in the review, so the learner's picks alone decide how big it is.
-- **The recommended size is 20 items.** Past it the app warns while adding, and tags the review **"Too Many Items"**. The number is advice, not a rule: no add is refused and no attempt is truncated.
-- **A custom review has no maximum size**, and neither has an attempt.
+- **There are no per-kind exercise limits.** An attempt uses every eligible item in the review; the review's size is bounded only by the maximum below.
+- **The recommended size is 20 items.** Past it the app warns while adding, and tags the review **"Too Many Items"**. The number is advice, not a rule: the warning never refuses an add and no attempt is truncated.
+- **The maximum size is 50 items**, counting every item the review holds, including items not eligible yet and items not available right now. An add that would cross it is refused as a whole, with the room left named. An attempt is never truncated.
+- **A review allows all item kinds by default**, or a chosen subset of them. The choice is shown on the review and can be changed later; a kind the review still holds items of cannot be turned off until those items are removed.
 - **Custom review attempts never change item ratings, schedules, statuses, or marks**, and never feed the daily suggestion, recent results, status suggestions, streaks, or Progress.
 - A custom review's attempt is **self-rated** (Hard, Okay, or Easy), like the rest of Review.
 - Archived sessions' items are **not available** while archived. They return in full when the session is restored.
@@ -42,7 +43,7 @@ This is different from the **Quick review** described in the Review feature. Qui
 - **Relationship to the Review feature's status suggestions:** custom attempt ratings do not count toward the "runs of ratings" that trigger suggestions to mark an item Learned or Still difficult.
 - **Naming:** the sequential default name is "Custom Review N", using the next unused number and given when the review is created, so deleting a review never causes a duplicate name. The learner can rename at any time.
 - **Three statuses, and only one of them belongs to the app.** **Empty** follows the item count, **Draft** is where a review with items begins, and **Finished** is the learner's own "this is ready to practise" mark. They are not the attempt statuses. The words **Finished** and **Finished early** mean different things and are never used for each other: one is a review ready to practise, the other is an attempt ended before every item was rated.
-- **The recommended size is spoken of, never enforced.** Twenty items is roughly a quarter of an hour of practice. Anything above it is the learner's choice, so the app informs and tags rather than blocks.
+- **The recommended size is spoken of, never enforced; the maximum is enforced, never silent.** Twenty items is roughly a quarter of an hour of practice, so the app informs and tags rather than blocks. Fifty is the hard ceiling: an add that would cross it is refused as a whole and says how much room is left.
 - **Experience principles that apply:** simple first, calm and encouraging, quick on any device, and distraction-free during attempts.
 
 ## Goals
@@ -50,7 +51,8 @@ This is different from the **Quick review** described in the Review feature. Qui
 - Let the learner create their own practice sets from any items they choose, across all collections.
 - Make it easy to gather items from many places, with one place that already exists to keep the picks safe.
 - Let the learner say plainly when a set is ready to practise, and tell at a glance which sets are ready and which are still being built.
-- Warn calmly when a set has grown long enough to take real time, without ever refusing what the learner asks for.
+- Warn calmly when a set has grown long enough to take real time, and refuse clearly only at the hard maximum.
+- Let the learner focus a review on chosen kinds of items, with the choice visible and changeable.
 - Let the learner practise a set repeatedly and see their history over time.
 - Keep custom practice completely separate, so it never disturbs the daily plan, statuses, marks, or progress.
 
@@ -70,13 +72,13 @@ This is different from the **Quick review** described in the Review feature. Qui
 7. If there is **one** such review, the items go into it without asking. If there are **several**, a small picker asks which one, with the most recently created already chosen. If there are **none**, a review is created and named "Custom Review N", and the items go into it.
 8. A review the learner is still building is one whose status is **Empty** or **Draft**. A **Finished** review is not offered here, because the learner has already said it is ready; to add to one, open it and use **+ Add items**, which never asks.
 9. Adding is always to a review the learner chose or is standing in. Nothing joins a review without the learner choosing it.
-10. A new review is a saved custom review from the first moment, so it **survives page changes, refresh, and a different device** without any special handling, and it has **no maximum size**.
+10. A new review is a saved custom review from the first moment, so it **survives page changes, refresh, and a different device** without any special handling, and it holds at most **50 items**.
 11. A review with no items keeps its **Empty** status on the listing and stays there until the learner deletes it. The app never deletes one silently or after a delay.
 12. Items already in the review show as added, and adding them again does nothing.
 13. The learner can remove items, or clear the review. Clearing asks for confirmation.
 14. Adding items never changes an item's marks, statuses, ratings, schedule, or any session.
 15. When an add would take a review past the recommended **20 items**, the app warns first — for example "This review will hold 26 items. Long reviews take a while to practise." — and offers **Continue** and **Cancel**. Continue adds the items anyway.
-16. The warning never blocks anything. There is no maximum, no add is refused, and no item is left out; the recommendation only says how long the practice is likely to be.
+16. The warning never blocks anything below the maximum. No item is left out by it; the recommendation only says how long the practice is likely to be. The hard maximum is a separate, clearly named refusal (requirements 78–80).
 17. Custom reviews are never shown in Collections, Review, Progress, or any other place, and they change nothing anywhere else. There is no basket bar and no separate basket page — every review lives on the listing like any other.
 
 ### Empty, Draft, and Finished
@@ -97,7 +99,7 @@ This is different from the **Quick review** described in the Review feature. Qui
 28. There are **no counts to set per exercise kind**. What the learner adds is what the review holds, and an attempt uses every eligible item in it.
 29. A review of more than 20 items carries a **"Too Many Items"** tag beside its name, with its item count. The tag is worded exactly as on the card, and it goes away once the review holds 20 items or fewer.
 30. Items that are in the review but **not eligible yet** (for example a mistake with no correction, or a question with no natural version) are shown in a separate line with the reason, so the learner understands why they are not used.
-31. **+ Add items** on a review's page opens the Collections pages **filtered to eligible items**, so the learner only sees items that can be used. Every item there has the same **Add to review** action, and its picks land in this review.
+31. **+ Add items** on a review's page opens the Collections pages **filtered to eligible items of the kinds the review allows**, so the learner only sees items that can be used. Every item there has the same **Add to review** action, and its picks land in this review.
 32. Removing an item from the review's page does not affect the item in its collection or in any other review.
 33. Items the learner did not add do not appear. An item added to Collections later does **not** join any review by itself.
 34. None of this changes any item, and a review has no attempts until it is first attempted.
@@ -106,7 +108,7 @@ This is different from the **Quick review** described in the Review feature. Qui
 
 35. The learner can rename a review, change its description, change its status, and add or remove items at any time.
 36. Changes to items affect **future attempts only**. Past attempts are never rewritten.
-37. Adding items uses the same **Add to review** action, the same picker, the same **+ Add items** filtered view, and the same recommended-size warning.
+37. Adding items uses the same **Add to review** action, the same picker, the same **+ Add items** filtered view, the same recommended-size warning, and the same maximum and allowed-kind checks.
 38. Removing every item leaves the review **Empty**, and emptying a review never rewrites its history — past attempts keep their snapshots and their **Deleted** indicators exactly as they were.
 
 ### Attempting a custom review
@@ -135,7 +137,7 @@ This is different from the **Quick review** described in the Review feature. Qui
     - **Finished early**: finished with some items unrated, by the learner's choice.
 54. These statuses describe one attempt each. The review's own **Empty**, **Draft**, and **Finished** status is a different thing, and neither ever sets or changes the other.
 55. Statuses are descriptive only. The app does not use pass or fail wording, and no status counts as a score.
-56. The **attempt history** lists every attempt, most recent first, with its number, date, status, and counts. It can be opened to show the items in that attempt, with their snapshot text, their ratings from that attempt, and any **Deleted** indicators.
+56. The **attempt history** lists every attempt, most recent first, **in pages of 10 with a Load more action**, each with its number, date, status, and counts. It can be opened to show the items in that attempt, with their snapshot text, their ratings from that attempt, and any **Deleted** indicators.
 
 ### The custom review card
 
@@ -175,9 +177,20 @@ This is different from the **Quick review** described in the Review feature. Qui
 ### Experience
 
 74. The listing, review pages, and attempt screens work on a phone, tablet, and computer, in light and dark mode, with no sideways scrolling.
-75. Everything can be done with the keyboard, with visible focus, and screen readers announce the item counts, the review's status, the size warning, the attempt number, the attempt statuses, and the other warnings calmly.
+75. Everything can be done with the keyboard, with visible focus, and screen readers announce the item counts, the review's status, the allowed kinds, the size warning, the maximum refusal, the attempt number, the attempt statuses, and the other warnings calmly.
 76. Status wording stays literal and calm: **Empty** means nothing in it yet, **Draft** means still being built, and **Finished** means ready to practise. None of them is a score, and none is used to mean an attempt's status.
 77. Wording is friendly and calm. Attempts are described as practice, never as tests or scores.
+
+### The maximum and the allowed kinds
+
+78. A custom review holds at most **50 items**. Every item it holds counts, including items not eligible yet and items not available right now, so the number the learner sees is the number the maximum uses.
+79. An add that would take the review past 50 is **refused as a whole** — nothing is added, and no partial subset is slipped in — with a message naming the room left, for example "This review has room for 5 more items." An add that lands exactly on 50 is allowed.
+80. The maximum is enforced on every way in — **Add to review**, the picker, and **+ Add items** — with the same message in each, and the refusal changes nothing outside the review.
+81. A review allows **all item kinds by default** — words, phrases, grammar notes, mistakes, and questions. The learner can choose a subset when creating the review and change it at any time later.
+82. The review's page and its card **show which kinds the review allows**, in the collections' own words — for example "Words only", "Words + Phrases", or "All kinds".
+83. An item of a kind the review does not allow is never added. The add is refused with a message naming the kinds the review allows, and **+ Add items** never shows items of other kinds.
+84. Turning off a kind the review still holds items of is **refused until those items are removed**, with a message naming them — for example "Remove the 4 phrase items first." Turning a kind on is always allowed.
+85. Changing the allowed kinds affects **future adds and future attempts only**. Past attempts keep their snapshots, and an attempt in progress finishes normally.
 
 ### Edge cases
 
@@ -190,13 +203,18 @@ This is different from the **Quick review** described in the Review feature. Qui
 - **An attempt in progress when the review goes back to Draft:** the attempt resumes and finishes normally; only new attempts are blocked.
 - **Adding to a review already above 20 items:** the warning shows again on every add that crosses the line, and the **Too Many Items** tag stays while the count is above 20.
 - **A review far above the recommendation:** nothing truncates it. The tag and the item count are visible before starting, and the attempt still carries every eligible item.
+- **An add that would cross 50 items:** refused as a whole, with the room left named; nothing is added and the review is unchanged.
+- **A bulk add with room for only some of it:** the whole add is refused rather than a partial subset added, so the count never surprises.
+- **A review at 50 whose items are archived:** it still holds 50, so nothing new can be added until items are removed; an attempt simply carries whatever is eligible.
+- **Turning off a kind the review still holds:** refused with the count and kind named, until those items are removed.
+- **Adding an item of a kind the review does not allow:** refused with the allowed kinds named; **+ Add items** never shows it.
 - **Several unfinished reviews at once:** Add to review asks which one, with the most recent already chosen; the listing shows each one's name, status, and item count so they are tellable apart.
 - **Empty and Draft reviews left behind:** they stay visible on the listing with their status and are deleted like any other review. Nothing is removed automatically, because silent deletion would be surprising.
 - **Two attempts started at once:** each is its own attempt and gets its own number.
 - **Renaming to a name already used:** allowed, since the sequential names only apply to reviews created without a name.
 - **Deleting the only custom review:** the listing shows its empty state.
 - **A session deleted that contained items in a review:** those items are removed from the review permanently, and the Deleted indicator appears in past attempts only.
-- **Very large reviews:** an attempt carries every eligible item, is still built quickly, and the list is shown in pages.
+- **A review at the maximum:** an attempt carries every eligible item and is still built quickly. The item list is shown in full — 50 items need no pages — and the attempt history is shown in pages.
 - **Unfinished attempt left open:** remains In progress, and resumes where the learner left it.
 
 ## Technical
@@ -208,7 +226,7 @@ This describes the intended approach at a high level, using the agreed stack (La
 3. **Stage in the review itself.** A review the learner is still building is an ordinary custom review record, so the existing review storage is the staging area. There is no basket table, no basket bar, and no save-as-review conversion.
 4. **One status column, three values, two automatic moves.** Store the status on the review as an enum — `Empty`, `Draft`, `Finished` — with `Empty` for a new review. Adding the first item moves `Empty` to `Draft`; losing the last item moves any status to `Empty`; only the learner's own control moves `Draft` to `Finished` and back. Nothing else in the app writes the column.
 5. **One answer to "can this be practised".** A single read helper — `Finished` status and at least one eligible item — gates the card's Start action, the page's Start action, and the attempt-creation Action, so the three can never disagree. The listing's status filter reads the stored column straight from the query.
-6. **Keep the size advice advisory.** Hold 20 items as the recommended size in one place, and let the add path return "needs confirmation" with the resulting count when an add would cross it. The front end shows the warning and re-sends the same request confirmed. Nothing in the attempt build reads the number, so no attempt is ever shortened or refused because of it.
+6. **Keep the size advice advisory and the maximum enforced.** Hold 20 as the recommended size and 50 as the hard maximum in one place. The add path returns "needs confirmation" with the resulting count when an add would cross the recommendation, and refuses with the room left when it would cross the maximum — checked against every item the review holds, inside the same transaction as the add. The front end shows the warning and re-sends the same request confirmed. Nothing in the attempt build reads either number, so no attempt is ever shortened.
 7. **Store references and snapshots.** A review keeps item identities. Each attempt keeps a snapshot of each item's text and kind at the time of the attempt, so history stays readable after edits or deletions.
 8. **Build the attempt list.** Reuse the Review piece that chooses items, extended with the eligibility rules, to build the fixed list from every eligible item in the review.
 9. **Build the review flow.** New custom review creating a named review at once, the Add to review action with its single-review shortcut and its picker over the reviews still being built, the status control, the review's page with grouped items, name, and description, the "not eligible yet" line, and the **+ Add items** view filtered to eligible collection items.
@@ -218,7 +236,9 @@ This describes the intended approach at a high level, using the agreed stack (La
 13. **Handle deletion of a review.** Confirm, then delete the review and its attempts, touching nothing else. Empty reviews use the same path.
 14. **Keep everything exclusive.** Add tests that prove custom attempts, ratings, statuses shown, review statuses, and the recommended-size warning change nothing outside custom reviews.
 15. **Connect exports.** Include custom reviews, their statuses, and their attempts in the exports planned in F7, without changing anything in the app.
-16. **Make it work everywhere.** Test on phone, tablet, and computer, in light and dark mode, with the keyboard and a screen reader, and with large numbers of items.
+16. **Make it work everywhere.** Test on phone, tablet, and computer, in light and dark mode, with the keyboard and a screen reader, and at the maximum size.
+17. **Store the allowed kinds on the review.** One column on the review holds the chosen kinds, empty for all of them. The add Action checks each item's kind against it, the **+ Add items** view filters by it, and narrowing is refused while the review holds items of a kind being turned off. Past attempts and an attempt in progress never read it.
+18. **Page the attempt history.** Reuse the listing's Load more pattern, 10 attempts per page, most recent first, keeping the history's query count flat however many attempts there are.
 
 ### UI components: use shadcn-vue wherever possible
 
@@ -232,6 +252,9 @@ All interface pieces should come from **shadcn-vue**. Only build a custom piece 
 | "Too Many Items" tag with the count               | Badge, with text                                       |
 | Draft-or-Finished control on card and page        | Toggle Group, with a clear label                       |
 | Recommended-size warning when adding              | Alert Dialog, with Continue and Cancel                 |
+| Maximum and allowed-kind refusals                 | Alert, naming the room left or the kinds allowed       |
+| Allowed-kinds chooser                             | Toggle Group, multiple selection, with a clear label   |
+| Allowed-kinds label on card and page              | Badge, with text                                       |
 | "Which review?" picker over unfinished reviews    | Dialog, with Select or Command, the most recent chosen |
 | Review page and grouped items                     | Card, Checkbox, Separator                              |
 | + Add items, filtered to eligible items           | The existing Collections lists, with filter controls   |
@@ -264,8 +287,8 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 - Items already in the review show as added, and adding them again does nothing.
 - An add that would take a review past 20 items warns first and names the resulting count. Cancel adds nothing, and Continue adds every item asked for.
 - Crossing the recommended size again warns again, and a review already above it warns on every further add.
-- An add of any size is never refused, and no item is ever left out because of the recommendation.
-- A review survives page changes, refresh, and a different browser session for the same learner, has no maximum size, and adding many items stays fast.
+- An add of any size is never refused, and no item is ever left out because of the recommendation. _(Superseded by Step 7: the recommendation still never refuses; the 50-item maximum does.)_
+- A review survives page changes, refresh, and a different browser session for the same learner, has no maximum size, and adding many items stays fast. _(Superseded by Step 7: a review holds at most 50 items.)_
 - Removing items and clearing a review work, and clearing asks for confirmation.
 - Add to review changes no item's marks, statuses, ratings, schedule, or sessions.
 - No basket bar, basket page, or basket data appears anywhere in the app.
@@ -353,7 +376,24 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 - A full journey works: create a review, gather items from several collections with the size warning answered, mark it Finished, attempt every item it holds, undo one rating, finish early, see the attempt in history, put the review back to Draft and see Start disappear, archive a session and see its items become not available, delete an item and see the Deleted indicator in past attempts, and delete the review with its attempts.
 - Every screen works on phones, tablets, and computers, in light and dark mode, with the keyboard and a screen reader, and with no sideways scrolling.
 - The status, the item count, the "Too Many Items" tag, and the warning are worded the same everywhere they appear, and nothing calls a practice session a test.
-- With about 5,000 items and many reviews, the listing, review pages, and attempts stay fast, with query counts that do not grow with the number of items.
+- With about 5,000 items and many reviews, the listing, review pages, and attempts stay fast, with query counts that do not grow with the number of items. _(Superseded by Step 7: the scale guarantee is now the 50-item maximum.)_
+
+### Step 7: The item maximum, allowed kinds, and paginated history
+
+**What it delivers:** The 50-item hard maximum enforced on every add path, the per-review allowed kinds with their chooser and label, the refusal messages, and the attempt history in pages of 10 with Load more.
+
+**Tests**
+
+- An add that would cross 50 items is refused as a whole and names the room left; an add landing exactly on 50 succeeds.
+- The maximum counts every item held, including not-eligible and archived items, and is enforced the same way through Add to review, the picker, and + Add items.
+- The recommended-size warning still appears past 20 and never blocks below the maximum.
+- A new review allows all kinds by default, and the chosen kinds are shown on the review's page and card in the same words.
+- An item of a disallowed kind is refused from every add path, and + Add items shows only eligible items of the allowed kinds.
+- Turning off a kind the review holds items of is refused until they are removed; turning kinds on always works.
+- Changing the allowed kinds leaves past attempts and an attempt in progress unchanged.
+- The attempt history shows 10 attempts per page, most recent first, with Load more, in a flat number of queries.
+- A review at the maximum renders and starts an attempt quickly.
+- The refusals and the allowed-kinds label work with the keyboard and are announced by screen readers, and nothing about them changes anything outside custom reviews.
 
 ## Open Questions
 
@@ -373,8 +413,10 @@ None at the moment.
 - **The warning, the tag, the card, and the page all read the same number.** A threshold that disagreed between places would be read as a bug rather than as guidance.
 - **Empty reviews stay visible on the listing with their status and are deleted like any other review.** Nothing is deleted automatically, because silent deletion would be surprising.
 - **Items reach a review only through the learner's choice** — Add to review in a collection, or + Add items from the review's own page, filtered to eligible items.
-- **There are no exercise limits.** An attempt uses every eligible item the review holds, so the learner's picks alone decide its size. Exercise kinds still group the attempt's sections and stepper.
-- **A custom review has no maximum size**, and neither has an attempt. The recommended size is the only guidance given.
+- **There are no per-kind exercise limits.** An attempt uses every eligible item the review holds. Exercise kinds still group the attempt's sections and stepper, and the overall size is bounded by the maximum below.
+- **The maximum is 50 items, counting everything the review holds.** It keeps every review page and every attempt fast at a size the learner can actually reach, and it is enforced as a whole-add refusal that names the room left. The recommended 20 stays advice; only the maximum blocks.
+- **A review allows all kinds by default, or a chosen subset.** The choice is shown on the card and page and changeable later; a kind still held cannot be turned off until its items are removed, so narrowing never silently drops anything.
+- **The attempt history is paginated; the item list is not.** Ten attempts per page with Load more bounds a history that can grow forever, while the 50-item maximum makes paging the item list unnecessary.
 - **Default names are sequential**, using the next unused number, given when the review is created.
 - **Deleted items are removed permanently** from reviews. Past attempts keep a snapshot of the text with a Deleted indicator.
 - **Archived items are not available** while archived, and return in full on restore.

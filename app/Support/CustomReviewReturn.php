@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace App\Support;
 
-use App\Models\CustomReview;
-
 /**
  * Where the review's page goes back to: the page the learner came from, with
  * its tab, filters and opened item intact, or the custom reviews listing when
@@ -60,17 +58,5 @@ final class CustomReviewReturn
         }
 
         return true;
-    }
-
-    /**
-     * The address a collection or reading page sends the learner to when they
-     * open the review their items went into.
-     */
-    public static function reviewUrl(CustomReview $review, ?string $from): string
-    {
-        $back = self::url($from);
-        $query = $back === self::url(null) ? [] : ['from' => $back];
-
-        return route('customReviews.show', ['customReview' => $review->id, ...$query]);
     }
 }

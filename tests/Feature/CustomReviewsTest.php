@@ -540,7 +540,7 @@ it('lists a review grouped by collection, with its words, source and availabilit
     expect(CustomReviewItem::query()->where('custom_review_id', $review->id)->count())->toBe(6);
 });
 
-it('says a review with nothing in it is empty and points back to Collections', function (): void {
+it('says a review with nothing in it is empty and points Back at the listing', function (): void {
     $review = CustomReview::factory()->create();
 
     $this->get(route('customReviews.show', $review))
@@ -551,8 +551,29 @@ it('says a review with nothing in it is empty and points back to Collections', f
             ->where('review.item_count_label', '0 items')
             ->where('review.status_label', 'Empty')
             ->where('groups', [])
-            ->where('back_url', route('collections.index')));
+            ->where('back_url', route('customReviews.index')));
 });
+
+it('sends Back to where the learner came from, or to the listing when there is nowhere to return to', function (string $from, ?string $expected): void {
+    $review = CustomReview::factory()->create();
+
+    $this->get(route('customReviews.show', [
+        'customReview' => $review,
+        'from' => $from,
+    ]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->component('custom-reviews/Show')
+            ->where('back_url', $expected ?? route('customReviews.index')));
+})->with([
+    'the collections page it was opened from' => ['/collections?tab=vocabulary', '/collections?tab=vocabulary'],
+    'the listing keeping its own filters' => ['/custom-reviews?status=finished', '/custom-reviews?status=finished'],
+    'another review' => ['/custom-reviews/12', null],
+    'an attempt of another review' => ['/custom-reviews/12/attempts/3', null],
+    'a session of another review' => ['/sessions/7', '/sessions/7'],
+    'somewhere outside the app' => ['https://elsewhere.test/practice', null],
+    'the home page' => ['/', null],
+]);
 
 it('takes the chosen items out and clears the rest', function (): void {
     $session = buildingSession();

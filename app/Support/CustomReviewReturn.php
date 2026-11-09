@@ -8,18 +8,19 @@ use App\Models\CustomReview;
 
 /**
  * Where the review's page goes back to: the page the learner came from, with
- * its tab, filters and opened item intact, or Collections when there is
- * nowhere to go back to.
+ * its tab, filters and opened item intact, or the custom reviews listing when
+ * there is nowhere to go back to.
  *
  * Only a local address inside the app is accepted. Anything else — an outside
  * link, or another review the learner would rather not be bounced between —
- * falls back to Collections, so the link can never send them off the app.
+ * falls back to the listing, so the link can never send them off the app or
+ * from one review into another.
  */
 final class CustomReviewReturn
 {
     public static function url(?string $from): string
     {
-        $fallback = route('collections.index');
+        $fallback = route('customReviews.index');
 
         if ($from === null || trim($from) === '') {
             return $fallback;
@@ -47,9 +48,18 @@ final class CustomReviewReturn
     /** Whether this address is a page of the app that can hold the learner. */
     private static function isAPage(string $path): bool
     {
-        return $path !== '/'
-            && ! str_starts_with($path, '/custom-reviews')
-            && ! str_starts_with($path, '//');
+        if ($path === '/' || str_starts_with($path, '//')) {
+            return false;
+        }
+
+        // The listing itself is a fine place to come back to; any other
+        // address inside the feature would bounce the learner from one review
+        // to another.
+        if (str_starts_with($path, '/custom-reviews') && $path !== '/custom-reviews') {
+            return false;
+        }
+
+        return true;
     }
 
     /**
@@ -58,13 +68,8 @@ final class CustomReviewReturn
      */
     public static function reviewUrl(CustomReview $review, ?string $from): string
     {
-        $query = [];
-
         $back = self::url($from);
-
-        if ($back !== route('collections.index')) {
-            $query['from'] = $back;
-        }
+        $query = $back === self::url(null) ? [] : ['from' => $back];
 
         return route('customReviews.show', ['customReview' => $review->id, ...$query]);
     }

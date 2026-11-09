@@ -137,6 +137,18 @@ describe('a custom review card', () => {
         });
     });
 
+    it('shows a name and description holding markup as plain text', () => {
+        const wrapper = mountCard({
+            name: '<script>alert(1)</script>',
+            description_excerpt: '<img src=x onerror=alert(1)>',
+        });
+
+        expect(wrapper.findAll('script')).toHaveLength(0);
+        expect(wrapper.findAll('img')).toHaveLength(0);
+        expect(wrapper.text()).toContain('<script>alert(1)</script>');
+        expect(wrapper.text()).toContain('<img src=x onerror=alert(1)>');
+    });
+
     it('holds both status choices while the change is on its way', () => {
         const wrapper = mount(CustomReviewCard, {
             props: { review: card(), busy: true },

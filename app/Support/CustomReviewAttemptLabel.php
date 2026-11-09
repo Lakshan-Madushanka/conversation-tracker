@@ -28,6 +28,14 @@ final class CustomReviewAttemptLabel
     /** The calm line the finish summary ends on. */
     public const string ENCOURAGEMENT = 'Every attempt is practice, never a test. Nicely done.';
 
+    /** A numbered attempt as every screen words it: "1st attempt", "2nd attempt". */
+    public static function numberLabel(?int $number): string
+    {
+        return $number === null
+            ? 'Not started'
+            : Ordinal::of($number).' attempt';
+    }
+
     /** The latest attempt's number, or the "never attempted" line. */
     public static function number(?CustomReviewAttempt $latest): string
     {
@@ -35,14 +43,14 @@ final class CustomReviewAttemptLabel
             return self::NONE;
         }
 
-        return 'Attempt '.$latest->number;
+        return self::numberLabel($latest->number);
     }
 
     /** The attempt before the latest, named by its status. */
     public static function previous(?CustomReviewAttemptStatus $status): ?string
     {
         return $status instanceof CustomReviewAttemptStatus
-            ? 'Previous: '.$status->label()
+            ? 'Previous attempt: '.$status->label()
             : null;
     }
 
@@ -87,6 +95,6 @@ final class CustomReviewAttemptLabel
             return $reviewName.' · Not started';
         }
 
-        return $reviewName.' · '.Ordinal::of($attempt->number).' attempt';
+        return $reviewName.' · '.self::numberLabel($attempt->number);
     }
 }

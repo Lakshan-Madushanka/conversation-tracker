@@ -6,6 +6,7 @@ namespace App\Http\Resources;
 
 use App\Models\CustomReviewAttempt;
 use App\Models\CustomReviewAttemptItem;
+use App\Support\CustomReviewAttemptLabel;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Collection;
@@ -69,9 +70,7 @@ final class CustomReviewAttemptHistoryResource extends JsonResource
         return [
             'id' => (int) $attempt->id,
             'number' => $attempt->number,
-            'number_label' => $attempt->number === null
-                ? 'Not started'
-                : 'Attempt '.$attempt->number,
+            'number_label' => CustomReviewAttemptLabel::numberLabel($attempt->number),
             'status' => $attempt->status->value,
             'status_label' => $attempt->status->label(),
             'started_at' => $attempt->started_at?->toIso8601String(),

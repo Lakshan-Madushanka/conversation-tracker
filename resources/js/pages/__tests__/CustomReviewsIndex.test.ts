@@ -1,16 +1,24 @@
-import { mount } from '@vue/test-utils';
+import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 import { router } from '@inertiajs/vue3';
 import { toast } from 'vue-sonner';
+import CustomReviewCard from '@/components/CustomReviewCard.vue';
 import CustomReviewFilterBar from '@/components/CustomReviewFilterBar.vue';
 import LibrarySearch from '@/components/LibrarySearch.vue';
 import Index from '@/pages/custom-reviews/Index.vue';
+import { updateReviewStatus } from '@/lib/custom-review';
 import { defaultCustomReviewFilters } from '@/lib/custom-review-listing';
 import type {
     CustomReviewCardData,
     CustomReviewFiltersState,
+    CustomReviewSummary,
     CustomReviewsPageData,
 } from '@/types';
+
+vi.mock('@/lib/custom-review', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@/lib/custom-review')>()),
+    updateReviewStatus: vi.fn(),
+}));
 
 function card(
     overrides: Partial<CustomReviewCardData> = {},
@@ -71,6 +79,46 @@ function mountPage(overrides: Partial<CustomReviewsPageData> = {}) {
     });
 }
 
+type Wrapper = ReturnType<typeof mountPage>;
+
+/** What the server answers a status move with. */
+function summary(
+    overrides: Partial<CustomReviewSummary> = {},
+): CustomReviewSummary {
+    return {
+        id: 1,
+        name: 'Morning set',
+        description: null,
+        status: 'finished',
+        status_label: 'Finished',
+        item_count: 2,
+        item_count_label: '2 items',
+        too_many_items: false,
+        too_many_label: null,
+        ...overrides,
+    };
+}
+
+/** The action whose label reads exactly this, if it is on the page. */
+function actionNamed(wrapper: Wrapper, label: string) {
+    return wrapper
+        .findAll('button, a')
+        .find((candidate) => candidate.text().trim() === label);
+}
+
+/** Moves a card with its own status control, the way a learner does. */
+function choose(
+    wrapper: Wrapper,
+    name: string,
+    status: 'draft' | 'finished',
+): void {
+    const card = wrapper
+        .findAllComponents(CustomReviewCard)
+        .find((candidate) => candidate.props('review').name === name);
+
+    card?.vm.$emit('change-status', card.props('review'), status);
+}
+
 function lastRequest(get: { mock: { calls: unknown[][] } }): {
     url: string;
     options: Record<string, unknown>;
@@ -90,6 +138,7 @@ function lastRequest(get: { mock: { calls: unknown[][] } }): {
 afterEach(() => {
     document.body.innerHTML = '';
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
     window.history.replaceState(null, '', '/');
 });
 
@@ -259,5 +308,70 @@ describe('the Custom reviews page', () => {
         mountPage();
 
         expect(info).not.toHaveBeenCalled();
+    });
+
+    it('offers Start practice as soon as a card is marked Finished', async () => {
+        vi.mocked(updateReviewStatus).mockResolvedValue(summary());
+        vi.stubGlobal(
+            'fetch',
+            vi.fn().mockRejectedValue(new Error('the list could not be read')),
+        );
+
+        const wrapper = mountPage({
+            reviews: [
+                card({
+                    eligible_count: 2,
+                    practice_note: 'Mark this review Finished to practise it.',
+                }),
+            ],
+        });
+
+        expect(
+            actionNamed(wrapper, 'Start practice · 2 items'),
+        ).toBeUndefined();
+
+        choose(wrapper, 'Morning set', 'finished');
+        await flushPromises();
+
+        expect(actionNamed(wrapper, 'Start practice · 2 items')).toBeDefined();
+        expect(wrapper.text()).not.toContain(
+            'Mark this review Finished to practise it.',
+        );
+    });
+
+    it('takes Start practice away again when a card goes back to Draft', async () => {
+        vi.mocked(updateReviewStatus).mockResolvedValue(
+            summary({ status: 'draft', status_label: 'Draft' }),
+        );
+        vi.stubGlobal(
+            'fetch',
+            vi.fn().mockRejectedValue(new Error('the list could not be read')),
+        );
+
+        const wrapper = mountPage({
+            reviews: [
+                card({
+                    status: 'finished',
+                    status_label: 'Finished',
+                    eligible_count: 2,
+                    can_start: true,
+                    start_label: 'Start practice · 2 items',
+                    start_url: '/custom-reviews/1/attempts',
+                    practice_note: null,
+                }),
+            ],
+        });
+
+        expect(actionNamed(wrapper, 'Start practice · 2 items')).toBeDefined();
+
+        choose(wrapper, 'Morning set', 'draft');
+        await flushPromises();
+
+        expect(
+            actionNamed(wrapper, 'Start practice · 2 items'),
+        ).toBeUndefined();
+        expect(wrapper.text()).toContain(
+            'Mark this review Finished to practise it.',
+        );
     });
 });

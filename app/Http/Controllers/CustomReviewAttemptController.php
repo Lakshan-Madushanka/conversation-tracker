@@ -165,9 +165,7 @@ final class CustomReviewAttemptController extends Controller
             'attempt' => [
                 'id' => (int) $attempt->id,
                 'number' => $attempt->number,
-                'number_label' => $attempt->number === null
-                    ? 'Not started'
-                    : 'Attempt '.$attempt->number,
+                'number_label' => CustomReviewAttemptLabel::numberLabel($attempt->number),
                 'status' => $attempt->status->value,
                 'status_label' => $attempt->status->label(),
                 'total' => $total,

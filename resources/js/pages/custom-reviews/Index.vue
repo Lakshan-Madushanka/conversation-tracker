@@ -10,7 +10,7 @@ import PageHeader from '@/components/PageHeader.vue';
 import { Button } from '@/components/ui/button';
 import { useCustomReviews } from '@/composables/useCustomReviews';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { updateReviewStatus } from '@/lib/custom-review';
+import { reviewCardAfterStatus, updateReviewStatus } from '@/lib/custom-review';
 import {
     customReviewCountLabel,
     hasCustomReviewFilters,
@@ -88,8 +88,10 @@ function focusFirstFilter(): void {
 }
 
 /**
- * Apply the learner's Draft-or-Finished choice from a card, then read the
- * list again so an active status filter and the practice note stay truthful.
+ * Apply the learner's Draft-or-Finished choice from a card. The card answers
+ * its own status and the practice line that follows from it at once, then the
+ * list is read again so an active status filter and every count stay
+ * truthful.
  */
 async function changeStatus(
     review: CustomReviewCardData,
@@ -105,18 +107,11 @@ async function changeStatus(
     try {
         const saved = await updateReviewStatus(review.id, status);
 
+        // The status and the practice line it decides are answered at once,
+        // from the server's own answer to the move, so the card never keeps
+        // showing the practice of the status the learner just left behind.
         reviews.value = reviews.value.map((card) =>
-            card.id === saved.id
-                ? {
-                      ...card,
-                      status: saved.status,
-                      status_label: saved.status_label,
-                      item_count: saved.item_count,
-                      item_count_label: saved.item_count_label,
-                      too_many_items: saved.too_many_items,
-                      too_many_label: saved.too_many_label,
-                  }
-                : card,
+            card.id === saved.id ? reviewCardAfterStatus(card, saved) : card,
         );
 
         // The filter and the practice note come from the server, so ask it

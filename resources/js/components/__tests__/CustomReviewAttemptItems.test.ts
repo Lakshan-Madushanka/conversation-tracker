@@ -32,7 +32,7 @@ function attempt(
     return {
         id: 3,
         number: 1,
-        number_label: 'Attempt 1',
+        number_label: '1st attempt',
         status: 'completed',
         status_label: 'Completed',
         started_at: '2026-10-12T08:00:00.000000Z',

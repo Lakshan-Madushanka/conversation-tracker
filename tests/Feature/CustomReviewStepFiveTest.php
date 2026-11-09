@@ -237,7 +237,7 @@ describe('a deleted item in a past attempt', function (): void {
 
         $this->get(route('customReviews.show', $review))
             ->assertInertia(fn (Assert $page): Assert => $page
-                ->where('attempts.0.number_label', 'Attempt 1')
+                ->where('attempts.0.number_label', '1st attempt')
                 ->where('attempts.0.status', 'completed')
                 ->where('attempts.0.counts.rated', 3)
                 ->where('attempts.0.counts.easy', 1)

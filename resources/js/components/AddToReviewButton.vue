@@ -39,8 +39,8 @@ const emit = defineEmits<{
         size="sm"
         :class="
             props.compact
-                ? 'size-8 shrink-0 cursor-pointer p-0'
-                : 'min-h-9 cursor-pointer gap-1.5'
+                ? 'size-11 shrink-0 cursor-pointer p-0 md:size-8'
+                : 'min-h-11 cursor-pointer gap-1.5 md:min-h-9'
         "
         :disabled="props.busy"
         :aria-label="`Add ${props.name} to review`"
@@ -57,8 +57,8 @@ const emit = defineEmits<{
         :title="props.compact ? 'In a review' : undefined"
         :class="
             props.compact
-                ? 'inline-flex size-8 shrink-0 items-center justify-center text-muted-foreground'
-                : 'inline-flex min-h-9 items-center gap-1 text-xs font-medium text-muted-foreground'
+                ? 'inline-flex size-11 shrink-0 items-center justify-center text-muted-foreground md:size-8'
+                : 'inline-flex min-h-11 items-center gap-1 text-xs font-medium text-muted-foreground md:min-h-9'
         "
     >
         <CheckIcon

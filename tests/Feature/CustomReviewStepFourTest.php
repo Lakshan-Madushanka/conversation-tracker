@@ -274,7 +274,7 @@ it("shows the attempt on Review's exercise screen, labelled with its number", fu
             ->where('finished', false)
             ->where('title', 'Ready set · 1st attempt')
             ->where('attempt.number', 1)
-            ->where('attempt.number_label', 'Attempt 1')
+            ->where('attempt.number_label', '1st attempt')
             ->where('attempt.status', 'in_progress')
             ->where('attempt.status_label', 'In progress')
             ->where('attempt.total', 3)
@@ -438,7 +438,7 @@ it('completes an attempt when every item is rated or skipped', function (): void
         ->where('finished', true)
         ->where('attempt.skipped', 1)
         ->where('counts.easy', 1)
-        ->where('attempt.number_label', 'Attempt 1')
+        ->where('attempt.number_label', '1st attempt')
     );
 });
 
@@ -505,7 +505,7 @@ it('lists every attempt newest first, from its snapshots and its own counts', fu
             ->has('attempts', 2)
             ->where('attempts.0.id', $second->id)
             ->where('attempts.0.number', 2)
-            ->where('attempts.0.number_label', 'Attempt 2')
+            ->where('attempts.0.number_label', '2nd attempt')
             ->where('attempts.0.status', 'in_progress')
             ->where('attempts.0.status_label', 'In progress')
             ->has('attempts.0.started_at')
@@ -626,7 +626,7 @@ it('describes the latest attempt on the card and offers the next action', functi
     expect($card['attempt_count'])->toBe(1)
         ->and($card['has_attempts'])->toBeTrue()
         ->and($card['in_progress'])->toBeFalse()
-        ->and($card['attempt_number_label'])->toBe('Attempt 1')
+        ->and($card['attempt_number_label'])->toBe('1st attempt')
         ->and($card['previous_attempt_status'])->toBeNull()
         ->and($card['attempt_summary_label'])->toStartWith('1 attempt · last on ')
         ->and($card['start_label'])->toBe('Start practice · 3 items')
@@ -642,9 +642,9 @@ it('describes the latest attempt on the card and offers the next action', functi
 
     expect($card['attempt_count'])->toBe(2)
         ->and($card['in_progress'])->toBeTrue()
-        ->and($card['attempt_number_label'])->toBe('Attempt 2')
+        ->and($card['attempt_number_label'])->toBe('2nd attempt')
         ->and($card['previous_attempt_status'])->toBe('finished_early')
-        ->and($card['previous_attempt_label'])->toBe('Previous: Finished early')
+        ->and($card['previous_attempt_label'])->toBe('Previous attempt: Finished early')
         ->and($card['attempt_summary_label'])->toBe(CustomReviewAttemptLabel::IN_PROGRESS)
         ->and($card['start_label'])->toBeNull()
         ->and($card['start_url'])->toBeNull()
@@ -673,7 +673,7 @@ it('never names an In progress attempt as the previous one', function (): void {
         ->firstWhere('id', $review->id);
 
     expect($card['previous_attempt_status'])->toBe('completed')
-        ->and($card['previous_attempt_label'])->toBe('Previous: Completed')
+        ->and($card['previous_attempt_label'])->toBe('Previous attempt: Completed')
         ->and($card['attempt_summary_label'])->toBe(CustomReviewAttemptLabel::IN_PROGRESS);
 });
 

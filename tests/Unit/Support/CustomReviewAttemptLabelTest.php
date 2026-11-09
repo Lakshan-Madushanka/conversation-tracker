@@ -22,15 +22,24 @@ it('names the latest attempt by its number, or says there is none yet', function
         ->and(CustomReviewAttemptLabel::number(stepFourAttempt(null, CustomReviewAttemptStatus::NotStarted)))
         ->toBe(CustomReviewAttemptLabel::NONE)
         ->and(CustomReviewAttemptLabel::number(stepFourAttempt(3, CustomReviewAttemptStatus::Completed)))
-        ->toBe('Attempt 3');
+        ->toBe('3rd attempt');
+});
+
+it('names a numbered attempt the same way everywhere, or says it never began', function (): void {
+    expect(CustomReviewAttemptLabel::numberLabel(null))->toBe('Not started')
+        ->and(CustomReviewAttemptLabel::numberLabel(1))->toBe('1st attempt')
+        ->and(CustomReviewAttemptLabel::numberLabel(2))->toBe('2nd attempt')
+        ->and(CustomReviewAttemptLabel::numberLabel(3))->toBe('3rd attempt')
+        ->and(CustomReviewAttemptLabel::numberLabel(11))->toBe('11th attempt')
+        ->and(CustomReviewAttemptLabel::numberLabel(12))->toBe('12th attempt');
 });
 
 it('names the attempt before the latest by its status', function (): void {
     expect(CustomReviewAttemptLabel::previous(null))->toBeNull()
         ->and(CustomReviewAttemptLabel::previous(CustomReviewAttemptStatus::Completed))
-        ->toBe('Previous: Completed')
+        ->toBe('Previous attempt: Completed')
         ->and(CustomReviewAttemptLabel::previous(CustomReviewAttemptStatus::FinishedEarly))
-        ->toBe('Previous: Finished early');
+        ->toBe('Previous attempt: Finished early');
 });
 
 it("words the quiet heading above an attempt's progress", function (): void {

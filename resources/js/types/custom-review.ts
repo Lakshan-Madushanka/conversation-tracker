@@ -143,7 +143,7 @@ export interface CustomReviewAttemptCounts {
 export interface CustomReviewAttemptHistoryData {
     id: number;
     number: number | null;
-    /** "Attempt 3", or "Not started" for a shell that never began. */
+    /** "3rd attempt", or "Not started" for a shell that never began. */
     number_label: string;
     status: 'not_started' | 'in_progress' | 'completed' | 'finished_early';
     status_label: string;

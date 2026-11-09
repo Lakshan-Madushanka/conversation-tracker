@@ -685,7 +685,12 @@ onBeforeUnmount(() => {
         <Head :title="review.name" />
 
         <div class="mb-4">
-            <Button variant="ghost" size="sm" as-child>
+            <Button
+                variant="ghost"
+                size="sm"
+                class="min-h-11 md:min-h-9"
+                as-child
+            >
                 <Link :href="props.back_url">
                     <ArrowLeftIcon aria-hidden="true" />
                     Back
@@ -995,7 +1000,7 @@ onBeforeUnmount(() => {
             "
         >
             <template #actions>
-                <Button size="lg" as-child>
+                <Button size="lg" class="min-h-11 md:min-h-9" as-child>
                     <Link :href="props.add_items_url"> Add items </Link>
                 </Button>
             </template>
@@ -1127,7 +1132,7 @@ onBeforeUnmount(() => {
                                         <Button
                                             variant="outline"
                                             size="sm"
-                                            class="min-h-9"
+                                            class="min-h-11 md:min-h-9"
                                             as-child
                                         >
                                             <a
@@ -1152,7 +1157,7 @@ onBeforeUnmount(() => {
                                             type="button"
                                             variant="ghost"
                                             size="sm"
-                                            class="min-h-9"
+                                            class="min-h-11 md:min-h-9"
                                             :disabled="busy"
                                             :aria-label="removeLabel(item)"
                                             @click="removeOne(item)"
@@ -1238,7 +1243,7 @@ onBeforeUnmount(() => {
                                             type="button"
                                             variant="ghost"
                                             size="sm"
-                                            class="min-h-9"
+                                            class="min-h-11 md:min-h-9"
                                             :aria-expanded="
                                                 openAttempt === attempt.id
                                             "
@@ -1378,11 +1383,16 @@ onBeforeUnmount(() => {
                 </AlertDialogHeader>
 
                 <AlertDialogFooter>
-                    <AlertDialogCancel data-autofocus :disabled="busy">
+                    <AlertDialogCancel
+                        data-autofocus
+                        class="min-h-11 md:min-h-9"
+                        :disabled="busy"
+                    >
                         Cancel
                     </AlertDialogCancel>
                     <AlertDialogAction
                         variant="destructive"
+                        class="min-h-11 md:min-h-9"
                         :disabled="busy"
                         @click="clearAll"
                     >

@@ -64,7 +64,7 @@ function stateLabel(item: CustomReviewAttemptItemData): string {
                 v-if="item.href"
                 variant="ghost"
                 size="sm"
-                class="justify-self-start"
+                class="min-h-11 justify-self-start md:min-h-9"
                 as-child
             >
                 <a :href="item.href" target="_blank" rel="noopener noreferrer">

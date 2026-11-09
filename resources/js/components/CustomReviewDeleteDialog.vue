@@ -81,11 +81,16 @@ function confirmDelete(): void {
             </AlertDialogHeader>
 
             <AlertDialogFooter>
-                <AlertDialogCancel data-autofocus :disabled="deleting">
+                <AlertDialogCancel
+                    data-autofocus
+                    class="min-h-11 md:min-h-9"
+                    :disabled="deleting"
+                >
                     Cancel
                 </AlertDialogCancel>
                 <AlertDialogAction
                     variant="destructive"
+                    class="min-h-11 md:min-h-9"
                     :disabled="deleting"
                     @click="confirmDelete"
                 >

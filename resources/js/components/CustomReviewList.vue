@@ -156,7 +156,7 @@ const resultAnnouncement = computed(() => {
                 description="Build one from the items you choose, and practise it whenever you like."
             >
                 <template #actions>
-                    <Button size="lg" as-child>
+                    <Button size="lg" class="min-h-11 md:min-h-9" as-child>
                         <Link :href="customReviewsStore.url()" method="post">
                             <PlusIcon aria-hidden="true" />
                             New custom review
@@ -215,7 +215,7 @@ const resultAnnouncement = computed(() => {
                         type="button"
                         variant="outline"
                         size="sm"
-                        class="mt-3"
+                        class="mt-3 min-h-11 md:min-h-9"
                         @click="emit('retry-filters')"
                     >
                         Try again
@@ -235,7 +235,7 @@ const resultAnnouncement = computed(() => {
                         type="button"
                         variant="outline"
                         size="sm"
-                        class="mt-3"
+                        class="mt-3 min-h-11 md:min-h-9"
                         @click="emit('load-more')"
                     >
                         Try again
@@ -252,6 +252,7 @@ const resultAnnouncement = computed(() => {
                 v-if="props.hasMore"
                 type="button"
                 variant="outline"
+                class="min-h-11 md:min-h-9"
                 :disabled="props.loading"
                 @click="emit('load-more')"
             >

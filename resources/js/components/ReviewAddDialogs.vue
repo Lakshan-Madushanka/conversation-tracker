@@ -87,7 +87,12 @@ function closeQuestion(open: boolean): void {
 
             <DialogFooter>
                 <DialogClose as-child>
-                    <Button type="button" variant="ghost" @click="cancelAdd">
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        class="min-h-11 md:min-h-9"
+                        @click="cancelAdd"
+                    >
                         Cancel
                     </Button>
                 </DialogClose>
@@ -105,9 +110,15 @@ function closeQuestion(open: boolean): void {
                 </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-                <AlertDialogCancel data-autofocus>Cancel</AlertDialogCancel>
+                <AlertDialogCancel data-autofocus class="min-h-11 md:min-h-9">
+                    Cancel
+                </AlertDialogCancel>
                 <AlertDialogAction as-child>
-                    <Button type="button" @click="confirmAddSize">
+                    <Button
+                        type="button"
+                        class="min-h-11 md:min-h-9"
+                        @click="confirmAddSize"
+                    >
                         Continue
                     </Button>
                 </AlertDialogAction>

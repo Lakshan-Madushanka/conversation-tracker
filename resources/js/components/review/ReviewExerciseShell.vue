@@ -440,7 +440,11 @@ onBeforeUnmount(() => {
                     props.sections.length > 1
                 "
                 class="mb-4"
-                aria-label="Review steps"
+                :aria-label="
+                    props.subject === 'attempt'
+                        ? 'Attempt steps'
+                        : 'Review steps'
+                "
             >
                 <Stepper
                     :model-value="activeSectionNumber"

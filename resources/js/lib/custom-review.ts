@@ -29,6 +29,7 @@ import {
     status as reviewStatus,
     update as reviewUpdate,
 } from '@/routes/customReviews';
+import { store as attemptStore } from '@/routes/customReviews/attempts';
 import {
     destroy as reviewItemsDestroy,
     store as reviewItemsStore,
@@ -36,7 +37,9 @@ import {
 import type {
     AddReviewAnswer,
     AddReviewOutcome,
+    CustomReviewCardData,
     CustomReviewKind,
+    CustomReviewPracticeData,
     CustomReviewStatusValue,
     CustomReviewSummary,
     RemoveReviewResult,
@@ -164,6 +167,101 @@ export function reviewStatusExplanation(
         case 'finished':
             return 'Finished: ready to practise.';
     }
+}
+
+/** What still stands between a review and practice, in the server's words. */
+const PRACTICE_NEEDS_ITEMS = 'Add items to use this review.';
+const PRACTICE_NEEDS_FINISHING = 'Mark this review Finished to practise it.';
+const PRACTICE_NOT_AVAILABLE = 'Its items are unavailable right now.';
+
+/** "Start practice · 26 items", naming what the attempt would hold. */
+function reviewStartLabel(count: number): string {
+    return `Start practice · ${reviewItemCountLabel(count)}`;
+}
+
+/** What still stands in the way, or null when nothing does. */
+function practiceNote(
+    status: CustomReviewStatusValue,
+    hasEligibleItem: boolean,
+): string | null {
+    switch (status) {
+        case 'empty':
+            return PRACTICE_NEEDS_ITEMS;
+        case 'draft':
+            return PRACTICE_NEEDS_FINISHING;
+        case 'finished':
+            return hasEligibleItem ? null : PRACTICE_NOT_AVAILABLE;
+    }
+}
+
+/**
+ * What the practice card says about a review in this state, answered the way
+ * `App\Support\CustomReviewPractice` answers it: Finished with at least one
+ * item usable right now, and never while an attempt is running.
+ *
+ * The review's page keeps its own copy of this, because the learner's status
+ * move answers on the spot while the page's props only change with the next
+ * load. Everything that belongs to an attempt rather than the status — how
+ * many items are eligible, and whether one is running — is taken as it came
+ * from the server.
+ */
+export function reviewPracticeFor(
+    reviewId: number,
+    status: CustomReviewStatusValue,
+    base: CustomReviewPracticeData,
+): CustomReviewPracticeData {
+    const hasEligibleItem = base.eligible_count > 0;
+    const canStart = status === 'finished' && hasEligibleItem;
+    const ready = canStart && !base.in_progress;
+
+    return {
+        ...base,
+        can_start: canStart,
+        start_label: ready ? reviewStartLabel(base.eligible_count) : null,
+        start_url: ready ? attemptStore.url(reviewId) : null,
+        note: practiceNote(status, hasEligibleItem),
+    };
+}
+
+/**
+ * A listing card as it stands the moment the server accepts the learner's
+ * status move: the new status, and the practice line answered the way
+ * `App\Support\CustomReviewPractice` answers it.
+ *
+ * The listing reads itself again right after the move, so counts, filters and
+ * eligibility settle from the server as well — but that round trip can be
+ * slow or fail, and until it lands the card would still show the practice of
+ * the status the learner just left behind. Answering it here keeps the card
+ * honest in the meantime, with no second fact invented: only what the status
+ * decides is recomputed, everything else is taken as the server sent it.
+ */
+export function reviewCardAfterStatus(
+    card: CustomReviewCardData,
+    review: CustomReviewSummary,
+): CustomReviewCardData {
+    const practice = reviewPracticeFor(card.id, review.status, {
+        can_start: card.can_start,
+        eligible_count: card.eligible_count,
+        start_label: card.start_label,
+        start_url: card.start_url,
+        in_progress: card.in_progress,
+        resume_url: card.resume_url,
+        note: card.practice_note,
+    });
+
+    return {
+        ...card,
+        status: review.status,
+        status_label: review.status_label,
+        item_count: review.item_count,
+        item_count_label: review.item_count_label,
+        too_many_items: review.too_many_items,
+        too_many_label: review.too_many_label,
+        can_start: practice.can_start,
+        start_label: practice.start_label,
+        start_url: practice.start_url,
+        practice_note: practice.note,
+    };
 }
 
 /** Why an Empty review cannot be marked finished, said once for both sides. */

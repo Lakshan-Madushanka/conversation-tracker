@@ -63,6 +63,7 @@ import {
     reviewIsTooMany,
     reviewItemCountLabel,
     reviewItemName,
+    reviewPracticeFor,
     reviewStatusExplanation,
     reviewStatusLabel,
     reviewTooManyLabel,
@@ -76,6 +77,7 @@ import type {
     CustomReviewItemData,
     CustomReviewKind,
     CustomReviewPageData,
+    CustomReviewPracticeData,
     CustomReviewSummary,
 } from '@/types';
 
@@ -145,17 +147,33 @@ const descriptionNotice = computed(() => {
 const statusBusy = ref(false);
 const statusError = ref('');
 
+/**
+ * The practice card's own copy of the server's answer. The learner's status
+ * move answers on the spot while the page's props only change with the next
+ * load, so the card follows the review on screen instead of waiting for a
+ * reload to agree with it.
+ */
+const practice = ref<CustomReviewPracticeData>({ ...props.practice });
+
+watch([review, () => props.practice], () => {
+    practice.value = reviewPracticeFor(
+        review.value.id,
+        review.value.status,
+        props.practice,
+    );
+});
+
 /** True while Start practice is on its way to the server. */
 const startBusy = ref(false);
 
 function startPractice(): void {
-    if (props.practice.start_url === null || startBusy.value) {
+    if (practice.value.start_url === null || startBusy.value) {
         return;
     }
 
     startBusy.value = true;
     router.post(
-        props.practice.start_url,
+        practice.value.start_url,
         {},
         {
             onFinish: () => {
@@ -462,11 +480,13 @@ function applyRemoved(kind: CustomReviewKind, identities: Set<string>): void {
 }
 
 /**
- * The header's status word follows what the review holds, which a removal may
- * have just changed, so the header is read again rather than restated here.
+ * Read again everything a change can have moved: the items on screen, the
+ * header's count and status, and the practice card — whose eligible count
+ * follows the items rather than the status, so it is read again with them
+ * instead of being guessed at from what was on screen.
  */
-function refreshHeader(): void {
-    router.reload({ only: ['review'] });
+function refreshReview(): void {
+    router.reload({ only: ['groups', 'review', 'practice'] });
 }
 
 /**
@@ -510,7 +530,7 @@ async function removeMany(
         }
 
         if (removed.length > 0) {
-            refreshHeader();
+            refreshReview();
         }
 
         return removed;
@@ -576,7 +596,7 @@ async function undoRemoval(removed: CustomReviewItemData[]): Promise<void> {
 
     // The server's order is the one the page keeps, so the list is read again
     // rather than guessed at from what was on screen.
-    router.reload({ only: ['groups', 'review'] });
+    refreshReview();
 }
 
 /** One row's Remove acts at once, with a few seconds of Undo. */
@@ -635,7 +655,7 @@ async function clearAll(): Promise<void> {
         groups.value = [];
         selectedIds.value = new Set();
         clearOpen.value = false;
-        refreshHeader();
+        refreshReview();
         toast.success(
             cleared === 1
                 ? 'The review is empty again.'
@@ -668,7 +688,7 @@ function onVisibilityChange(): void {
         return;
     }
 
-    router.reload({ only: ['groups', 'review'] });
+    refreshReview();
 }
 
 onMounted(() => {
@@ -753,17 +773,17 @@ onBeforeUnmount(() => {
                             Practice
                         </h2>
                         <p class="text-sm text-muted-foreground">
-                            <template v-if="props.practice.in_progress">
+                            <template v-if="practice.in_progress">
                                 You have an attempt in progress. Pick up where
                                 you left off — nothing is lost.
                             </template>
-                            <template v-else-if="props.practice.can_start">
+                            <template v-else-if="practice.can_start">
                                 Ready when you are. An attempt holds every item
                                 that is available right now.
                             </template>
                             <template v-else>
                                 {{
-                                    props.practice.note ??
+                                    practice.note ??
                                     'This review is not ready to practise yet.'
                                 }}
                             </template>
@@ -772,25 +792,19 @@ onBeforeUnmount(() => {
 
                     <div class="flex flex-wrap gap-2">
                         <Button
-                            v-if="
-                                props.practice.in_progress &&
-                                props.practice.resume_url
-                            "
+                            v-if="practice.in_progress && practice.resume_url"
                             size="lg"
                             class="min-h-11 md:min-h-9"
                             as-child
                         >
-                            <Link :href="props.practice.resume_url">
+                            <Link :href="practice.resume_url">
                                 <PlayIcon aria-hidden="true" />
                                 Resume attempt
                             </Link>
                         </Button>
 
                         <Button
-                            v-else-if="
-                                props.practice.can_start &&
-                                props.practice.start_url
-                            "
+                            v-else-if="practice.can_start && practice.start_url"
                             type="button"
                             size="lg"
                             class="min-h-11 md:min-h-9"
@@ -798,7 +812,7 @@ onBeforeUnmount(() => {
                             @click="startPractice"
                         >
                             <PlayIcon aria-hidden="true" />
-                            {{ props.practice.start_label }}
+                            {{ practice.start_label }}
                         </Button>
                     </div>
                 </div>

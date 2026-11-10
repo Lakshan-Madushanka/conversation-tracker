@@ -2,17 +2,17 @@
 
 ## Summary
 
-Practice sessions are how everything gets into the app. After a conversation with the AI tutor, the learner opens the app, picks a topic, and copies and pastes the tutor's questions, their own answers, and the tutor's feedback (mistakes, vocabulary, phrases, grammar notes, and a more natural version) into clearly separated boxes. The app saves the work automatically and keeps it editable. Longer text boxes use a simple rich text editor, so formatting from the tutor's reply (such as bold corrections and lists) is kept.
+Practice sessions are one way to bring learning material into the app. After a conversation with the AI tutor, the learner opens the app, picks a topic, and copies and pastes the tutor's questions, their own answers, and the tutor's feedback (mistakes, vocabulary, phrases, grammar notes, and a more natural version) into clearly separated boxes. The app saves the work automatically and keeps it editable. Longer text boxes use a simple rich text editor, so formatting from the tutor's reply (such as bold corrections and lists) is kept. [Notebooks](feature-Notebooks.md) provide a separate path for vocabulary, phrases, and grammar notes without recording a session.
 
 This feature has to be fast and low-effort. If recording a session feels like a chore, the learner will go back to spreadsheets.
 
 ### Assumptions
 
 - The app is for **one learner** (personal use) in this version.
-- The app contains **no AI**. The live conversation with the tutor happens elsewhere; everything enters the app through manual copy and paste.
+- The app contains **no AI**. The live conversation with the tutor happens elsewhere; session content is entered manually, usually by copy and paste. Notebook content is also written or pasted by the learner, without an AI or a session workflow.
 - The learner needs an internet connection to use the app (offline use is an open question in the spec, so it is not assumed to be supported).
 - Each question has the same set of feedback boxes: mistakes and corrections, new vocabulary, new phrases and expressions, grammar notes, and a more natural version.
-- A topic is a short label (for example "Ordering at a restaurant") that can be reused across sessions.
+- A topic is a short label (for example "Ordering at a restaurant") shared across sessions and notebooks. Each notebook has exactly one topic, defaulting to General; this notebook default does not change session topic selection.
 - Finishing a session does not lock it. Sessions stay editable afterward.
 - Pasted text may be messy (extra spaces, bullets, numbering, blank lines). The learner is expected to be able to clean it up.
 - Longer free-text fields (the tutor's question, the learner's answer, the more natural version, and grammar notes) use a **rich text (WYSIWYG) editor**. Short fields (topic and the mistakes, vocabulary, and phrases entries) stay plain text.
@@ -22,11 +22,12 @@ This feature has to be fast and low-effort. If recording a session feels like a 
 ### Dependencies
 
 - **Base app layout:** the app shell, navigation, and the focus layout used by guided mode.
-- **Library of saved sessions:** where saved sessions are listed, searched, and reopened. This feature creates the sessions; the library presents them.
-- **Personal collections:** vocabulary, phrases, grammar notes, and common mistakes saved here feed the collections automatically.
-- **Review and re-practice:** the mistakes, phrases, and natural versions saved here become the material for exercises.
-- **Progress and motivation:** session counts and practice days come from sessions recorded here.
-- **Import from spreadsheets:** imported records must end up in the same shape as sessions created here, so both are treated identically afterward.
+- **[Library of saved sessions](feature-F2%20Library%20of%20saved%20sessions.md):** where saved sessions are listed, searched, and reopened. This feature creates the sessions; the Library presents sessions only, not notebooks.
+- **[Notebooks](feature-Notebooks.md):** shares topics, applicable entry editors, autosave/conflict handling, rich text, and paste components, not the session page or a fabricated session. Each notebook has one vocabulary/phrases/grammar board, with no questions, answers, mistakes, natural versions, or session finish/archive workflow.
+- **Collections:** vocabulary, phrases, grammar notes, and common mistakes from finished, non-archived sessions feed Collections. Notebook items also feed Collections but remain separate scoped identities, even with the same spelling.
+- **Review and re-practice:** eligible session entries become exercise material under the existing session rules. Notebook support must not change session grouping, marks, schedules, or custom-review references.
+- **Progress and motivation:** session counts, session-based practice days and streaks, and session-content totals remain session-derived. Planned notebook daily/Quick review-activity reporting is separate; its exact measures remain open in [Notebooks](feature-Notebooks.md#open-questions).
+- **Import from spreadsheets:** imported session records must end up in the same shape as sessions created here, so both are treated identically afterward.
 
 ### Related notes
 
@@ -50,8 +51,16 @@ This feature has to be fast and low-effort. If recording a session feels like a 
 ### Starting a session
 
 1. The learner can start a new session from the Home screen and from the main navigation.
-2. A session must have a topic. The learner can pick an existing topic or type a new one.
+2. A session must have a topic. The learner can pick an existing shared topic (including one used by notebooks) or type a new one. General is the notebook creation default, not a new default or forced assignment for sessions.
 3. A new session opens with one empty question ready to fill in.
+
+### Shared topics
+
+- Sessions and notebooks use the same topic picker, creation, and name-normalisation rules. A notebook requires exactly one topic; its General default does not change session creation.
+- Renaming a topic updates its label at every session and notebook reference, without changing study identities, marks, schedules, or custom-review membership. Changing one source's topic assignment changes only that source, not the shared label.
+- A topic can be deleted only when **no session and no notebook references it**. Empty notebooks, unfinished sessions, and archived sessions still protect their topics.
+- Refused deletion explains that the topic is in use. It must not cascade into content or silently reassign sources to General. Removing a session or notebook leaves the topic intact; once unused, it is eligible for a separate, explicit deletion.
+- See [Notebooks: Shared topics](feature-Notebooks.md#shared-topics) and [Library filtering](feature-F2%20Library%20of%20saved%20sessions.md#filtering-and-sorting): Library topic choices use relevant session references, not every globally protected topic.
 
 ### Recording questions and answers
 
@@ -121,7 +130,9 @@ This feature has to be fast and low-effort. If recording a session feels like a 
 - **Messy pasted text:** extra spaces, mixed bullet styles, numbering, and trailing line breaks are cleaned. In plain boxes (topic, mistakes, vocabulary, phrases), text copied with formatting is shown as plain text. In rich text fields, supported formatting is kept and everything else is simplified.
 - **Duplicate entries:** pasting the same word or phrase twice in one list is allowed but flagged, so the learner can remove it. The same word appearing in different sessions is allowed.
 - **A pasted list with one very long line:** treated as a single entry, which the learner can edit.
-- **Topic variations:** topics that differ only by capitalization or extra spaces are treated as the same topic, to avoid accidental duplicates.
+- **Topic variations:** topics that differ only by capitalization or extra spaces are treated as the same topic across sessions and notebooks, to avoid accidental duplicates.
+- **A topic used outside active sessions:** even an empty notebook or an unfinished/archived session prevents topic deletion. Removing the last session reference can remove a Library filter choice without making a notebook-referenced topic deletable.
+- **Same spelling in a notebook:** existing session grouping stays unchanged. A notebook's matching word or phrase is a separate scoped item with its own content, marks, schedules, and custom-review references. Comma-separated meanings within one notebook meaning field stay one item; shared paste handling must not introduce word-sense splitting.
 - **Removing a question or entry by mistake:** destructive actions on content ask for confirmation, or can be undone.
 - **Saving problems or lost connection:** text is never discarded while saving is failing, and the learner is told clearly what happened.
 - **Two browser tabs open on the same session:** the app should not silently overwrite newer work with older work. At minimum, the learner is warned.
@@ -139,14 +150,14 @@ This feature has to be fast and low-effort. If recording a session feels like a 
 
 This describes the intended approach at a high level, using the agreed stack (Laravel, Inertia, Vue, Tailwind, shadcn-vue) plus Tiptap, a free, open-source rich text editor for Vue. It is a plan to refine, not a final design.
 
-1. **Model the content.** Define the core things the app stores: topics, practice sessions, questions within a session (with the learner's answer), and feedback entries attached to each question. Feedback entries have a type (mistake, vocabulary, phrase, grammar note, natural version) so collections, search, and review can use them later. Formatted fields keep their formatting along with a plain-text version used for search, counting, and review.
-2. **Create the backend pieces.** Add routes and controller actions to create, load, update, and delete sessions, questions, and entries, with validation for required topics and sensible limits on text length. Clean and check formatted text on the server as well, so only the supported formatting is ever saved.
+1. **Model the content.** Define the core things the app stores: shared topics, practice sessions, questions within a session (with the learner's answer), and session feedback entries attached to each question. Feedback entries have a type (mistake, vocabulary, phrase, grammar note, natural version) so collections, search, and review can use them later. Formatted fields keep their formatting along with a plain-text version used for search, counting, and review. [Notebook storage and scoping](feature-Notebooks.md#technical) reuse entry storage with a real notebook parent, not a fabricated question/session; the parent representation remains an explicit decision. Preserve existing session entry ids, relationships, grouping, marks, schedules, and custom-review references.
+2. **Create the backend pieces.** Add routes and thin controllers calling write actions, with request validation for required topics, entry ownership, and sensible limits on text length. Clean and check formatted text on the server as well, so only the supported formatting is ever saved. Shared topic writes must propagate renames and refuse deletion while any session or notebook references the topic; source deletion never deletes the topic or reassigns sources to General. Resolve any notebook General default in a write, never during a read, without imposing it on session creation.
 3. **Create the New Session page.** A Vue page inside the main app layout with a top bar (topic, Saved indicator, Finish button), a stack of question cards, and an Add question button. Use shadcn-vue components for inputs, collapsible sections, buttons, and confirmation dialogs.
 4. **Build one reusable rich text editor.** Use Tiptap with a deliberately small feature set (bold, italic, bulleted and numbered lists, line breaks) and a compact toolbar styled with Tailwind and shadcn-vue. Use it for the tutor's question, the learner's answer, the more natural version, and grammar notes, so every later step and feature reuses the same editor and the same paste behavior.
 5. **Define paste behavior for the editor.** Keep supported formatting, remove everything else (colors, fonts, sizes, images, tables, anything unsafe), keep paragraphs for plain text, and show a consistent look.
-6. **Build reusable pieces.** A question card, a feedback box (with its type label and color tag), a plain list-entry editor, and a Saved indicator, so Edit and Guided modes reuse them.
-7. **Add list pasting for plain boxes.** When the learner pastes into the mistakes, vocabulary, or phrases boxes, clean the text (remove bullets, numbering, blank lines, extra spaces) and split it into separate entries the learner can still edit. Grammar notes and the natural version are not split.
-8. **Add automatic saving.** Save changes shortly after the learner stops typing, pasting, or formatting, update the Saved indicator, and keep content on screen if saving fails. Save early so an unfinished session is never lost.
+6. **Build reusable pieces.** A question card, a feedback box (with its type label and color tag), entry editors, and a Saved indicator, so Edit and Guided modes reuse them. Notebooks reuse applicable entry, example, rich-text, and paste components, not the session page or question cards. Keep their single three-box board separate from session-only fields and lifecycle. Shared changes must preserve session focus behaviour, including the correct target when opening a box or adding an example sub-field.
+7. **Add list pasting for plain boxes.** When the learner pastes into the mistakes, vocabulary, or phrases boxes, clean the text (remove bullets, numbering, blank lines, extra spaces) and split it into separate entries the learner can still edit. Grammar notes and the natural version are not split. Preserve existing entry/column boundaries and example formatting when sharing with notebooks; commas within a notebook meaning field do not split entries, identities, or review slots.
+8. **Add automatic saving.** Save changes shortly after the learner stops typing, pasting, or formatting, update the Saved indicator, and keep content on screen if saving fails. Save early so an unfinished session is never lost. Share applicable retry, row-sync, and conflict handling with notebooks without applying session finish/archive logic to notebook saves.
 9. **Add finishing.** Mark a session as finished and show a confirmation with counts of what was saved. Finished sessions remain editable.
 10. **Reuse the screen for editing.** Opening a saved session for editing loads it into the same layout, so there is one entry experience for both new and existing sessions.
 11. **Add guided mode.** A separate Vue view using the focus layout that walks through the same fields one at a time, with the same editor, data, and saving as the normal layout.
@@ -156,7 +167,7 @@ This describes the intended approach at a high level, using the agreed stack (La
 
 ## Implementation Steps
 
-The steps are ordered so each one leaves a usable, reviewable piece of the feature.
+The steps are ordered so each one leaves a usable, reviewable piece of the feature. The tests below are acceptance requirements, including notebook integration regressions, not evidence that the behaviour has been implemented or verified.
 
 ### Step 1: Create a session with a topic and one question
 
@@ -166,8 +177,12 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 
 - Starting a new session from Home and from the main navigation opens an empty New Session page with one empty question.
 - A session cannot be saved without a topic, and a clear message explains why.
-- Choosing an existing topic and typing a new topic both work.
-- Topics that differ only by capitalization or spacing are treated as the same topic.
+- Choosing an existing topic and typing a new topic both work, including choosing a topic already used by a notebook.
+- Topics that differ only by capitalization or spacing are treated as the same topic across sessions and notebooks.
+- Creating a notebook defaults to General with exactly one topic; session creation still requires topic selection and is not forced to General.
+- Renaming a shared topic updates every notebook and session reference without changing study identities or learning state.
+- Topic deletion is refused when its only reference is an empty notebook, an unfinished session, or an archived session; refusal changes no assignments or content and does not reassign anything to General.
+- Deleting the last source leaves its topic intact; only a separate explicit deletion can remove a topic with no session or notebook references.
 - A question and answer entered and saved are still there after reloading the page.
 - Bold, italic, bulleted lists, and numbered lists applied in the question and answer are saved and look the same after reloading.
 - Pasting formatted text (for example from an AI chat) keeps the supported formatting and removes colors, fonts, sizes, images, and tables.
@@ -289,3 +304,6 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 - Formatted text displays correctly in the session reading view, collections, and review.
 - No page scrolls sideways at a phone-sized width.
 - Every destructive action asks for confirmation or can be undone.
+- Reusing editors for a notebook creates no session or question, shows only vocabulary, phrases, and grammar notes on its one board, and does not change the session's five feedback boxes or guided mode.
+- Shared editor changes preserve session paste boundaries, formatted examples, grammar-note formatting, autosave/retry/conflict handling, and keyboard focus when opening boxes or adding sub-fields.
+- A notebook word with comma-separated meanings remains one item; matching session spelling stays separate, while existing session grouping, marks, schedules, and custom-review references remain unchanged.

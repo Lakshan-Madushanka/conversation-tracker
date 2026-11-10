@@ -1,6 +1,8 @@
 # Features: Spoken English Practice Companion
 
-A plain-language list of everything the app does, written so anyone on the team can follow it. Each feature gives a short description, what the learner can do, a **step-by-step user flow** showing how it feels to use, and a **UI overview** describing what the screen looks like.
+A plain-language specification of the app's intended behaviour, written so anyone on the team can follow it. Each feature gives a short description, what the learner can do, a **step-by-step user flow** showing how it feels to use, and a **UI overview** describing what the screen looks like.
+
+The Notebook extension below is planned behaviour, not a claim of completed implementation or testing. Its detailed requirements and remaining decisions are in [Notebooks](feature-Notebooks.md). Priority labels do not report implementation status.
 
 **Priority key:** 🟢 First version · ⚪ Idea for the future
 
@@ -8,21 +10,22 @@ A plain-language list of everything the app does, written so anyone on the team 
 
 ## Summary
 
-| #   | Feature                                  | Priority |
-| --- | ---------------------------------------- | -------- |
-| F1  | Practice sessions (copy and paste entry) | 🟢       |
-| F2  | Library of saved sessions                | 🟢       |
-| F3  | Personal collections                     | 🟢       |
-| F4  | Review and re-practice                   | 🟢       |
-| F5  | Progress and motivation                  | 🟢       |
-| F6  | Import from spreadsheets                 | 🟢       |
-| F7  | Export and backup                        | 🟢       |
-| F8  | Voice and pronunciation                  | ⚪       |
-| F9  | Reminders                                | ⚪       |
-| F10 | Sharing                                  | ⚪       |
-| F11 | Smart sorting of pasted chats            | ⚪       |
-| F12 | Learning goals and levels                | ⚪       |
-| F13 | Custom reviews                           | ⚪       |
+| #   | Feature                                  | Priority          |
+| --- | ---------------------------------------- | ----------------- |
+| F1  | Practice sessions (copy and paste entry) | 🟢                |
+| F2  | Library of saved sessions                | 🟢                |
+| F3  | Collections                              | 🟢                |
+| F4  | Review and re-practice                   | 🟢                |
+| F5  | Progress and motivation                  | 🟢                |
+| F6  | Import from spreadsheets                 | 🟢                |
+| F7  | Export and backup                        | 🟢                |
+| F8  | Voice and pronunciation                  | ⚪                |
+| F9  | Reminders                                | ⚪                |
+| F10 | Sharing                                  | ⚪                |
+| F11 | Smart sorting of pasted chats            | ⚪                |
+| F12 | Learning goals and levels                | ⚪                |
+| F13 | Custom reviews                           | ⚪                |
+| F14 | Notebooks                                | Planned extension |
 
 ---
 
@@ -32,7 +35,7 @@ Lets the learner record a practice session by pasting the tutor's questions, the
 
 **What the learner can do**
 
-- Start a session by choosing or creating a **topic** (for example "Travel," "Job interview," "Daily routine").
+- Start a session by choosing or creating a **topic** (for example "Travel," "Job interview," "Daily routine"). Topics are shared with notebooks: renaming reaches every reference, and deletion is allowed only when no session or notebook uses the topic, including archived/unfinished sessions and empty notebooks.
 - Add each **question** from the tutor and paste in their own **answer**.
 - Write and paste in a simple **rich text editor** (bold, italic, bulleted and numbered lists) for the question, answer, natural version, and grammar notes, so formatting from the tutor's reply is kept.
 - Paste the tutor's feedback into separate boxes: mistakes and corrections, new vocabulary, new phrases, grammar notes, and a more natural version.
@@ -89,13 +92,13 @@ _Screen: New Session_
 
 ## F2. Library of Saved Sessions 🟢
 
-A single place to browse, search, and reopen every saved practice session.
+A single place to browse, search, and reopen every saved practice session. The Library stays **session-only**; notebooks have their own listing, and Collections brings both sources together. Archiving or deleting a session does not affect matching words in notebooks. A topic can disappear from the Library's session filter while remaining in use by a notebook and therefore protected from deletion.
 
 **What the learner can do**
 
 - See all sessions in one place, newest first.
 - Filter by **topic**, **date**, or **type of content** (mistakes, vocabulary, and so on).
-- **Search** for any word, phrase, or mistake ever saved.
+- **Search** for any word, phrase, or mistake saved in a session. Notebook content is searched in Notebooks or Collections.
 - Open a session and read it again from start to finish in a clean layout.
 - Archive finished sessions they no longer want to see, or delete any session. Unfinished sessions cannot be archived.
 
@@ -132,37 +135,39 @@ _Screen: Library_
 
 ---
 
-## F3. Personal Collections 🟢
+## F3. Collections 🟢
 
-Automatically gathers vocabulary, phrases, grammar notes, and common mistakes from all sessions into personal study lists.
+Automatically gathers vocabulary, phrases, grammar notes, and common mistakes from **finished, non-archived sessions**, together with saved **notebook vocabulary, phrases, and grammar notes**, into one study index. Collections are not the notebooks themselves: entries are edited at their source.
 
 **What the learner can do**
 
-- Browse automatic collections: **Vocabulary**, **Phrases and expressions**, **Grammar notes**, and **My common mistakes**.
-- **Star** the items that matter most.
-- Add **personal notes** to any item, with simple formatting.
-- Mark items as **"learned"** or **"still difficult."**
-- Jump from any item back to the session it came from.
+- Browse **Vocabulary**, **Phrases and expressions**, **Grammar notes**, and **My common mistakes**. Mistakes remain session-sourced.
+- Filter by **Source: All / Sessions / Notebooks**, a particular notebook, or shared topics. All is the default; selecting a notebook selects notebook sources, and switching to Sessions clears that notebook choice.
+- **Star** items, add formatted **personal notes**, and mark them **Learned** or **Still difficult**. These marks are shared across the app only for the same scoped item.
+- Keep a notebook's word separate from the same word in a session or another notebook. Existing grouping across sessions is unchanged; grammar notes are never merged.
+- Open the original session or notebook at the entry, and add selected scoped items to a custom review.
 
 **User flow**
 
-1. The learner taps **"Collections"** in the main menu.
-2. They choose a collection, for example "Vocabulary."
-3. They see every word saved so far, each with its meaning and an example sentence.
-4. They tap the **star** on words they want to focus on.
-5. They tap a word to open it, add a personal note (for example, "Sounds like the word in my language"), and mark it "still difficult."
-6. If they want more context, they tap **"See original session"** to view the conversation where the word first appeared.
-7. In "My common mistakes," they can see which errors appear most often, so they know what to work on.
+1. The learner opens **Collections** and chooses Vocabulary.
+2. With All selected, “bank” from a session and “bank” from Nature reading appear as separate rows with clear source labels.
+3. They choose Notebooks and then Nature reading to focus on that notebook's items.
+4. They star its “bank”, add a personal note, and mark it Still difficult. The session's “bank” stays unchanged.
+5. The panel offers **Open notebook** to edit its source; a session item's panel instead offers **See original session**.
+6. Returning from the source restores the list context. In My common mistakes, session appearances still show which errors recur.
 
 **UI overview**
 
 _Screen: Collections_
 
-- **Top:** four large tabs: Vocabulary, Phrases, Grammar, My mistakes.
-- **Main area:** a list of items. Each row shows the item, its meaning or correction, a **star**, and a small status label ("Learned" or "Still difficult").
-- **Item detail:** opens as a panel with the full explanation, an example, a notes box, status buttons, and a **See original session** link.
-- **Sorting and filtering:** a small control to show only starred items, only difficult items, or the newest first.
-- **My mistakes tab:** items are grouped, with the most frequent errors at the top and a counter such as "Seen 5 times."
+- **Top:** four tabs and source, notebook, shared-topic, starred, status, and attention filters.
+- **Main area:** source-labelled items with meaning/correction, star, and status. Counts, search, and selection distinguish scoped identities rather than combining matching spellings across sources.
+- **Item detail:** its own content, notes, marks, and an appropriate source link. Notebook items never borrow meanings or examples from sessions.
+- **Sorting and provenance:** existing session dates and seen counts keep their meaning. Notebook items show notebook provenance, not fabricated session counts. Mixed-source date/frequency presentation and duplicate notebook-row content resolution remain open in the Notebook specification.
+- **Empty states:** notebook-only learners see their saved content, not a demand to finish a session first.
+- **My mistakes tab:** session-sourced groups retain their frequency counters; Notebooks filtering produces an honest empty result.
+
+**Full details:** [Collections](feature-F3-Personal%20collections.md) and [Notebooks](feature-Notebooks.md).
 
 ```
 ┌─────────────────────────────────────┐
@@ -179,7 +184,9 @@ _Screen: Collections_
 
 ## F4. Review and Re-Practice 🟢
 
-Turns saved material into short exercises such as flashcards and mistake-fixing, and brings harder items back more often.
+Turns eligible saved material from finished, non-archived sessions and from notebooks into short exercises, and brings harder items back more often. Notebook vocabulary, phrases, and grammar notes use their own scoped content and daily-review schedules; mistakes and past questions remain session-sourced. A learner with notebooks but no sessions can still review.
+
+**Quick review** is the unsaved chooser described here. **Custom reviews (F13)** are saved sets with isolated attempts. Daily and Quick ratings affect the scoped item's schedule, never another notebook's or a session's same-spelling item. The shared topic filter includes notebook topics, and source actions open the notebook or session as appropriate.
 
 **What the learner can do**
 
@@ -214,16 +221,16 @@ Turns saved material into short exercises such as flashcards and mistake-fixing,
 
 **User flow: choosing what to review**
 
-1. From the review screen, the learner taps **"Custom review."**
-2. They pick a topic, a collection, or "starred items only."
-3. They choose how many items they want, then tap **"Start."**
+1. From the review screen, the learner taps **"Quick review."**
+2. They pick shared topics, collections, or "starred items only." Matching notebook items participate alongside session items without merging identities.
+3. They choose how many items they want, then tap **"Start."** This does not create a saved custom review.
 
 **UI overview**
 
 _Screen: Review Home_
 
 - **Top card:** today's suggested review ("5 minutes · 8 items") with a large **Start review** button.
-- **Below:** a **Custom review** option and a short list of recent review results.
+- **Below:** a **Quick review** option, a link to saved **Custom reviews**, and recent daily/Quick review results. Saved custom attempts never enter this recent-results list.
 
 _Screen: Exercise_
 
@@ -251,15 +258,18 @@ _Screen: Exercise_
 
 ## F5. Progress and Motivation 🟢
 
-Shows streaks, learning totals, and weekly summaries so the learner can see how they are improving.
+Shows session-derived totals, streaks, and weekly summaries. The Notebook extension also requires **daily/Quick review-activity reporting**, with its exact measures still to be defined separately from session content totals.
 
 **What the learner can see**
 
-- Number of sessions and practice days.
-- A **streak** of consecutive practice days. A practice day is a day on which a session was finished. Unfinished sessions do not count. Archiving never changes the streak, and deleting a finished session can lower it.
-- How many words, phrases, and grammar points have been learned. These totals come from finished sessions, including archived ones. Deleting a finished session lowers them.
-- **Mistakes reduced over time**, showing that repeated errors are fading.
+- Number of finished sessions and session-based practice days. A notebook is not a finished session.
+- A **streak** of consecutive practice days. A practice day is a day on which a session was finished. Unfinished sessions do not count. Archiving never changes the streak, and deleting a finished session can lower it. Notebook entry editing and reviewing do not extend this streak.
+- Existing word, phrase, and grammar-point totals from finished sessions, including archived ones. These are session-content totals, not the learner's manual Learned labels or proof of mastery; deleting a finished session lowers them. Typing notebook entries or adding comma-separated meanings does not increase these totals.
+- **Mistakes reduced over time**, based on session-sourced mistakes; notebooks introduce no mistake entries.
 - A **weekly summary**.
+- Planned review-activity reporting that treats notebook and session items consistently for **daily and Quick reviews**. Saved custom-review attempts remain excluded.
+
+**Open decision before implementing review-activity reporting:** define which measures and labels F5 shows, whether they count rated items or completed reviews, how repeated practice is represented, and what source deletion does to those measures. Do not invent a new “words learned” formula, change session-derived totals/streaks, or copy custom-attempt ratings into Progress. See [Notebook Progress requirements and open questions](feature-Notebooks.md#open-questions).
 
 **User flow**
 
@@ -275,7 +285,7 @@ Shows streaks, learning totals, and weekly summaries so the learner can see how 
 _Screen: Progress_
 
 - **Top row:** large friendly numbers for the current **streak** and total practice days.
-- **Stat tiles:** small cards for sessions, words, phrases, and grammar points learned.
+- **Stat tiles:** existing cards for sessions and session-derived word, phrase, and grammar-point totals. Keep planned daily/Quick review-activity measures visibly separate once their definitions are agreed.
 - **Mistakes chart:** one simple chart showing how often common mistakes appear week by week, going down over time.
 - **Weekly summary card:** a short sentence with the week's highlights and a small celebration icon when there is a win.
 - **Tone:** encouraging and uncluttered. No scores that make the learner feel judged.
@@ -296,7 +306,7 @@ _Screen: Progress_
 
 ## F6. Import from Spreadsheets 🟢
 
-Brings the learner's existing spreadsheet records into the app so past work is not lost.
+Brings the learner's existing spreadsheet session records into the app so past work is not lost. This import path still creates sessions; spreadsheet-to-notebook import is outside the Notebook extension.
 
 **What the learner can do**
 
@@ -340,7 +350,9 @@ _Screen: Import (inside Settings)_
 
 ## F7. Export and Backup 🟢
 
-Lets the learner download all of their data at any time as a personal backup.
+Lets the learner download their data as a personal backup. **An export described as “all data” must include notebooks**, their shared-topic references, rich descriptions, entries, scoped identities and marks, as well as session data, review state, and custom-review attempt snapshots within the existing backup scope.
+
+Notebook export delivery and the representation of scoped relationships must be confirmed before this extension ships with an all-data backup promise. A session-only export must say what it includes rather than silently omit notebooks. This is a coverage requirement, not a claim that the current exporter already supports notebook parents; spreadsheet-to-notebook import is not introduced here.
 
 **What the learner can do**
 
@@ -359,7 +371,7 @@ Lets the learner download all of their data at any time as a personal backup.
 _Screen: Export (inside Settings)_
 
 - **Simple panel** with a short explanation: "Your data is yours. Download it any time."
-- **Choices:** checkboxes for what to include (all sessions, vocabulary, phrases, grammar, mistakes).
+- **Choices:** name exactly which sources and data are included, including notebooks when supported. Filtering vocabulary or phrases must retain their source scopes rather than merging same-spelling items across sources. Export format and notebook delivery details remain to be confirmed.
 - **Action:** one large **Download** button.
 - **After download:** a small confirmation message with the file name and the date of the last backup, shown for reassurance.
 
@@ -441,21 +453,58 @@ The app is built with a modern, single-codebase web stack:
 
 ## F13. Custom reviews ⚪
 
-**Description:** Saved, named practice sets built from items the learner chooses across all collections, with a Draft/Finished status, repeatable attempts, and a full attempt history. Completely separate from the daily review: attempts never change marks, ratings, schedules, statuses, or progress.
+**Description:** Saved, named practice sets built from the learner's chosen scoped items, with Empty/Draft/Finished status, repeatable attempts, and snapshot history. Membership is fixed unless explicitly edited, an identity follows a source edit under the shared rules, or a source item is permanently deleted. A saved review is not a live subscription to its source notebook. Custom attempts remain separate from daily/Quick practice: they never change item marks, daily ratings or schedules, statuses, streaks, or Progress.
 
 **What the learner can do**
 
-- Start a review and get it saved straight away, named "Custom Review N", that survives refresh like any other review.
-- Add items from any collection with **Add to review**, choosing which unfinished review takes them, or use **+ Add items** on a review's page to see only items that can be used.
-- Name it and describe it whenever they like — there is no save step, and an attempt uses every item the review holds.
-- Work with three statuses: **Empty** while it holds nothing, **Draft** while it is being built, and **Finished** once they mark it ready. Only a Finished review can be practised.
-- See a friendly **"Too Many Items"** tag, and a warning while adding, once a review grows past the recommended 20 items — the warning never blocks. A review holds at most **50 items**, and an add that would cross the maximum is refused with the room left named.
-- Choose which kinds of items a review allows — all kinds by default — see the choice on the review, and change it later; a kind the review still holds items of cannot be turned off until those items are removed.
-- Attempt a Finished review as often as they like, and see every attempt with its date, status, and counts, a page at a time.
-- Search and filter their reviews by name and status, and see each review's previous attempt status on its card.
-- Delete a review, which also deletes its attempts, after confirmation.
+- Start an ordinary review and get it saved straight away as **Empty**, named "Custom Review N", surviving refresh. Adding its first item moves it to Draft; the learner chooses Finished when ready.
+- Add session- or notebook-sourced items from Collections with **Add to review**, choosing which unfinished review takes them, or use **+ Add items** on a review's page for eligible items of allowed kinds.
+- Choose **Create review and practise** on a notebook to create a **new** saved review and explicitly mark it Finished as part of that action. It requires 1–50 distinct selected members and at least one eligible item, after saving pending source edits. More than 50 candidates opens selection before any review is created; nothing is silently truncated.
+- Name and describe a review at any time. An attempt uses every **eligible** member; ineligible members remain listed with reasons and still count toward the maximum.
+- Keep the **recommended 20-item** warning and tag. Continue allows a valid set above 20, but cannot override the **50-item maximum**. Ordinary adds that cross 50 remain refused as a whole, with the room left named.
+- Choose allowed kinds, with all kinds allowed by default. A notebook's populated boxes do not automatically narrow this setting; kinds already represented cannot be turned off until those items are removed.
+- Add or remove members explicitly. New notebook entries never join automatically. Current source edits affect future attempts; started attempts, including those in progress, retain their snapshots.
+- Attempt a Finished review with eligible content and browse its paged history. A notebook source link opens that notebook, never a same-spelling session item.
+- Keep existing attempt snapshots with Deleted indications if a source notebook/item is deleted. Its references are removed; losing the last member makes the review Empty, not deleted.
+- Search/filter reviews and delete a review with confirmation. Deleting the review removes its attempts but not source notebooks, sessions, or their items.
 
-**Full details:** see `feature-Custom reviews.md`.
+**Full details:** [Custom reviews](feature-Custom%20reviews.md) and [Notebooks](feature-Notebooks.md).
+
+---
+
+## F14. Notebooks
+
+**Status:** Planned extension. [The Notebook specification](feature-Notebooks.md) records the agreed behaviour, implementation stages, acceptance criteria, and remaining decisions; this section does not claim it is implemented.
+
+Notebooks are named containers for language found outside conversations. They reuse familiar entry editors without requiring a session, question, answer, or finish step. Collections remains the combined index; the Library remains session-only.
+
+**What the learner can do**
+
+- Create a notebook with a required **name**, one shared **topic** defaulting to **General**, and an optional **rich-text description**.
+- After creation, enter **Vocabulary**, **Phrases**, and **Grammar notes** on **one autosaving board**. There are no mistakes or natural-version boxes.
+- Edit name, topic, description, entries, and examples later. Save failures and two-tab conflicts use the same visible recovery patterns as session editing.
+- Put comma-separated meanings in one word's meaning field, keeping it one scoped study item. Matching words in other notebooks or sessions stay independent; grammar notes remain separate even when their text matches.
+- Search notebooks by name, topic, description, and entry content, including meanings and examples; open a matching entry directly.
+- Use their notebook items in Collections, daily/Quick Review, and saved custom reviews, with marks shared only for each scoped item.
+- Create a ready saved review and practise immediately when constraints are met; choose a subset above 50 distinct candidates. Later notebook additions do not join that review automatically.
+- Hard-delete a notebook after an impact preview and explicit acknowledgement. The shared topic and other sources survive; custom-review references are pruned within scope and existing attempt snapshots remain readable.
+
+**User flow**
+
+1. After reading a book, the learner opens **Notebooks** and chooses **New notebook**.
+2. They name it Nature reading, choose a shared topic or keep General, and optionally format a description.
+3. Creation saves the notebook and opens its three-box board. They add “bank” with “river edge, raised ground beside water” as its single meaning field, and the work saves automatically.
+4. In Collections, selecting Notebooks and Nature reading shows that scoped word. Its star and status do not affect the session's financial “bank”.
+5. **Create review and practise** offers a valid immediate start or the required selection/size guidance. The resulting review's membership stays fixed while future source edits remain live.
+
+**UI overview**
+
+- **Notebooks listing:** searchable names, topics, item counts, last-updated information, and plain-text description previews, with New notebook and a topic filter.
+- **Notebook page:** editable metadata and the full rich-text description above one familiar entry board, save feedback, Create review and practise, and a deliberate Delete action.
+- **Source context:** Collections and practice show the notebook name and Open notebook at the entry, not invented session dates or questions.
+- **Accessibility:** mobile-first layout, dark mode, visible keyboard focus, accessible editors, and clear save, selection, and deletion announcements.
+
+**Remaining decisions:** parent representation, exact daily/Quick Progress measures, mixed-source sorting, duplicate-row content resolution, metadata limits/General default lifecycle, and export delivery remain in [Notebook Open Questions](feature-Notebooks.md#open-questions). Neither the 20-item recommendation nor the 50-item review maximum limits notebook storage.
 
 ---
 

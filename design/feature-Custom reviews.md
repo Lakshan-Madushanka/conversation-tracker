@@ -2,7 +2,9 @@
 
 ## Summary
 
-Custom reviews let the learner build **their own named practice sets** from the items they choose, and practise them again and again whenever they want. Creating one saves it immediately, empty and ready for items, so the learner picks items from Collections (words, phrases, grammar notes, mistakes, and questions) and adds them straight into it, names it whenever they like, marks it **Finished** when it is ready to practise, and attempts it as often as they wish. Every attempt is recorded, so the learner can see their history over time.
+Custom reviews let the learner build **their own named practice sets** from the items they choose, and practise them again and again whenever they want. Ordinary creation saves one immediately, empty and ready for items from Collections: words, phrases, and grammar notes from eligible sessions or saved notebooks, plus session-only mistakes and questions. The learner names it whenever they like and marks it **Finished** when ready. A notebook also offers **Create review and practise**, explicitly creating a new saved review and choosing Finished before starting; it never silently fills an existing review. Every attempt is recorded, so the learner can see their history over time.
+
+Notebook integration below is a **planned requirement**, aligned with [Notebooks](feature-Notebooks.md), not evidence of implementation or passing tests.
 
 Custom reviews are **completely separate from the rest of the app**. Ratings made inside a custom review, its attempts, its statuses, and the items being gathered affect nothing else. They do not change item marks, schedules, the daily suggestion, recent results, status suggestions, streaks, or Progress.
 
@@ -11,29 +13,30 @@ This is different from the **Quick review** described in the Review feature. Qui
 ### Assumptions
 
 - The app is for **one learner**. Custom reviews belong to that learner.
-- The Practice sessions, Library, Collections, and Review features already exist, and the item identity, the "study sessions" rule, and the exercise kinds from Review are available.
-- Items are added from Collections by the learner. Nothing is added automatically.
+- Practice sessions, Library, Collections, and Review supply the existing session grouping, study-session rule, and exercise kinds. [Notebooks](feature-Notebooks.md) adds saved vocabulary, phrases, and grammar notes without a session finish/archive lifecycle.
+- Items are added by the learner from Collections, the review's page, or the notebook shortcut. Nothing is added automatically, including later notebook rows.
 - A review the learner is still building is a real, saved custom review, created the moment they start one and named **"Custom Review N"** by default. It needs no separate storage, bar, or page.
-- **There is no basket.** The reviews themselves are the staging area, and every item reaches one through **Add to review** in a collection or through that review's own page. There is no "save as custom review" step, because the review already exists.
-- A custom review stores **references to items** (their identities), not their text. Attempts keep a **snapshot** of the text they were attempted with.
-- Every review carries exactly one of three statuses — **Empty**, **Draft**, or **Finished** — and only **Finished** can be practised. **Empty** follows the item count automatically, **Draft** is what a review becomes automatically when its first item arrives, and **Finished** is chosen only by the learner.
+- **There is no basket.** Reviews themselves are the staging area. **Add to review** and **+ Add items** fill them; **Create review and practise** on a notebook creates a new one, never selecting an existing unfinished review. There is no "save as custom review" conversion.
+- A custom review stores **scoped references**, not frozen source text. Existing session grouping is unchanged; notebook words/phrases use **notebook identity + kind + normalised main text**, and grammar notes use their **individual saved-row identity with the source checked**. Content, eligibility, typo-following, and deletion never cross source scopes. Every started attempt keeps a **snapshot** independent of later source changes.
+- Every review carries exactly one of three statuses — **Empty**, **Draft**, or **Finished** — and only **Finished** can be practised. Ordinary creation starts Empty; the first ordinary add makes it Draft. Finished is chosen only by the learner, including their explicit **Create review and practise** action for the new notebook-based review.
 - **There are no per-kind exercise limits.** An attempt uses every eligible item in the review; the review's size is bounded only by the maximum below.
 - **The recommended size is 20 items.** Past it the app warns while adding, and tags the review **"Too Many Items"**. The number is advice, not a rule: the warning never refuses an add and no attempt is truncated.
 - **The maximum size is 50 items**, counting every item the review holds, including items not eligible yet and items not available right now. An add that would cross it is refused as a whole, with the room left named. An attempt is never truncated.
 - **A review allows all item kinds by default**, or a chosen subset of them. The choice is shown on the review and can be changed later; a kind the review still holds items of cannot be turned off until those items are removed.
 - **Custom review attempts never change item ratings, schedules, statuses, or marks**, and never feed the daily suggestion, recent results, status suggestions, streaks, or Progress.
 - A custom review's attempt is **self-rated** (Hard, Okay, or Easy), like the rest of Review.
-- Archived sessions' items are **not available** while archived. They return in full when the session is restored.
-- Deleted items are **removed permanently** from every custom review.
+- Archived sessions' items are **not available** while archived and return on restore. Notebooks are hard-deleted, never archived; saved notebook items do not wait for Finished.
+- Deleted scoped items are **removed permanently** from every custom review that references them. A duplicate appearance in the same scope can keep the item alive; matching text in another notebook or a session cannot. Losing the last member makes a review Empty; started attempts retain snapshots with Deleted indicators.
 - The learner's local day is used for dates.
 - Custom reviews need an internet connection (offline use is an open question in the spec).
 
 ### Dependencies
 
-- **Practice sessions:** the source of questions, natural versions, and all entries, and the reading page for opening the original.
-- **Library:** the study sessions rule, archiving, restoring, and deleting, all of which must be reflected in custom reviews.
-- **Personal collections:** the item identity, the "Needs attention" rule, the learner's stars and statuses (which are shown, never changed, by custom reviews), and the bulk-selection pattern from Library Step 6, which the "Add to review" action reuses.
-- **Review and re-practice:** the exercise kinds, the sections and stepper, the exercise shell (ratings, undo, early finish, saving), and the Quick review chooser, which remains separate.
+- **Practice sessions:** the only source of questions, natural versions, and mistakes; also a source of vocabulary, phrases, and grammar notes, with a reading page for the original.
+- **Library:** the study sessions rule, archiving, restoring, and deleting for session sources only.
+- [Notebooks](feature-Notebooks.md): saved vocabulary, phrases, and grammar notes; notebook-scoped identities, autosave before practice, scoped edit/deletion rules, and Open notebook navigation. Its duplicate-row representative rule remains an open decision.
+- **Collections:** scoped item identity, the "Needs attention" rule, the learner's scoped stars and statuses (shown, never changed, by custom reviews), and the bulk-selection pattern from Library Step 6, reused by Add to review for either source.
+- [Review and re-practice](feature-F4-Review%20and%20re-practice.md): exercise eligibility, sections and stepper, exercise shell (ratings, undo, early finish, saving), and the separate Quick review chooser. Daily/Quick reviews resolve live source changes during practice; custom attempts keep their started snapshots.
 - **Base app layout:** navigation (a link from the Review page), the page header, and the focus layout used for attempts.
 - **Export and backup (F7):** custom reviews, their statuses, and their attempts should be included.
 
@@ -48,7 +51,7 @@ This is different from the **Quick review** described in the Review feature. Qui
 
 ## Goals
 
-- Let the learner create their own practice sets from any items they choose, across all collections.
+- Let the learner create their own practice sets across all collections and from notebooks, without combining same-spelling items from different sources.
 - Make it easy to gather items from many places, with one place that already exists to keep the picks safe.
 - Let the learner say plainly when a set is ready to practise, and tell at a glance which sets are ready and which are still being built.
 - Warn calmly when a set has grown long enough to take real time, and refuse clearly only at the hard maximum.
@@ -68,64 +71,74 @@ This is different from the **Quick review** described in the Review feature. Qui
 
 ### Starting a review and filling it
 
-6. The **Add to review** action in each Collections list adds the selected items to a review the learner is still building. It works with the existing bulk-selection pattern, and an item can be added from any collection.
+6. The **Add to review** action in each Collections list adds selected scoped items from either eligible sessions or saved notebooks to a review the learner is still building. It uses existing bulk selection. Notebook sources support words, phrases, and grammar notes only; mistakes and questions remain session-only.
 7. If there is **one** such review, the items go into it without asking. If there are **several**, a small picker asks which one, with the most recently created already chosen. If there are **none**, a review is created and named "Custom Review N", and the items go into it.
 8. A review the learner is still building is one whose status is **Empty** or **Draft**. A **Finished** review is not offered here, because the learner has already said it is ready; to add to one, open it and use **+ Add items**, which never asks.
 9. Adding is always to a review the learner chose or is standing in. Nothing joins a review without the learner choosing it.
 10. A new review is a saved custom review from the first moment, so it **survives page changes, refresh, and a different device** without any special handling, and it holds at most **50 items**.
 11. A review with no items keeps its **Empty** status on the listing and stays there until the learner deletes it. The app never deletes one silently or after a delay.
-12. Items already in the review show as added, and adding them again does nothing.
+12. Items already in the review show as added, and adding the same scoped identity again does nothing. Repeated word/phrase rows in one notebook and comma-separated meanings occupy one slot; matching words in a session or another notebook occupy separate slots. Identical grammar notes remain individual rows.
 13. The learner can remove items, or clear the review. Clearing asks for confirmation.
-14. Adding items never changes an item's marks, statuses, ratings, schedule, or any session.
+14. Adding items never changes an item's marks, statuses, ratings, schedule, or source session/notebook.
 15. When an add would take a review past the recommended **20 items**, the app warns first — for example "This review will hold 26 items. Long reviews take a while to practise." — and offers **Continue** and **Cancel**. Continue adds the items anyway.
 16. The warning never blocks anything below the maximum. No item is left out by it; the recommendation only says how long the practice is likely to be. The hard maximum is a separate, clearly named refusal (requirements 78–80).
-17. Custom reviews are never shown in Collections, Review, Progress, or any other place, and they change nothing anywhere else. There is no basket bar and no separate basket page — every review lives on the listing like any other.
+17. Custom-review activity never feeds Collections, daily/Quick Review results, or Progress. Entry links, Add to review controls, and the notebook shortcut can lead to saved reviews, but there is no basket bar or separate basket page — every review lives on the custom-review listing.
+
+### Create review and practise from a notebook
+
+- **Create review and practise** first saves pending notebook input. Failed or conflicting saves keep the learner's input and block the shortcut; it must not practise stale content.
+- Candidates are **distinct, valid scoped identities** from saved, non-blank rows in this notebook. A row without sufficient main text cannot become an anonymous reference. The screen distinguishes selected membership from exercise-eligible count and explains ineligible items.
+- The chosen set must contain **1–50 members and at least one eligible item**. All retained members, including ineligible ones, count. More than 50 distinct candidates opens selection **before creating any review or attempt**; show kinds, content, eligibility reasons, and selected count. Never silently take the first 50, split into multiple reviews, or create an empty review while selecting. Cancel creates nothing.
+- Validate the maximum and allowed kinds before the existing **above-20 Continue/Cancel warning**. Exactly 20 needs no warning, 21 does, 50 is allowed, and confirming cannot permit 51. Cancelling the warning creates nothing. Allowed kinds default to **all**, not the notebook's populated kinds; only the learner may restrict them.
+- Confirmation creates a **new saved custom review**, using existing naming rules. The action explicitly communicates the learner's choice to mark **this new review Finished** and start an attempt containing every eligible selected member. It neither chooses nor changes an existing unfinished review. Ordinary creation remains Empty and ordinary first adds remain Draft; ordinary Add to review still refuses a whole add above 50.
+- Revalidate saved candidates, parent/source existence, kinds, scoped identities, membership size, and eligibility on the server. Stale selections and retries must not create partial membership, duplicate reviews/attempts, or cross-scope content. If creation succeeds but starting fails, retain the saved review with an honest error and retry path that uses it rather than creating it again.
+- The resulting membership is fixed, **not a notebook subscription**. New rows never autojoin; explicit membership edits and scoped typo-following/deletion remain allowed under the normal custom-review rules.
 
 ### Empty, Draft, and Finished
 
 18. Every custom review has exactly one status: **Empty**, **Draft**, or **Finished**. Only a **Finished** review can be practised.
-19. **Empty** is the status of a review with no items, and a new review starts there. The app sets it again the moment a review loses its last item, and the learner never chooses or clears it.
-20. The first item added changes **Empty** to **Draft** by itself. With Empty, that is the only status change the app ever makes on its own.
-21. The learner marks a review **Finished** when they want to practise it, and can put it back to **Draft** whenever they like. The control sits on the review's page and on its card, and the change takes effect at once — there is no save step, as with the name.
-22. Only the learner moves a review between Draft and Finished. Growing past the recommended size, an attempt finishing, adding items, and archiving or restoring a session all leave the choice alone. Losing the last item is the one exception, and it moves the review to Empty.
+19. **Empty** is the status of a review with no items, and ordinary creation starts there. The app sets it again the moment a review loses its last item, and the learner never chooses or clears it.
+20. The first ordinary add changes **Empty** to **Draft** by itself. With Empty, that is the only status change the app ever makes on its own.
+21. The learner marks a review **Finished** when they want to practise it, and can put it back to **Draft** whenever they like. The control sits on the review's page and card and takes effect immediately. The notebook's explicit **Create review and practise** request also chooses Finished, for its new review only; readiness is never inferred from eligibility or notebook content.
+22. Only the learner moves a review between Draft and Finished. Growing past the recommended size, an attempt finishing, adding items, source edits, and archiving/restoring a session all leave the choice alone. Losing the last scoped member, including through notebook hard deletion, is the one exception: it moves the review to Empty.
 23. A **Draft** or **Empty** review cannot be started. Its card and page offer no Start action, and the page says what would make it ready — add items, or mark it Finished. A **Finished** review with no eligible item left cannot be started either, and says its items are unavailable right now.
 24. Putting a Finished review back to Draft removes its Start action everywhere on the next load. An attempt already in progress stays resumable and finishes normally; only new attempts are blocked.
 25. A review that was emptied and then filled again comes back as **Draft**, so the learner looks at the new set before practising it. Its past attempts stay exactly as they were.
 
 ### Setting up a review
 
-26. Opening a review shows its items grouped by collection with counts, its **name**, its **description**, and its **status** with the Draft-or-Finished control. All three can be set or changed at any time, and changes take effect immediately — there is no save step.
+26. Opening a review shows its items grouped by collection with **distinct scoped counts**, its **name**, its **description**, and its **status** with the Draft-or-Finished control. Label each item's source: session context or notebook name/topic, so a notebook's word and a same-spelling session word remain distinguishable in membership and eligible counts. No notebook session dates or question numbers are invented. Name, description, and status can be changed immediately without a save step.
 27. The learner can give the review a **name** and an optional **description**. A review created without a name is named **"Custom Review N"**, using the next number not already used by one of the learner's reviews.
 28. There are **no counts to set per exercise kind**. What the learner adds is what the review holds, and an attempt uses every eligible item in it.
 29. A review of more than 20 items carries a **"Too Many Items"** tag beside its name, with its item count. The tag is worded exactly as on the card, and it goes away once the review holds 20 items or fewer.
 30. Items that are in the review but **not eligible yet** (for example a mistake with no correction, or a question with no natural version) are shown in a separate line with the reason, so the learner understands why they are not used.
 31. **+ Add items** on a review's page opens the Collections pages **filtered to eligible items of the kinds the review allows**, so the learner only sees items that can be used. Every item there has the same **Add to review** action, and its picks land in this review.
 32. Removing an item from the review's page does not affect the item in its collection or in any other review.
-33. Items the learner did not add do not appear. An item added to Collections later does **not** join any review by itself.
+33. Items the learner did not add do not appear. An item added to Collections or to the source notebook later does **not** join a review by itself. Fixed membership permits explicit adds/removes and the existing scoped typo-following/deletion rules; it does not freeze content or eligibility. A retained item gaining required content can become eligible later without being re-added.
 34. None of this changes any item, and a review has no attempts until it is first attempted.
 
 ### Editing a custom review
 
 35. The learner can rename a review, change its description, change its status, and add or remove items at any time.
-36. Changes to items affect **future attempts only**. Past attempts are never rewritten.
+36. Source or membership changes affect **future attempts only**. Every started attempt, including an in-progress/resumed attempt and past history, retains its fixed items and content snapshots; deletion may add a Deleted indicator, not rewrite text or substitute another source. Word/phrase reference changes follow the existing typo rules within the original scope during the successful save, including remaining old appearances and existing destinations. Grammar-note text edits retain the same row identity.
 37. Adding items uses the same **Add to review** action, the same picker, the same **+ Add items** filtered view, the same recommended-size warning, and the same maximum and allowed-kind checks.
 38. Removing every item leaves the review **Empty**, and emptying a review never rewrites its history — past attempts keep their snapshots and their **Deleted** indicators exactly as they were.
 
 ### Attempting a custom review
 
 39. **Start practice** appears on a review's card and page only while it is **Finished** with at least one eligible item, and it names how many items the attempt holds — for example "26 items".
-40. Starting an attempt builds the attempt's fixed list from **every eligible item in the review**, using the same rules as the daily review for mixing kinds and never repeating an item. Each item's text is read at that moment.
+40. Starting an attempt builds its fixed list from **every eligible scoped member**, using the daily rules for mixing kinds and never repeating the same scoped identity. Resolve content and eligibility live at that moment **only within each reference's source**. Same-spelling items in different scopes can each appear; neither supplies another's meaning/example or makes it eligible. Duplicate notebook rows use the deterministic shared representative rule once that open decision in Notebooks is resolved, never accidental SQL row order.
 41. An attempt uses the **same exercise screen, sections, stepper, rating buttons, undo, early finish, and saving** as Review. The stepper shows one step per kind that has items in the attempt.
 42. Ratings made in an attempt are stored **on that attempt only**. They do not change the item's schedule, marks, statuses, or any other review.
 43. Undo, early finish, and resuming a half-finished attempt work as in Review, but only within the attempt.
 44. An attempt is **complete** when every item is rated or skipped. Early finish is allowed once an item is rated, and an unfinished attempt remains in the history as unfinished.
 45. Every attempt is numbered. The screen shows the **current attempt number** ("1st attempt", "2nd attempt", "3rd attempt"), counting **every attempt started**, so an unfinished attempt is visible as the latest one.
-46. An attempt keeps a **snapshot** of each item's text, meaning, example, and kind as it was attempted, so the history stays readable after items are edited.
-47. An item that has been **archived** is shown as **Not available right now** and skipped in new attempts. It returns in full when its session is restored.
-48. An item that has been **deleted** is removed from the review permanently. In **past attempts** that included it, the item stays in its snapshot with a **Deleted** indicator, so the learner knows why it is no longer part of the review.
-49. An item that is still available but whose text was edited shows its current text in the next attempt, and its snapshot in past attempts keeps the older text.
+46. Every started attempt keeps a **snapshot** of each item's text, meaning, example, kind, and scoped reference. In-progress/resumed and past attempts keep that content after source edits or removal; sharing the Review screen does not import daily/Quick live-source replacement or skipping into this snapshot contract.
+47. A session item that has been **archived** is shown as **Not available right now** and skipped in new attempts. Its membership is retained and it returns when its session is restored. Notebooks have no archived state.
+48. A **deleted scoped item** is pruned permanently from review membership. Deleting a notebook removes only its references; deleting one duplicate row leaves the reference while another appearance remains in that notebook. Another scope's matching word never keeps a reference alive or replaces it, and a recreated notebook never revives it. Started attempts retain their snapshots with **Deleted** indicators. Losing the last member makes the review Empty, not deleted.
+49. Future attempts resolve current content and eligibility in the original scope. An included item losing required content stays a member but is skipped until eligible again. Existing attempt snapshots remain unchanged.
 50. Attempts never change the learner's marks: stars, statuses, and notes stay exactly as they were. They never change the review's own status either.
-51. A learner can open the **source item** from an attempt (for example "See original session") to see its context, in a new tab, without losing the attempt.
+51. A learner can open the **source item** in a new tab without losing the attempt: **See original session** for session context or **Open notebook** at the notebook entry. A deleted source has a calm unavailable indication, no broken link and no same-spelling fallback in another scope.
 
 ### Attempt history and attempt statuses
 
@@ -170,9 +183,9 @@ This is different from the **Quick review** described in the Review feature. Qui
 
 ### Staying in step
 
-71. Custom reviews reflect the learner's sessions straight away. When an item's session is finished, edited, archived, restored, or deleted, the review, its counts, its Empty status, and its availability change on the next load, as described above.
-72. Eligibility uses the same rules as Review: finished sessions that are not archived, and the same rules for corrections, natural versions, bold parts, and meanings.
-73. Custom reviews are never stale, and only the latest request updates the screen.
+71. Reviews' current membership, counts, Empty status, and availability reflect source changes on the next load through existing refresh conventions. Session finish/edit/archive/restore/delete behaviour remains; notebook saves and scoped hard deletion also apply. New notebook rows do not autojoin, and started snapshots are not refreshed from the source. Renaming a notebook or changing its topic/description does not reset references.
+72. Eligibility uses [Review's](feature-F4-Review%20and%20re-practice.md) unchanged per-kind rules for meanings, usable examples, corrections, natural versions, and rich grammar notes. Sessions must be finished and not archived; saved notebook vocabulary/phrases/grammar need no finish step. A phrase without a meaning need not be an attention error but cannot supply a meaning flashcard. No source may borrow required content from another scope.
+73. Only the latest request updates the screen; do not promise unsupported cross-device live updates. Server-side revalidation protects starts and notebook shortcut submissions against stale saved content, changed membership, and deleted sources.
 
 ### Experience
 
@@ -183,10 +196,10 @@ This is different from the **Quick review** described in the Review feature. Qui
 
 ### The maximum and the allowed kinds
 
-78. A custom review holds at most **50 items**. Every item it holds counts, including items not eligible yet and items not available right now, so the number the learner sees is the number the maximum uses.
-79. An add that would take the review past 50 is **refused as a whole** — nothing is added, and no partial subset is slipped in — with a message naming the room left, for example "This review has room for 5 more items." An add that lands exactly on 50 is allowed.
-80. The maximum is enforced on every way in — **Add to review**, the picker, and **+ Add items** — with the same message in each, and the refusal changes nothing outside the review.
-81. A review allows **all item kinds by default** — words, phrases, grammar notes, mistakes, and questions. The learner can choose a subset when creating the review and change it at any time later.
+78. A custom review holds at most **50 distinct scoped members**. All retained members count, including ineligible and unavailable items. Duplicate notebook word/phrase rows or comma-separated meanings do not inflate it; grammar rows remain separate. The visible count and maximum use the same identities.
+79. An ordinary add that would take the review past 50 is **refused as a whole** — nothing is added, and no partial subset is slipped in — with the room left named, for example "This review has room for 5 more items." Exactly 50 is allowed.
+80. The maximum applies to **Add to review**, its picker, **+ Add items**, and **Create review and practise**. Ordinary adds use the same whole-refusal message; the notebook shortcut opens selection before creation when candidates exceed 50 and refuses an over-limit submission. It never truncates. Validation and cancellation create no partial membership.
+81. A review allows **all item kinds by default** — words, phrases, grammar notes, mistakes, and questions — even when created from a notebook containing only some kinds. Only the learner may choose a subset, subject to the shared rules. Notebook rows cannot supply mistakes or questions just because those kinds are allowed.
 82. The review's page and its card **show which kinds the review allows**, in the collections' own words — for example "Words only", "Words + Phrases", or "All kinds".
 83. An item of a kind the review does not allow is never added. The add is refused with a message naming the kinds the review allows, and **+ Add items** never shows items of other kinds.
 84. Turning off a kind the review still holds items of is **refused until those items are removed**, with a message naming them — for example "Remove the 4 phrase items first." Turning a kind on is always allowed.
@@ -221,18 +234,18 @@ This is different from the **Quick review** described in the Review feature. Qui
 
 This describes the intended approach at a high level, using the agreed stack (Laravel, Inertia, Vue, Tailwind, shadcn-vue). It is a plan to refine, not a final design.
 
-1. **Build on what exists.** Use the item identity, the study sessions rule, the eligibility rules from Review, the exercise sections and stepper, the exercise shell, and the bulk-selection pattern from Collections.
+1. **Build on scoped sources.** Preserve existing session identities/grouping and study-session eligibility. Add saved notebook words/phrases keyed by notebook identity, kind, and normalised main text, plus individual grammar-row references with parent checks. Reuse Review eligibility and the Collections bulk-selection pattern. Constrain source content, eligibility, typo-following, and deletion to that same scope; resolve the shared duplicate-row representative rule from Notebooks before implementation.
 2. **Keep custom reviews in their own space.** Store custom reviews, their items, their statuses, their attempts, and each attempt's ratings separately from the daily review's ratings, schedules, and history, so no code path can mix them up. Mark attempt ratings so the schedule, suggestions, recent results, and Progress never read them.
 3. **Stage in the review itself.** A review the learner is still building is an ordinary custom review record, so the existing review storage is the staging area. There is no basket table, no basket bar, and no save-as-review conversion.
-4. **One status column, three values, two automatic moves.** Store the status on the review as an enum — `Empty`, `Draft`, `Finished` — with `Empty` for a new review. Adding the first item moves `Empty` to `Draft`; losing the last item moves any status to `Empty`; only the learner's own control moves `Draft` to `Finished` and back. Nothing else in the app writes the column.
+4. **One status column, three values, two automatic moves.** Store `Empty`, `Draft`, and `Finished` as an enum. Ordinary creation is Empty and the first ordinary add makes it Draft; losing the last member makes any status Empty. Finished is learner-chosen through the status control or the explicit notebook create-and-practise request for a new review only. Eligibility alone never chooses Finished.
 5. **One answer to "can this be practised".** A single read helper — `Finished` status and at least one eligible item — gates the card's Start action, the page's Start action, and the attempt-creation Action, so the three can never disagree. The listing's status filter reads the stored column straight from the query.
 6. **Keep the size advice advisory and the maximum enforced.** Hold 20 as the recommended size and 50 as the hard maximum in one place. The add path returns "needs confirmation" with the resulting count when an add would cross the recommendation, and refuses with the room left when it would cross the maximum — checked against every item the review holds, inside the same transaction as the add. The front end shows the warning and re-sends the same request confirmed. Nothing in the attempt build reads either number, so no attempt is ever shortened.
-7. **Store references and snapshots.** A review keeps item identities. Each attempt keeps a snapshot of each item's text and kind at the time of the attempt, so history stays readable after edits or deletions.
-8. **Build the attempt list.** Reuse the Review piece that chooses items, extended with the eligibility rules, to build the fixed list from every eligible item in the review.
-9. **Build the review flow.** New custom review creating a named review at once, the Add to review action with its single-review shortcut and its picker over the reviews still being built, the status control, the review's page with grouped items, name, and description, the "not eligible yet" line, and the **+ Add items** view filtered to eligible collection items.
+7. **Store references and snapshots.** Membership keeps scoped identities, updated only by explicit membership actions and scoped source edit/deletion rules. New notebook rows never autojoin. Snapshot content and references at attempt start; later source edits never rewrite started, resumed, or past attempts. Do not reuse daily/Quick live-source behaviour for custom snapshots.
+8. **Build the attempt list.** Resolve every retained member's current eligibility/content in its own scope, then snapshot every eligible member once. Ineligible members stay retained and can become eligible later. No content or fallback matching comes from another scope.
+9. **Build the review flow.** Preserve ordinary creation, Add to review's unfinished-review shortcut/picker, the status control, and + Add items filtered to eligible allowed kinds. Show source labels and scoped membership/eligible counts. Add the distinct notebook shortcut: save pending input, select before creation above 50, validate 1–50 with at least one eligible, check allowed kinds, warn above 20, then create a new review with the learner's explicit Finished choice and start. Use request validation and write actions with transactional membership/count/readiness checks and established retry protection; never duplicate or partially create on stale/retried requests. If starting fails after creation, recovery uses the saved review. Defaults remain all kinds, never inferred.
 10. **Build the listing and the card.** Search, status filters, sorting, the card's front with its status label and the Draft-or-Finished control, the "Too Many Items" tag, and the attempt history page.
 11. **Build attempts.** Reuse the exercise screen with its stepper, ratings, undo, early finish, and resume, scoped to the attempt. Refuse to start when the review is not Finished or has nothing eligible, and record attempt numbers, statuses, and counts.
-12. **Handle availability.** Archived items are marked not available and skipped; deleted items are removed from reviews, with the Deleted indicator shown only in past attempts' snapshots. Every path that drops an item — the learner's own removal, a session deletion, an archive — recomputes whether the review still has any, and moves it to `Empty` when it does not.
+12. **Handle availability and scoped pruning.** Session archive marks items unavailable for new attempts but retains membership and status; restore returns availability. Notebooks have hard deletion only. Source-save/deletion and membership write actions, never read queries/resources, prune deleted scoped references and make a review Empty only when its last member is lost. A surviving duplicate in that notebook retains the item; matching text elsewhere cannot. Started snapshots remain with Deleted indicators and source navigation becomes unavailable rather than relinking. Keep source resolution and count reads bounded.
 13. **Handle deletion of a review.** Confirm, then delete the review and its attempts, touching nothing else. Empty reviews use the same path.
 14. **Keep everything exclusive.** Add tests that prove custom attempts, ratings, statuses shown, review statuses, and the recommended-size warning change nothing outside custom reviews.
 15. **Connect exports.** Include custom reviews, their statuses, and their attempts in the exports planned in F7, without changing anything in the app.
@@ -270,7 +283,7 @@ All interface pieces should come from **shadcn-vue**. Only build a custom piece 
 
 ## Implementation Steps
 
-The steps are ordered so each one leaves a usable, reviewable piece of the feature.
+The steps are ordered so each one leaves a usable, reviewable piece of the feature. These are **planned requirements and acceptance tests**, not historical evidence that notebook integration has shipped or passed checks. Exercise notebook behaviour through learner-visible routes and server request boundaries; resolve the shared duplicate-row content rule before implementing its dependent paths.
 
 ### Step 1: New reviews, the three statuses, and "Add to review"
 
@@ -287,8 +300,10 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 - Items already in the review show as added, and adding them again does nothing.
 - An add that would take a review past 20 items warns first and names the resulting count. Cancel adds nothing, and Continue adds every item asked for.
 - Crossing the recommended size again warns again, and a review already above it warns on every further add.
-- An add of any size is never refused, and no item is ever left out because of the recommendation. _(Superseded by Step 7: the recommendation still never refuses; the 50-item maximum does.)_
-- A review survives page changes, refresh, and a different browser session for the same learner, has no maximum size, and adding many items stays fast. _(Superseded by Step 7: a review holds at most 50 items.)_
+- The recommendation never refuses an add, but an ordinary add above the 50-member maximum is refused as a whole (Step 7); nothing is silently left out.
+- A review survives page changes, refresh, and a different browser session for the same learner, with at most 50 members and responsive adding.
+- Adding a notebook's word and matching words from another notebook and a session retains three scoped members with distinguishable source labels/counts. Duplicate rows in one notebook and comma-separated meanings count once; identical grammar rows remain separate.
+- Collection adds and direct requests validate source, kind, and scoped identity. Unsupported notebook mistakes/questions and mismatched parents cannot add references or borrow content.
 - Removing items and clearing a review work, and clearing asks for confirmation.
 - Add to review changes no item's marks, statuses, ratings, schedule, or sessions.
 - No basket bar, basket page, or basket data appears anywhere in the app.
@@ -307,7 +322,9 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 - Items not eligible yet appear in their own line with the reason.
 - **+ Add items** opens the Collections pages filtered to eligible items, and each item there adds itself to this review.
 - Removing an item from the review leaves it in its collection and in every other review.
-- Items added to Collections later do not join a review by themselves, and nothing here changes any item.
+- Items added to Collections or the originating notebook later never autojoin. Explicit adds/removes remain available under the normal constraints.
+- Retained notebook members gaining or losing required content change future eligibility without re-adding; no same-spelling source can supply missing content.
+- A notebook rename, description edit, or topic change leaves scoped membership intact; source labels update without fabricated session dates.
 
 ### Step 3: Listing, search, filters, and cards
 
@@ -336,7 +353,9 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 - A Finished review with nothing eligible — every item archived, or none of them usable yet — cannot be started and says its items are unavailable right now.
 - The Start control names how many items the attempt holds.
 - Putting a Finished review back to Draft mid-attempt leaves the running attempt resumable and finishable, and blocks only new attempts.
-- Each item's text is read at the start of the attempt, and later edits appear only in later attempts.
+- Each item's text is read from its own scope at attempt start. Editing notebook meanings, examples, phrases, or grammar changes future attempts only; started, in-progress/resumed, and past snapshots remain unchanged.
+- Duplicate notebook rows with different content or one incomplete row resolve deterministically under the agreed shared representative rule and agree with Collections. No test or implementation treats incidental SQL order as that decision.
+- Notebook phrase/grammar eligibility retains Review's meaning-flashcard, usable-example, bold one-to-four-word, quoted-fallback, and invalid-rich-text rules.
 - The stepper shows one step per kind present in the attempt, and the screen is the same as Review's.
 - Ratings are stored on the attempt only, and the item's schedule, marks, status, and other reviews are unchanged.
 - Undo, early finish, and resuming work within the attempt only.
@@ -344,7 +363,7 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 - Statuses are Not started, In progress, Completed, and Finished early, with descriptive wording and no pass or fail language.
 - Each attempt records its start and finish dates in local time, counts of Easy, Okay, and Hard, skipped items, and its status.
 - The attempt history lists attempts most recent first, and opening one shows its items with snapshot text and ratings.
-- "See original session" opens in a new tab and keeps the attempt.
+- See original session and Open notebook each open the correct source in a new tab and keep the attempt. Notebook context has no invented session date/question number; deleted sources offer no broken or cross-scope link.
 
 ### Step 5: Availability, deletion of items, and deletion of reviews
 
@@ -354,7 +373,10 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 
 - An archived item shows as Not available right now and is skipped in new attempts, and it returns in full when its session is restored.
 - Archiving every item in a Finished review leaves it Finished with its items present, and stops it starting an attempt because nothing is eligible.
-- A deleted item is removed from every review permanently, and its snapshot in past attempts keeps the text with a Deleted indicator.
+- A deleted scoped item is removed from every referencing review permanently, while all started snapshots retain text with a Deleted indicator.
+- Notebook hard deletion prunes only that notebook's references, leaves matching session/other-notebook items untouched, and does not archive or delete the review/history. Losing the last member makes it Empty.
+- Removing one duplicate notebook row retains the identity while an appearance remains in that notebook; deleting its last appearance prunes it even if another scope matches. Recreating a notebook with the same name/text cannot revive the reference.
+- Word/phrase typo-following stays within the notebook during save, including remaining old appearances and existing destinations, without duplicating membership. Grammar text edits retain row identity. Session grouping and archive/restore behaviour remain unchanged.
 - A review whose items are all deleted, or all removed by the learner, becomes Empty with a note, whatever status it held, and past attempts keep their snapshots.
 - Filling that review again shows Draft, not the status it had before it was emptied.
 - Deleting a review asks for confirmation, states how many attempts will be deleted, and then removes the review and all its attempts.
@@ -370,13 +392,14 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 - Custom attempt ratings never count toward the daily schedule, status suggestions, recent results, streaks, practice days, Progress totals, marks, or the "waiting for a fix" note.
 - Custom reviews never appear in recent results, and the daily review's suggestion is unchanged by any custom activity.
 - A review's Empty, Draft, or Finished status never appears on, or changes, anything in Collections, Review, or Progress.
-- Editing a session, archiving, restoring, and deleting a session each update custom reviews on the next load, and nothing else changes.
-- Custom reviews are never stale, and only the latest request updates the screen.
+- Session edits/archive/restore/deletion and notebook saves/hard deletion update current custom-review membership/content/counts on the next load without rewriting started snapshots or changing other scopes.
+- Notebook-backed custom attempts, ratings, undo, early finish, and resume change no daily/Quick ratings or schedules, recent results, marks, status suggestions, streaks, practice days, or Progress metrics. Daily/Quick review-activity integration must still exclude saved custom attempts.
+- Only the latest request updates the screen; stale starts are revalidated at the request boundary.
 - Exports include custom reviews, their statuses, and their attempts without changing anything in the app.
 - A full journey works: create a review, gather items from several collections with the size warning answered, mark it Finished, attempt every item it holds, undo one rating, finish early, see the attempt in history, put the review back to Draft and see Start disappear, archive a session and see its items become not available, delete an item and see the Deleted indicator in past attempts, and delete the review with its attempts.
 - Every screen works on phones, tablets, and computers, in light and dark mode, with the keyboard and a screen reader, and with no sideways scrolling.
 - The status, the item count, the "Too Many Items" tag, and the warning are worded the same everywhere they appear, and nothing calls a practice session a test.
-- With about 5,000 items and many reviews, the listing, review pages, and attempts stay fast, with query counts that do not grow with the number of items. _(Superseded by Step 7: the scale guarantee is now the 50-item maximum.)_
+- Listings and source selection stay bounded for large notebooks; custom-review pages and attempts stay responsive at the 50-member maximum without per-member source queries.
 
 ### Step 7: The item maximum, allowed kinds, and paginated history
 
@@ -395,31 +418,51 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 - A review at the maximum renders and starts an attempt quickly.
 - The refusals and the allowed-kinds label work with the keyboard and are announced by screen readers, and nothing about them changes anything outside custom reviews.
 
+### Step 8: Notebook Create review and practise
+
+**What it delivers:** A distinct, save-first path that creates a new saved custom review with the learner's explicit Finished choice, then starts all its eligible selected items. It never reuses the ordinary unfinished-review picker.
+
+**Tests**
+
+- A learner with no sessions and one eligible notebook member can create and practise. Existing Empty/Draft/Finished reviews remain untouched; ordinary creation still starts Empty and first ordinary adds make Draft.
+- Pending input saves before candidate validation; failed/conflicting saves block creation/start and preserve local input. Blank/unidentifiable rows produce no references.
+- Selection totals use distinct valid scoped identities: multiple meanings/duplicate word rows take one slot, while identical grammar rows take separate slots. Ineligible retained members still count.
+- At 0 selected members or with no eligible member, explain what to fix and create no ready review/attempt. At 1 eligible member the shortcut succeeds; 20 needs no warning, 21 requires Continue, 50 succeeds, and 51 opens selection before any review/attempt exists. A direct submission of 51 is refused.
+- More than 50 saved rows representing at most 50 identities fit; more than 50 identities never silently truncate or split. Cancelling selection or the above-20 warning creates nothing. Ordinary Add to review above 50 still refuses the whole add.
+- All kinds remain the default even from a vocabulary-only notebook. Learner restrictions obey allowed-kind checks before the size warning; disallowed members cannot slip into the request.
+- Server requests revalidate saved source existence, identity, kind, count, and eligibility after concurrent edits/deletion. Stale or forged selections cannot create partial membership or use another notebook/session's content.
+- Double submissions/retries create no duplicate reviews or attempts. If creation succeeds but attempt start fails, the saved review is accessible and retry starts from it, not a replacement review.
+- Later notebook additions never autojoin; explicit membership edits, scoped typo-following, source deletion, live future eligibility, and existing attempt snapshots follow Steps 2, 4, and 5.
+- The shortcut and its attempt preserve the complete isolation asserted in Step 6. Selection, warning, counts, source labels, error recovery, and focus work on mobile, by keyboard, and with screen readers.
+
 ## Open Questions
 
-None at the moment.
+- **Duplicate notebook-row representative:** [Notebooks — Open Questions](feature-Notebooks.md#open-questions) must define deterministic meanings/examples and eligibility for duplicate word/phrase rows, including incomplete rows. Collections and review resolution must share that rule within the notebook. Do not silently settle it through SQL row order or session dates. Notebook parent representation is also unresolved there; this spec does not choose a schema.
 
 ## Decisions Made
 
 - **Custom reviews are saved, named, and repeatable.** Quick review remains a one-off chooser in the Review feature.
 - **Custom reviews are exclusive.** Nothing done inside them affects any other page or calculation.
 - **Custom attempts do not change item marks, ratings, schedules, or statuses**, and never feed the daily suggestion, recent results, status suggestions, streaks, or Progress.
-- **A review still being built is the staging area.** Creating one makes it immediately, named "Custom Review N", and Add to review fills it. The basket, its storage, its bar, its page, and the "save as custom review" step are gone.
-- **Three statuses — Empty, Draft, and Finished — and only Finished can be practised.** Empty and Draft follow the item count automatically; Finished is the learner's mark alone. Keeping the app's own moves down to those two means the learner's intent is never overruled, while a set that was emptied still has to be looked at before it is practised again.
+- **A review still being built is the staging area.** Ordinary creation saves an Empty review named "Custom Review N", and Add to review fills it. No basket or save-as conversion is introduced.
+- **Notebook Create review and practise creates a new saved review only.** Save pending input first; require 1–50 distinct valid selected scoped members with at least one eligible. Above 50 opens selection before creation; above 20 retains the warning. No truncation, partial membership, or duplicate creation on stale/retried requests. Recover a failed attempt start through the saved review.
+- **Three statuses — Empty, Draft, and Finished — and only Finished can be practised.** Empty follows zero membership and the first ordinary add makes Draft. Finished is the learner's mark alone, including the explicit notebook shortcut for its new review; it is never inferred from content. Existing review statuses are not changed by that shortcut.
 - **An emptied and refilled review comes back as Draft, not Finished.** The rebuilt set is not the set the learner marked ready, so the mark is asked for again. This is the one place where Empty overrides a Finished choice.
 - **An attempt already running is never cut short by a status change.** Putting a review back to Draft blocks new attempts only, because stopping halfway would throw away the practice the learner had just done.
 - **One unfinished review is used without asking; several open a small picker defaulting to the most recent.** Finished reviews stay out of the picker, so a set the learner closed is never topped up by accident.
 - **Twenty items is the recommended size, and it is only advice.** Crossing it warns and can be continued past; being above it tags the review. Twenty is roughly a quarter of an hour of practice. Blocking or truncating on the number would refuse something the learner clearly asked for.
 - **The warning, the tag, the card, and the page all read the same number.** A threshold that disagreed between places would be read as a bug rather than as guidance.
 - **Empty reviews stay visible on the listing with their status and are deleted like any other review.** Nothing is deleted automatically, because silent deletion would be surprising.
-- **Items reach a review only through the learner's choice** — Add to review in a collection, or + Add items from the review's own page, filtered to eligible items.
+- **Items reach a review only through the learner's choice** — Add to review, + Add items, or the notebook Create review and practise path. Membership is fixed rather than a notebook subscription; explicit edits and scoped typo-following/deletion remain allowed.
+- **References are source-scoped.** Existing session grouping is unchanged; notebook word/phrase identities use notebook + kind + normalised text, and grammar notes remain individual rows. Content, eligibility, counts, edit-following, and deletion never merge scopes. Duplicate-row representative content remains an open Notebook decision, not implicit query order.
+- **Future attempts use live source content; started attempts keep snapshots.** New notebook rows never autojoin. Retained members may gain/lose eligibility; in-progress/resumed and past custom attempts remain unchanged apart from Deleted indicators. This differs from daily/Quick live-source handling.
 - **There are no per-kind exercise limits.** An attempt uses every eligible item the review holds. Exercise kinds still group the attempt's sections and stepper, and the overall size is bounded by the maximum below.
 - **The maximum is 50 items, counting everything the review holds.** It keeps every review page and every attempt fast at a size the learner can actually reach, and it is enforced as a whole-add refusal that names the room left. The recommended 20 stays advice; only the maximum blocks.
-- **A review allows all kinds by default, or a chosen subset.** The choice is shown on the card and page and changeable later; a kind still held cannot be turned off until its items are removed, so narrowing never silently drops anything.
+- **A review allows all kinds by default, or a learner-chosen subset.** Notebook populated kinds never redefine the default. The choice is shown on the card and page and changeable later; a kind still held cannot be turned off until its items are removed, so narrowing never silently drops anything.
 - **The attempt history is paginated; the item list is not.** Ten attempts per page with Load more bounds a history that can grow forever, while the 50-item maximum makes paging the item list unnecessary.
 - **Default names are sequential**, using the next unused number, given when the review is created.
-- **Deleted items are removed permanently** from reviews. Past attempts keep a snapshot of the text with a Deleted indicator.
-- **Archived items are not available** while archived, and return in full on restore.
+- **Deleted scoped items are pruned permanently** from reviews, with the last loss making the review Empty and started snapshots retaining text with Deleted indicators. A surviving duplicate in the same scope preserves the item; matching text elsewhere or a recreated notebook does not.
+- **Session archive is unchanged; notebooks are hard-deleted, never archived.** Archived session members remain held but unavailable for new attempts, and return on restore. Notebook deletion touches only its own scoped references, not other sources or custom-attempt history.
 - **Deleting a review deletes its attempts** as well, after confirmation.
 - **Attempt statuses are Not started, In progress, Completed, and Finished early**, described without pass or fail wording.
 - **Custom review attempts never appear in recent results.**

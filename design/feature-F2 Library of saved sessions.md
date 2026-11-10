@@ -2,7 +2,7 @@
 
 ## Summary
 
-The Library is the one place where the learner can find every practice session they have ever recorded. It lists sessions newest first, lets the learner narrow the list by topic, date, content type, and status, and lets them **search for any word, phrase, or mistake ever saved**. From the Library the learner can open a session to read it again, edit it, archive it, or delete it, and can **select several sessions at once** to archive, restore, or delete them together.
+The Library is the one place where the learner can find every practice session they have ever recorded. It lists sessions newest first, lets the learner narrow the list by topic, date, content type, and status, and lets them **search for any word, phrase, or mistake saved in sessions**. From the Library the learner can open a session to read it again, edit it, archive it, or delete it, and can **select several sessions at once** to archive, restore, or delete them together. [Notebooks](feature-Notebooks.md) are a separate source and destination: the Library's lists, search, filters, counts, selection, and empty states remain session-only.
 
 Practice is only useful if it can be found again. The Library turns a growing pile of saved conversations into something the learner can browse and search quickly, so they can revisit exactly what they want to practice.
 
@@ -18,38 +18,42 @@ Practice is only useful if it can be found again. The Library turns a growing pi
 - Search ignores capitalization, accents, extra spaces, and formatting.
 - **Archiving** is a gentle, reversible way to hide a **finished** session the learner no longer wants to see. **Unfinished sessions cannot be archived.** They can be continued, finished, or deleted. Because a finished session never goes back to unfinished, every archived session is a finished one. **Deleting** is permanent and is available for both finished and unfinished sessions.
 - Archived sessions are hidden from the main Library and from the Home lists, and are **not used** by Collections and Review. They stay available in an Archived view and can be restored.
-- Archived sessions **still count in Progress totals** (for example total words learned) and are **included in exports**, with their archived status kept. Archiving never removes anything from the learner's history or data.
-- **Totals, practice days, and streaks follow the content.** They are worked out from the **finished sessions that exist**, including archived ones, using the day each session was **finished**. Unfinished sessions never count. Archiving or restoring a session changes nothing. **Deleting a finished session lowers the totals by what it contained, and removes its practice day if no other finished session was finished on that day, which can lower the streak.** Deleting an unfinished session changes nothing.
+- Archived sessions **still count in session-derived Progress totals** (for example total words learned) and are **included in exports**, with their archived status kept. Archiving never removes anything from the learner's history or data.
+- **Session-derived totals, practice days, and streaks follow session content.** They are worked out from the **finished sessions that exist**, including archived ones, using the day each session was **finished**. Unfinished sessions never count. Archiving or restoring a session changes none of these measures. **Deleting a finished session lowers the totals by what it contained, and removes its practice day if no other finished session was finished on that day, which can lower the streak.** Deleting an unfinished session changes none of these measures.
+- **Progress scope throughout this document:** totals, practice days, streaks, and deletion previews below refer to these existing session-derived measures, not all possible Progress reporting. Notebook creation/entry editing does not count as a finished session or alter them. Notebook daily/Quick review activity is planned for separate review-activity reporting; exact measures and deletion/history treatment remain [open](feature-Notebooks.md#open-questions), and saved custom-review attempts remain excluded.
 - The practice day that counts for a session is the day it was **finished**, not the day it was started.
-- Totals of saved content (such as total words learned, phrases, mistakes, and grammar points) are worked out the same way. They can be higher than what Collections and Review show, because archived sessions count in totals but are hidden from Collections and Review.
+- Totals of session content (such as total words learned, phrases, mistakes, and grammar points) are worked out the same way. They can be higher than the session-sourced content Collections and Review show, because archived sessions count in these totals but are hidden from Collections and Review. Notebook items in the combined study index do not change this session-only calculation.
+- Topics are shared with notebooks. Renaming a topic updates every reference; deleting one requires no session or notebook references, including empty notebooks and unfinished/archived sessions. Library filter availability is a separate, session-based question.
+- Session archive, restore, and deletion affect only session-sourced study items. Existing session grouping remains unchanged; matching notebook spelling never merges identities or supplies replacement content, marks, schedules, or custom-review references.
 - The learner can select **several sessions at once** and archive, restore, or delete them together. Selecting works the same way in the main Library and in the Archived view.
 - Selection is cleared whenever the filters or search change, so the learner never acts on sessions they can no longer see.
 - The learner needs an internet connection to use the app (offline use is an open question in the spec).
 
 ### Dependencies
 
-- **Practice sessions:** the source of all sessions, their statuses, dates, counts, the reading page, and the editor.
+- **[Practice sessions](feature-Practice%20sessions%20%28copy%20and%20paste%20entry%29.md):** the source of all sessions, their statuses, dates, counts, the reading page, and the editor; also the shared topic picker and name-normalisation rules.
+- **[Notebooks](feature-Notebooks.md):** defines shared-topic rename/reference protection and separate study identities. Notebook listing and hard deletion belong there, not in Library actions; no notebook archive is introduced.
 - **Base app layout:** the main navigation (with a Library link), the page header, empty-state, and session card pieces.
 - **Home screen:** gains a "View all sessions" link, and its lists must stay correct when sessions are archived or deleted.
-- **Personal collections and Review:** must exclude archived and deleted sessions. They are built later, but the rule is set here.
-- **Progress and motivation:** totals, practice days, and streaks are worked out from the finished sessions that exist, including archived ones. Archiving changes nothing. Deleting a finished session lowers totals and can lower the streak, so Progress must be able to preview the exact effect of a deletion for the delete warning.
+- **Collections and Review:** must exclude archived and deleted session appearances under existing session grouping rules, without hiding or changing independent notebook items. Session-source availability and custom-review references must never fall back to same-spelling notebook items.
+- **Progress and motivation:** session-derived totals, practice days, and streaks are worked out from the finished sessions that exist, including archived ones. Archiving changes none of these measures. Deleting a finished session lowers totals and can lower the streak, so Progress must preview this exact session-derived effect for the delete warning. Notebook daily/Quick review-activity reporting is separate and awaits the [Notebook Progress decisions](feature-Notebooks.md#daily-review-and-progress).
 - **Import from spreadsheets:** imported sessions must appear in the Library exactly like any other session.
 - **Export and backup:** includes archived sessions and keeps their archived status in the exported data.
 
 ### Related notes
 
 - **Experience principles that apply:** simple first, calm and encouraging, quick to use on any device, and distraction-free.
-- **Spec goal:** keep everything **organized and searchable**. This feature is the main way that goal is met.
+- **Spec goal:** keep learning material **organized and searchable**. This feature meets that goal for sessions; notebooks have their own listing and search.
 - **Success measures that depend on it:** the learner practices review several times a week, and stops needing spreadsheets. Both depend on being able to find past material quickly.
 - **User flow in the feature list:** open the Library, see a list of sessions with topic, date, and a short summary, narrow it with filters, search for something specific, open a session, then edit, archive, or delete it (delete asks for confirmation).
 - **Screen in the feature list:** a search box and filter chips on top, a list of session cards below showing topic, date, and short counts such as "6 questions · 12 words · 4 mistakes," and a friendly empty state with a "Start your first session" button.
 - **Existing visual reference:** the layout mockups show the general look of cards, chips, and the sidebar and bottom navigation. A specific mockup of the Library screen has not been made yet.
-- **Not part of this feature:** Collections (browsing individual words, phrases, grammar notes, and mistakes), Review exercises, Import, and Export. The Library is about sessions, with search reaching into their contents.
+- **Not part of this feature:** Collections (browsing individual words, phrases, grammar notes, and mistakes), Review exercises, Notebooks and their hard-deletion flow, Import, and Export. The Library is about sessions, with search reaching only into their contents.
 
 ## Goals
 
 - Let the learner find any past session in a few seconds, however many sessions have been saved.
-- Let the learner find any word, phrase, or mistake they have ever saved, and jump straight to it.
+- Let the learner find any word, phrase, or mistake saved in a session, and jump straight to it.
 - Let the learner narrow the list by topic, date, content type, and status, in any combination.
 - Let the learner tidy their sessions safely, one at a time or several at once, with a reversible Archive option and a clearly warned Delete.
 - Keep the Library fast, calm, and easy to use on a phone as well as a computer.
@@ -66,11 +70,11 @@ Practice is only useful if it can be found again. The Library turns a growing pi
 6. Long lists load progressively, so the page stays quick with hundreds of sessions.
 7. Opening a card opens the session: a finished session opens on its reading page, and an unfinished session opens in the editor.
 8. Returning to the Library from a session brings the learner back to the same place, with the same search, filters, sort, and scroll position as before.
-9. If there are no sessions at all, a friendly empty state explains what the Library is for and offers a **Start your first session** button.
+9. If there are no sessions at all, a friendly empty state explains what the Library is for and offers a **Start your first session** button. This remains true when notebooks exist: they do not create session cards or counts, and the wording must not imply that the learner has no saved notebook content.
 
 ### Filtering and sorting
 
-10. The learner can filter by **topic**, choosing one or several of the topics they have used.
+10. The learner can filter by **topic**, choosing one or several topics referenced by the relevant sessions in the Library or Archived view. The picker is not a list of every globally undeletable topic: notebook-only references do not supply Library choices. Renaming a shared topic updates cards, choices, and active filter labels wherever referenced.
 11. The learner can filter by **date**, using quick choices (for example today, the last 7 days, the last 30 days) or a custom range. The filter uses the session date.
 12. The learner can filter by **content type**: mistakes, vocabulary, phrases, grammar notes, or natural versions. A session matches when it has at least one non-empty entry of the chosen type. Several types can be chosen.
 13. The learner can filter by **status**: all, finished, or unfinished.
@@ -82,7 +86,7 @@ Practice is only useful if it can be found again. The Library turns a growing pi
 ### Searching
 
 18. A search box sits at the top of the Library. Results appear as the learner types, after a short pause, and once at least two characters have been entered.
-19. Search covers **everything saved in sessions**: topics, tutor's questions, answers, mistakes (what I said, the correction, and the reason), vocabulary (word, meaning, and example), phrases (phrase, meaning or use, and example), grammar notes, and natural versions.
+19. Search covers **everything saved in sessions**: topics, tutor's questions, answers, mistakes (what I said, the correction, and the reason), vocabulary (word, meaning, and example), phrases (phrase, meaning or use, and example), grammar notes, and natural versions. Notebook names, descriptions, and entries are not searched here; matching notebook spelling must not supply a session match or snippet.
 20. Search ignores capitalization, accents (so "cafe" finds "café"), extra spaces, and formatting. It matches parts of words.
 21. When several words are typed, all of them must appear together in the same entry or field to match.
 22. Results show the **matching sessions**, and beneath each one the **matching items**, each labeled with the section it came from (using the same color tag and text label as elsewhere) and with the matching text highlighted. Highlighting never relies on color alone.
@@ -96,16 +100,16 @@ Practice is only useful if it can be found again. The Library turns a growing pi
 27. Each session card, and the session's reading page, offers a small menu with **Edit**, **Archive**, and **Delete**. For an **unfinished** session, **Archive** is shown as unavailable with a short explanation (for example "Finish this session to archive it"), while **Edit** and **Delete** work normally.
 28. **Edit** opens the session in the editor.
 29. **Archive** hides the session from the main Library, from the Home lists, and from Collections and Review. It happens immediately, with a brief message that offers **Undo**. Archive is available **only for finished sessions**. Archiving an unfinished session is not possible.
-30. Archived sessions **still count in Progress totals** (for example total words learned) and are **included in exports**, with their archived status kept, so archiving never removes anything from the learner's history or data.
-31. Archiving and restoring a session **never change** Progress totals, practice days, or streaks. Practice days come only from finished sessions, and unfinished sessions never count toward them.
+30. Archived sessions **still count in session-derived Progress totals** (for example total words learned) and are **included in exports**, with their archived status kept, so archiving never removes anything from the learner's history or data.
+31. Archiving and restoring a session **never change** session-derived Progress totals, practice days, or streaks. These practice days come only from finished sessions, and unfinished sessions never count toward them. Archive, Undo, and Restore apply only to session-sourced study availability; they must not hide, restore, replace, or change a same-spelling notebook item, its marks, daily schedule, or custom-review references.
 32. An **Archived** view lists archived sessions, searchable and filterable in the same way, each with **Restore** and **Delete** actions.
 33. **Restore** returns the session to the Library exactly as it was, with its original status, dates, and content.
 34. **Delete** permanently removes the session and everything in it, and always asks for confirmation first. The safe choice (Cancel) is the default. What the confirmation says depends on the session's status:
-    - **Unfinished session:** a clear confirmation that names the session (topic and date), says how much will be removed, and states that this cannot be undone. It says that progress totals and streaks will not change, because unfinished sessions do not count. Archive is not suggested, because unfinished sessions cannot be archived.
-    - **Finished session:** a **prominent warning**, visually distinct from other confirmations, in plain and serious wording (for example "Delete this finished session? This cannot be undone."). It names the session (topic and date), lists exactly what will be permanently removed (questions, words, phrases, mistakes, and grammar notes), and says the session will no longer appear in the Library, Collections, or Review. It shows the **exact effect on the learner's progress**: the totals before and after (for example "Words learned: 180 → 168") and, when it applies, the effect on the practice days and streak (for example "Your streak will drop from 6 days to 2 days"). When nothing changes, it says so plainly. It suggests **Archive** as a gentler, reversible alternative that keeps everything and can be chosen directly from the dialog. The delete button is labeled **Delete permanently** and stays disabled until the learner ticks "I understand this cannot be undone."
-35. After a delete, the session disappears everywhere, including Home, search results, and Collections and Review. The learner sees a brief message and stays in the Library.
-36. Deleting a **finished** session **lowers** the Progress totals by the words, phrases, mistakes, and grammar points it contained, and removes its practice day if no other finished session was finished on that day, which can lower the streak. Deleting an **unfinished** session changes nothing, because unfinished sessions never count.
-37. Archiving, restoring, or deleting a session never changes any other session. Topics that are no longer used by any session simply stop appearing in the topic filter.
+    - **Unfinished session:** a clear confirmation that names the session (topic and date), says how much will be removed, and states that this cannot be undone. It says that session-derived progress totals and streaks will not change, because unfinished sessions do not count. Archive is not suggested, because unfinished sessions cannot be archived.
+    - **Finished session:** a **prominent warning**, visually distinct from other confirmations, in plain and serious wording (for example "Delete this finished session? This cannot be undone."). It names the session (topic and date), lists exactly what will be permanently removed (questions, words, phrases, mistakes, and grammar notes), and says the session will no longer appear in the Library, Collections, or Review. It shows the **exact effect on the learner's session-derived progress**: the totals before and after (for example "Words learned: 180 → 168") and, when it applies, the effect on the practice days and streak (for example "Your streak will drop from 6 days to 2 days"). When nothing changes, it says so plainly. It suggests **Archive** as a gentler, reversible alternative that keeps everything and can be chosen directly from the dialog. The delete button is labeled **Delete permanently** and stays disabled until the learner ticks "I understand this cannot be undone."
+35. After a delete, the session and its owned appearances disappear everywhere, including Home, search results, and Collections and Review. Existing session grouping still applies: if another eligible session appearance of the same session-sourced item remains, that identity and its applicable marks, schedules, and custom-review references remain. Notebook spelling cannot keep a deleted session identity alive or replace it. Independent notebook items and their marks, schedules, and custom-review references are never removed or changed. Deletion previews must reflect this source-isolated impact. The learner sees a brief message and stays in the Library.
+36. Deleting a **finished** session **lowers** the session-derived Progress totals by the words, phrases, mistakes, and grammar points it contained, and removes its practice day if no other finished session was finished on that day, which can lower the streak. Deleting an **unfinished** session changes none of these measures, because unfinished sessions never count. A remaining grouped study identity does not preserve the deleted session's contribution to these totals.
+37. Archiving, restoring, or deleting a session never changes any other session or notebook. Removing the last relevant session reference can remove a topic from the Library picker even if a notebook still uses it. This is not topic deletion: source removal leaves the shared topic intact. A topic can be deleted separately only with **no session or notebook references**, including unfinished/archived sessions and empty notebooks. Refusal explains that it is in use, with no cascade or implicit reassignment to General. See [Notebooks: Shared topics](feature-Notebooks.md#shared-topics) and [Practice sessions: Shared topics](feature-Practice%20sessions%20%28copy%20and%20paste%20entry%29.md#shared-topics).
 38. If a session is archived or deleted while its card or page is open elsewhere, opening it shows a calm "We couldn't find that session" page with a link back to the Library.
 
 ### Selecting several sessions
@@ -118,10 +122,10 @@ Practice is only useful if it can be found again. The Library turns a growing pi
 44. **Archive** (several) happens immediately, with one brief message such as "3 sessions archived" that offers **Undo**. Undo restores all of them. Unfinished sessions in the selection are skipped, and the message says how many were archived and how many were skipped because unfinished sessions cannot be archived. Each archived session follows the same archive rules as a single session.
 45. **Restore** (several), in the Archived view, returns all selected sessions to the Library exactly as they were.
 46. **Delete** (several) always asks for confirmation first, and the safe choice (Cancel) is the default. The confirmation states how many sessions will be deleted, names the first few (topic and date) followed by "and N more," says how much will be removed in total, and states clearly that this cannot be undone.
-    - If **any finished session** is included, the confirmation shows the same **prominent warning** as for a single finished session: it says how many finished sessions are included, what will be permanently removed, and that they will leave the Library, Collections, and Review. It shows the **combined effect on progress** (totals before and after, and the effect on practice days and the streak, worked out for all of them together). It suggests **Archive** for those finished sessions, and the **Delete permanently** button stays disabled until the learner ticks "I understand this cannot be undone."
-    - If **only unfinished sessions** are selected, a clear confirmation is enough. It does not suggest Archive and does not need the tick, and it says that progress totals and streaks will not change.
+    - If **any finished session** is included, the confirmation shows the same **prominent warning** as for a single finished session: it says how many finished sessions are included, what will be permanently removed, and that they will leave the Library, Collections, and Review. It shows the **combined effect on session-derived progress** (totals before and after, and the effect on practice days and the streak, worked out for all of them together). It suggests **Archive** for those finished sessions, and the **Delete permanently** button stays disabled until the learner ticks "I understand this cannot be undone."
+    - If **only unfinished sessions** are selected, a clear confirmation is enough. It does not suggest Archive and does not need the tick, and it says that session-derived progress totals and streaks will not change.
 47. If some selected sessions cannot be changed (for example, they were already archived or deleted in another tab, or, for Archive, they are unfinished), the rest are still processed, and the learner is told clearly how many were changed and how many were skipped. No session is left half-changed, and Undo covers only the sessions that were actually changed.
-48. After a bulk action, selection mode ends, the list, the result count, and the Home lists update, and a brief message confirms what happened.
+48. After a bulk action, selection mode ends, the list, the result count, and the Home lists update, and a brief message confirms what happened. Select all and bulk actions include sessions only and obey the same topic protection and source-isolated impact rules as single-session actions; no notebook or notebook item can be selected or changed.
 49. Selecting works with the keyboard and a screen reader: each checkbox is labeled with its session's topic and date, the selected count is announced calmly, and the selection bar is reachable. On a phone, the selection bar stays within easy reach of the thumb.
 
 ### Experience
@@ -145,10 +149,12 @@ Practice is only useful if it can be found again. The Library turns a growing pi
 - **Returning to the Library:** after editing a session, archiving, or deleting, the list reflects the change when the learner returns, without needing a refresh.
 - **Archived and deleted while another tab is open:** the other tab shows correct information after its next load, and opening an affected session shows the friendly "couldn't find that session" page.
 - **Undo after archive:** if the learner navigates away before pressing Undo, the session simply stays archived and can be restored from the Archived view.
-- **Deleting the only session:** the Library shows the empty state again.
+- **Deleting the only session:** the Library shows the session empty state again, even if notebooks remain. Notebook-only content never fills Library search results or filtered/Archived empty states.
+- **A shared topic loses its last session reference:** it can leave the Library picker while remaining undeletable because a notebook still references it, even if that notebook is empty. Shared renames still reach every session and notebook reference; source deletion never deletes the topic.
+- **The same word in a notebook and a session:** archive, restore, and delete affect only the session source, never the notebook item or its marks, schedule, or custom-review references. Hard notebook deletion belongs to [Notebooks](feature-Notebooks.md#hard-deletion).
 - **Deleting an unfinished session shown on Home:** the "Continue where you left off" card updates and no longer shows it.
 - **Deleting a finished session that was the only one finished that day:** that day stops counting and the streak can drop. The warning showed the exact effect first.
-- **Deleting a finished session:** its words, phrases, mistakes, and grammar points leave the Progress totals, Collections, and Review. The warning showed the new totals first.
+- **Deleting a finished session:** its content leaves the session-derived Progress totals and its appearances leave Collections and Review. A grouped session item remains available while another eligible session appearance remains; a notebook appearance cannot preserve or replace that session identity. Independent notebook items remain unchanged. The warning showed the correct session-derived totals and source-isolated study impact first.
 - **Deleting a finished session that was edited after it was finished:** the totals drop by the content the session had at the moment it is deleted.
 - **Deleting an unfinished session:** nothing was counted in the totals, so nothing changes.
 - **An unfinished session, with or without content:** it never counts toward a practice day, so deleting it never affects streaks.
@@ -164,7 +170,7 @@ Practice is only useful if it can be found again. The Library turns a growing pi
 - **Mixed finished and unfinished sessions in a bulk delete:** only the finished ones change totals and streaks, and the warning shows the combined result.
 - **Several finished sessions deleted together, from the same day or across a streak:** the warning works out the combined effect accurately, not session by session.
 - **A deletion that makes the streak much shorter or zero:** the warning states the numbers plainly and keeps Archive visible as the alternative.
-- **Totals higher than Collections:** Progress totals can be higher than what Collections and Review show, because archived sessions count in totals but are hidden from them. This is by design.
+- **Totals higher than session-sourced Collections content:** session-derived Progress totals can be higher because archived sessions count in totals but are hidden from Collections and Review. Notebook items in the combined index are separate and do not change the session calculation. This is by design.
 - **Pressing an action twice:** a bulk action runs once and causes no error.
 - **Starting a bulk action with nothing selected:** not possible, because the actions are unavailable.
 - **Bulk archive that includes unfinished sessions:** the unfinished ones are skipped and reported, and the finished ones are archived.
@@ -182,14 +188,14 @@ This describes the intended approach at a high level, using the agreed stack (La
 2. **Add the archived state.** Give sessions a way to be marked archived, with the date it happened, so archived sessions can be hidden, listed, and restored without losing anything. Only finished sessions can be archived, and this rule is enforced on the server as well as in the screens.
 3. **Create the Library page.** A Vue page in the main app layout with a page header, a search box, a row of filter controls, the session cards, and a "load more" area. Use existing shared pieces (page header, session card, empty state, status chip) and **shadcn-vue components wherever possible** (see "UI components" below).
 4. **Load the list efficiently.** Load sessions a page at a time, with counts worked out in bulk rather than one session at a time, so the page stays fast with many sessions.
-5. **Add filtering and sorting.** Apply topic, date, content type, status, and sort on the server, combining them as described. Keep the chosen filters in the page address, so refreshing, the browser's Back button, and returning from a session keep the learner's place.
-6. **Add search.** Search the plain-text versions of everything saved, ignoring capitalization, accents, and formatting, and group matches by session and section. Keep results fast and bounded, and keep the matching logic in one place so Collections can reuse it later.
+5. **Add filtering and sorting.** Apply topic, date, content type, status, and sort on the server, combining them as described. Derive topic choices from relevant session references, not from all shared topics or global topic-deletion eligibility. Keep the chosen filters in the page address, so refreshing, the browser's Back button, and returning from a session keep the learner's place. Resolve shared topic labels so renames reach cards, choices, and active chips.
+6. **Add search.** Search the plain-text versions of session fields and session-owned entries only, ignoring capitalization, accents, and formatting, and group matches by session and section. Keep results fast and bounded, and keep the matching logic in one place so Collections can reuse it later. Shared entry storage must not leak notebook entries into matches, snippets, counts, filters, or selection.
 7. **Show matches and jump to them.** Return enough information to highlight the matching text and to open the reading page at the matching item.
 8. **Add the session menu.** Add Edit, Archive, and Delete to cards and to the reading page. Archive appears as unavailable, with a short reason, for unfinished sessions, and works with Undo for finished ones. Delete shows a simple confirmation for unfinished sessions, and for finished sessions a prominent warning with an "I understand" tick, an Archive alternative, and a "Delete permanently" button.
 9. **Add the Archived view and Restore.** The same list, search, and filters, applied to archived sessions.
-10. **Keep other parts of the app correct.** Make Home's lists, counts, and later features follow the include and exclude rules: archived sessions are excluded from Collections and Review, and included in Progress totals and exports.
+10. **Keep other parts of the app correct.** Make Home's lists, counts, and later features follow the include and exclude rules: archived sessions are excluded from Collections and Review, and included in session-derived Progress totals and exports. Scope archive/restore/delete actions and impact previews to session sources, preserving existing grouping and references while another eligible session appearance remains. Never hide, delete, replace, or reassign notebook items, marks, schedules, or custom-review references by matching spelling. Shared-topic deletion protection checks all notebooks and sessions; deleting a source must not delete its topic, cascade into another source, or reassign it to General.
 11. **Add selection and bulk actions.** Add a selection mode to the Library and the Archived view, with checkboxes, a selection bar, Select all across everything that matches the current filters, and range selection. Apply archive, restore, and delete to many sessions in one request, reusing the single-session rules and reporting how many were changed or skipped.
-12. **Work out progress from existing finished sessions.** Have Progress work out totals, practice days, and streaks from the finished sessions that exist (including archived ones), using the day each was finished. Provide a way to **preview** the effect of deleting one or several sessions (the new totals and the new streak) without changing anything, so the delete warning shows exact numbers and they match what Progress shows afterward.
+12. **Work out session-derived progress from existing finished sessions.** Keep totals, practice days, and streaks based on the finished sessions that exist (including archived ones), using the day each was finished. Provide a read-only way to **preview** the effect of deleting one or several sessions (the new session-derived totals and streak), so the delete warning shows exact numbers and they match those measures afterward. Do not fabricate sessions for notebook activity or apply this calculation to all Progress reporting; notebook daily/Quick review-activity measures and their deletion/history treatment await the [Notebook open decisions](feature-Notebooks.md#open-questions).
 13. **Make it work everywhere.** Test on phone, tablet, and computer, in light and dark mode, with the keyboard and a screen reader, and with large numbers of sessions.
 
 ### UI components: use shadcn-vue wherever possible
@@ -222,7 +228,7 @@ Where a shadcn-vue component needs small changes (for example the destructive lo
 
 ## Implementation Steps
 
-The steps are ordered so each one leaves a usable, reviewable piece of the feature.
+The steps are ordered so each one leaves a usable, reviewable piece of the feature. The tests below are acceptance requirements, including notebook integration regressions, not evidence of implemented or verified behaviour. Progress assertions cover the session-derived measures defined above, not the still-open notebook review-activity reporting.
 
 ### Step 1: The Library list
 
@@ -240,7 +246,7 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 - Opening a finished session opens its reading page, and opening an unfinished session opens the editor.
 - Returning to the Library from a session brings the learner back to the same scroll position.
 - With 300 sessions, the page loads quickly and more sessions load as the learner reaches the end, with no duplicates or missing sessions.
-- With no sessions, the empty state and "Start your first session" button appear, and the button starts a new session.
+- With no sessions, the empty state and "Start your first session" button appear, and the button starts a new session, even when populated or empty notebooks exist. No notebook produces a Library card, session count, or an Archived record.
 - A very long topic name stays tidy on the card.
 - A session with no content shows zero counts and an "Unfinished" label.
 - The page works on phone, tablet, and computer, in light and dark mode, with no sideways scrolling.
@@ -262,7 +268,9 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 - The result count updates with every change.
 - When nothing matches, a friendly message with Clear all appears, never a blank page.
 - Refreshing the page, using the browser's Back button, and returning from a session all keep the same filters, sort, and scroll position.
-- Topics no longer used by any session do not appear in the topic filter.
+- Topic choices reflect relevant sessions in each Library view; notebook-only topics do not appear. Removing a topic's final session reference removes that choice even if a notebook still protects the topic from deletion.
+- Renaming a shared topic updates session cards, picker choices, and active filter labels as well as notebook labels, without changing assignments or study identities.
+- Notebook content never causes a session to match topic, content-type, date, or status filters; no-session and no-match states stay session-specific.
 - Filters work on a phone, using a panel that is easy to open and close, and can be used with the keyboard.
 - Sessions near midnight appear on the correct day.
 
@@ -273,7 +281,8 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 **Tests**
 
 - Results appear as the learner types, after a short pause, and not before two characters.
-- Search finds text in topics, tutor's questions, answers, mistakes (what I said, correction, reason), vocabulary (word, meaning, example), phrases (phrase, meaning or use, example), grammar notes, and natural versions.
+- Search finds text in session topics, tutor's questions, answers, mistakes (what I said, correction, reason), vocabulary (word, meaning, example), phrases (phrase, meaning or use, example), grammar notes, and natural versions.
+- Text found only in a notebook's name, description, or entries returns no Library match, including when a session contains the same word with a different meaning. Snippets and result counts use only matching session content.
 - Search ignores capitalization, accents ("cafe" finds "café"), and extra spaces, and matches parts of words.
 - Words inside bold, italic, and list text are found, and formatting itself is not searched.
 - Typing several words finds only entries where all of them appear together.
@@ -308,16 +317,17 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 - The Archived view lists archived sessions with search and filters working as in the main Library.
 - Restore returns a session to the Library with its original status, date, and content, and it appears in the correct sorted position.
 - Navigating away before pressing Undo leaves the session archived, and it can be restored from the Archived view.
-- Archiving never changes any other session or any topic.
+- Archiving never changes any other session or any topic. An archived session remains a reference that prevents topic deletion.
+- Archive, Undo, and Restore leave a same-spelling notebook item available with unchanged content, marks, daily schedule, and custom-review references; existing session grouping and availability rules are preserved.
 - Opening an archived session's address from another tab shows the friendly "couldn't find that session" page, or opens it from the Archived view with a clear "Archived" label (the chosen behavior is applied consistently).
-- Archived sessions are excluded by the shared rule that Collections and Review will use, and included by the shared rule that Progress totals and Export will use. A test confirms both rules exist in one place.
-- Archiving and restoring a session never change Progress totals, practice days, or streaks.
+- Archived sessions are excluded by the shared rule that Collections and Review will use, and included by the shared rule that session-derived Progress totals and Export will use. A test confirms both rules exist in one place.
+- Archiving and restoring a session never change session-derived Progress totals, practice days, or streaks.
 - An archived session is still included when all data is exported, with its archived status.
 - The Archived view's empty state is friendly and clear.
 
 ### Step 5: Delete
 
-**What it delivers:** Permanent deletion from cards, the reading page, and the Archived view, with a simple confirmation for unfinished sessions and a prominent warning for finished sessions. The finished-session warning shows the exact effect on progress totals and the streak before the learner confirms, and the deletion then lowers them accordingly.
+**What it delivers:** Permanent deletion from cards, the reading page, and the Archived view, with a simple confirmation for unfinished sessions and a prominent warning for finished sessions. The finished-session warning shows the exact effect on session-derived progress totals and the streak before the learner confirms, and the deletion then lowers them accordingly.
 
 **Tests**
 
@@ -336,16 +346,18 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 - Deleting the only remaining session shows the empty state.
 - Deleting from the reading page returns the learner to the Library.
 - Opening a deleted session's address shows the friendly "couldn't find that session" page with a link to the Library.
-- Deleting does not change any other session, and topics no longer used stop appearing in the topic filter.
+- Deleting does not change any other session or notebook. Topics without relevant session references stop appearing in the topic filter, but are not automatically deleted.
+- Deleting the final session reference to a topic leaves it protected if an empty or populated notebook still references it. Topic deletion is also refused for unfinished/archived session references, without cascading or reassigning to General; only an entirely unreferenced topic can be explicitly deleted.
 - Pressing Delete's confirm button twice quickly deletes the session once and causes no error.
 - Deleting a finished session that was the only one finished that day removes that day, and the streak drops accordingly.
-- Deleting an unfinished session, with or without content, never changes the streak, practice days, or Progress totals.
+- Deleting an unfinished session, with or without content, never changes the streak, practice days, or session-derived Progress totals.
 - Deleting a finished session lowers the totals that Progress uses by exactly the words, phrases, mistakes, and grammar points it contained.
 - If a finished session was edited after finishing, deleting it lowers the totals by the content it had at the moment of deletion.
-- A deleted session's content disappears from Collections, Review, and the Progress totals.
+- A deleted session's appearances disappear from Collections and Review, and its contribution leaves session-derived Progress totals. Another eligible session appearance keeps the existing grouped session identity and its applicable marks, schedule, and custom-review references, not the deleted session's totals.
+- A same-spelling notebook item, its marks, daily schedule, and custom-review references survive session deletion unchanged. If the final eligible session appearance disappears, the notebook item is not a replacement for the session identity or its references. The preview reflects this source-isolated impact.
 - The finished-session warning shows the totals before and after, and the effect on practice days and the streak when it changes, and says plainly when nothing changes.
-- The numbers shown in the warning match what Progress shows after the deletion.
-- The unfinished-session confirmation says that progress totals and streaks will not change.
+- The numbers shown in the warning match the session-derived measures Progress shows after the deletion, including when notebooks contain the same words. Creating/editing notebooks changes none of these totals, days, or streaks; these assertions do not define notebook daily/Quick review-activity metrics.
+- The unfinished-session confirmation says that session-derived progress totals and streaks will not change.
 - A session that was unfinished, then finished, then deleted counts while it exists and stops counting after it is deleted.
 - Archiving and restoring never change totals or streaks.
 - The dialog works with the keyboard, traps focus, closes with Escape, and is announced by a screen reader.
@@ -360,7 +372,8 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 - In selection mode, tapping a card selects or unselects it instead of opening it, and the single-session menu is hidden.
 - The selection bar shows the correct count, and the actions are unavailable when nothing is selected.
 - Individual sessions can be selected and unselected, and holding Shift selects a range on a computer.
-- Select all selects every session matching the current filters and search, not only the loaded ones, and the count is exact.
+- Select all selects every session matching the current filters and search, not only the loaded ones, and the count is exact. Notebooks and notebook entries never enter the selection.
+- Bulk Archive, Restore, and Delete preserve matching notebook items, marks, schedules, and custom-review references, as well as shared topics. Deletion previews reflect remaining eligible session appearances without borrowing notebook content.
 - Sessions can be selected in search results, and individual matching items cannot.
 - Changing the filters or the search clears the selection and tells the learner.
 - Loading more sessions keeps the existing selection.
@@ -404,11 +417,14 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 
 ## Decisions Made
 
-- **Archived sessions count in Progress totals.** Archiving never removes anything from the learner's history.
+- **Library remains session-only.** Notebooks have their own listing and hard-deletion flow; Library search, filters, selection, counts, and empty states never treat notebooks as sessions.
+- **Topics are shared, filter choices are session-based.** Renames reach every session and notebook reference. Empty notebooks and unfinished/archived sessions protect a topic from deletion, even when it is absent from the Library picker. Source deletion never deletes the topic; no cascading or implicit reassignment to General is allowed.
+- **Study effects are source-isolated.** Session archive/restore/delete cannot affect same-spelling notebook items, marks, schedules, or custom-review references. Existing session grouping and preservation while another eligible session appearance remains are unchanged; notebooks cannot replace deleted session identities.
+- **Archived sessions count in session-derived Progress totals.** Archiving never removes anything from the learner's history.
 - **Unfinished sessions cannot be archived.** They can be continued, finished, or deleted. Only finished sessions can be archived, so the Archived view contains only finished sessions.
 - **Cards show the last edited date** (when it differs from the session date), in addition to the "recently edited" sort.
-- **Deleting a finished session shows a prominent warning**, with the details of what will be removed, the exact effect on progress, an Archive alternative, and an "I understand this cannot be undone" tick before **Delete permanently** is enabled. Deleting an unfinished session needs only a simple confirmation.
-- **Totals and streaks follow the content.** Progress totals, practice days, and streaks are worked out from the finished sessions that exist, using the day each was finished. Archived sessions count, unfinished sessions never count, and archiving changes nothing. Deleting a finished session lowers totals and can lower the streak.
+- **Deleting a finished session shows a prominent warning**, with the details of what will be removed, the exact effect on session-derived progress, an Archive alternative, and an "I understand this cannot be undone" tick before **Delete permanently** is enabled. Deleting an unfinished session needs only a simple confirmation.
+- **Session-derived totals and streaks follow session content.** Totals, practice days, and streaks are worked out from the finished sessions that exist, using the day each was finished. Archived sessions count, unfinished sessions never count, and archiving changes none of these measures. Deleting a finished session lowers totals and can lower the streak. Planned notebook daily/Quick review-activity reporting is separate; its exact measures and deletion/history treatment remain open, and custom-review attempts stay excluded.
 - **The practice day that counts is the day a session was finished**, not the day it was started.
 - **Delete warnings show the exact effect.** The warning for a finished session (single or several) shows the totals before and after and the effect on the streak, so the learner knows exactly what will change before confirming.
 - **Exports include archived sessions**, with their archived status kept.
@@ -416,4 +432,4 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 
 ## Open Questions
 
-None at the moment.
+No additional Library decisions. Notebook daily/Quick review-activity measures and their deletion/history treatment remain open in [Notebooks](feature-Notebooks.md#open-questions); the session-derived totals and streak rules here do not decide them.

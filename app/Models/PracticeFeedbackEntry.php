@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
+use LogicException;
 
 /**
  * One entry inside a feedback box, kept as formatted text (for grammar notes
@@ -30,7 +31,8 @@ use Illuminate\Support\Carbon;
  * with the id the editor gave it.
  *
  * @property int $id
- * @property int $practice_question_id
+ * @property int|null $practice_question_id
+ * @property int|null $notebook_id
  * @property FeedbackType $type
  * @property int $position
  * @property string|null $client_id
@@ -52,6 +54,7 @@ use Illuminate\Support\Carbon;
  */
 #[Fillable([
     'practice_question_id',
+    'notebook_id',
     'type',
     'position',
     'client_id',
@@ -77,6 +80,20 @@ class PracticeFeedbackEntry extends Model
     protected static function booted(): void
     {
         static::saving(function (self $entry): void {
+            // Exactly one real parent, always: the foreign keys keep each
+            // parent's deletion to its own rows, and this guard keeps a row
+            // from ever belonging to both or neither.
+            $hasQuestion = $entry->practice_question_id !== null;
+            $hasNotebook = $entry->notebook_id !== null;
+
+            if ($hasQuestion === $hasNotebook) {
+                throw new LogicException('A feedback entry must have exactly one parent: a practice question or a notebook.');
+            }
+
+            if ($hasNotebook && ! in_array($entry->type, [FeedbackType::Vocabulary, FeedbackType::Phrase, FeedbackType::GrammarNote], true)) {
+                throw new LogicException('A notebook holds only vocabulary, phrases and grammar notes.');
+            }
+
             $entry->search_text = EntrySearch::text($entry);
             $entry->collection_key = EntrySearch::collectionKey($entry);
             $entry->sort_text = EntrySearch::sortText($entry);
@@ -177,5 +194,13 @@ class PracticeFeedbackEntry extends Model
     public function practiceQuestion(): BelongsTo
     {
         return $this->belongsTo(PracticeQuestion::class);
+    }
+
+    /**
+     * @return BelongsTo<Notebook, $this>
+     */
+    public function notebook(): BelongsTo
+    {
+        return $this->belongsTo(Notebook::class);
     }
 }

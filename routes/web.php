@@ -11,6 +11,7 @@ use App\Http\Controllers\LibraryController;
 use App\Http\Controllers\PracticeSessionController;
 use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\ReviewSuggestionController;
+use App\Http\Controllers\TopicController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', HomeController::class)->name('home');
@@ -128,6 +129,11 @@ Route::get('/custom-reviews/{customReview}', [CustomReviewsController::class, 's
 // personal notes with the version marker that catches another tab's change.
 Route::put('/collections/marks', [CollectionMarkController::class, 'store'])->name('collections.marks.store');
 Route::put('/collections/notes', [CollectionMarkController::class, 'storeNotes'])->name('collections.notes.store');
+
+// Topics are shared by sessions and notebooks, so a rename reaches both and a
+// delete is refused while either still names the topic.
+Route::put('/topics/{topic}', [TopicController::class, 'update'])->name('topics.update');
+Route::delete('/topics/{topic}', [TopicController::class, 'destroy'])->name('topics.destroy');
 
 // Review and re-practice. The sitting is named in the exercise page's address,
 // so a refresh returns to the next item not yet rated and a finished review

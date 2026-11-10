@@ -42,7 +42,6 @@ class CollectionController extends Controller
         TableCollection $collection,
     ): Response|JsonResponse {
         $tab = $request->tab();
-        $type = $tab->feedbackType();
 
         // The review this page marks its items against: the one the address
         // names, or the only one still being built, or none when the learner
@@ -54,6 +53,16 @@ class CollectionController extends Controller
         // resolved review there is nothing to be eligible for, so the ordinary
         // list stays whole.
         $eligibleOnly = $request->eligibleOnly() && $target instanceof CustomReview;
+
+        // + Add items never shows a kind the review does not allow, so a
+        // disallowed tab falls back to the first allowed one.
+        $allowedTabs = $this->allowedTabs($target, $eligibleOnly);
+
+        if (! in_array($tab, $allowedTabs, true)) {
+            $tab = $allowedTabs[0] ?? $tab;
+        }
+
+        $type = $tab->feedbackType();
 
         $filters = $request->filters();
         $topicOptions = $collection->topicOptions($type, $eligibleOnly);
@@ -86,7 +95,7 @@ class CollectionController extends Controller
                 $counts = $collection->counts($eligibleOnly);
 
                 $payload += [
-                    'tabs' => $this->tabs($counts),
+                    'tabs' => $this->tabs($counts, $allowedTabs),
                     'all_total' => $counts[$tab->value],
                     'attention_count' => $eligibleOnly ? 0 : $collection->attentionCount($type),
                     'topic_options' => $topicOptions,
@@ -104,7 +113,7 @@ class CollectionController extends Controller
 
         $payload = [
             'tab' => $tab->value,
-            'tabs' => $this->tabs($counts),
+            'tabs' => $this->tabs($counts, $allowedTabs),
             'items' => $items,
             'next_cursor' => $page['next_cursor'],
             'has_more' => $page['has_more'],
@@ -171,12 +180,16 @@ class CollectionController extends Controller
     }
 
     /**
-     * The four tabs, with the count of every collection gathered live.
+     * The tabs on show, with the count of every collection gathered live.
+     *
+     * The + Add items view offers only the kinds the review allows; the
+     * ordinary view offers all four.
      *
      * @param  array<string, int>  $counts
+     * @param  list<CollectionTab>  $tabs
      * @return list<array{key: string, label: string, count: int}>
      */
-    private function tabs(array $counts): array
+    private function tabs(array $counts, array $tabs): array
     {
         return array_map(
             fn (CollectionTab $candidate): array => [
@@ -184,8 +197,27 @@ class CollectionController extends Controller
                 'label' => $candidate->label(),
                 'count' => $counts[$candidate->value],
             ],
-            CollectionTab::ordered(),
+            $tabs,
         );
+    }
+
+    /**
+     * The tabs the page may show. The + Add items view narrows to the kinds
+     * the review allows, so an item of another kind is never even offered; the
+     * ordinary view, and a review that allows every kind, offer all four.
+     *
+     * @return list<CollectionTab>
+     */
+    private function allowedTabs(?CustomReview $target, bool $eligibleOnly): array
+    {
+        if (! $eligibleOnly || ! $target instanceof CustomReview) {
+            return CollectionTab::ordered();
+        }
+
+        return array_values(array_filter(
+            CollectionTab::ordered(),
+            fn (CollectionTab $tab): bool => $target->allowsKind($tab->feedbackType()),
+        ));
     }
 
     /**

@@ -13,10 +13,15 @@ use Illuminate\Support\Collection;
 /**
  * Every attempt at one review, newest first, with the items each one kept.
  *
- * Two reads cover the whole history however many attempts or items there are:
- * one for the attempts and one for their items. Nothing is loaded one attempt
- * at a time and nothing is written, so opening the history can never change an
+ * Two reads cover a whole page however many attempts or items it holds: one
+ * for the attempts and one for their items. Nothing is loaded one attempt at a
+ * time and nothing is written, so opening the history can never change an
  * attempt.
+ *
+ * A page is bounded by the caller rather than read whole, because a history
+ * can grow forever. The page a named attempt sits on is answered from a count
+ * of the attempts that come before it, so an open row survives a reload even
+ * when it sits beyond the first page.
  *
  * @phpstan-type HistoryAttempt array{
  *     attempt: CustomReviewAttempt,
@@ -25,17 +30,25 @@ use Illuminate\Support\Collection;
  */
 final class CustomReviewAttemptHistory
 {
+    /** How many attempts one page of history holds. */
+    public const int PER_PAGE = 10;
+
     /**
      * @return list<HistoryAttempt>
      */
-    public function for(CustomReview $review): array
+    public function for(CustomReview $review, ?int $limit = null, int $offset = 0): array
     {
-        /** @var EloquentCollection<int, CustomReviewAttempt> $attempts */
-        $attempts = CustomReviewAttempt::query()
+        $query = CustomReviewAttempt::query()
             ->where('custom_review_id', $review->id)
             ->orderByDesc('started_at')
-            ->orderByDesc('id')
-            ->get();
+            ->orderByDesc('id');
+
+        if ($limit !== null) {
+            $query->offset($offset)->limit($limit);
+        }
+
+        /** @var EloquentCollection<int, CustomReviewAttempt> $attempts */
+        $attempts = $query->get();
 
         if ($attempts->isEmpty()) {
             return [];
@@ -58,5 +71,38 @@ final class CustomReviewAttemptHistory
         }
 
         return $history;
+    }
+
+    /** How many attempts the review's whole history holds. */
+    public function countFor(CustomReview $review): int
+    {
+        return CustomReviewAttempt::query()
+            ->where('custom_review_id', $review->id)
+            ->count();
+    }
+
+    /** The one-based page a named attempt sits on, in the history's order. */
+    public function pageOf(CustomReview $review, CustomReviewAttempt $attempt): int
+    {
+        $newer = CustomReviewAttempt::query()
+            ->where('custom_review_id', $review->id)
+            ->where(function ($query) use ($attempt): void {
+                if ($attempt->started_at === null) {
+                    $query->whereNotNull('started_at')
+                        ->orWhere(fn ($inner) => $inner
+                            ->whereNull('started_at')
+                            ->where('id', '>', $attempt->id));
+
+                    return;
+                }
+
+                $query->where('started_at', '>', $attempt->started_at)
+                    ->orWhere(fn ($inner) => $inner
+                        ->where('started_at', $attempt->started_at)
+                        ->where('id', '>', $attempt->id));
+            })
+            ->count();
+
+        return intdiv($newer, self::PER_PAGE) + 1;
     }
 }

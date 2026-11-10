@@ -78,6 +78,13 @@ Route::put('/custom-reviews/{customReview}/status', [CustomReviewsController::cl
     ->whereNumber('customReview')
     ->name('customReviews.status');
 
+// The kinds a review is allowed to hold. Sending every kind clears the choice,
+// which means "all kinds"; narrowing away a kind still held is refused until
+// its items are removed.
+Route::put('/custom-reviews/{customReview}/kinds', [CustomReviewsController::class, 'updateKinds'])
+    ->whereNumber('customReview')
+    ->name('customReviews.kinds');
+
 // Deleting a review for good. The id travels unbound: the review may already be
 // gone by the time the request arrives, and then the answer is a calm line on
 // the listing rather than a missing record.
@@ -91,6 +98,10 @@ Route::delete('/custom-reviews/{customReviewId}', [CustomReviewsController::clas
 Route::post('/custom-reviews/{customReview}/attempts', [CustomReviewAttemptController::class, 'store'])
     ->whereNumber('customReview')
     ->name('customReviews.attempts.store');
+// One page of the history, newest first, for the page's Load more.
+Route::get('/custom-reviews/{customReview}/attempts', [CustomReviewsController::class, 'attempts'])
+    ->whereNumber('customReview')
+    ->name('customReviews.attempts.index');
 Route::post('/custom-reviews/{customReview}/attempts/{attempt}/rate', [CustomReviewAttemptController::class, 'rate'])
     ->whereNumber('customReview')
     ->whereNumber('attempt')

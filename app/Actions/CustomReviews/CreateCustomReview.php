@@ -5,56 +5,43 @@ declare(strict_types=1);
 namespace App\Actions\CustomReviews;
 
 use App\Enums\CustomReviewStatus;
+use App\Enums\FeedbackType;
 use App\Models\CustomReview;
+use App\Queries\NextCustomReviewName;
+use App\Support\CustomReviewKinds;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Starts a custom review, which is saved the moment it exists.
+ * Starts a custom review with the name and kinds the learner chose.
  *
- * The learner never has to name it or save it: it takes the next number no
- * review of theirs already carries, so deleting one cannot leave two reviews
- * with the same default name, and it starts `Empty` because nothing is in it.
+ * The dialog always sends both. A path that asks nothing — adding items while
+ * no review is being built — creates the review without a name, and it takes
+ * the next number no review of theirs already carries. It starts `Empty`
+ * because nothing is in it; choosing every kind is stored as no choice at all.
  *
- * Naming is the app's only write here. No item, mark, rating or session is
- * read or touched.
+ * Naming and the kinds choice are the app's only writes here. No item, mark,
+ * rating or session is read or touched.
  */
-final class CreateCustomReview
+final readonly class CreateCustomReview
 {
-    /** The name a review the learner has not named yet carries. */
-    public const string NAME_PREFIX = 'Custom Review ';
+    public function __construct(
+        private NextCustomReviewName $nextName,
+    ) {}
 
-    public function handle(): CustomReview
+    /**
+     * @param  list<FeedbackType>|null  $kinds  the kinds the review allows, or
+     *                                          null for every kind
+     */
+    public function handle(?string $name = null, ?array $kinds = null): CustomReview
     {
-        return DB::transaction(function (): CustomReview {
+        return DB::transaction(function () use ($name, $kinds): CustomReview {
             $review = new CustomReview;
-            $review->name = $this->nextName();
+            $review->name = $name ?? $this->nextName->handle();
             $review->status = CustomReviewStatus::Empty;
+            $review->allowed_kinds = $kinds === null ? null : CustomReviewKinds::storedChoice($kinds);
             $review->save();
 
             return $review;
         });
-    }
-
-    /**
-     * The default name with the first number none of the learner's reviews
-     * already uses. Gaps left by a deleted review are filled, so a name is
-     * never reused while another review carries it.
-     */
-    private function nextName(): string
-    {
-        /** @var array<int, true> $used */
-        $used = [];
-
-        foreach (CustomReview::query()->pluck('name') as $name) {
-            if (preg_match('/^'.preg_quote(self::NAME_PREFIX, '/').'([1-9][0-9]*)$/', (string) $name, $matches) === 1) {
-                $used[(int) $matches[1]] = true;
-            }
-        }
-
-        for ($number = 1; ; $number++) {
-            if (! isset($used[$number])) {
-                return self::NAME_PREFIX.$number;
-            }
-        }
     }
 }

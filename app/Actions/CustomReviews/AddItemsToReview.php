@@ -9,6 +9,7 @@ use App\Enums\FeedbackType;
 use App\Models\CustomReview;
 use App\Queries\CustomReviewItems;
 use App\Queries\UnfinishedCustomReviews;
+use App\Support\CustomReviewKinds;
 use App\Support\CustomReviewRules;
 
 /**
@@ -22,9 +23,12 @@ use App\Support\CustomReviewRules;
  * - several ask which one, most recently created first;
  * - none creates one and names it.
  *
- * The recommended size is checked here too, before anything is written, and
- * the learner's answer arrives on the same request. Nothing is ever refused:
- * a confirmed add goes through whole, whatever its size.
+ * The maximum is checked here before anything is written — even before a
+ * review is created — and a confirmed add never passes it. A review that has
+ * narrowed its kinds refuses the item first, naming what it does allow; that
+ * refusal, like the maximum, is never undone by an answer. The recommended
+ * size is checked after both, and the learner's answer arrives on the same
+ * request: a confirmed add below the maximum goes through whole.
  */
 final readonly class AddItemsToReview
 {
@@ -44,7 +48,8 @@ final readonly class AddItemsToReview
      *     choices: list<array{review: CustomReview, item_count: int}>,
      *     added: list<string>,
      *     already: list<string>,
-     *     resulting_count: int
+     *     resulting_count: int,
+     *     message: string|null
      * }
      */
     public function handle(
@@ -66,21 +71,50 @@ final readonly class AddItemsToReview
                     'added' => [],
                     'already' => [],
                     'resulting_count' => 0,
+                    'message' => null,
                 ];
             }
         }
 
-        if (! $confirmed) {
-            $answer = $this->explainSize($kind, $identities, $target);
+        $plan = $this->plan($kind, $identities, $target);
 
-            if ($answer !== null) {
-                return $answer;
-            }
+        // A review that has narrowed its kinds refuses the item outright,
+        // before its size is ever weighed: the item does not belong here at
+        // all. A review with no kinds chosen allows every kind.
+        if ($target instanceof CustomReview && ! $target->allowsKind($kind)) {
+            return $this->refusedKind($target, $plan['held']);
+        }
+
+        // The maximum refuses the whole add, confirmed or not, before a
+        // warning is ever asked or a review is ever created.
+        if (CustomReviewRules::crossesMaximum($plan['resulting_count'])) {
+            return $this->refusal($target, $plan['held']);
+        }
+
+        if (! $confirmed && CustomReviewRules::needsConfirmation($plan['resulting_count'], $plan['new_count'])) {
+            return [
+                'outcome' => CustomReviewAddOutcome::NeedsConfirmation,
+                'review' => $target,
+                'choices' => [],
+                'added' => [],
+                'already' => array_keys($plan['already']),
+                'resulting_count' => $plan['resulting_count'],
+                'message' => null,
+            ];
         }
 
         // No review was being built, so the one these items need is made now.
         $review = $target ?? $this->createCustomReview->handle();
         $result = $this->addCustomReviewItems->handle($review, $kind, $identities);
+
+        // Another add filled the review while this one was on its way, or the
+        // learner narrowed its kinds in a second tab; the transaction refused
+        // it, so nothing was written.
+        if ($result['refused']) {
+            return $result['refused_kind']
+                ? $this->refusedKind($review, $result['total'])
+                : $this->refusal($review, $result['total']);
+        }
 
         return [
             'outcome' => CustomReviewAddOutcome::Added,
@@ -89,27 +123,19 @@ final readonly class AddItemsToReview
             'added' => $result['added'],
             'already' => $result['already'],
             'resulting_count' => $result['total'],
+            'message' => null,
         ];
     }
 
     /**
-     * The warning when this add would take the review past its recommended
-     * size, or null when it can go ahead.
-     *
-     * The count comes from the database, never from what the client claims:
-     * only the items the review does not hold yet can change its size.
+     * What this add would change, counted from the database, never from what
+     * the client claims: only the items the review does not hold yet can
+     * change its size.
      *
      * @param  list<string>  $identities
-     * @return array{
-     *     outcome: CustomReviewAddOutcome,
-     *     review: CustomReview|null,
-     *     choices: list<array{review: CustomReview, item_count: int}>,
-     *     added: list<string>,
-     *     already: list<string>,
-     *     resulting_count: int
-     * }|null
+     * @return array{already: array<string, true>, held: int, new_count: int, resulting_count: int}
      */
-    private function explainSize(FeedbackType $kind, array $identities, ?CustomReview $target): ?array
+    private function plan(FeedbackType $kind, array $identities, ?CustomReview $target): array
     {
         $already = $target instanceof CustomReview
             ? $this->items->among($target, $kind, $identities)
@@ -120,19 +146,90 @@ final readonly class AddItemsToReview
             fn (string $identity): bool => ! isset($already[$identity]),
         ));
 
-        $resultingCount = ($target instanceof CustomReview ? $this->items->count($target) : 0) + $newCount;
-
-        if (! CustomReviewRules::needsConfirmation($resultingCount, $newCount)) {
-            return null;
-        }
+        $held = $target instanceof CustomReview ? $this->items->count($target) : 0;
 
         return [
-            'outcome' => CustomReviewAddOutcome::NeedsConfirmation,
-            'review' => $target,
+            'already' => $already,
+            'held' => $held,
+            'new_count' => $newCount,
+            'resulting_count' => $held + $newCount,
+        ];
+    }
+
+    /**
+     * The refusal, with the review as it stands and the room it has left.
+     *
+     * @return array{
+     *     outcome: CustomReviewAddOutcome,
+     *     review: CustomReview|null,
+     *     choices: list<array{review: CustomReview, item_count: int}>,
+     *     added: list<string>,
+     *     already: list<string>,
+     *     resulting_count: int,
+     *     message: string|null
+     * }
+     */
+    private function refusal(?CustomReview $review, int $held): array
+    {
+        return $this->refused(
+            CustomReviewAddOutcome::RefusedMaximum,
+            $review,
+            $held,
+            CustomReviewRules::maximumMessage($held),
+        );
+    }
+
+    /**
+     * The refusal for an item of a kind the review has narrowed away, naming
+     * the kinds it does allow.
+     *
+     * @return array{
+     *     outcome: CustomReviewAddOutcome,
+     *     review: CustomReview|null,
+     *     choices: list<array{review: CustomReview, item_count: int}>,
+     *     added: list<string>,
+     *     already: list<string>,
+     *     resulting_count: int,
+     *     message: string|null
+     * }
+     */
+    private function refusedKind(?CustomReview $review, int $held): array
+    {
+        return $this->refused(
+            CustomReviewAddOutcome::RefusedKind,
+            $review,
+            $held,
+            CustomReviewKinds::addRefusalMessage($review?->allowed_kinds),
+        );
+    }
+
+    /**
+     * A refusal changes nothing, and the review reads as it stands.
+     *
+     * @return array{
+     *     outcome: CustomReviewAddOutcome,
+     *     review: CustomReview|null,
+     *     choices: list<array{review: CustomReview, item_count: int}>,
+     *     added: list<string>,
+     *     already: list<string>,
+     *     resulting_count: int,
+     *     message: string|null
+     * }
+     */
+    private function refused(
+        CustomReviewAddOutcome $outcome,
+        ?CustomReview $review,
+        int $held,
+        string $message,
+    ): array {
+        return [
+            'outcome' => $outcome,
+            'review' => $review,
             'choices' => [],
             'added' => [],
-            'already' => array_keys($already),
-            'resulting_count' => $resultingCount,
+            'already' => [],
+            'resulting_count' => $held,
+            'message' => $message,
         ];
     }
 }

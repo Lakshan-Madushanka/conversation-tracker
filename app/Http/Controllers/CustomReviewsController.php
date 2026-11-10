@@ -11,12 +11,15 @@ use App\Actions\CustomReviews\CreateCustomReview;
 use App\Actions\CustomReviews\DeleteCustomReview;
 use App\Actions\CustomReviews\PruneCustomReviewItems;
 use App\Actions\CustomReviews\RemoveCustomReviewItems;
+use App\Actions\CustomReviews\SetCustomReviewKinds;
 use App\Actions\CustomReviews\SetCustomReviewStatus;
 use App\Actions\CustomReviews\UpdateCustomReview;
 use App\Enums\CustomReviewAddOutcome;
 use App\Http\Requests\AddCustomReviewItemsRequest;
 use App\Http\Requests\CustomReviewsRequest;
 use App\Http\Requests\RemoveCustomReviewItemsRequest;
+use App\Http\Requests\StoreCustomReviewRequest;
+use App\Http\Requests\UpdateCustomReviewKindsRequest;
 use App\Http\Requests\UpdateCustomReviewRequest;
 use App\Http\Requests\UpdateCustomReviewStatusRequest;
 use App\Http\Resources\CustomReviewAttemptHistoryResource;
@@ -30,6 +33,7 @@ use App\Queries\CustomReviewAttemptSummaries;
 use App\Queries\CustomReviewContents;
 use App\Queries\CustomReviewItems;
 use App\Queries\CustomReviewsListing;
+use App\Queries\NextCustomReviewName;
 use App\Support\CustomReviewDeletion;
 use App\Support\CustomReviewPractice;
 use App\Support\CustomReviewReturn;
@@ -69,6 +73,7 @@ final class CustomReviewsController extends Controller
         CustomReviewItems $items,
         CustomReviewContents $contents,
         CustomReviewAttemptSummaries $attemptSummaries,
+        NextCustomReviewName $nextName,
     ): Response|JsonResponse {
         $filters = $request->filters();
         $paginator = $listing->paginate(
@@ -113,20 +118,29 @@ final class CustomReviewsController extends Controller
 
         return Inertia::render('custom-reviews/Index', [
             ...$page,
+            // The name the creation dialog offers, filled in the same way as a
+            // review started without one.
+            'next_review_name' => $nextName->handle(),
             // What a deletion just answered with, said once and then forgotten.
             'notice' => $request->session()->get('review_notice'),
         ]);
     }
 
     /**
-     * Start a review, which is saved and named at once, and open it.
+     * Start a review with the name and kinds the dialog sends, and open it.
      *
-     * The button that calls this lives on the listing; "Add to review" reaches
-     * the same action when nothing is being built yet.
+     * The dialog that calls this lives on the listing; "Add to review" reaches
+     * the same action when nothing is being built yet, naming the review and
+     * allowing every kind.
      */
-    public function store(CreateCustomReview $createCustomReview): RedirectResponse
-    {
-        return to_route('customReviews.show', $createCustomReview->handle());
+    public function store(
+        StoreCustomReviewRequest $request,
+        CreateCustomReview $createCustomReview,
+    ): RedirectResponse {
+        return to_route('customReviews.show', $createCustomReview->handle(
+            $request->name(),
+            $request->kinds(),
+        ));
     }
 
     public function show(
@@ -151,7 +165,17 @@ final class CustomReviewsController extends Controller
         $back = $request->query('from');
         $count = $items->count($customReview);
         $eligibleCount = $contents->eligibleCounts([$customReview->id])[(int) $customReview->id] ?? 0;
-        $attempts = $history->for($customReview);
+        $expanded = $request->query('attempt');
+        $expandedAttempt = $this->namedAttempt($expanded, $customReview);
+        $attemptTotal = $history->countFor($customReview);
+        // The history is read in pages. An attempt named by the address is kept
+        // open, so a reload after Load more brings back the rows above it too.
+        $attempts = $history->for(
+            $customReview,
+            $expandedAttempt instanceof CustomReviewAttempt
+                ? CustomReviewAttemptHistory::PER_PAGE * $history->pageOf($customReview, $expandedAttempt)
+                : CustomReviewAttemptHistory::PER_PAGE,
+        );
 
         $inProgress = null;
 
@@ -164,7 +188,6 @@ final class CustomReviewsController extends Controller
         }
 
         $canStart = CustomReviewPractice::canStart($customReview->status, $eligibleCount > 0);
-        $expanded = $request->query('attempt');
 
         return Inertia::render('custom-reviews/Show', [
             'review' => CustomReviewSummaryResource::make($customReview, $count)->resolve(),
@@ -205,6 +228,12 @@ final class CustomReviewsController extends Controller
                 )->resolve(),
                 $attempts,
             ),
+            // How many attempts exist in all, so the page's Load more and its
+            // delete warning count the whole history rather than one page.
+            'attempt_total' => $attemptTotal,
+            'attempts_next_page' => count($attempts) < $attemptTotal
+                ? intdiv(count($attempts), CustomReviewAttemptHistory::PER_PAGE) + 1
+                : null,
             'expanded_attempt' => $this->expandedAttempt($expanded, $attempts),
             // A refused start says why in the review's own calm words, then
             // disappears on the next visit.
@@ -233,6 +262,48 @@ final class CustomReviewsController extends Controller
         }
 
         return null;
+    }
+
+    /** The attempt an address names, only when it belongs to this review. */
+    private function namedAttempt(mixed $value, CustomReview $review): ?CustomReviewAttempt
+    {
+        if (! is_numeric($value)) {
+            return null;
+        }
+
+        return CustomReviewAttempt::query()
+            ->where('custom_review_id', $review->id)
+            ->whereKey((int) $value)
+            ->first();
+    }
+
+    /**
+     * One page of a review's history, newest first, for the page's Load more.
+     * Read-only: a whole page costs the same small number of queries however
+     * long the history grows.
+     */
+    public function attempts(
+        Request $request,
+        CustomReview $customReview,
+        CustomReviewAttemptHistory $history,
+    ): JsonResponse {
+        $perPage = CustomReviewAttemptHistory::PER_PAGE;
+        $page = max(1, $request->integer('page', 1));
+        $offset = ($page - 1) * $perPage;
+        $rows = $history->for($customReview, $perPage, $offset);
+        $total = $history->countFor($customReview);
+
+        return response()->json([
+            'attempts' => array_map(
+                fn (array $row): array => CustomReviewAttemptHistoryResource::make(
+                    $row['attempt'],
+                    $row['items'],
+                )->resolve(),
+                $rows,
+            ),
+            'next_page' => $offset + count($rows) < $total ? $page + 1 : null,
+            'total' => $total,
+        ]);
     }
 
     /**
@@ -264,12 +335,33 @@ final class CustomReviewsController extends Controller
     }
 
     /**
+     * The learner's kinds choice, saved whole.
+     *
+     * Narrowing away a kind the review still holds is refused with the items to
+     * remove first, which the page shows as a validation message; turning a
+     * kind on is always allowed.
+     */
+    public function updateKinds(
+        UpdateCustomReviewKindsRequest $request,
+        CustomReview $customReview,
+        SetCustomReviewKinds $setCustomReviewKinds,
+        CustomReviewItems $items,
+    ): JsonResponse {
+        $review = $setCustomReviewKinds->handle($customReview, $request->kinds());
+
+        return response()->json($this->savedAnswer($review, $items));
+    }
+
+    /**
      * Add the chosen items, repeating safely.
      *
      * The server decides where they go: one review being built takes them
      * without a word, several ask which one, none creates one and names it.
-     * An add past the recommended size answers with the count it would reach
-     * and waits for the learner to go ahead on the same request.
+     * An add of a kind a narrowed review does not allow is refused with the
+     * kinds it does allow; an add past the recommended size answers with the
+     * count it would reach and waits for the learner to go ahead on the same
+     * request; an add past the maximum is refused whole, with the room left
+     * named.
      */
     public function storeItems(
         AddCustomReviewItemsRequest $request,
@@ -291,6 +383,16 @@ final class CustomReviewsController extends Controller
                 'outcome' => CustomReviewAddOutcome::NeedsConfirmation->value,
                 'review' => $this->summary($result['review'], $result['resulting_count']),
                 'resulting_count' => $result['resulting_count'],
+            ]),
+            CustomReviewAddOutcome::RefusedMaximum => response()->json([
+                'outcome' => CustomReviewAddOutcome::RefusedMaximum->value,
+                'review' => $this->summary($result['review'], $result['resulting_count']),
+                'message' => $result['message'],
+            ]),
+            CustomReviewAddOutcome::RefusedKind => response()->json([
+                'outcome' => CustomReviewAddOutcome::RefusedKind->value,
+                'review' => $this->summary($result['review'], $result['resulting_count']),
+                'message' => $result['message'],
             ]),
             CustomReviewAddOutcome::Added => response()->json([
                 'outcome' => CustomReviewAddOutcome::Added->value,

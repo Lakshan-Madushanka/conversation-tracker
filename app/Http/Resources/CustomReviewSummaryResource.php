@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Resources;
 
 use App\Models\CustomReview;
+use App\Support\CustomReviewKinds;
 use App\Support\CustomReviewRules;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -35,6 +36,8 @@ final class CustomReviewSummaryResource extends JsonResource
      *     description: string|null,
      *     status: string,
      *     status_label: string,
+     *     allowed_kinds: list<string>|null,
+     *     allowed_kinds_label: string,
      *     item_count: int,
      *     item_count_label: string,
      *     too_many_items: bool,
@@ -56,6 +59,8 @@ final class CustomReviewSummaryResource extends JsonResource
             'description' => $review->description,
             'status' => $review->status->value,
             'status_label' => $review->status->label(),
+            'allowed_kinds' => $review->allowed_kinds,
+            'allowed_kinds_label' => CustomReviewKinds::label($review->allowed_kinds),
             'item_count' => $this->itemCount,
             'item_count_label' => $itemCountLabel,
             'too_many_items' => $tooMany,

@@ -412,6 +412,190 @@ it('says nothing when an add only repeats what a long review already holds', fun
         ]);
 });
 
+it('refuses an add that would cross the maximum as a whole and names the room left', function (): void {
+    $session = buildingSession();
+    $question = buildingQuestion($session);
+
+    $further = array_map(fn (int $index): string => 'extra'.$index, range(1, 6));
+    foreach ($further as $text) {
+        buildingRow($question, $text);
+    }
+
+    // Every kind held counts toward the same maximum: 30 words and 15 phrases.
+    $review = CustomReview::factory()->draft()->create();
+    CustomReviewItem::factory()->count(30)->create(['custom_review_id' => $review->id]);
+    foreach (range(1, 15) as $index) {
+        CustomReviewItem::factory()->phrase('phrase '.$index)->create(['custom_review_id' => $review->id]);
+    }
+
+    addToReview($this, FeedbackType::Vocabulary, $further, $review->id)
+        ->assertOk()
+        ->assertJson([
+            'outcome' => 'refused_maximum',
+            'message' => 'This review has room for 5 more items.',
+            'review' => ['item_count' => 45],
+        ]);
+
+    // The whole add is refused: no partial subset slipped in.
+    expect(CustomReviewItem::query()->where('custom_review_id', $review->id)->count())->toBe(45)
+        ->and($review->fresh()?->status)->toBe(CustomReviewStatus::Draft);
+});
+
+it('allows an add that lands exactly on the maximum', function (): void {
+    $session = buildingSession();
+    $question = buildingQuestion($session);
+
+    $further = array_map(fn (int $index): string => 'extra'.$index, range(1, 5));
+    foreach ($further as $text) {
+        buildingRow($question, $text);
+    }
+
+    $review = CustomReview::factory()->draft()->create();
+    CustomReviewItem::factory()->count(45)->create(['custom_review_id' => $review->id]);
+
+    addToReview($this, FeedbackType::Vocabulary, $further, $review->id, true)
+        ->assertOk()
+        ->assertJson(['outcome' => 'added', 'added_count' => 5, 'total' => 50]);
+
+    expect(CustomReviewItem::query()->where('custom_review_id', $review->id)->count())->toBe(50);
+});
+
+it('refuses a confirmed add that would cross the maximum', function (): void {
+    $session = buildingSession();
+    $question = buildingQuestion($session);
+
+    $further = array_map(fn (int $index): string => 'extra'.$index, range(1, 3));
+    foreach ($further as $text) {
+        buildingRow($question, $text);
+    }
+
+    $review = CustomReview::factory()->draft()->create();
+    CustomReviewItem::factory()->count(48)->create(['custom_review_id' => $review->id]);
+
+    // Answering the size warning never answers the maximum.
+    addToReview($this, FeedbackType::Vocabulary, $further, $review->id, true)
+        ->assertOk()
+        ->assertJson([
+            'outcome' => 'refused_maximum',
+            'message' => 'This review has room for 2 more items.',
+        ]);
+
+    expect(CustomReviewItem::query()->where('custom_review_id', $review->id)->count())->toBe(48);
+});
+
+it('counts items in archived sessions toward the maximum', function (): void {
+    $session = buildingSession(attributes: ['archived_at' => CarbonImmutable::now()]);
+    $question = buildingQuestion($session);
+
+    $held = array_map(fn (int $index): string => 'word'.$index, range(1, 50));
+    foreach ($held as $text) {
+        buildingRow($question, $text);
+    }
+
+    addToReview($this, FeedbackType::Vocabulary, $held, null, true)
+        ->assertOk()
+        ->assertJson(['outcome' => 'added', 'total' => 50]);
+
+    $review = CustomReview::query()->sole();
+
+    buildingRow(buildingQuestion(buildingSession('Live topic')), 'newcomer');
+
+    // The review holds 50, though none of them can be practised right now.
+    addToReview($this, FeedbackType::Vocabulary, ['newcomer'], $review->id, true)
+        ->assertOk()
+        ->assertJson([
+            'outcome' => 'refused_maximum',
+            'message' => 'This review is full at 50 items.',
+        ]);
+
+    expect(CustomReviewItem::query()->where('custom_review_id', $review->id)->count())->toBe(50);
+});
+
+it('refuses an add too long for any review and creates nothing', function (): void {
+    $session = buildingSession();
+    $question = buildingQuestion($session);
+
+    $texts = array_map(fn (int $index): string => 'word'.$index, range(1, 51));
+    foreach ($texts as $text) {
+        buildingRow($question, $text);
+    }
+
+    addToReview($this, FeedbackType::Vocabulary, $texts)
+        ->assertOk()
+        ->assertJson([
+            'outcome' => 'refused_maximum',
+            'message' => 'This review has room for 50 more items.',
+            'review' => null,
+        ]);
+
+    expect(CustomReview::query()->count())->toBe(0)
+        ->and(CustomReviewItem::query()->count())->toBe(0);
+});
+
+it('refuses an add that would overflow the review chosen in the picker', function (): void {
+    $session = buildingSession();
+    $question = buildingQuestion($session);
+    buildingRow($question, 'newcomer');
+    buildingRow($question, 'another');
+
+    $fullish = CustomReview::factory()->draft()->create();
+    CustomReviewItem::factory()->count(49)->create(['custom_review_id' => $fullish->id]);
+    $other = CustomReview::factory()->draft()->create();
+
+    addToReview($this, FeedbackType::Vocabulary, ['newcomer', 'another'])
+        ->assertOk()
+        ->assertJson(['outcome' => 'needs_review_choice']);
+
+    addToReview($this, FeedbackType::Vocabulary, ['newcomer', 'another'], $fullish->id)
+        ->assertOk()
+        ->assertJson([
+            'outcome' => 'refused_maximum',
+            'message' => 'This review has room for 1 more item.',
+        ]);
+
+    expect(CustomReviewItem::query()->where('custom_review_id', $fullish->id)->count())->toBe(49);
+
+    // A refusal names one review's room; another review still takes the items.
+    addToReview($this, FeedbackType::Vocabulary, ['newcomer', 'another'], $other->id)
+        ->assertOk()
+        ->assertJson(['outcome' => 'added', 'total' => 2]);
+});
+
+it('still warns below the maximum and lets a confirmed add reach it', function (): void {
+    $session = buildingSession();
+    buildingRow(buildingQuestion($session), 'newcomer');
+
+    $review = CustomReview::factory()->draft()->create();
+    CustomReviewItem::factory()->count(49)->create(['custom_review_id' => $review->id]);
+
+    addToReview($this, FeedbackType::Vocabulary, ['newcomer'], $review->id)
+        ->assertOk()
+        ->assertJson(['outcome' => 'needs_confirmation', 'resulting_count' => 50]);
+
+    addToReview($this, FeedbackType::Vocabulary, ['newcomer'], $review->id, true)
+        ->assertOk()
+        ->assertJson(['outcome' => 'added', 'total' => 50]);
+});
+
+it('lets a full review hear again what it already holds', function (): void {
+    $review = CustomReview::factory()->draft()->create();
+    CustomReviewItem::factory()->count(50)->create(['custom_review_id' => $review->id]);
+
+    $held = CustomReviewItem::query()
+        ->where('custom_review_id', $review->id)
+        ->pluck('item_identity')
+        ->all();
+
+    addToReview($this, FeedbackType::Vocabulary, $held, $review->id)
+        ->assertOk()
+        ->assertJson([
+            'outcome' => 'added',
+            'added_count' => 0,
+            'already_count' => 50,
+            'total' => 50,
+        ]);
+});
+
 it('marks the items of the only review being built on the collections page', function (): void {
     $session = buildingSession();
     buildingRow(buildingQuestion($session), 'cafe');

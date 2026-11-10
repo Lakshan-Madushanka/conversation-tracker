@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\CustomReviewStatus;
+use App\Enums\FeedbackType;
 use App\Support\SearchText;
 use Database\Factories\CustomReviewFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -26,12 +27,13 @@ use Illuminate\Support\Carbon;
  * @property int $id
  * @property string $name
  * @property string|null $description
+ * @property list<string>|null $allowed_kinds
  * @property string|null $search_text
  * @property CustomReviewStatus $status
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['name', 'description', 'status'])]
+#[Fillable(['name', 'description', 'allowed_kinds', 'status'])]
 final class CustomReview extends Model
 {
     /** @use HasFactory<CustomReviewFactory> */
@@ -58,7 +60,23 @@ final class CustomReview extends Model
     {
         return [
             'status' => CustomReviewStatus::class,
+            'allowed_kinds' => 'array',
         ];
+    }
+
+    /**
+     * Whether the learner has let this review hold items of the kind.
+     *
+     * An empty choice allows every kind, which is how a review starts and how
+     * an unchanged one reads; only a narrowed review carries a list.
+     */
+    public function allowsKind(FeedbackType $kind): bool
+    {
+        $allowed = $this->allowed_kinds;
+
+        return $allowed === null
+            || $allowed === []
+            || in_array($kind->value, $allowed, true);
     }
 
     /**

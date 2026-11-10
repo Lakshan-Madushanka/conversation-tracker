@@ -50,6 +50,6 @@ final class CustomReviewItem extends Model
      */
     public function review(): BelongsTo
     {
-        return $this->belongsTo(CustomReview::class);
+        return $this->belongsTo(CustomReview::class, 'custom_review_id');
     }
 }

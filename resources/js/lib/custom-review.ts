@@ -13,7 +13,8 @@
  * Where an add goes, and whether it deserves a warning first, is decided by
  * the server. This file only asks the two questions the server sends back —
  * which review, and whether that many items is what they meant — and never
- * decides either of them itself.
+ * decides either of them itself. A refusal is the server's statement, shown
+ * as it came and never argued with.
  */
 
 import { ref } from 'vue';
@@ -25,11 +26,15 @@ import type {
 import { jsonRequest } from '@/lib/http';
 import {
     clear as reviewClear,
+    kinds as reviewKinds,
     show as reviewShow,
     status as reviewStatus,
     update as reviewUpdate,
 } from '@/routes/customReviews';
-import { store as attemptStore } from '@/routes/customReviews/attempts';
+import {
+    index as attemptIndex,
+    store as attemptStore,
+} from '@/routes/customReviews/attempts';
 import {
     destroy as reviewItemsDestroy,
     store as reviewItemsStore,
@@ -37,6 +42,7 @@ import {
 import type {
     AddReviewAnswer,
     AddReviewOutcome,
+    CustomReviewAttemptPageData,
     CustomReviewCardData,
     CustomReviewKind,
     CustomReviewPracticeData,
@@ -63,6 +69,12 @@ export const reviewChoices = ref<CustomReviewSummary[]>([]);
 
 /** The size the warning names. */
 export const resultingCount = ref(0);
+
+/**
+ * The refusal the server last sent, in its own words, or nothing. A refusal
+ * asks no question: it stands until the next add replaces it.
+ */
+export const refusalMessage = ref('');
 
 /**
  * An add waiting on an answer. The whole request is kept, because either
@@ -148,6 +160,67 @@ export function reviewIsTooMany(count: number): boolean {
 /** The size tag's words, written the way the server writes them. */
 export function reviewTooManyLabel(count: number): string {
     return `Too Many Items · ${reviewItemCountLabel(count)}`;
+}
+
+/** Every kind a review can hold, in the order its page groups them. */
+export const ALL_CUSTOM_REVIEW_KINDS: CustomReviewKind[] = [
+    'vocabulary',
+    'phrase',
+    'grammar_note',
+    'mistake',
+    'question',
+];
+
+/** The collections' own words for each kind, as the backend names them. */
+const KIND_WORDS: Record<CustomReviewKind, string> = {
+    vocabulary: 'Words',
+    phrase: 'Phrases',
+    grammar_note: 'Grammar notes',
+    mistake: 'Mistakes',
+    question: 'Questions',
+};
+
+/**
+ * The allowed-kinds label, written the way `App\Support\CustomReviewKinds`
+ * writes it. Used while the page takes the learner's choice optimistically, so
+ * the badge and the control move together before the server answers; every
+ * other place reads the server's own label.
+ */
+export function reviewKindsLabel(
+    allowedKinds: CustomReviewKind[] | null,
+): string {
+    const chosen =
+        allowedKinds === null || allowedKinds.length === 0
+            ? ALL_CUSTOM_REVIEW_KINDS
+            : ALL_CUSTOM_REVIEW_KINDS.filter((kind) =>
+                  allowedKinds.includes(kind),
+              );
+
+    if (chosen.length === ALL_CUSTOM_REVIEW_KINDS.length) {
+        return 'All kinds';
+    }
+
+    const words = chosen.map((kind) => KIND_WORDS[kind]);
+
+    return words.length === 1 ? `${words[0]} only` : words.join(' + ');
+}
+
+/**
+ * The collections' own words for a set of kinds, joined as the labels join
+ * them, without "All kinds" or "only". Used to name the kinds a change takes
+ * away from a review.
+ */
+export function reviewKindsNames(
+    allowedKinds: CustomReviewKind[] | null,
+): string {
+    const chosen =
+        allowedKinds === null || allowedKinds.length === 0
+            ? ALL_CUSTOM_REVIEW_KINDS
+            : ALL_CUSTOM_REVIEW_KINDS.filter((kind) =>
+                  allowedKinds.includes(kind),
+              );
+
+    return chosen.map((kind) => KIND_WORDS[kind]).join(' + ');
 }
 
 /** The status as the learner sees it, capitalised once. */
@@ -441,6 +514,63 @@ export async function updateReviewStatus(
 }
 
 /**
+ * The learner's kinds choice, saved whole. Turning off a kind the review still
+ * holds is refused with the items to remove first, which arrives as one
+ * message; turning a kind on is always allowed.
+ */
+export async function updateReviewKinds(
+    reviewId: number,
+    kinds: CustomReviewKind[],
+): Promise<CustomReviewSummary> {
+    const response = await jsonRequest(reviewKinds.url(reviewId), {
+        method: 'PUT',
+        body: JSON.stringify({ kinds }),
+    });
+
+    if (response.status === 200) {
+        const body = (await response.json()) as {
+            review: CustomReviewSummary;
+        };
+
+        return body.review;
+    }
+
+    if (response.status === 422) {
+        const body = (await response.json()) as {
+            errors?: Record<string, unknown>;
+        };
+        const errors = firstError(body.errors ?? {});
+
+        throw new Error(
+            errors.kinds ?? 'These kinds could not be saved just now.',
+        );
+    }
+
+    throw new Error('These kinds could not be saved just now.');
+}
+
+/**
+ * One page of a review's attempt history, newest first, for Load more.
+ * Read-only: reading the history changes nothing about any attempt.
+ */
+export async function loadAttemptHistory(
+    reviewId: number,
+    page: number,
+): Promise<CustomReviewAttemptPageData> {
+    const response = await jsonRequest(
+        attemptIndex.url(reviewId, { query: { page } }),
+    );
+
+    if (!response.ok) {
+        throw new Error(
+            `Loading the attempt history failed (${response.status}).`,
+        );
+    }
+
+    return (await response.json()) as CustomReviewAttemptPageData;
+}
+
+/**
  * One add request, answered by the server's own decision. Used on its own
  * when a page has already settled where the items go — the Undo of a removal
  * puts them back in the review it just named.
@@ -471,9 +601,10 @@ export async function sendAddToReview(
  * Adds the chosen items where they belong, asking only when the server asks.
  *
  * Never throws: the caller gets `added` with what changed, `cancelled` when
- * the learner turned a question down, and `failed` when the request did not
- * go through — the case a list answers by keeping the selection and offering
- * a way to try again.
+ * nothing was written and nothing more is asked — a question turned down or a
+ * refusal already shown — and `failed` when the request did not go through,
+ * the case a list answers by keeping the selection and offering a way to try
+ * again.
  */
 export async function addItemsToReview(
     kind: CustomReviewKind,
@@ -571,6 +702,8 @@ async function send(
     add: Waiting,
     request: () => Promise<AddReviewAnswer>,
 ): Promise<AddReviewOutcome> {
+    refusalMessage.value = '';
+
     let answer: AddReviewAnswer;
 
     try {
@@ -592,6 +725,18 @@ async function send(
     // Another add has taken the question over since this one was sent, so
     // nothing is asked about this one: its items simply were not added.
     if (waiting !== add) {
+        return { status: 'cancelled' };
+    }
+
+    // A refusal is a statement, not a question: it is shown as it came, and
+    // the caller is told nothing changed without waiting for an answer.
+    if (
+        answer.outcome === 'refused_maximum' ||
+        answer.outcome === 'refused_kind'
+    ) {
+        refusalMessage.value = answer.message;
+        finish(add);
+
         return { status: 'cancelled' };
     }
 

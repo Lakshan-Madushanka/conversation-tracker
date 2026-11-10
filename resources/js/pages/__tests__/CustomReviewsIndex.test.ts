@@ -30,6 +30,8 @@ function card(
         description_excerpt: null,
         status: 'draft',
         status_label: 'Draft',
+        allowed_kinds: null,
+        allowed_kinds_label: 'All kinds',
         item_count: 2,
         item_count_label: '2 items',
         too_many_items: false,
@@ -67,6 +69,7 @@ function pageProps(
         all_total: reviews.length,
         per_page: 20,
         filters: defaultCustomReviewFilters(),
+        next_review_name: 'Custom Review 1',
         notice: null,
         ...overrides,
     };
@@ -91,6 +94,8 @@ function summary(
         description: null,
         status: 'finished',
         status_label: 'Finished',
+        allowed_kinds: null,
+        allowed_kinds_label: 'All kinds',
         item_count: 2,
         item_count_label: '2 items',
         too_many_items: false,
@@ -168,7 +173,7 @@ describe('the Custom reviews page', () => {
         expect(wrapper.text()).not.toContain('of 12');
     });
 
-    it('offers New custom review as a post to the listing', () => {
+    it('starts a review from a dialog that offers its name and kinds', async () => {
         const wrapper = mountPage();
         const button = wrapper
             .findAll('button')
@@ -176,7 +181,15 @@ describe('the Custom reviews page', () => {
                 candidate.text().includes('New custom review'),
             );
 
-        expect(button).toBeDefined();
+        await button?.trigger('click');
+        await flushPromises();
+
+        const name =
+            document.querySelector<HTMLInputElement>('#new-review-name');
+
+        expect(name?.value).toBe('Custom Review 1');
+        expect(document.body.textContent).toContain('Kinds this review allows');
+        expect(document.body.textContent).toContain('Create review');
     });
 
     it('shows a card for every review with its practice note', () => {

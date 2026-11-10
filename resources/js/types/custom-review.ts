@@ -15,6 +15,10 @@ export interface CustomReviewSummary {
     description: string | null;
     status: CustomReviewStatusValue;
     status_label: string;
+    /** The kinds chosen, or null when the review allows every kind. */
+    allowed_kinds: CustomReviewKind[] | null;
+    /** "All kinds", "Words only", or "Words + Phrases". */
+    allowed_kinds_label: string;
     item_count: number;
     item_count_label: string;
     /** True past the recommended size; advice only, never a limit. */
@@ -187,6 +191,8 @@ export interface CustomReviewsPageData {
     all_total: number;
     per_page: number;
     filters: CustomReviewFiltersState;
+    /** The name the creation dialog offers, filled in as a new review would be. */
+    next_review_name: string;
     /** What a deletion just answered with, said once and then forgotten. */
     notice: string | null;
 }
@@ -203,12 +209,25 @@ export interface CustomReviewPageData {
     practice: CustomReviewPracticeData;
     /** Every attempt, newest first, read-only. */
     attempts: CustomReviewAttemptHistoryData[];
+    /** How many attempts exist in all, however many are on screen. */
+    attempt_total: number;
+    /** The page after the loaded ones, or null once the history is whole. */
+    attempts_next_page: number | null;
     /** The attempt the address has open, or null when every row is closed. */
     expanded_attempt: number | null;
     /** Why a start was refused, in the review's calm words, or null. */
     attempt_error: string | null;
     /** Where the page's Delete sends the review for good. */
     delete_url: string;
+}
+
+/** One page of a review's attempt history, for Load more. */
+export interface CustomReviewAttemptPageData {
+    attempts: CustomReviewAttemptHistoryData[];
+    /** The page after this one, or null once the history is whole. */
+    next_page: number | null;
+    /** How many attempts exist in all. */
+    total: number;
 }
 
 /** An add that went through, with the review it went into. */
@@ -233,13 +252,30 @@ export type AddReviewAnswer =
           outcome: 'needs_confirmation';
           review: null;
           resulting_count: number;
+      }
+    | {
+          /** The add would cross the maximum; nothing was written. */
+          outcome: 'refused_maximum';
+          review: CustomReviewSummary | null;
+          /** The refusal in the server's words, naming the room left. */
+          message: string;
+      }
+    | {
+          /** The review has narrowed its kinds; nothing was written. */
+          outcome: 'refused_kind';
+          review: CustomReviewSummary | null;
+          /** The refusal in the server's words, naming the kinds allowed. */
+          message: string;
       };
 
 /** What the learner's add came to once any question was answered. */
 export type AddReviewOutcome =
     | { status: 'added'; answer: AddedReviewAnswer }
     | {
-          /** The learner turned a question down; nothing changed. */
+          /**
+           * Nothing changed and no question is waiting: the learner turned a
+           * question down, or the server refused the add and said why.
+           */
           status: 'cancelled';
       }
     | {

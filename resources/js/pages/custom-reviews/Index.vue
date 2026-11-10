@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { Head, Link } from '@inertiajs/vue3';
+import { Head } from '@inertiajs/vue3';
 import { PlusIcon } from '@lucide/vue';
 import { toast } from 'vue-sonner';
+import CustomReviewCreateDialog from '@/components/CustomReviewCreateDialog.vue';
 import CustomReviewFilterBar from '@/components/CustomReviewFilterBar.vue';
 import CustomReviewList from '@/components/CustomReviewList.vue';
 import LibrarySearch from '@/components/LibrarySearch.vue';
@@ -17,7 +18,6 @@ import {
     hasCustomReviewSearch,
     hasCustomReviewStatuses,
 } from '@/lib/custom-review-listing';
-import { store as customReviewsStore } from '@/routes/customReviews';
 import type { CustomReviewCardData, CustomReviewsPageData } from '@/types';
 
 defineOptions({ layout: AppLayout });
@@ -47,6 +47,9 @@ const {
 
 /** The card whose status is on its way, so only that card waits. */
 const busyId = ref<number | null>(null);
+
+/** True while the dialog that starts a review is open. */
+const creating = ref(false);
 
 /** A calm line a screen reader hears after a status change. */
 const statusNotice = ref('');
@@ -147,11 +150,14 @@ async function changeStatus(
             description="The sets you build from your own words, phrases, notes and mistakes — ready whenever you are."
         >
             <template #actions>
-                <Button size="lg" class="min-h-11" as-child>
-                    <Link :href="customReviewsStore.url()" method="post">
-                        <PlusIcon aria-hidden="true" />
-                        New custom review
-                    </Link>
+                <Button
+                    type="button"
+                    size="lg"
+                    class="min-h-11"
+                    @click="creating = true"
+                >
+                    <PlusIcon aria-hidden="true" />
+                    New custom review
                 </Button>
             </template>
         </PageHeader>
@@ -197,6 +203,13 @@ async function changeStatus(
             @clear-search="clearSearchAndFocus"
             @retry-filters="retryFilters"
             @change-status="changeStatus"
+            @create="creating = true"
+        />
+
+        <CustomReviewCreateDialog
+            :open="creating"
+            :default-name="props.next_review_name"
+            @update:open="creating = $event"
         />
     </div>
 </template>

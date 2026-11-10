@@ -13,6 +13,8 @@ function card(
         description_excerpt: 'The words I use before breakfast.',
         status: 'draft',
         status_label: 'Draft',
+        allowed_kinds: null,
+        allowed_kinds_label: 'All kinds',
         item_count: 3,
         item_count_label: '3 items',
         too_many_items: false,
@@ -60,6 +62,17 @@ describe('a custom review card', () => {
         expect(wrapper.find('time').attributes('datetime')).toBe(
             '2026-10-12T08:00:00.000000Z',
         );
+    });
+
+    it('shows the kinds the review allows', () => {
+        expect(mountCard().text()).toContain('All kinds');
+
+        expect(
+            mountCard({
+                allowed_kinds: ['vocabulary', 'phrase'],
+                allowed_kinds_label: 'Words + Phrases',
+            }).text(),
+        ).toContain('Words + Phrases');
     });
 
     it('shortens the description to its excerpt', () => {

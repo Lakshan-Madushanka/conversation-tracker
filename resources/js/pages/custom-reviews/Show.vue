@@ -14,6 +14,7 @@ import {
 import { toast } from 'vue-sonner';
 import CustomReviewAttemptItems from '@/components/CustomReviewAttemptItems.vue';
 import CustomReviewDeleteDialog from '@/components/CustomReviewDeleteDialog.vue';
+import CustomReviewKindsControl from '@/components/CustomReviewKindsControl.vue';
 import CustomReviewStatusControl from '@/components/CustomReviewStatusControl.vue';
 import EmptyState from '@/components/EmptyState.vue';
 import PageHeader from '@/components/PageHeader.vue';
@@ -52,10 +53,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { useAutoSave } from '@/composables/useAutoSave';
 import AppLayout from '@/layouts/AppLayout.vue';
 import {
+    ALL_CUSTOM_REVIEW_KINDS,
     ARCHIVED_ITEM_NOTE,
     clearReview,
     createReviewDescriptionSaver,
     createReviewNameSaver,
+    loadAttemptHistory,
     NOT_AVAILABLE_LABEL,
     removeItemsFromReview,
     REVIEW_EMPTY_REASON,
@@ -63,11 +66,14 @@ import {
     reviewIsTooMany,
     reviewItemCountLabel,
     reviewItemName,
+    reviewKindsLabel,
+    reviewKindsNames,
     reviewPracticeFor,
     reviewStatusExplanation,
     reviewStatusLabel,
     reviewTooManyLabel,
     sendAddToReview,
+    updateReviewKinds,
     updateReviewStatus,
 } from '@/lib/custom-review';
 import { shortDate } from '@/lib/format';
@@ -210,6 +216,61 @@ function toggleAttempt(
     window.history.replaceState(window.history.state, '', url);
 }
 
+/**
+ * The history on screen, newest first, page by page. The first page arrives
+ * with the page; Load more appends the next without reloading anything else.
+ */
+const attempts = ref<CustomReviewAttemptHistoryData[]>([...props.attempts]);
+const attemptsTotal = ref(props.attempt_total);
+const attemptsNextPage = ref<number | null>(props.attempts_next_page);
+const historyBusy = ref(false);
+const historyError = ref('');
+
+watch(
+    () =>
+        [
+            props.attempts,
+            props.attempt_total,
+            props.attempts_next_page,
+        ] as const,
+    ([next, total, nextPage]) => {
+        attempts.value = [...next];
+        attemptsTotal.value = total;
+        attemptsNextPage.value = nextPage;
+    },
+);
+
+/** Appends the next page; a failure keeps the rows already shown. */
+async function loadMoreAttempts(): Promise<void> {
+    const page = attemptsNextPage.value;
+
+    if (page === null || historyBusy.value) {
+        return;
+    }
+
+    historyBusy.value = true;
+    historyError.value = '';
+
+    try {
+        const result = await loadAttemptHistory(props.review.id, page);
+        const known = new Set(attempts.value.map((attempt) => attempt.id));
+
+        attempts.value = [
+            ...attempts.value,
+            ...result.attempts.filter((attempt) => !known.has(attempt.id)),
+        ];
+        attemptsTotal.value = result.total;
+        attemptsNextPage.value = result.next_page;
+    } catch (error) {
+        historyError.value =
+            error instanceof Error
+                ? error.message
+                : 'The next page could not be loaded just now.';
+    } finally {
+        historyBusy.value = false;
+    }
+}
+
 /** Every item the attempt kept, however it ended. */
 function attemptTotal(attempt: CustomReviewAttemptHistoryData): number {
     return (
@@ -266,7 +327,7 @@ const count = computed(() => items.value.length);
  * an archive is not the same as never having had one, and the page says so.
  */
 const everHeldItems = ref(
-    props.review.item_count > 0 || props.attempts.length > 0,
+    props.review.item_count > 0 || props.attempt_total > 0,
 );
 
 watch(count, (value) => {
@@ -347,6 +408,95 @@ async function changeStatus(next: 'draft' | 'finished'): Promise<void> {
                 : 'This review could not be moved just now.';
     } finally {
         statusBusy.value = false;
+    }
+}
+
+/**
+ * The kinds the learner chooses, shown the moment they confirm and saved
+ * whole. The previous choice comes back with the server's words if the save is
+ * refused — a kind the review still holds cannot be turned off until its items
+ * are removed.
+ */
+const kindsDraft = ref<CustomReviewKind[] | null>(
+    props.review.allowed_kinds === null
+        ? null
+        : [...props.review.allowed_kinds],
+);
+const kindsBusy = ref(false);
+const kindsError = ref('');
+const kindsLabel = computed(() => reviewKindsLabel(kindsDraft.value));
+
+/**
+ * The choice waiting for the learner's word. Changing the kinds after the
+ * review exists changes what can be added to it, so the page asks first and
+ * saves the whole choice only when the learner agrees.
+ */
+const pendingKinds = ref<CustomReviewKind[] | null>(null);
+const pendingKindsLabel = computed(() =>
+    pendingKinds.value === null ? '' : reviewKindsLabel(pendingKinds.value),
+);
+/** The kinds the pending choice takes away, in the collections' words. */
+const pendingKindsLoss = computed(() => {
+    if (pendingKinds.value === null) {
+        return '';
+    }
+
+    const current =
+        kindsDraft.value === null ? ALL_CUSTOM_REVIEW_KINDS : kindsDraft.value;
+    const lost = current.filter((kind) => !pendingKinds.value?.includes(kind));
+
+    return lost.length === 0 ? '' : reviewKindsNames(lost);
+});
+
+function changeKinds(next: CustomReviewKind[]): void {
+    if (kindsBusy.value) {
+        return;
+    }
+
+    const current =
+        kindsDraft.value === null ? ALL_CUSTOM_REVIEW_KINDS : kindsDraft.value;
+    const unchanged =
+        next.length === current.length &&
+        next.every((kind, index) => kind === current[index]);
+
+    if (unchanged) {
+        return;
+    }
+
+    pendingKinds.value = next;
+}
+
+function cancelKinds(): void {
+    pendingKinds.value = null;
+}
+
+/** Saves the choice the learner just agreed to, whole. */
+async function confirmKinds(): Promise<void> {
+    const next = pendingKinds.value;
+    pendingKinds.value = null;
+
+    if (next === null) {
+        return;
+    }
+
+    const previous = kindsDraft.value;
+    kindsDraft.value = next;
+    kindsBusy.value = true;
+    kindsError.value = '';
+
+    try {
+        const saved = await updateReviewKinds(props.review.id, next);
+        review.value = { ...saved };
+        kindsDraft.value =
+            saved.allowed_kinds === null ? null : [...saved.allowed_kinds];
+    } catch (error) {
+        kindsDraft.value = previous;
+        kindsError.value =
+            error instanceof Error
+                ? error.message
+                : 'These kinds could not be saved just now.';
+    } finally {
+        kindsBusy.value = false;
     }
 }
 
@@ -559,7 +709,8 @@ function removedMessage(removed: CustomReviewItemData[]): string {
  *
  * The review is named by the address, and the add is confirmed on the way, so
  * Undo of a removal can never answer with the size warning: the learner has
- * already said they wanted these items.
+ * already said they wanted these items. The maximum still stands — a review
+ * filled up since the removal refuses the Undo in the server's own words.
  */
 async function undoRemoval(removed: CustomReviewItemData[]): Promise<void> {
     if (busy.value || removed.length === 0) {
@@ -575,6 +726,12 @@ async function undoRemoval(removed: CustomReviewItemData[]): Promise<void> {
                 kindItems.map((item) => item.identity),
                 { review: props.review.id, confirmed: true },
             );
+
+            if (answer.outcome === 'refused_maximum') {
+                toast.error(answer.message);
+
+                return;
+            }
 
             if (answer.outcome !== 'added') {
                 throw new Error('The review did not take the items back.');
@@ -592,11 +749,11 @@ async function undoRemoval(removed: CustomReviewItemData[]): Promise<void> {
         );
     } finally {
         busy.value = false;
-    }
 
-    // The server's order is the one the page keeps, so the list is read again
-    // rather than guessed at from what was on screen.
-    refreshReview();
+        // The server's order is the one the page keeps, so the list is read
+        // again rather than guessed at from what was on screen.
+        refreshReview();
+    }
 }
 
 /** One row's Remove acts at once, with a few seconds of Undo. */
@@ -961,6 +1118,87 @@ onBeforeUnmount(() => {
                             {{ statusError }}
                         </p>
                     </div>
+
+                    <div class="grid gap-2 border-t pt-4">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="text-sm font-medium">
+                                Kinds this review allows
+                            </span>
+                            <Badge variant="outline">{{ kindsLabel }}</Badge>
+                        </div>
+
+                        <CustomReviewKindsControl
+                            :allowed-kinds="kindsDraft"
+                            :busy="kindsBusy"
+                            @change="changeKinds"
+                        />
+
+                        <p class="text-xs text-muted-foreground">
+                            Choose what this review may hold. A kind still held
+                            can be turned off once its items are removed.
+                        </p>
+
+                        <p
+                            v-if="kindsError !== ''"
+                            class="text-xs font-medium text-destructive"
+                            role="alert"
+                        >
+                            {{ kindsError }}
+                        </p>
+
+                        <AlertDialog
+                            :open="pendingKinds !== null"
+                            @update:open="
+                                (open) => {
+                                    if (!open) {
+                                        cancelKinds();
+                                    }
+                                }
+                            "
+                        >
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                    <AlertDialogTitle>
+                                        Change the kinds this review allows?
+                                    </AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                        This review will allow
+                                        {{ pendingKindsLabel }}.
+                                        <template
+                                            v-if="pendingKindsLoss !== ''"
+                                        >
+                                            {{ pendingKindsLoss }} can no longer
+                                            be added here, though nothing
+                                            already in the review changes.
+                                        </template>
+                                        <template v-else>
+                                            The kinds left out can be added here
+                                            again.
+                                        </template>
+                                        Past attempts keep the items they
+                                        started with.
+                                    </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                    <AlertDialogCancel
+                                        class="min-h-11 md:min-h-9"
+                                        @click="cancelKinds"
+                                    >
+                                        Keep the current kinds
+                                    </AlertDialogCancel>
+                                    <!-- A plain button, so the choice is read
+                                    before the dialog's own close clears it. -->
+                                    <Button
+                                        type="button"
+                                        class="min-h-11 md:min-h-9"
+                                        @click="confirmKinds"
+                                    >
+                                        Change kinds
+                                    </Button>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
+                    </div>
                 </div>
             </Card>
         </section>
@@ -1202,7 +1440,7 @@ onBeforeUnmount(() => {
             </p>
 
             <p
-                v-if="props.attempts.length === 0"
+                v-if="attempts.length === 0"
                 class="mt-4 text-sm text-muted-foreground"
             >
                 No attempts yet. Start practice and the first one will appear
@@ -1227,7 +1465,7 @@ onBeforeUnmount(() => {
                         </TableHeader>
                         <TableBody>
                             <template
-                                v-for="attempt in props.attempts"
+                                v-for="attempt in attempts"
                                 :key="attempt.id"
                             >
                                 <TableRow>
@@ -1303,7 +1541,7 @@ onBeforeUnmount(() => {
 
                 <!-- Phones read the same history as stacked cards. -->
                 <ul class="mt-4 grid gap-2 md:hidden">
-                    <li v-for="attempt in props.attempts" :key="attempt.id">
+                    <li v-for="attempt in attempts" :key="attempt.id">
                         <Card class="py-0">
                             <Collapsible
                                 :open="openAttempt === attempt.id"
@@ -1375,13 +1613,43 @@ onBeforeUnmount(() => {
                         </Card>
                     </li>
                 </ul>
+
+                <div
+                    v-if="attemptsNextPage !== null || historyError !== ''"
+                    class="mt-4 grid justify-items-start gap-2"
+                >
+                    <Button
+                        v-if="attemptsNextPage !== null"
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        class="min-h-11 md:min-h-9"
+                        :disabled="historyBusy"
+                        @click="loadMoreAttempts"
+                    >
+                        {{ historyBusy ? 'Loading…' : 'Load more' }}
+                    </Button>
+
+                    <p class="text-xs text-muted-foreground">
+                        Showing {{ attempts.length }} of {{ attemptsTotal }}
+                        attempts.
+                    </p>
+
+                    <p
+                        v-if="historyError !== ''"
+                        class="text-xs font-medium text-destructive"
+                        role="alert"
+                    >
+                        {{ historyError }}
+                    </p>
+                </div>
             </template>
         </section>
 
         <CustomReviewDeleteDialog
             v-model:open="deleteOpen"
             :name="review.name"
-            :attempt-count="props.attempts.length"
+            :attempt-count="attemptsTotal"
             :delete-url="props.delete_url"
         />
 

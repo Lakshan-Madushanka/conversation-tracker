@@ -42,6 +42,8 @@ function card(
         description_excerpt: null,
         status: 'draft',
         status_label: 'Draft',
+        allowed_kinds: null,
+        allowed_kinds_label: 'All kinds',
         item_count: 3,
         item_count_label: '3 items',
         too_many_items: false,

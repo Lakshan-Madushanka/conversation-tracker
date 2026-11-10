@@ -58,8 +58,9 @@ final class EntrySearch
 
     /**
      * The item's public collection identity, by the same rule the Collections
-     * page groups by: the normalised word or phrase, the normalised mistake
-     * pair, or a grammar note's own row key.
+     * page groups by: the normalised word or phrase (scoped to its notebook
+     * when it has one), the normalised mistake pair, or a grammar note's own
+     * row key, which is unique wherever the note lives.
      *
      * A blank row has no identity at all, so it never joins a collection.
      */
@@ -81,7 +82,15 @@ final class EntrySearch
         if ($entry->type === FeedbackType::Vocabulary || $entry->type === FeedbackType::Phrase) {
             $key = SearchText::normalize((string) $entry->content_text);
 
-            return $key === '' ? null : $key;
+            if ($key === '') {
+                return null;
+            }
+
+            // A notebook word stays inside its notebook; a session word keeps
+            // the shared normalised text it has always had.
+            return $entry->notebook_id === null
+                ? $key
+                : NotebookIdentity::wordKey($entry->notebook_id, $key);
         }
 
         return null;

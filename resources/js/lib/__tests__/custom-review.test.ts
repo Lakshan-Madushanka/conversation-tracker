@@ -4,10 +4,14 @@ import {
     createReviewDescriptionSaver,
     createReviewNameSaver,
     RECOMMENDED_ITEMS,
+    loadAttemptHistory,
     reviewIsTooMany,
+    reviewKindsLabel,
+    reviewKindsNames,
     reviewStatusExplanation,
     reviewStatusLabel,
     reviewTooManyLabel,
+    updateReviewKinds,
     updateReviewStatus,
 } from '@/lib/custom-review';
 import type { CustomReviewSummary } from '@/types';
@@ -34,6 +38,8 @@ function summary(
         description: null,
         status: 'draft',
         status_label: 'Draft',
+        allowed_kinds: null,
+        allowed_kinds_label: 'All kinds',
         item_count: 3,
         item_count_label: '3 items',
         too_many_items: false,
@@ -194,6 +200,115 @@ describe('saving the description', () => {
                 description: 'Keep the description to 500 characters or fewer.',
             },
         });
+    });
+});
+
+describe('the kinds a review allows', () => {
+    it('names the whole set, a single kind, or what is left', () => {
+        expect(reviewKindsLabel(null)).toBe('All kinds');
+        expect(reviewKindsLabel([])).toBe('All kinds');
+        expect(
+            reviewKindsLabel([
+                'vocabulary',
+                'phrase',
+                'grammar_note',
+                'mistake',
+                'question',
+            ]),
+        ).toBe('All kinds');
+        expect(reviewKindsLabel(['vocabulary'])).toBe('Words only');
+        expect(reviewKindsLabel(['vocabulary', 'phrase'])).toBe(
+            'Words + Phrases',
+        );
+    });
+
+    it('names a set without "only" or "All kinds", for what a change takes away', () => {
+        expect(reviewKindsNames(['grammar_note'])).toBe('Grammar notes');
+        expect(reviewKindsNames(['grammar_note', 'mistake', 'question'])).toBe(
+            'Grammar notes + Mistakes + Questions',
+        );
+        expect(reviewKindsNames(null)).toBe(
+            'Words + Phrases + Grammar notes + Mistakes + Questions',
+        );
+    });
+
+    it('sends the whole choice and reads the review back', async () => {
+        const saved = summary({
+            allowed_kinds: ['vocabulary', 'phrase'],
+            allowed_kinds_label: 'Words + Phrases',
+        });
+        const fetch = vi.fn(async () => jsonResponse({ review: saved }));
+        vi.stubGlobal('fetch', fetch);
+
+        await expect(
+            updateReviewKinds(4, ['vocabulary', 'phrase']),
+        ).resolves.toEqual(saved);
+
+        const [url, init] = fetch.mock.calls[0] as unknown as [
+            string,
+            RequestInit,
+        ];
+        expect(url).toContain('/custom-reviews/4/kinds');
+        expect(init.method).toBe('PUT');
+        expect(JSON.parse(init.body as string)).toEqual({
+            kinds: ['vocabulary', 'phrase'],
+        });
+    });
+
+    it('says why a held kind cannot be turned off yet', async () => {
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(async () =>
+                jsonResponse(
+                    {
+                        errors: {
+                            kinds: ['Remove the 2 phrase items first.'],
+                        },
+                    },
+                    422,
+                ),
+            ),
+        );
+
+        await expect(updateReviewKinds(4, ['vocabulary'])).rejects.toThrow(
+            'Remove the 2 phrase items first.',
+        );
+    });
+
+    it('keeps a calm line when the save did not arrive', async () => {
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(async () => new Response(null, { status: 500 })),
+        );
+
+        await expect(updateReviewKinds(4, ['vocabulary'])).rejects.toThrow(
+            'These kinds could not be saved just now.',
+        );
+    });
+});
+
+describe('loading the attempt history', () => {
+    it('asks for one page and reads it back', async () => {
+        const page = { attempts: [], next_page: 3, total: 21 };
+        const fetch = vi.fn(async () => jsonResponse(page));
+        vi.stubGlobal('fetch', fetch);
+
+        await expect(loadAttemptHistory(4, 2)).resolves.toEqual(page);
+
+        const [url] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+        expect(url).toContain('/custom-reviews/4/attempts');
+        expect(url).toContain('page=2');
+    });
+
+    it('keeps a calm line when the page did not arrive', async () => {
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(async () => new Response(null, { status: 500 })),
+        );
+
+        await expect(loadAttemptHistory(4, 2)).rejects.toThrow(
+            'Loading the attempt history failed (500).',
+        );
     });
 });
 

@@ -86,6 +86,26 @@ final readonly class CustomReviewItems
     }
 
     /**
+     * How many items a review holds of each kind, in one grouped query, so the
+     * number of queries never grows with the number of kinds. Kinds the review
+     * holds nothing of are left out.
+     *
+     * @return array<string, int>
+     */
+    public function countsByKind(CustomReview $review): array
+    {
+        /** @var array<string, int> $counts */
+        $counts = CustomReviewItem::query()
+            ->where('custom_review_id', $review->id)
+            ->selectRaw('kind, COUNT(*) as aggregate')
+            ->groupBy('kind')
+            ->pluck('aggregate', 'kind')
+            ->all();
+
+        return $counts;
+    }
+
+    /**
      * The questions of a session that the review already holds.
      *
      * @param  list<int>  $questionIds

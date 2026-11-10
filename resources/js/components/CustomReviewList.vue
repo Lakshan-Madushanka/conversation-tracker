@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { Link } from '@inertiajs/vue3';
 import {
     ListFilterIcon,
     LoaderCircleIcon,
@@ -13,7 +12,6 @@ import EmptyState from '@/components/EmptyState.vue';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { customReviewResultAnnouncement } from '@/lib/custom-review-listing';
-import { store as customReviewsStore } from '@/routes/customReviews';
 import type { CustomReviewCardData } from '@/types';
 
 /** The cards loaded so far, with the states that explain how loading is going. */
@@ -61,6 +59,7 @@ const emit = defineEmits<{
     (event: 'clear-filters'): void;
     (event: 'clear-search'): void;
     (event: 'retry-filters'): void;
+    (event: 'create'): void;
     (
         event: 'change-status',
         review: CustomReviewCardData,
@@ -156,11 +155,14 @@ const resultAnnouncement = computed(() => {
                 description="Build one from the items you choose, and practise it whenever you like."
             >
                 <template #actions>
-                    <Button size="lg" class="min-h-11 md:min-h-9" as-child>
-                        <Link :href="customReviewsStore.url()" method="post">
-                            <PlusIcon aria-hidden="true" />
-                            New custom review
-                        </Link>
+                    <Button
+                        type="button"
+                        size="lg"
+                        class="min-h-11 md:min-h-9"
+                        @click="emit('create')"
+                    >
+                        <PlusIcon aria-hidden="true" />
+                        New custom review
                     </Button>
                 </template>
             </EmptyState>

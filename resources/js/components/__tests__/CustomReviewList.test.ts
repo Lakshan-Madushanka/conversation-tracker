@@ -15,6 +15,8 @@ function card(
         description_excerpt: null,
         status: 'draft',
         status_label: 'Draft',
+        allowed_kinds: null,
+        allowed_kinds_label: 'All kinds',
         item_count: 2,
         item_count_label: '2 items',
         too_many_items: false,
@@ -57,7 +59,7 @@ function buttonNamed(wrapper: ReturnType<typeof mountList>, label: string) {
 }
 
 describe('the custom review list', () => {
-    it('welcomes a learner with no reviews and offers the first one', () => {
+    it('welcomes a learner with no reviews and offers the first one', async () => {
         const wrapper = mountList({ reviews: [], total: 0, allTotal: 0 });
         const button = wrapper
             .findAll('button')
@@ -70,6 +72,11 @@ describe('the custom review list', () => {
             'Build one from the items you choose, and practise it whenever you like.',
         );
         expect(button).toBeDefined();
+
+        // The page answers by opening the dialog that starts one.
+        await button?.trigger('click');
+
+        expect(wrapper.emitted('create')).toHaveLength(1);
     });
 
     it('offers Clear search alone when only the search matches nothing', () => {

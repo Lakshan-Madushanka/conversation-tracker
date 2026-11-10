@@ -90,6 +90,9 @@ function start(): void {
                     <Badge variant="secondary">
                         {{ props.review.status_label }}
                     </Badge>
+                    <Badge variant="outline">
+                        {{ props.review.allowed_kinds_label }}
+                    </Badge>
                     <Badge v-if="props.review.too_many_items" variant="outline">
                         {{ props.review.too_many_label }}
                     </Badge>

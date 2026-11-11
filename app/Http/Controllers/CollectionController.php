@@ -65,8 +65,18 @@ class CollectionController extends Controller
         $type = $tab->feedbackType();
 
         $filters = $request->filters();
-        $topicOptions = $collection->topicOptions($type, $eligibleOnly);
+
+        // A notebook the learner no longer has, or one that holds nothing of
+        // this kind, opens every notebook instead of a dead end.
+        $notebookOptions = $collection->notebookOptions($type, $eligibleOnly);
+        $filters = $filters->restrictNotebook(array_column($notebookOptions, 'id'));
+
+        $topicOptions = $collection->topicOptions($type, $filters, $eligibleOnly);
         $filters = $filters->restrictTopics(array_column($topicOptions, 'id'));
+
+        // The counts around the list follow the source scope the learner is
+        // looking at, not the search or status choices inside it.
+        $scopeFilters = $filters->scopeOnly();
 
         $page = $collection->page(
             type: $type,
@@ -92,15 +102,17 @@ class CollectionController extends Controller
             // topic picker and the attention marker follow an archive, restore,
             // edit or deletion made in a session.
             if ($request->wantsMeta()) {
-                $counts = $collection->counts($eligibleOnly);
+                $counts = $collection->counts($scopeFilters, $eligibleOnly);
 
                 $payload += [
                     'tabs' => $this->tabs($counts, $allowedTabs),
                     'all_total' => $counts[$tab->value],
-                    'attention_count' => $eligibleOnly ? 0 : $collection->attentionCount($type),
+                    'attention_count' => $eligibleOnly ? 0 : $collection->attentionCount($type, $filters),
                     'topic_options' => $topicOptions,
+                    'notebook_options' => $notebookOptions,
                     'filters' => $filters->toArray(),
                     'has_finished_sessions' => $collection->hasFinishedSessions(),
+                    'has_sources' => $collection->hasSources(),
                     'review_target' => $this->reviewTarget($target),
                     'review_context' => $this->reviewContext($target, $eligibleOnly),
                 ];
@@ -109,7 +121,7 @@ class CollectionController extends Controller
             return response()->json($payload);
         }
 
-        $counts = $collection->counts($eligibleOnly);
+        $counts = $collection->counts($scopeFilters, $eligibleOnly);
 
         $payload = [
             'tab' => $tab->value,
@@ -119,10 +131,12 @@ class CollectionController extends Controller
             'has_more' => $page['has_more'],
             'total' => $page['total'],
             'all_total' => $counts[$tab->value],
-            'attention_count' => $eligibleOnly ? 0 : $collection->attentionCount($type),
+            'attention_count' => $eligibleOnly ? 0 : $collection->attentionCount($type, $filters),
             'topic_options' => $topicOptions,
+            'notebook_options' => $notebookOptions,
             'filters' => $filters->toArray(),
             'has_finished_sessions' => $collection->hasFinishedSessions(),
+            'has_sources' => $collection->hasSources(),
             'review_target' => $this->reviewTarget($target),
             'review_context' => $this->reviewContext($target, $eligibleOnly),
         ];
@@ -166,10 +180,13 @@ class CollectionController extends Controller
         $type = $request->tab()->feedbackType();
         $target = $this->unfinished->target($request->reviewId());
         $eligibleOnly = $request->eligibleOnly() && $target instanceof CustomReview;
-        $topicOptions = $collection->topicOptions($type, $eligibleOnly);
-        $filters = $request->filters()->restrictTopics(
-            array_column($topicOptions, 'id'),
+
+        $filters = $request->filters()->restrictNotebook(
+            array_column($collection->notebookOptions($type, $eligibleOnly), 'id'),
         );
+
+        $topicOptions = $collection->topicOptions($type, $filters, $eligibleOnly);
+        $filters = $filters->restrictTopics(array_column($topicOptions, 'id'));
 
         $keys = $collection->keys($type, $filters, $eligibleOnly);
 

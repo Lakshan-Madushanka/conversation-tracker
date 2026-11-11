@@ -16,9 +16,10 @@ use Illuminate\Support\Facades\DB;
 /**
  * The typo rule: marks and review ratings follow an edited item.
  *
- * When an entry in a finished, non-archived session is edited so that its
- * identity changes (a fixed typo, a corrected mistake), what the learner has
- * attached to the old words follows the words they now see:
+ * When an entry is edited so that its identity changes (a fixed typo, a
+ * corrected mistake) — in a finished, non-archived session or on a notebook
+ * board — what the learner has attached to the old words follows the words
+ * they now see:
  *
  * - if the old item appears nowhere else, the marks and ratings move to the
  *   new item;
@@ -150,9 +151,10 @@ final readonly class MoveMarkAfterEdit
 
     /**
      * Whether the old item has any other appearance in finished sessions that
-     * are not archived. The collection key is already stored on every row by
-     * the same shared normalisation the collections group by, so this is one
-     * lookup rather than reading and comparing every entry of the type.
+     * are not archived, or in a notebook. The collection key is already stored
+     * on every row by the same shared normalisation the collections group by,
+     * so this is one lookup rather than reading and comparing every entry of
+     * the type.
      */
     private function appearsElsewhere(
         FeedbackType $kind,
@@ -163,10 +165,12 @@ final readonly class MoveMarkAfterEdit
             ->where('type', $kind->value)
             ->where('collection_key', $fromIdentity)
             ->whereKeyNot($editedEntryId)
-            ->whereHas(
-                'practiceQuestion.practiceSession',
-                fn (Builder $query): Builder => $query->study(),
-            )
+            ->where(fn (Builder $scope): Builder => $scope
+                ->whereNotNull('notebook_id')
+                ->orWhereHas(
+                    'practiceQuestion.practiceSession',
+                    fn (Builder $query): Builder => $query->study(),
+                ))
             ->exists();
     }
 }

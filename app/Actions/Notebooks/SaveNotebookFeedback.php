@@ -4,12 +4,16 @@ declare(strict_types=1);
 
 namespace App\Actions\Notebooks;
 
+use App\Actions\Collections\MoveMarkAfterEdit;
+use App\Actions\CustomReviews\MoveCustomReviewItemsAfterEdit;
 use App\Enums\FeedbackType;
 use App\Models\Notebook;
 use App\Models\PracticeFeedbackEntry;
 use App\Support\FeedbackTable;
 use App\Support\ListEntries;
+use App\Support\NotebookIdentity;
 use App\Support\RichText;
+use App\Support\SearchText;
 use Illuminate\Support\Str;
 
 /**
@@ -17,9 +21,19 @@ use Illuminate\Support\Str;
  * rules as session feedback. Rows are claimed by their client id, so a retry
  * or a repeated id never duplicates an entry, and rows the board no longer
  * holds are removed.
+ *
+ * A word or phrase whose spelling is edited follows the same typo rule as a
+ * session row: the marks and review references move to the new scoped
+ * identity when the old one no longer appears anywhere else in the notebook.
+ * Grammar notes keep their own identity, so nothing moves for them.
  */
 final readonly class SaveNotebookFeedback
 {
+    public function __construct(
+        private MoveMarkAfterEdit $moveMarkAfterEdit,
+        private MoveCustomReviewItemsAfterEdit $moveCustomReviewItems,
+    ) {}
+
     /**
      * @param  array<string, mixed>  $feedback
      */
@@ -41,6 +55,8 @@ final readonly class SaveNotebookFeedback
         $claimed = [];
         $stored = [];
         $seenIds = [];
+        /** @var list<array{from: string, to: string, entry_id: int}> $marksToMove */
+        $marksToMove = [];
 
         foreach ($this->entriesToStore($type, $submitted) as $entry) {
             // The same id twice in one box is one entry, not two rows.
@@ -53,6 +69,9 @@ final readonly class SaveNotebookFeedback
             }
 
             $row = $this->claimRow($notebook, $type, $rows, $claimed, $entry['client_id']);
+            $move = $type->isTable() && $row->exists
+                ? $this->identityChange($notebook, $row, $entry['content_text'])
+                : null;
 
             $row->position = count($stored);
             $row->content_html = $entry['content_html'];
@@ -65,6 +84,10 @@ final readonly class SaveNotebookFeedback
             $row->is_split = $entry['is_split'];
             $row->save();
 
+            if ($move !== null) {
+                $marksToMove[] = ['from' => $move[0], 'to' => $move[1], 'entry_id' => $row->id];
+            }
+
             $claimed[spl_object_id($row)] = true;
             $stored[] = $row;
         }
@@ -74,6 +97,56 @@ final readonly class SaveNotebookFeedback
                 $row->delete();
             }
         }
+
+        // Run after the box is in its new shape, so "appears elsewhere" reads
+        // the notebook as it is from now on.
+        foreach ($marksToMove as $move) {
+            $this->moveMarkAfterEdit->handle(
+                $type,
+                $move['from'],
+                $move['to'],
+                $move['entry_id'],
+            );
+
+            $this->moveCustomReviewItems->handle(
+                $type,
+                $move['from'],
+                $move['to'],
+                $move['entry_id'],
+            );
+        }
+    }
+
+    /**
+     * The scoped identity an edited row loses and gains, when they genuinely
+     * differ. A change that only touched capitals, accents or spacing keeps
+     * the same identity and moves nothing.
+     *
+     * @return array{0: string, 1: string}|null
+     */
+    private function identityChange(
+        Notebook $notebook,
+        PracticeFeedbackEntry $row,
+        string $content,
+    ): ?array {
+        $from = $this->identityOf($notebook, (string) $row->getOriginal('content_text'));
+        $to = $this->identityOf($notebook, $content);
+
+        if ($from === null || $to === null || $from === $to) {
+            return null;
+        }
+
+        return [$from, $to];
+    }
+
+    /** The scoped identity a notebook row's subject makes, or null when blank. */
+    private function identityOf(Notebook $notebook, string $content): ?string
+    {
+        $identity = SearchText::normalize($content);
+
+        return $identity === ''
+            ? null
+            : NotebookIdentity::wordKey((int) $notebook->id, $identity);
     }
 
     /**

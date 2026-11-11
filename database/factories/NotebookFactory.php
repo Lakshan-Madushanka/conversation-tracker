@@ -23,6 +23,9 @@ class NotebookFactory extends Factory
         return [
             'name' => ucfirst(is_array($name) ? implode(' ', $name) : $name),
             'topic_id' => Topic::factory(),
+            'description_html' => null,
+            'description_text' => null,
+            'client_key' => null,
         ];
     }
 }

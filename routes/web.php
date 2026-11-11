@@ -8,6 +8,7 @@ use App\Http\Controllers\CustomReviewsController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\LibraryBulkController;
 use App\Http\Controllers\LibraryController;
+use App\Http\Controllers\NotebooksController;
 use App\Http\Controllers\PracticeSessionController;
 use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\ReviewSuggestionController;
@@ -134,6 +135,18 @@ Route::put('/collections/notes', [CollectionMarkController::class, 'storeNotes']
 // delete is refused while either still names the topic.
 Route::put('/topics/{topic}', [TopicController::class, 'update'])->name('topics.update');
 Route::delete('/topics/{topic}', [TopicController::class, 'destroy'])->name('topics.destroy');
+
+// Notebooks: the learner's own words and grammar notes, saved automatically.
+// The listing comes before the parameterised board route, so /notebooks is
+// never mistaken for a notebook id.
+Route::get('/notebooks', [NotebooksController::class, 'index'])->name('notebooks.index');
+Route::post('/notebooks', [NotebooksController::class, 'store'])->name('notebooks.store');
+Route::get('/notebooks/{notebook}', [NotebooksController::class, 'show'])
+    ->whereNumber('notebook')
+    ->name('notebooks.show');
+Route::put('/notebooks/{notebook}/autosave', [NotebooksController::class, 'autosaveUpdate'])
+    ->whereNumber('notebook')
+    ->name('notebooks.autosave.update');
 
 // Review and re-practice. The sitting is named in the exercise page's address,
 // so a refresh returns to the next item not yet rated and a finished review

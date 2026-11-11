@@ -18,11 +18,16 @@ import {
     type CollectionFilterChip,
     type CollectionFilters,
 } from '@/lib/collection-filters';
-import type { CollectionTabKey, CollectionTopicOption } from '@/types';
+import type {
+    CollectionNotebookOption,
+    CollectionTabKey,
+    CollectionTopicOption,
+} from '@/types';
 
 const props = defineProps<{
     filters: CollectionFilters;
     topics: CollectionTopicOption[];
+    notebooks?: CollectionNotebookOption[];
     tab: CollectionTabKey;
     attentionCount?: number;
     updating?: boolean;
@@ -66,11 +71,15 @@ function focusFirstControl(): void {
             typeof window.matchMedia === 'function' &&
             window.matchMedia('(min-width: 768px)').matches;
 
-        // On a computer the topic button is the first control, unless the tab
-        // has no topics to choose; the star control always does something. On
-        // a phone the Filters button is the way back into the controls.
+        // On a computer the source control is the first one; the topic and
+        // star controls follow when it cannot take focus. On a phone the
+        // Filters button is the way back into the controls.
         const candidates = isDesktop
-            ? ['collection-desktop-topic-filter', 'collection-desktop-starred']
+            ? [
+                  'collection-desktop-source-filter',
+                  'collection-desktop-topic-filter',
+                  'collection-desktop-starred',
+              ]
             : ['collection-filters-button'];
 
         for (const id of candidates) {
@@ -113,6 +122,7 @@ defineExpose({ focusFirstControl });
                 id-prefix="collection-desktop"
                 :filters="props.filters"
                 :topics="props.topics"
+                :notebooks="props.notebooks"
                 :tab="props.tab"
                 :attention-count="props.attentionCount"
                 :disabled="props.disabled"
@@ -145,6 +155,7 @@ defineExpose({ focusFirstControl });
         <CollectionActiveFilters
             :filters="props.filters"
             :topics="props.topics"
+            :notebooks="props.notebooks"
             :disabled="props.disabled"
             @remove="remove"
             @clear="clearAndFocus"
@@ -159,8 +170,8 @@ defineExpose({ focusFirstControl });
                 <SheetHeader class="mb-4 text-left">
                     <SheetTitle>Filters</SheetTitle>
                     <SheetDescription>
-                        Narrow this collection by marks, status or the topics it
-                        came from.
+                        Narrow this collection by its source, marks, status or
+                        the topics and notebooks it came from.
                     </SheetDescription>
                 </SheetHeader>
 
@@ -169,6 +180,7 @@ defineExpose({ focusFirstControl });
                     stacked
                     :filters="props.filters"
                     :topics="props.topics"
+                    :notebooks="props.notebooks"
                     :tab="props.tab"
                     :attention-count="props.attentionCount"
                     :disabled="props.disabled"

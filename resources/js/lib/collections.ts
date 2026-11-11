@@ -1,4 +1,5 @@
 import { collectionUrl } from '@/lib/collection-query';
+import { show as notebooksShow } from '@/routes/notebooks';
 import { show as sessionsShow } from '@/routes/sessions';
 import type {
     CollectionAppearance,
@@ -8,10 +9,13 @@ import type {
     CollectionMistakeAppearance,
     CollectionMistakeItem,
     CollectionNoteItem,
+    CollectionNotebookOption,
+    CollectionNotebookSource,
     CollectionOpenedItem,
     CollectionPage,
     CollectionReviewContext,
     CollectionRow,
+    CollectionRowContent,
     CollectionTabKey,
     CollectionTopicOption,
 } from '@/types';
@@ -32,8 +36,10 @@ export interface CollectionSnapshot {
     savedAt: number;
     /** The search, filters and order the saved list was showing. */
     filters?: CollectionFilters;
-    /** The topic picker, whole-collection counts and attention count. */
+    /** The topic and notebook pickers, counts and empty-state flag. */
     topicOptions?: CollectionTopicOption[];
+    notebookOptions?: CollectionNotebookOption[];
+    hasSources?: boolean;
     allTotal?: number;
     attentionCount?: number;
     /** The review whose + Add items narrowed the list, when one did. */
@@ -126,9 +132,33 @@ export function isCollectionItemsPage(
             typeof page.attention_count === 'number') &&
         (page.topic_options === undefined ||
             isCollectionTopicOptions(page.topic_options)) &&
+        (page.notebook_options === undefined ||
+            isCollectionNotebookOptions(page.notebook_options)) &&
         (page.filters === undefined || isCollectionFilters(page.filters)) &&
         (page.has_finished_sessions === undefined ||
-            typeof page.has_finished_sessions === 'boolean')
+            typeof page.has_finished_sessions === 'boolean') &&
+        (page.has_sources === undefined ||
+            typeof page.has_sources === 'boolean')
+    );
+}
+
+/** Whether the notebook options a refresh sends back look right. */
+function isCollectionNotebookOptions(value: unknown): boolean {
+    return (
+        Array.isArray(value) &&
+        value.every((notebook) => {
+            if (typeof notebook !== 'object' || notebook === null) {
+                return false;
+            }
+
+            const candidate = notebook as Record<string, unknown>;
+
+            return (
+                typeof candidate.id === 'number' &&
+                typeof candidate.name === 'string' &&
+                typeof candidate.count === 'number'
+            );
+        })
     );
 }
 
@@ -167,8 +197,61 @@ function isCollectionFilters(value: unknown): boolean {
         typeof filters.attention === 'boolean' &&
         Array.isArray(filters.topics) &&
         filters.topics.every((topic) => typeof topic === 'number') &&
+        isSource(filters.source) &&
+        (filters.notebook === null || typeof filters.notebook === 'number') &&
         typeof filters.sort === 'string'
     );
+}
+
+/** Whether a value names one of the sources a collection gathers from. */
+function isSource(value: unknown): boolean {
+    return value === 'all' || value === 'sessions' || value === 'notebooks';
+}
+
+/** Whether a value names the source one item came from. */
+function isSourceValue(value: unknown): boolean {
+    return value === 'session' || value === 'notebook';
+}
+
+/** Whether a notebook source looks right, or is absent for a session item. */
+function isNotebookSource(value: unknown): boolean {
+    if (value === null) {
+        return true;
+    }
+
+    if (typeof value !== 'object') {
+        return false;
+    }
+
+    const notebook = value as Record<string, unknown>;
+
+    return (
+        typeof notebook.id === 'number' &&
+        typeof notebook.name === 'string' &&
+        typeof notebook.topic === 'string'
+    );
+}
+
+/** Whether one saved notebook row looks right. */
+function isRowContent(value: unknown): boolean {
+    if (typeof value !== 'object' || value === null) {
+        return false;
+    }
+
+    const row = value as Record<string, unknown>;
+
+    return (
+        (row.entry_id === null || typeof row.entry_id === 'string') &&
+        typeof row.entry_position === 'number' &&
+        typeof row.meaning === 'string' &&
+        typeof row.example === 'string' &&
+        typeof row.example_html === 'string'
+    );
+}
+
+/** Whether a list of saved notebook rows looks right. */
+function isRowContents(value: unknown): boolean {
+    return Array.isArray(value) && value.every(isRowContent);
 }
 
 export function isCollectionItem(value: unknown): value is CollectionItem {
@@ -184,12 +267,19 @@ export function isCollectionItem(value: unknown): value is CollectionItem {
         typeof item.meaning === 'string' &&
         typeof item.example === 'string' &&
         typeof item.example_html === 'string' &&
-        (typeof item.latest_session_date === 'string' ||
-            item.latest_session_date === null) &&
-        typeof item.seen_count === 'number' &&
+        typeof item.latest_date === 'string' &&
+        (item.seen_count === null || typeof item.seen_count === 'number') &&
         typeof item.needs_attention === 'boolean' &&
         (item.attention_reason === null ||
             typeof item.attention_reason === 'string') &&
+        (item.session_id === null || typeof item.session_id === 'number') &&
+        (item.session_date === null || typeof item.session_date === 'string') &&
+        typeof item.topic === 'string' &&
+        (item.question_position === null ||
+            typeof item.question_position === 'number') &&
+        isSourceValue(item.source) &&
+        isNotebookSource(item.notebook) &&
+        isRowContents(item.rows) &&
         Array.isArray(item.appearances) &&
         item.appearances.every(isAppearance)
     );
@@ -209,14 +299,16 @@ export function isCollectionNoteItem(
         typeof item.text === 'string' &&
         typeof item.preview === 'string' &&
         typeof item.html === 'string' &&
-        (typeof item.latest_session_date === 'string' ||
-            item.latest_session_date === null) &&
-        typeof item.session_id === 'number' &&
+        typeof item.latest_date === 'string' &&
+        (item.session_id === null || typeof item.session_id === 'number') &&
         typeof item.topic === 'string' &&
         (typeof item.session_date === 'string' || item.session_date === null) &&
-        typeof item.question_position === 'number' &&
+        (item.question_position === null ||
+            typeof item.question_position === 'number') &&
         typeof item.entry_position === 'number' &&
-        (item.entry_id === null || typeof item.entry_id === 'string')
+        (item.entry_id === null || typeof item.entry_id === 'string') &&
+        isSourceValue(item.source) &&
+        isNotebookSource(item.notebook)
     );
 }
 
@@ -235,13 +327,15 @@ export function isCollectionMistakeItem(
         typeof item.correction === 'string' &&
         typeof item.correction_html === 'string' &&
         typeof item.reason === 'string' &&
-        (typeof item.latest_session_date === 'string' ||
-            item.latest_session_date === null) &&
+        typeof item.latest_date === 'string' &&
         typeof item.seen_count === 'number' &&
         typeof item.worth_practicing === 'boolean' &&
         typeof item.needs_attention === 'boolean' &&
         (item.attention_reason === null ||
             typeof item.attention_reason === 'string') &&
+        isSourceValue(item.source) &&
+        isNotebookSource(item.notebook) &&
+        isRowContents(item.rows) &&
         Array.isArray(item.appearances) &&
         item.appearances.every(isMistakeAppearance)
     );
@@ -454,8 +548,63 @@ export function collectionItemHref(
     return sessionsShow.url(row.session_id, { query });
 }
 
-/** The link back to a note as a row, so one helper serves both panels. */
-export function collectionNoteHref(note: CollectionNoteItem): string {
+/**
+ * The address of a notebook, opened at the exact row the learner came from.
+ * The board uses the same search-target behaviour, so the row is highlighted,
+ * scrolled to and focused; a row edited or deleted since opens the board calmly
+ * at the top with an explanation.
+ */
+export function collectionNotebookHref(
+    notebook: CollectionNotebookSource,
+    row: CollectionRowContent | null,
+    type: CollectionTabKey = 'vocabulary',
+): string {
+    if (row === null) {
+        return notebooksShow.url(notebook.id, {
+            query: { from: 'collections' },
+        });
+    }
+
+    const query: Record<string, string> = {
+        from: 'collections',
+        field: 'entry',
+        type: feedbackTypeFor(type),
+        position: String(row.entry_position),
+    };
+
+    if (row.entry_id !== null && row.entry_id !== '') {
+        query.entry = row.entry_id;
+    }
+
+    return notebooksShow.url(notebook.id, { query });
+}
+
+/**
+ * The link back to a note, to its session or to its notebook. A session note
+ * whose row can no longer be named has nowhere to go and returns null, so the
+ * panel never offers a broken link.
+ */
+export function collectionNoteHref(note: CollectionNoteItem): string | null {
+    if (note.source === 'notebook') {
+        return note.notebook === null
+            ? null
+            : collectionNotebookHref(
+                  note.notebook,
+                  {
+                      entry_id: note.entry_id,
+                      entry_position: note.entry_position,
+                      meaning: '',
+                      example: '',
+                      example_html: '',
+                  },
+                  'grammar',
+              );
+    }
+
+    if (note.session_id === null || note.question_position === null) {
+        return null;
+    }
+
     return collectionItemHref(
         {
             session_id: note.session_id,
@@ -496,11 +645,55 @@ export function distinctExamples(item: CollectionItem): CollectionAppearance[] {
 }
 
 /** Two identical examples are one example, however they were saved. */
-function exampleKey(appearance: CollectionAppearance): string {
+function exampleKey(appearance: {
+    example: string;
+    example_html: string;
+}): string {
     return (
         appearance.example.trim().toLocaleLowerCase() ||
         appearance.example_html.trim().toLocaleLowerCase()
     );
+}
+
+/**
+ * Every different meaning of a notebook item, in the learner's saved row
+ * order. The same meaning saved in two rows is shown once, and an empty meaning
+ * is not something to show.
+ */
+export function distinctRowMeanings(
+    item: CollectionItem,
+): CollectionRowContent[] {
+    return uniqueRows(item.rows, (row) =>
+        row.meaning.trim().toLocaleLowerCase(),
+    );
+}
+
+/** Every different example of a notebook item, in the saved row order. */
+export function distinctRowExamples(
+    item: CollectionItem,
+): CollectionRowContent[] {
+    return uniqueRows(item.rows, (row) => exampleKey(row));
+}
+
+function uniqueRows(
+    rows: CollectionRowContent[],
+    keyOf: (row: CollectionRowContent) => string,
+): CollectionRowContent[] {
+    const seen = new Set<string>();
+    const result: CollectionRowContent[] = [];
+
+    for (const row of rows) {
+        const key = keyOf(row);
+
+        if (key === '' || seen.has(key)) {
+            continue;
+        }
+
+        seen.add(key);
+        result.push(row);
+    }
+
+    return result;
 }
 
 /**
@@ -635,6 +828,10 @@ function isStoredSnapshot(value: unknown): value is CollectionSnapshot {
                 snapshot.filters !== null)) &&
         (snapshot.topicOptions === undefined ||
             Array.isArray(snapshot.topicOptions)) &&
+        (snapshot.notebookOptions === undefined ||
+            Array.isArray(snapshot.notebookOptions)) &&
+        (snapshot.hasSources === undefined ||
+            typeof snapshot.hasSources === 'boolean') &&
         (snapshot.allTotal === undefined ||
             typeof snapshot.allTotal === 'number') &&
         (snapshot.attentionCount === undefined ||

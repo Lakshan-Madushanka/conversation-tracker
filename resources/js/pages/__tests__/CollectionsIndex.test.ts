@@ -44,11 +44,14 @@ function mistakeItem(
         correction: 'I agree',
         correction_html: '',
         reason: 'Verb tense',
-        latest_session_date: '2026-10-19T10:14:55.000000Z',
+        latest_date: '2026-10-19T10:14:55.000000Z',
         seen_count: 2,
         worth_practicing: false,
         needs_attention: false,
         attention_reason: null,
+        source: 'session',
+        notebook: null,
+        rows: [],
         starred: false,
         status: null,
         has_notes: false,
@@ -64,10 +67,17 @@ function item(overrides: Partial<CollectionItem> = {}): CollectionItem {
         meaning: 'a liquid food',
         example: 'I want a soup.',
         example_html: '',
-        latest_session_date: '2026-10-19T10:14:55.000000Z',
+        latest_date: '2026-10-19T10:14:55.000000Z',
         seen_count: 1,
         needs_attention: false,
         attention_reason: null,
+        session_id: 1,
+        session_date: '2026-10-19T10:14:55.000000Z',
+        topic: 'Ordering at a restaurant',
+        question_position: 1,
+        source: 'session',
+        notebook: null,
+        rows: [],
         starred: false,
         status: null,
         has_notes: false,
@@ -84,13 +94,15 @@ function noteItem(
         text: 'Use the past tense here.',
         preview: 'Use the past tense here.',
         html: '<p>Use the <strong>past tense</strong> here.</p>',
-        latest_session_date: '2026-10-19T10:14:55.000000Z',
+        latest_date: '2026-10-19T10:14:55.000000Z',
         session_id: 1,
         session_date: '2026-10-19T10:14:55.000000Z',
         topic: 'Ordering at a restaurant',
         question_position: 1,
         entry_id: null,
         entry_position: 0,
+        source: 'session',
+        notebook: null,
         starred: false,
         status: null,
         has_notes: false,
@@ -123,6 +135,7 @@ function pageProps(overrides: Partial<CollectionPage> = {}): CollectionPage {
         topic_options: [],
         filters: filters(),
         has_finished_sessions: true,
+        has_sources: true,
         open_item: null,
         open_item_missing: false,
         ...overrides,
@@ -184,6 +197,98 @@ describe('the Collections page', () => {
         expect(mounted?.text()).toContain('My mistakes');
         expect(mounted?.text()).toContain('soup');
         expect(mounted?.text()).toContain('a liquid food');
+    });
+
+    it('shows where a notebook word came from and the day it was added', () => {
+        mountPage({
+            items: [
+                item({
+                    source: 'notebook',
+                    notebook: { id: 5, name: 'Kitchen', topic: 'Food' },
+                    session_id: null,
+                    session_date: null,
+                    question_position: null,
+                    seen_count: null,
+                }),
+            ],
+            total: 1,
+        });
+
+        expect(mounted?.text()).toContain('Kitchen');
+        expect(mounted?.text()).toContain('Added');
+        expect(mounted?.text()).not.toContain('Seen 0 times');
+    });
+
+    it('offers a notebook picker only once a notebook can be chosen', () => {
+        mountPage();
+
+        const pickers = [
+            ...document.querySelectorAll<HTMLButtonElement>(
+                '[id$="-notebook-filter"]',
+            ),
+        ];
+
+        expect(pickers.length).toBeGreaterThan(0);
+        expect(pickers.every((picker) => picker.disabled)).toBe(true);
+
+        mounted?.unmount();
+        mountPage({
+            notebook_options: [{ id: 5, name: 'Kitchen', count: 3 }],
+        });
+
+        const enabled = [
+            ...document.querySelectorAll<HTMLButtonElement>(
+                '[id$="-notebook-filter"]',
+            ),
+        ];
+
+        expect(enabled.every((picker) => !picker.disabled)).toBe(true);
+    });
+
+    it('offers the notebook picker inside the phone filter sheet', async () => {
+        mountPage({
+            notebook_options: [{ id: 5, name: 'Kitchen', count: 3 }],
+        });
+
+        await mounted?.find('#collection-filters-button').trigger('click');
+        await nextTick();
+        await flushPromises();
+
+        const picker = document.querySelector<HTMLButtonElement>(
+            '#collection-mobile-notebook-filter',
+        );
+
+        expect(picker).not.toBeNull();
+        expect(picker?.disabled).toBe(false);
+    });
+
+    it('opens a notebook note and links back to its notebook', async () => {
+        const chosen = noteItem({
+            source: 'notebook',
+            session_id: null,
+            session_date: null,
+            question_position: null,
+            notebook: { id: 5, name: 'Kitchen', topic: 'Food' },
+        });
+
+        mountPage({
+            tab: 'grammar',
+            items: [chosen],
+            total: 1,
+            open_item: chosen,
+        });
+        await flushPromises();
+        await flushPromises();
+
+        expect(document.body.textContent).toContain('From notebook');
+        expect(document.body.textContent).toContain('Kitchen');
+
+        const open = [...document.querySelectorAll('a')].find((anchor) =>
+            anchor.textContent?.includes('Open notebook'),
+        );
+
+        expect(open?.getAttribute('href')).toContain('/notebooks/5?');
+        expect(open?.getAttribute('href')).toContain('type=grammar_note');
     });
 
     it('reads every collection count on its tab', () => {
@@ -370,7 +475,7 @@ describe('the Collections page', () => {
 
         expect(document.body.textContent).toContain('Grammar note');
         expect(document.body.textContent).toContain(
-            'Everything this note says, as you saved it in its session.',
+            'Everything this note says, as you saved it in its session or notebook.',
         );
         expect(document.body.textContent).toContain('Seen in');
     });

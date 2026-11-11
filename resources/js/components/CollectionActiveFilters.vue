@@ -8,11 +8,12 @@ import {
     type CollectionFilterChip,
     type CollectionFilters,
 } from '@/lib/collection-filters';
-import type { CollectionTopicOption } from '@/types';
+import type { CollectionNotebookOption, CollectionTopicOption } from '@/types';
 
 const props = defineProps<{
     filters: CollectionFilters;
     topics: CollectionTopicOption[];
+    notebooks?: CollectionNotebookOption[];
     disabled?: boolean;
 }>();
 
@@ -57,7 +58,10 @@ function remove(chip: CollectionFilterChip, index: number): void {
 
 <template>
     <div
-        v-if="collectionFilterChips(props.filters, props.topics).length > 0"
+        v-if="
+            collectionFilterChips(props.filters, props.topics, props.notebooks)
+                .length > 0
+        "
         ref="container"
         class="flex flex-wrap items-center gap-2"
     >
@@ -65,6 +69,7 @@ function remove(chip: CollectionFilterChip, index: number): void {
             v-for="(chip, index) in collectionFilterChips(
                 props.filters,
                 props.topics,
+                props.notebooks,
             )"
             :key="chip.key"
             variant="outline"

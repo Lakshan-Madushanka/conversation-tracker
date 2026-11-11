@@ -2,7 +2,7 @@
 import { computed, nextTick, ref, watch } from 'vue';
 import { Link } from '@inertiajs/vue3';
 import { useMediaQuery } from '@vueuse/core';
-import { ArrowUpRightIcon, TriangleAlertIcon } from '@lucide/vue';
+import { ArrowUpRightIcon, BookOpenIcon, TriangleAlertIcon } from '@lucide/vue';
 import AddToReviewButton from '@/components/AddToReviewButton.vue';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -23,8 +23,11 @@ import { collectionTabConfig } from '@/lib/collection-tabs';
 import {
     collectionItemHref,
     collectionNoteHref,
+    collectionNotebookHref,
     distinctExamples,
     distinctMeanings,
+    distinctRowExamples,
+    distinctRowMeanings,
     isCollectionItem,
     isCollectionNoteItem,
     seenIn,
@@ -138,12 +141,47 @@ const sightings = computed(() =>
 
 const seenBadge = computed(() => seenLabel(wordItem.value?.seen_count ?? 0));
 
+/** A notebook item never borrows a session's appearances or wording. */
+const notebookItem = computed(() =>
+    wordItem.value?.source === 'notebook' ? wordItem.value : null,
+);
+
+/** The notebook a note was gathered from, when it came from one. */
+const noteNotebook = computed(() =>
+    noteItem.value?.source === 'notebook' ? noteItem.value.notebook : null,
+);
+
+/** A notebook word's own rows, deduplicated the way sessions dedupe. */
+const rowMeanings = computed(() =>
+    wordItem.value === null ? [] : distinctRowMeanings(wordItem.value),
+);
+
+const rowExamples = computed(() =>
+    wordItem.value === null ? [] : distinctRowExamples(wordItem.value),
+);
+
+const noteHref = computed(() =>
+    noteItem.value === null ? null : collectionNoteHref(noteItem.value),
+);
+
+/**
+ * The notebook, opened at the item's first saved row. A notebook with no rows
+ * left still opens plainly, so the link is never dead.
+ */
+const notebookHref = computed(() => {
+    const notebook = notebookItem.value?.notebook;
+
+    return notebook === undefined || notebook === null
+        ? null
+        : collectionNotebookHref(
+              notebook,
+              notebookItem.value?.rows[0] ?? null,
+              props.tab,
+          );
+});
+
 function hrefFor(appearance: CollectionAppearance): string {
     return collectionItemHref(rowOf(appearance), props.tab);
-}
-
-function hrefForNote(note: CollectionNoteItem): string {
-    return collectionNoteHref(note);
 }
 
 /**
@@ -211,7 +249,18 @@ function seeOriginal(event: MouseEvent): void {
                             </h2>
                         </SheetTitle>
 
-                        <Badge v-if="wordItem.seen_count > 1" variant="outline">
+                        <Badge v-if="notebookItem !== null" variant="outline">
+                            <BookOpenIcon aria-hidden="true" />
+                            {{ notebookItem.notebook?.name }}
+                        </Badge>
+
+                        <Badge
+                            v-if="
+                                wordItem.seen_count !== null &&
+                                wordItem.seen_count > 1
+                            "
+                            variant="outline"
+                        >
                             {{ seenBadge }}
                         </Badge>
                     </span>
@@ -232,6 +281,11 @@ function seeOriginal(event: MouseEvent): void {
                                 Grammar note
                             </h2>
                         </SheetTitle>
+
+                        <Badge v-if="noteNotebook !== null" variant="outline">
+                            <BookOpenIcon aria-hidden="true" />
+                            {{ noteNotebook.name }}
+                        </Badge>
                     </span>
 
                     <SheetDescription>
@@ -258,38 +312,74 @@ function seeOriginal(event: MouseEvent): void {
                             id="collection-note-seen-in"
                             class="text-sm font-medium"
                         >
-                            Seen in
+                            {{
+                                noteNotebook !== null
+                                    ? 'From notebook'
+                                    : 'Seen in'
+                            }}
                         </h3>
 
-                        <p class="text-sm">
-                            <span class="font-medium">{{
-                                noteItem.topic
-                            }}</span>
-                            <span
-                                v-if="noteItem.session_date"
-                                class="text-muted-foreground"
+                        <template v-if="noteNotebook !== null">
+                            <p class="text-sm">
+                                <span class="font-medium">{{
+                                    noteNotebook.name
+                                }}</span>
+                                <span class="text-muted-foreground">
+                                    · {{ noteItem.topic }}
+                                </span>
+                            </p>
+
+                            <p class="text-xs text-muted-foreground">
+                                Added {{ shortDate(noteItem.latest_date) }}
+                            </p>
+
+                            <Link
+                                v-if="noteHref !== null"
+                                :href="noteHref"
+                                class="flex min-h-11 items-center justify-between gap-3 rounded-lg border p-3 transition-colors outline-none hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/50"
                             >
-                                · {{ shortDate(noteItem.session_date) }}
-                            </span>
-                        </p>
+                                <span class="min-w-0 text-sm font-medium">
+                                    Open notebook
+                                </span>
+                                <ArrowUpRightIcon
+                                    class="size-4 shrink-0 text-primary"
+                                    aria-hidden="true"
+                                />
+                            </Link>
+                        </template>
 
-                        <p class="text-xs text-muted-foreground">
-                            Question {{ noteItem.question_position }}
-                        </p>
+                        <template v-else>
+                            <p class="text-sm">
+                                <span class="font-medium">{{
+                                    noteItem.topic
+                                }}</span>
+                                <span
+                                    v-if="noteItem.session_date"
+                                    class="text-muted-foreground"
+                                >
+                                    · {{ shortDate(noteItem.session_date) }}
+                                </span>
+                            </p>
 
-                        <Link
-                            :href="hrefForNote(noteItem)"
-                            class="flex min-h-11 items-center justify-between gap-3 rounded-lg border p-3 transition-colors outline-none hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/50"
-                            @click="seeOriginal"
-                        >
-                            <span class="min-w-0 text-sm font-medium">
-                                See original session
-                            </span>
-                            <ArrowUpRightIcon
-                                class="size-4 shrink-0 text-primary"
-                                aria-hidden="true"
-                            />
-                        </Link>
+                            <p class="text-xs text-muted-foreground">
+                                Question {{ noteItem.question_position }}
+                            </p>
+
+                            <Link
+                                v-if="noteHref !== null"
+                                :href="noteHref"
+                                class="flex min-h-11 items-center justify-between gap-3 rounded-lg border p-3 transition-colors outline-none hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/50"
+                                @click="seeOriginal"
+                            >
+                                <span class="min-w-0 text-sm font-medium">
+                                    See original session
+                                </span>
+                                <ArrowUpRightIcon
+                                    class="size-4 shrink-0 text-primary"
+                                    aria-hidden="true"
+                                />
+                            </Link>
+                        </template>
                     </section>
 
                     <div
@@ -380,15 +470,104 @@ function seeOriginal(event: MouseEvent): void {
                                     Needs attention
                                 </span>
                                 <span class="block">
-                                    {{ wordItem.attention_reason }} Opening the
-                                    original session lets you fix it.
+                                    {{ wordItem.attention_reason }}
+                                    {{
+                                        notebookItem !== null
+                                            ? 'Opening the notebook lets you fix it.'
+                                            : 'Opening the original session lets you fix it.'
+                                    }}
                                 </span>
                             </span>
                         </span>
                     </div>
 
+                    <!-- A notebook word carries its saved rows, not session
+                        appearances, so each meaning and example is shown as it
+                        was written in the notebook. -->
                     <template
                         v-if="
+                            notebookItem !== null &&
+                            (rowMeanings.length > 0 || rowExamples.length > 0)
+                        "
+                    >
+                        <Separator />
+
+                        <Collapsible default-open>
+                            <CollapsibleTrigger
+                                class="flex w-full items-center justify-between gap-2 rounded-md text-left text-sm font-medium focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+                            >
+                                <span>All meanings and examples</span>
+                                <Badge variant="secondary">
+                                    {{
+                                        rowMeanings.length + rowExamples.length
+                                    }}
+                                </Badge>
+                            </CollapsibleTrigger>
+
+                            <CollapsibleContent class="mt-3 space-y-4">
+                                <div v-if="rowMeanings.length > 0">
+                                    <p
+                                        class="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase"
+                                    >
+                                        {{ config.columns[1] }}
+                                    </p>
+                                    <ul class="space-y-3">
+                                        <li
+                                            v-for="(row, index) in rowMeanings"
+                                            :key="`row-meaning-${index}`"
+                                            class="text-sm"
+                                        >
+                                            <p>{{ row.meaning }}</p>
+                                            <p
+                                                class="mt-0.5 text-xs text-muted-foreground"
+                                            >
+                                                {{ notebookItem.topic }}
+                                            </p>
+                                        </li>
+                                    </ul>
+                                </div>
+
+                                <div v-if="rowExamples.length > 0">
+                                    <p
+                                        class="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase"
+                                    >
+                                        {{ config.columns[2] }}
+                                    </p>
+                                    <ul class="space-y-3">
+                                        <li
+                                            v-for="(row, index) in rowExamples"
+                                            :key="`row-example-${index}`"
+                                            class="text-sm text-muted-foreground italic"
+                                        >
+                                            <p>
+                                                “
+                                                <span
+                                                    v-if="
+                                                        props.tab ===
+                                                            'phrases' &&
+                                                        row.example_html
+                                                    "
+                                                    v-html="row.example_html"
+                                                ></span>
+                                                <template v-else>{{
+                                                    row.example
+                                                }}</template>
+                                                ”
+                                            </p>
+                                            <p
+                                                class="mt-0.5 text-xs not-italic"
+                                            >
+                                                {{ notebookItem.topic }}
+                                            </p>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </CollapsibleContent>
+                        </Collapsible>
+                    </template>
+
+                    <template
+                        v-else-if="
                             meanings.length > 1 ||
                             examples.length > 1 ||
                             (meanings.length > 0 && examples.length > 0)
@@ -472,7 +651,47 @@ function seeOriginal(event: MouseEvent): void {
 
                     <Separator />
 
-                    <section aria-labelledby="collection-seen-in">
+                    <section
+                        v-if="notebookItem !== null"
+                        aria-labelledby="collection-notebook-source"
+                        class="space-y-2"
+                    >
+                        <h3
+                            id="collection-notebook-source"
+                            class="text-sm font-medium"
+                        >
+                            From notebook
+                        </h3>
+
+                        <p class="text-sm">
+                            <span class="font-medium">{{
+                                notebookItem.notebook?.name
+                            }}</span>
+                            <span class="text-muted-foreground">
+                                · {{ notebookItem.topic }}
+                            </span>
+                        </p>
+
+                        <p class="text-xs text-muted-foreground">
+                            Added {{ shortDate(notebookItem.latest_date) }}
+                        </p>
+
+                        <Link
+                            v-if="notebookHref !== null"
+                            :href="notebookHref"
+                            class="flex min-h-11 items-center justify-between gap-3 rounded-lg border p-3 transition-colors outline-none hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/50"
+                        >
+                            <span class="min-w-0 text-sm font-medium">
+                                Open notebook
+                            </span>
+                            <ArrowUpRightIcon
+                                class="size-4 shrink-0 text-primary"
+                                aria-hidden="true"
+                            />
+                        </Link>
+                    </section>
+
+                    <section v-else aria-labelledby="collection-seen-in">
                         <div
                             class="mb-2 flex items-center justify-between gap-2"
                         >

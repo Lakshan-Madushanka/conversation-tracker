@@ -15,6 +15,7 @@ import { index as collectionsIndex } from '@/routes/collections';
 import type {
     CollectionFilters,
     CollectionSort,
+    CollectionSource,
     CollectionStatusFilter,
     CollectionTabKey,
 } from '@/types';
@@ -73,6 +74,9 @@ export function readCollectionFilters(
                 undefined,
             attention: isTruthy(parsed.get('attention')),
             topics: topicIds(parsed.get('topics')),
+            source:
+                (parsed.get('source') as CollectionSource | null) ?? undefined,
+            notebook: positiveId(parsed.get('notebook')),
             sort: (parsed.get('sort') as CollectionSort | null) ?? undefined,
         },
         tab,
@@ -165,4 +169,11 @@ function topicIds(value: string | null): number[] {
         .split(',')
         .map((piece) => Number(piece.trim()))
         .filter((id) => Number.isInteger(id) && id > 0);
+}
+
+/** One positive whole number from the address, or none. */
+function positiveId(value: string | null): number | null {
+    const id = Number(value);
+
+    return Number.isInteger(id) && id > 0 ? id : null;
 }

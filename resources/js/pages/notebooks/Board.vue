@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref } from 'vue';
+import { onBeforeUnmount, onMounted, ref } from 'vue';
 import { Head, Link } from '@inertiajs/vue3';
 import { ArrowLeftIcon, RefreshCwIcon, TriangleAlertIcon } from '@lucide/vue';
 import FeedbackBox from '@/components/FeedbackBox.vue';
@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { useAutoSave } from '@/composables/useAutoSave';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { saveNotebook } from '@/lib/notebook-autosave';
+import { readSearchTarget, revealSearchTarget } from '@/lib/search-target';
 import { index as notebooksIndex } from '@/routes/notebooks';
 import type {
     NotebookData,
@@ -72,6 +73,83 @@ onBeforeUnmount(() => {
     flush();
 });
 
+/** The boxes a collection item can point at, as the board names them. */
+const notebookFieldIds = {
+    vocabulary: 'nb-vocabulary',
+    phrase: 'nb-phrase',
+    grammar_note: 'nb-grammar',
+} as const;
+
+type NotebookFeedbackType = keyof typeof notebookFieldIds;
+
+/** A calm note when a collection item no longer points at anything. */
+const targetNotice = ref('');
+
+/**
+ * Take the learner to the entry a Collections item named. The entry is found
+ * before anything is scrolled, so a board changed since then opens calmly at
+ * the top instead of jumping to the wrong row.
+ */
+function revealTargetFromAddress(): void {
+    const target = readSearchTarget(window.location.href);
+
+    if (
+        target === null ||
+        target.field !== 'entry' ||
+        !isNotebookFeedbackType(target.type)
+    ) {
+        return;
+    }
+
+    const fieldId = notebookFieldIds[target.type];
+    const entries = feedback.value[target.type];
+
+    const byId =
+        target.entry === null
+            ? undefined
+            : entries.find((entry) => entry.id === target.entry);
+
+    const entry =
+        byId ??
+        (target.position === null ? undefined : entries[target.position]);
+
+    if (entry === undefined) {
+        targetHasMoved();
+
+        return;
+    }
+
+    const id =
+        entry.id === ''
+            ? fieldId
+            : target.type === 'grammar_note'
+              ? `${fieldId}-${entry.id}`
+              : `${fieldId}-row-${entry.id}`;
+
+    revealSearchTarget(id, (found) => {
+        if (!found) {
+            targetHasMoved();
+        }
+    });
+}
+
+function isNotebookFeedbackType(
+    type: string | null,
+): type is NotebookFeedbackType {
+    return (
+        type === 'vocabulary' || type === 'phrase' || type === 'grammar_note'
+    );
+}
+
+function targetHasMoved(): void {
+    targetNotice.value =
+        'The entry you came from has changed since it was saved. You are at the top of the notebook.';
+
+    window.scrollTo({ top: 0 });
+}
+
+onMounted(revealTargetFromAddress);
+
 function errorFor(key: string): string | undefined {
     return errors.value[key];
 }
@@ -89,6 +167,22 @@ function errorFor(key: string): string | undefined {
                 </Link>
             </Button>
             <SaveIndicator :status="status" :last-saved-at="lastSavedAt" />
+        </div>
+
+        <div
+            v-if="targetNotice"
+            role="status"
+            class="mb-4 flex flex-wrap items-start justify-between gap-3 rounded-lg border border-border bg-muted/40 px-3 py-3 text-sm"
+        >
+            <p class="text-muted-foreground">{{ targetNotice }}</p>
+            <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                @click="targetNotice = ''"
+            >
+                Dismiss
+            </Button>
         </div>
 
         <!-- Conflict: another tab saved first. -->

@@ -29,6 +29,7 @@ import { jsonRequest } from '@/lib/http';
 import { index as collectionsIndex } from '@/routes/collections';
 import type {
     CollectionItemsPage,
+    CollectionNotebookOption,
     CollectionOpenedItem,
     CollectionPage,
     CollectionReviewContext,
@@ -49,8 +50,9 @@ const LIST_PROPS = [
     'all_total',
     'attention_count',
     'topic_options',
+    'notebook_options',
     'filters',
-    'has_finished_sessions',
+    'has_sources',
     'review_target',
     'review_context',
 ];
@@ -82,7 +84,10 @@ export function useCollection(initial: CollectionPage) {
     const topicOptions = ref<CollectionTopicOption[]>([
         ...(initial.topic_options ?? []),
     ]);
-    const hasFinishedSessions = ref(initial.has_finished_sessions);
+    const notebookOptions = ref<CollectionNotebookOption[]>([
+        ...(initial.notebook_options ?? []),
+    ]);
+    const hasSources = ref(initial.has_sources === true);
     const openItem = ref<CollectionOpenedItem | null>(initial.open_item);
     const openItemMissing = ref(initial.open_item_missing);
 
@@ -279,6 +284,10 @@ export function useCollection(initial: CollectionPage) {
                 topicOptions.value = [...meta.topic_options];
             }
 
+            if (meta.notebook_options !== undefined) {
+                notebookOptions.value = [...meta.notebook_options];
+            }
+
             if (meta.filters !== undefined) {
                 filters.value = normalizeCollectionFilters(
                     meta.filters,
@@ -286,8 +295,8 @@ export function useCollection(initial: CollectionPage) {
                 );
             }
 
-            if (meta.has_finished_sessions !== undefined) {
-                hasFinishedSessions.value = meta.has_finished_sessions;
+            if (meta.has_sources !== undefined) {
+                hasSources.value = meta.has_sources;
             }
 
             hydrateReviewTarget(meta.review_target);
@@ -314,6 +323,7 @@ export function useCollection(initial: CollectionPage) {
         tab.value = next;
         filters.value = defaults;
         topicOptions.value = [];
+        notebookOptions.value = [];
         items.value = [];
         nextCursor.value = null;
         hasMore.value = false;
@@ -555,6 +565,8 @@ export function useCollection(initial: CollectionPage) {
         attentionCount.value = saved.attentionCount ?? 0;
         filters.value = normalizeCollectionFilters(saved.filters, saved.tab);
         topicOptions.value = [...(saved.topicOptions ?? [])];
+        notebookOptions.value = [...(saved.notebookOptions ?? [])];
+        hasSources.value = saved.hasSources ?? hasSources.value;
         reviewContext.value = saved.reviewContext ?? null;
         openItemMissing.value = false;
         openItem.value =
@@ -606,6 +618,8 @@ export function useCollection(initial: CollectionPage) {
             savedAt: Date.now(),
             filters: copyCollectionFilters(filters.value),
             topicOptions: [...topicOptions.value],
+            notebookOptions: [...notebookOptions.value],
+            hasSources: hasSources.value,
             allTotal: allTotal.value,
             attentionCount: attentionCount.value,
             reviewContext: reviewContext.value,
@@ -622,8 +636,11 @@ export function useCollection(initial: CollectionPage) {
         allTotal.value = page.all_total ?? page.total;
         attentionCount.value = page.attention_count ?? attentionCount.value;
         topicOptions.value = [...(page.topic_options ?? topicOptions.value)];
+        notebookOptions.value = [
+            ...(page.notebook_options ?? notebookOptions.value),
+        ];
         filters.value = normalizeCollectionFilters(page.filters, page.tab);
-        hasFinishedSessions.value = page.has_finished_sessions;
+        hasSources.value = page.has_sources === true;
         hydrateReviewTarget(page.review_target);
 
         if (page.review_context !== undefined) {
@@ -659,8 +676,9 @@ export function useCollection(initial: CollectionPage) {
         attentionCount,
         filters,
         topicOptions,
+        notebookOptions,
         reviewContext,
-        hasFinishedSessions,
+        hasSources,
         openItem,
         openItemMissing,
         loading,

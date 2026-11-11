@@ -2,6 +2,7 @@ import type { Component } from 'vue';
 import { computed } from 'vue';
 import { usePage } from '@inertiajs/vue3';
 import {
+    BookOpenIcon,
     ChartLineIcon,
     DownloadIcon,
     GraduationCapIcon,
@@ -14,6 +15,7 @@ import {
 } from '@lucide/vue';
 import { home } from '@/routes';
 import { index as collectionsIndex } from '@/routes/collections';
+import { index as notebooksIndex } from '@/routes/notebooks';
 import { index as progressIndex } from '@/routes/progress';
 import { index as reviewIndex } from '@/routes/review';
 import {
@@ -49,6 +51,7 @@ export const sidebarNav: NavItem[] = [
         href: collectionsIndex.url(),
         icon: LayersIcon,
     },
+    { label: 'Notebooks', href: notebooksIndex.url(), icon: BookOpenIcon },
     { label: 'Review', href: reviewIndex.url(), icon: GraduationCapIcon },
     { label: 'Progress', href: progressIndex.url(), icon: ChartLineIcon },
     { label: 'Settings', href: settingsIndex.url(), icon: SettingsIcon },
@@ -58,15 +61,16 @@ export const sidebarNav: NavItem[] = [
 export const mobilePrimaryNav: NavItem[] = [
     sidebarNav[0],
     sidebarNav[1],
-    sidebarNav[4],
+    sidebarNav[5],
     sidebarNav[2],
 ];
 
 /** The destinations tucked behind the mobile "More" sheet. */
 export const mobileMoreNav: NavItem[] = [
     sidebarNav[3],
-    sidebarNav[5],
+    sidebarNav[4],
     sidebarNav[6],
+    sidebarNav[7],
 ];
 
 export const settingsNav: NavItem[] = [

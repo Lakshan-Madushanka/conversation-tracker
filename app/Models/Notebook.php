@@ -6,6 +6,7 @@ namespace App\Models;
 
 use App\Enums\FeedbackType;
 use App\Support\SearchText;
+use Carbon\CarbonImmutable;
 use Database\Factories\NotebookFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Collection;
@@ -13,7 +14,6 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Carbon\CarbonImmutable;
 
 /**
  * A notebook the learner keeps: one board of vocabulary, phrases and grammar

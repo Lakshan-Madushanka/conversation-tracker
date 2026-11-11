@@ -71,6 +71,8 @@ describe('collectionUrl', () => {
                 status: 'learned',
                 attention: true,
                 topics: [2, 5],
+                source: 'all' as const,
+                notebook: null,
                 sort: 'az',
             }),
         ).toBe(
@@ -89,6 +91,8 @@ describe('readCollectionFilters', () => {
             status: 'all',
             attention: false,
             topics: [],
+            source: 'all' as const,
+            notebook: null,
             sort: 'most_seen',
         });
     });
@@ -105,6 +109,8 @@ describe('readCollectionFilters', () => {
             status: 'learned',
             attention: true,
             topics: [2, 5],
+            source: 'all' as const,
+            notebook: null,
             sort: 'az',
         });
     });
@@ -121,6 +127,8 @@ describe('readCollectionFilters', () => {
             status: 'all',
             attention: false,
             topics: [2],
+            source: 'all' as const,
+            notebook: null,
             sort: 'newest',
         });
     });

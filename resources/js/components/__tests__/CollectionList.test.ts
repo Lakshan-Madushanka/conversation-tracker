@@ -32,13 +32,15 @@ function noteItem(
         text: 'Use the past tense here.',
         preview: 'Use the past tense here. && <safe>',
         html: '<p>Use the <strong>past tense</strong> here.</p>',
-        latest_session_date: '2026-10-19T10:14:55.000000Z',
+        latest_date: '2026-10-19T10:14:55.000000Z',
         session_id: 1,
         session_date: '2026-10-19T10:14:55.000000Z',
         topic: 'Ordering at a restaurant',
         question_position: 1,
         entry_id: null,
         entry_position: 0,
+        source: 'session',
+        notebook: null,
         starred: false,
         status: null,
         has_notes: false,
@@ -53,10 +55,17 @@ function item(overrides: Partial<CollectionItem> = {}): CollectionItem {
         meaning: 'a liquid food',
         example: 'I want a soup.',
         example_html: '',
-        latest_session_date: '2026-10-19T10:14:55.000000Z',
+        latest_date: '2026-10-19T10:14:55.000000Z',
         seen_count: 1,
         needs_attention: false,
         attention_reason: null,
+        session_id: 1,
+        session_date: '2026-10-19T10:14:55.000000Z',
+        topic: 'Ordering at a restaurant',
+        question_position: 1,
+        source: 'session',
+        notebook: null,
+        rows: [],
         starred: false,
         status: null,
         has_notes: false,
@@ -92,11 +101,14 @@ function mistakeItem(
         correction: 'I agree',
         correction_html: '',
         reason: 'Word order',
-        latest_session_date: '2026-10-19T10:14:55.000000Z',
+        latest_date: '2026-10-19T10:14:55.000000Z',
         seen_count: 2,
         worth_practicing: false,
         needs_attention: false,
         attention_reason: null,
+        source: 'session',
+        notebook: null,
+        rows: [],
         starred: false,
         status: null,
         has_notes: false,
@@ -253,7 +265,7 @@ describe('the collection list', () => {
 
     it('offers a fresh start when no session has been finished', () => {
         const wrapper = mount(CollectionList, {
-            props: { items: [], total: 0, hasFinishedSessions: false },
+            props: { items: [], total: 0, hasSources: false },
         });
 
         expect(wrapper.text()).toContain('Your collections are waiting');
@@ -264,7 +276,7 @@ describe('the collection list', () => {
 
     it('says no words yet when there are finished sessions without words', () => {
         const wrapper = mount(CollectionList, {
-            props: { items: [], total: 0, hasFinishedSessions: true },
+            props: { items: [], total: 0, hasSources: true },
         });
 
         expect(wrapper.text()).toContain('No words yet');
@@ -311,7 +323,7 @@ describe('the collection list', () => {
                 items: [],
                 tab: 'grammar',
                 total: 0,
-                hasFinishedSessions: true,
+                hasSources: true,
             },
         });
 
@@ -471,7 +483,7 @@ describe('the mistakes list', () => {
                 items: [],
                 tab: 'mistakes',
                 total: 0,
-                hasFinishedSessions: true,
+                hasSources: true,
             },
         });
 
@@ -527,7 +539,7 @@ describe('search and filters in the collection list', () => {
                 total: 0,
                 allTotal: 3,
                 hasSearch: true,
-                hasFinishedSessions: true,
+                hasSources: true,
             },
         });
 
@@ -545,7 +557,7 @@ describe('search and filters in the collection list', () => {
                 total: 0,
                 allTotal: 3,
                 hasFilters: true,
-                hasFinishedSessions: true,
+                hasSources: true,
             },
         });
 
@@ -565,7 +577,7 @@ describe('search and filters in the collection list', () => {
                 allTotal: 3,
                 hasSearch: true,
                 hasFilters: true,
-                hasFinishedSessions: true,
+                hasSources: true,
             },
         });
 
@@ -593,7 +605,7 @@ describe('search and filters in the collection list', () => {
                 items: [],
                 total: 0,
                 hasSearch: true,
-                hasFinishedSessions: false,
+                hasSources: false,
             },
         });
 

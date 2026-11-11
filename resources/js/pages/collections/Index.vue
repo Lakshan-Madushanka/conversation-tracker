@@ -90,8 +90,9 @@ const {
     attentionCount,
     filters,
     topicOptions,
+    notebookOptions,
     reviewContext,
-    hasFinishedSessions,
+    hasSources,
     openItem,
     openItemMissing,
     loading,
@@ -786,6 +787,8 @@ onBeforeUnmount(() => {
         savedAt: Date.now(),
         filters: { ...filters.value, topics: [...filters.value.topics] },
         topicOptions: [...topicOptions.value],
+        notebookOptions: [...notebookOptions.value],
+        hasSources: hasSources.value,
         allTotal: allTotal.value,
         attentionCount: attentionCount.value,
         reviewContext: reviewContext.value,
@@ -812,7 +815,7 @@ onBeforeUnmount(() => {
 
         <PageHeader
             title="Collections"
-            description="Vocabulary, phrases, grammar notes and your common mistakes, gathered from every finished session."
+            description="Vocabulary, phrases, grammar notes and your common mistakes, gathered from every finished session and notebook."
         />
 
         <Alert v-if="activeReview !== null" class="mb-4">
@@ -896,6 +899,7 @@ onBeforeUnmount(() => {
                     ref="filterBar"
                     :filters="filters"
                     :topics="topicOptions"
+                    :notebooks="notebookOptions"
                     :tab="tab"
                     :attention-count="attentionCount"
                     :updating="updating"
@@ -951,7 +955,7 @@ onBeforeUnmount(() => {
                     :has-filters="collectionActiveFilterCount(filters) > 0"
                     :has-search="hasCollectionSearch(filters)"
                     :filter-error="filterError"
-                    :has-finished-sessions="hasFinishedSessions"
+                    :has-sources="hasSources"
                     :selection-mode="selectionActive"
                     :selected-keys="selectedKeys"
                     :busy-key="addingKey"

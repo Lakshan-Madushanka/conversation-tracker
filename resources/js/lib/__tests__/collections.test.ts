@@ -3,11 +3,15 @@ import {
     cameFromCollections,
     clearCollectionSnapshot,
     collectionItemHref,
+    collectionNoteHref,
+    collectionNotebookHref,
     collectionReturnUrl,
     consumeCollectionRestore,
     distinctExamples,
     distinctMeanings,
     distinctReasons,
+    distinctRowExamples,
+    distinctRowMeanings,
     feedbackTypeFor,
     isCollectionItemsPage,
     isCollectionMistakeItem,
@@ -56,10 +60,17 @@ function item(overrides: Partial<CollectionItem> = {}): CollectionItem {
         meaning: 'a liquid food',
         example: 'I want a soup.',
         example_html: '',
-        latest_session_date: '2026-10-19T10:14:55.000000Z',
+        latest_date: '2026-10-19T10:14:55.000000Z',
         seen_count: 1,
         needs_attention: false,
         attention_reason: null,
+        session_id: 1,
+        session_date: '2026-10-19T10:14:55.000000Z',
+        topic: 'Ordering at a restaurant',
+        question_position: 1,
+        source: 'session',
+        notebook: null,
+        rows: [],
         starred: false,
         status: null,
         has_notes: false,
@@ -74,13 +85,15 @@ function note(overrides: Partial<CollectionNoteItem> = {}): CollectionNoteItem {
         text: 'Use the past tense here.',
         preview: 'Use the past tense here.',
         html: '<p>Use the <strong>past tense</strong> here.</p>',
-        latest_session_date: '2026-10-19T10:14:55.000000Z',
+        latest_date: '2026-10-19T10:14:55.000000Z',
         session_id: 1,
         session_date: '2026-10-19T10:14:55.000000Z',
         topic: 'Ordering at a restaurant',
         question_position: 1,
         entry_id: 'note-a',
         entry_position: 0,
+        source: 'session',
+        notebook: null,
         starred: false,
         status: null,
         has_notes: false,
@@ -115,11 +128,14 @@ function mistake(
         correction: 'I agree',
         correction_html: '<strong>I agree</strong>',
         reason: 'verb tense',
-        latest_session_date: '2026-10-19T10:14:55.000000Z',
+        latest_date: '2026-10-19T10:14:55.000000Z',
         seen_count: 2,
         worth_practicing: false,
         needs_attention: false,
         attention_reason: null,
+        source: 'session',
+        notebook: null,
+        rows: [],
         starred: false,
         status: null,
         has_notes: false,
@@ -417,6 +433,166 @@ describe('the link to the original session', () => {
         expect(feedbackTypeFor('grammar')).toBe('grammar_note');
         expect(feedbackTypeFor('mistakes')).toBe('mistake');
         expect(feedbackTypeFor('vocabulary')).toBe('vocabulary');
+    });
+});
+
+describe('the link to the original notebook', () => {
+    it('names the notebook, the box, the row and its position', () => {
+        const href = collectionNotebookHref(
+            { id: 5, name: 'Kitchen', topic: 'Food' },
+            {
+                entry_id: 'row-a',
+                entry_position: 2,
+                meaning: 'a liquid food',
+                example: '',
+                example_html: '',
+            },
+            'vocabulary',
+        );
+
+        expect(href).toContain('/notebooks/5?');
+        expect(href).toContain('from=collections');
+        expect(href).toContain('field=entry');
+        expect(href).toContain('type=vocabulary');
+        expect(href).toContain('entry=row-a');
+        expect(href).toContain('position=2');
+    });
+
+    it('falls back to the row position when a row has no id', () => {
+        const href = collectionNotebookHref(
+            { id: 5, name: 'Kitchen', topic: 'Food' },
+            {
+                entry_id: '',
+                entry_position: 1,
+                meaning: '',
+                example: '',
+                example_html: '',
+            },
+        );
+
+        expect(href).not.toContain('entry=');
+        expect(href).toContain('position=1');
+    });
+
+    it('opens the notebook itself when no row names a place', () => {
+        const href = collectionNotebookHref(
+            { id: 5, name: 'Kitchen', topic: 'Food' },
+            null,
+        );
+
+        expect(href).toContain('/notebooks/5?');
+        expect(href).toContain('from=collections');
+        expect(href).not.toContain('field=');
+    });
+
+    it('links a notebook note to its own grammar box', () => {
+        const href = collectionNoteHref(
+            note({
+                source: 'notebook',
+                session_id: null,
+                session_date: null,
+                notebook: { id: 5, name: 'Kitchen', topic: 'Food' },
+                entry_id: 'note-a',
+            }),
+        );
+
+        expect(href).toContain('/notebooks/5?');
+        expect(href).toContain('type=grammar_note');
+        expect(href).toContain('entry=note-a');
+    });
+
+    it('links a session note to the question it was saved in', () => {
+        const href = collectionNoteHref(note());
+
+        expect(href).toContain('/sessions/1?');
+        expect(href).toContain('question=1');
+        expect(href).toContain('type=grammar_note');
+    });
+
+    it('offers no link when the place can no longer be named', () => {
+        expect(
+            collectionNoteHref(
+                note({ session_id: null, question_position: null }),
+            ),
+        ).toBeNull();
+        expect(
+            collectionNoteHref(note({ source: 'notebook', notebook: null })),
+        ).toBeNull();
+    });
+});
+
+describe('the meanings and examples of a notebook item', () => {
+    it('shows each different row meaning once, in saved order', () => {
+        const chosen = item({
+            rows: [
+                {
+                    entry_id: 'row-a',
+                    entry_position: 0,
+                    meaning: 'a liquid food',
+                    example: '',
+                    example_html: '',
+                },
+                {
+                    entry_id: 'row-b',
+                    entry_position: 1,
+                    meaning: 'A LIQUID FOOD',
+                    example: '',
+                    example_html: '',
+                },
+                {
+                    entry_id: 'row-c',
+                    entry_position: 2,
+                    meaning: '',
+                    example: '',
+                    example_html: '',
+                },
+                {
+                    entry_id: 'row-d',
+                    entry_position: 3,
+                    meaning: 'a bowl of soup',
+                    example: '',
+                    example_html: '',
+                },
+            ],
+        });
+
+        expect(distinctRowMeanings(chosen).map((row) => row.meaning)).toEqual([
+            'a liquid food',
+            'a bowl of soup',
+        ]);
+    });
+
+    it('shows each different row example once, in saved order', () => {
+        const chosen = item({
+            rows: [
+                {
+                    entry_id: 'row-a',
+                    entry_position: 0,
+                    meaning: '',
+                    example: 'I want a soup.',
+                    example_html: '',
+                },
+                {
+                    entry_id: 'row-b',
+                    entry_position: 1,
+                    meaning: '',
+                    example: 'I want a soup.',
+                    example_html: '',
+                },
+                {
+                    entry_id: 'row-c',
+                    entry_position: 2,
+                    meaning: '',
+                    example: 'The soup was hot.',
+                    example_html: '',
+                },
+            ],
+        });
+
+        expect(distinctRowExamples(chosen).map((row) => row.example)).toEqual([
+            'I want a soup.',
+            'The soup was hot.',
+        ]);
     });
 });
 

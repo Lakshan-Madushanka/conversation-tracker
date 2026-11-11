@@ -117,6 +117,8 @@ final class CollectionRequest extends FormRequest
             'attention' => $this->query('attention'),
             'topics' => $this->query('topics'),
             'sort' => $this->query('sort'),
+            'source' => $this->query('source'),
+            'notebook' => $this->query('notebook'),
         ], $this->tab()->feedbackType());
     }
 }

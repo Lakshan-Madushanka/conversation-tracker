@@ -40,10 +40,17 @@ function item(overrides: Partial<CollectionItem> = {}): CollectionItem {
         meaning: 'a liquid food',
         example: 'I want a soup.',
         example_html: '',
-        latest_session_date: '2026-10-19T10:14:55.000000Z',
+        latest_date: '2026-10-19T10:14:55.000000Z',
         seen_count: 1,
         needs_attention: false,
         attention_reason: null,
+        session_id: 1,
+        session_date: '2026-10-19T10:14:55.000000Z',
+        topic: 'Ordering at a restaurant',
+        question_position: 1,
+        source: 'session',
+        notebook: null,
+        rows: [],
         starred: false,
         status: null,
         has_notes: false,
@@ -210,6 +217,82 @@ describe('the opened word panel', () => {
         expect(sessionLinks()).toHaveLength(2);
         expect(text()).toContain('Question 1');
         expect(text()).toContain('Question 2');
+    });
+
+    it('links a notebook word back to the notebook it was gathered from', async () => {
+        await openPanel(
+            item({
+                session_id: null,
+                session_date: null,
+                question_position: null,
+                seen_count: null,
+                source: 'notebook',
+                notebook: { id: 5, name: 'Kitchen', topic: 'Food' },
+                rows: [
+                    {
+                        entry_id: 'row-a',
+                        entry_position: 2,
+                        meaning: 'a liquid food',
+                        example: 'I want a soup.',
+                        example_html: '',
+                    },
+                ],
+                appearances: [],
+            }),
+        );
+
+        expect(text()).toContain('From notebook');
+        expect(text()).toContain('Kitchen');
+        expect(text()).toContain('Added');
+        expect(text()).not.toContain('Seen 0 times');
+        expect(sessionLinks()).toHaveLength(0);
+
+        const open = anchors().find((anchor) =>
+            anchor.textContent?.includes('Open notebook'),
+        );
+        const href = open?.getAttribute('href') ?? '';
+
+        expect(href).toContain('/notebooks/5?');
+        expect(href).toContain('from=collections');
+        expect(href).toContain('field=entry');
+        expect(href).toContain('entry=row-a');
+        expect(href).toContain('position=2');
+    });
+
+    it('shows every meaning and example a notebook row holds', async () => {
+        await openPanel(
+            item({
+                source: 'notebook',
+                notebook: { id: 5, name: 'Kitchen', topic: 'Food' },
+                session_id: null,
+                question_position: null,
+                seen_count: null,
+                appearances: [],
+                rows: [
+                    {
+                        entry_id: 'row-a',
+                        entry_position: 0,
+                        meaning: 'a liquid food',
+                        example: 'I want a soup.',
+                        example_html: '',
+                    },
+                    {
+                        entry_id: 'row-b',
+                        entry_position: 1,
+                        meaning: 'a bowl of soup',
+                        example: 'The soup was hot.',
+                        example_html: '',
+                    },
+                ],
+            }),
+        );
+
+        expect(text()).toContain('All meanings and examples');
+        expect(text()).toContain('a liquid food');
+        expect(text()).toContain('a bowl of soup');
+        expect(text()).toContain('I want a soup.');
+        expect(text()).toContain('The soup was hot.');
+        expect(text()).not.toContain('Question');
     });
 
     it('links each sighting back to its exact row', async () => {

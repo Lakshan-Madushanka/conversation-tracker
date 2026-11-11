@@ -1,7 +1,9 @@
 import { normalizeSearch } from '@/lib/library-filters';
 import type {
     CollectionFilters,
+    CollectionNotebookOption,
     CollectionSort,
+    CollectionSource,
     CollectionStatusFilter,
     CollectionTabKey,
     CollectionTopicOption,
@@ -10,6 +12,7 @@ import type {
 export type {
     CollectionFilters,
     CollectionSort,
+    CollectionSource,
     CollectionStatusFilter,
 } from '@/types';
 
@@ -36,6 +39,19 @@ export const collectionStatusChoices: ReadonlyArray<{
 ];
 
 const statusValues: CollectionStatusFilter[] = collectionStatusChoices.map(
+    (choice) => choice.value,
+);
+
+export const collectionSourceChoices: ReadonlyArray<{
+    value: CollectionSource;
+    label: string;
+}> = [
+    { value: 'all', label: 'All sources' },
+    { value: 'sessions', label: 'Sessions' },
+    { value: 'notebooks', label: 'Notebooks' },
+];
+
+const sourceValues: CollectionSource[] = collectionSourceChoices.map(
     (choice) => choice.value,
 );
 
@@ -73,6 +89,8 @@ export function defaultCollectionFilters(
         status: 'all',
         attention: false,
         topics: [],
+        source: 'all',
+        notebook: null,
         sort: defaultCollectionSort(tab),
     };
 }
@@ -81,6 +99,9 @@ export function defaultCollectionFilters(
  * Keep a state safe to show and to send. Values this page does not know fall
  * back to their default, topics are whole positive numbers in a stable order,
  * and a sort the tab cannot honour becomes its usual order.
+ *
+ * Source and notebook are kept compatible: choosing a notebook narrows the
+ * list to notebooks, and choosing sessions clears the notebook it cannot show.
  */
 export function normalizeCollectionFilters(
     filters: Partial<CollectionFilters> | null | undefined,
@@ -102,6 +123,17 @@ export function normalizeCollectionFilters(
         ? (filters.status as CollectionStatusFilter)
         : 'all';
 
+    let source = sourceValues.includes(filters.source as CollectionSource)
+        ? (filters.source as CollectionSource)
+        : 'all';
+    let notebook = isTopicId(filters.notebook) ? filters.notebook : null;
+
+    if (source === 'sessions') {
+        notebook = null;
+    } else if (notebook !== null) {
+        source = 'notebooks';
+    }
+
     return {
         q: normalizeSearch(filters.q),
         starred: filters.starred === true,
@@ -110,6 +142,8 @@ export function normalizeCollectionFilters(
         // there instead of showing a filter that cannot change anything.
         attention: tab !== 'grammar' && filters.attention === true,
         topics,
+        source,
+        notebook,
         sort: normalizeCollectionSort(filters.sort, tab),
     };
 }
@@ -162,6 +196,14 @@ export function collectionFiltersToQuery(
         query.topics = filters.topics.join(',');
     }
 
+    if (filters.source !== 'all') {
+        query.source = filters.source;
+    }
+
+    if (filters.notebook !== null) {
+        query.notebook = String(filters.notebook);
+    }
+
     if (filters.sort !== defaultCollectionSort(tab)) {
         query.sort = filters.sort;
     }
@@ -177,7 +219,9 @@ export function collectionActiveFilterCount(
         filters.topics.length +
         (filters.starred ? 1 : 0) +
         (filters.status === 'all' ? 0 : 1) +
-        (filters.attention ? 1 : 0)
+        (filters.attention ? 1 : 0) +
+        (filters.source === 'all' ? 0 : 1) +
+        (filters.notebook === null ? 0 : 1)
     );
 }
 
@@ -245,6 +289,8 @@ export function clearCollectionSearch(
 }
 
 export type CollectionFilterChip =
+    | { kind: 'source'; key: string; label: string }
+    | { kind: 'notebook'; key: string; label: string }
     | { kind: 'starred'; key: string; label: string }
     | {
           kind: 'status';
@@ -256,14 +302,40 @@ export type CollectionFilterChip =
     | { kind: 'topic'; key: string; label: string; value: number };
 
 /**
- * One chip per active choice. Topics follow the picker's order, so the chips
- * stay predictable even when they were chosen in another order.
+ * One chip per active choice. Source and notebook come first, because they
+ * decide which sources the other chips narrow. Topics follow the picker's
+ * order, so the chips stay predictable even when they were chosen in another
+ * order.
  */
 export function collectionFilterChips(
     filters: CollectionFilters,
     topics: CollectionTopicOption[],
+    notebooks: CollectionNotebookOption[] = [],
 ): CollectionFilterChip[] {
     const chips: CollectionFilterChip[] = [];
+
+    if (filters.source !== 'all') {
+        chips.push({
+            kind: 'source',
+            key: 'source',
+            label:
+                filters.source === 'sessions'
+                    ? 'Source: Sessions'
+                    : 'Source: Notebooks',
+        });
+    }
+
+    if (filters.notebook !== null) {
+        const chosen = notebooks.find(
+            (notebook) => notebook.id === filters.notebook,
+        );
+
+        chips.push({
+            kind: 'notebook',
+            key: 'notebook',
+            label: `Notebook: ${chosen?.name ?? 'selected'}`,
+        });
+    }
 
     if (filters.starred) {
         chips.push({ kind: 'starred', key: 'starred', label: 'Starred only' });
@@ -310,6 +382,17 @@ export function removeCollectionFilterChip(
     chip: CollectionFilterChip,
 ): CollectionFilters {
     const next = copyCollectionFilters(filters);
+
+    if (chip.kind === 'source') {
+        // Without a source choice, a chosen notebook would force the source
+        // back, so both are cleared together.
+        next.source = 'all';
+        next.notebook = null;
+    }
+
+    if (chip.kind === 'notebook') {
+        next.notebook = null;
+    }
 
     if (chip.kind === 'starred') {
         next.starred = false;

@@ -19,8 +19,11 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * into the page as it was received.
  *
  * The note's own identity carries the learner's marks, so identical notes
- * never share a star, status or personal note.
+ * never share a star, status or personal note. A note saved in a notebook has
+ * no session, question or session date to link back to; those are null, and
+ * its notebook is named instead.
  *
+ * @phpstan-import-type CollectionNotebook from TableCollection
  * @phpstan-import-type NoteItem from TableCollection
  */
 final class CollectionNoteResource extends JsonResource
@@ -45,11 +48,13 @@ final class CollectionNoteResource extends JsonResource
      *     text: string,
      *     preview: string,
      *     html: string,
-     *     latest_session_date: string,
-     *     session_id: int,
+     *     latest_date: string,
+     *     session_id: int|null,
      *     session_date: string|null,
      *     topic: string,
-     *     question_position: int,
+     *     question_position: int|null,
+     *     source: 'session'|'notebook',
+     *     notebook: CollectionNotebook|null,
      *     entry_id: string|null,
      *     entry_position: int,
      *     starred: bool,
@@ -71,11 +76,13 @@ final class CollectionNoteResource extends JsonResource
             'text' => $item['text'],
             'preview' => $item['preview'],
             'html' => $item['html'],
-            'latest_session_date' => $item['latest_at']->toIso8601String(),
+            'latest_date' => $item['latest_at']->toIso8601String(),
             'session_id' => $item['session_id'],
             'session_date' => $item['session_date']?->toIso8601String(),
             'topic' => $item['topic'],
             'question_position' => $item['question_position'],
+            'source' => $item['source'],
+            'notebook' => $item['notebook'],
             'entry_id' => $item['entry_id'],
             'entry_position' => $item['entry_position'],
             'starred' => $this->mark->starred ?? false,

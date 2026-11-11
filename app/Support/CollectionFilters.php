@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Support;
 
 use App\Enums\CollectionSort;
+use App\Enums\CollectionSource;
 use App\Enums\CollectionStatusFilter;
 use App\Enums\FeedbackType;
 
@@ -28,6 +29,8 @@ final readonly class CollectionFilters
         private bool $attention,
         private array $topics,
         private CollectionSort $sort,
+        private CollectionSource $source,
+        private ?int $notebook,
     ) {}
 
     /**
@@ -35,6 +38,19 @@ final readonly class CollectionFilters
      */
     public static function fromArray(array $input, FeedbackType $type): self
     {
+        $source = CollectionSource::fromQuery(
+            is_string($input['source'] ?? null) ? $input['source'] : null,
+        );
+        $notebook = self::notebookFrom($input['notebook'] ?? null);
+
+        // Asking for sessions alone forgets any notebook, because the two
+        // scopes cannot meet. Choosing one notebook is choosing notebooks.
+        if ($source === CollectionSource::Sessions) {
+            $notebook = null;
+        } elseif ($notebook !== null) {
+            $source = CollectionSource::Notebooks;
+        }
+
         return new self(
             search: self::searchFrom($input['q'] ?? null),
             starred: self::truthy($input['starred'] ?? null),
@@ -51,6 +67,8 @@ final readonly class CollectionFilters
                 is_string($input['sort'] ?? null) ? $input['sort'] : null,
                 $type,
             ),
+            source: $source,
+            notebook: $notebook,
         );
     }
 
@@ -64,6 +82,8 @@ final readonly class CollectionFilters
             attention: false,
             topics: [],
             sort: CollectionSort::defaultFor($type),
+            source: CollectionSource::All,
+            notebook: null,
         );
     }
 
@@ -115,6 +135,18 @@ final readonly class CollectionFilters
         return $this->sort;
     }
 
+    /** Which source the list gathers from: sessions, notebooks, or both. */
+    public function source(): CollectionSource
+    {
+        return $this->source;
+    }
+
+    /** The one notebook being looked at, or null for every notebook. */
+    public function notebook(): ?int
+    {
+        return $this->notebook;
+    }
+
     /** Whether a filter narrows the collection. Search and sort are separate. */
     public function hasFilters(): bool
     {
@@ -153,6 +185,51 @@ final readonly class CollectionFilters
             attention: $this->attention,
             topics: $topics,
             sort: $this->sort,
+            source: $this->source,
+            notebook: $this->notebook,
+        );
+    }
+
+    /**
+     * Drop a notebook that no longer feeds this collection, so a stale
+     * bookmark opens every notebook instead of a dead end.
+     *
+     * @param  list<int>  $allowed
+     */
+    public function restrictNotebook(array $allowed): self
+    {
+        if ($this->notebook === null || in_array($this->notebook, $allowed, true)) {
+            return $this;
+        }
+
+        return new self(
+            search: $this->search,
+            starred: $this->starred,
+            status: $this->status,
+            attention: $this->attention,
+            topics: $this->topics,
+            sort: $this->sort,
+            source: $this->source,
+            notebook: null,
+        );
+    }
+
+    /**
+     * The same view with only its source scope kept. Counts around the list are
+     * gathered from the scope the learner is looking at, not from the search,
+     * status or topic choices inside it.
+     */
+    public function scopeOnly(): self
+    {
+        return new self(
+            search: '',
+            starred: false,
+            status: CollectionStatusFilter::All,
+            attention: false,
+            topics: [],
+            sort: $this->sort,
+            source: $this->source,
+            notebook: $this->notebook,
         );
     }
 
@@ -166,6 +243,8 @@ final readonly class CollectionFilters
             attention: true,
             topics: [],
             sort: $this->sort,
+            source: $this->source,
+            notebook: $this->notebook,
         );
     }
 
@@ -185,7 +264,9 @@ final readonly class CollectionFilters
      *     status: string,
      *     attention: bool,
      *     topics: list<int>,
-     *     sort: string
+     *     sort: string,
+     *     source: string,
+     *     notebook: int|null
      * }
      */
     public function toArray(): array
@@ -197,6 +278,8 @@ final readonly class CollectionFilters
             'attention' => $this->attention,
             'topics' => $this->topics,
             'sort' => $this->sort->value,
+            'source' => $this->source->value,
+            'notebook' => $this->notebook,
         ];
     }
 
@@ -220,6 +303,22 @@ final readonly class CollectionFilters
         $meaningful = (string) preg_replace('/\s+/u', '', $search);
 
         return mb_strlen($meaningful) >= SearchText::MIN_LENGTH ? $search : '';
+    }
+
+    /** A notebook is named by its positive id, the same way topics are. */
+    private static function notebookFrom(mixed $value): ?int
+    {
+        if (is_int($value)) {
+            return $value > 0 ? $value : null;
+        }
+
+        if (! is_string($value) || preg_match('/^\d+$/', trim($value)) !== 1) {
+            return null;
+        }
+
+        $id = (int) trim($value);
+
+        return $id > 0 ? $id : null;
     }
 
     private static function truthy(mixed $value): bool

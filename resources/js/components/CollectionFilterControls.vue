@@ -33,23 +33,31 @@ import {
 } from '@/components/ui/select';
 import {
     collectionSortChoices,
+    collectionSourceChoices,
     collectionStatusChoices,
     copyCollectionFilters,
     normalizeCollectionFilters,
     type CollectionFilters,
     type CollectionSort,
+    type CollectionSource,
     type CollectionStatusFilter,
 } from '@/lib/collection-filters';
-import type { CollectionTabKey, CollectionTopicOption } from '@/types';
+import type {
+    CollectionNotebookOption,
+    CollectionTabKey,
+    CollectionTopicOption,
+} from '@/types';
 
 /**
- * The controls that search one collection: the star, the learner's status,
- * the items that need attention, the topics that feed it, and the order.
+ * The controls that search one collection: its source, the star, the learner's
+ * status, the items that need attention, the topics and notebook that feed it,
+ * and the order.
  */
 const props = withDefaults(
     defineProps<{
         filters: CollectionFilters;
         topics: CollectionTopicOption[];
+        notebooks?: CollectionNotebookOption[];
         tab: CollectionTabKey;
         /** How many items of the whole collection need attention. */
         attentionCount?: number;
@@ -60,6 +68,7 @@ const props = withDefaults(
         idPrefix?: string;
     }>(),
     {
+        notebooks: () => [],
         attentionCount: 0,
         stacked: false,
         disabled: false,
@@ -120,6 +129,24 @@ function changeSort(value: unknown): void {
         value === 'az' || value === 'most_seen' ? value : 'newest';
 
     apply({ sort });
+}
+
+function changeSource(value: unknown): void {
+    const source: CollectionSource =
+        value === 'sessions' || value === 'notebooks' ? value : 'all';
+
+    apply({ source });
+}
+
+/**
+ * Choosing a notebook also narrows the source to notebooks, which the shared
+ * normalisation applies, so the row never asks for a notebook the session-only
+ * view cannot show.
+ */
+function changeNotebook(value: unknown): void {
+    const id = typeof value === 'string' ? Number(value) : NaN;
+
+    apply({ notebook: Number.isInteger(id) && id > 0 ? id : null });
 }
 </script>
 
@@ -182,6 +209,82 @@ function changeSort(value: unknown): void {
                     </Label>
                 </div>
             </div>
+        </div>
+
+        <div :class="props.stacked ? 'grid gap-1.5' : ''">
+            <span
+                v-if="props.stacked"
+                class="text-xs font-medium text-muted-foreground"
+            >
+                Source
+            </span>
+
+            <Select
+                :model-value="props.filters.source"
+                :disabled="props.disabled"
+                @update:model-value="changeSource"
+            >
+                <SelectTrigger
+                    :id="`${props.idPrefix}-source-filter`"
+                    class="h-11 w-full md:h-8 md:w-auto"
+                    aria-label="Source"
+                >
+                    <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem
+                        v-for="choice in collectionSourceChoices"
+                        :key="choice.value"
+                        :value="choice.value"
+                        class="min-h-11 md:min-h-8"
+                    >
+                        {{ choice.label }}
+                    </SelectItem>
+                </SelectContent>
+            </Select>
+        </div>
+
+        <div
+            v-if="props.filters.source !== 'sessions'"
+            :class="props.stacked ? 'grid gap-1.5' : ''"
+        >
+            <span
+                v-if="props.stacked"
+                class="text-xs font-medium text-muted-foreground"
+            >
+                Notebook
+            </span>
+
+            <Select
+                :model-value="
+                    props.filters.notebook === null
+                        ? 'all'
+                        : String(props.filters.notebook)
+                "
+                :disabled="props.disabled || props.notebooks.length === 0"
+                @update:model-value="changeNotebook"
+            >
+                <SelectTrigger
+                    :id="`${props.idPrefix}-notebook-filter`"
+                    class="h-11 w-full md:h-8 md:w-auto"
+                    aria-label="Notebook"
+                >
+                    <SelectValue placeholder="All notebooks" />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="all" class="min-h-11 md:min-h-8">
+                        All notebooks
+                    </SelectItem>
+                    <SelectItem
+                        v-for="notebook in props.notebooks"
+                        :key="notebook.id"
+                        :value="String(notebook.id)"
+                        class="min-h-11 md:min-h-8"
+                    >
+                        {{ notebook.name }} ({{ notebook.count }})
+                    </SelectItem>
+                </SelectContent>
+            </Select>
         </div>
 
         <div :class="props.stacked ? 'grid gap-1.5' : ''">

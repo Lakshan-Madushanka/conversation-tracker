@@ -46,12 +46,12 @@ const configs: Record<CollectionTabKey, CollectionTabConfig> = {
         unitPlural: 'words',
         emptyTitle: 'No words yet',
         emptyDescription:
-            'Words you save while practicing will appear here, with their meanings and examples.',
+            'Words you save while practicing or add to a notebook will appear here, with their meanings and examples.',
         missingTitle: 'That word is no longer here',
         missingDescription:
-            'It may have been edited or removed from its session since you saved this link. Your other words are still below.',
+            'It may have been edited or removed from its session or notebook since you saved this link. Your other words are still below.',
         panelDescription:
-            'Everything you saved for this word, gathered from your finished sessions.',
+            'Everything you saved for this word, gathered from your finished sessions and notebooks.',
     },
 
     phrases: {
@@ -64,12 +64,12 @@ const configs: Record<CollectionTabKey, CollectionTabConfig> = {
         unitPlural: 'phrases',
         emptyTitle: 'No phrases yet',
         emptyDescription:
-            'Phrases you save in finished sessions will appear here.',
+            'Phrases you save in a finished session or add to a notebook will appear here.',
         missingTitle: 'That phrase is no longer here',
         missingDescription:
-            'It may have been edited or removed from its session since you saved this link. Your other phrases are still below.',
+            'It may have been edited or removed from its session or notebook since you saved this link. Your other phrases are still below.',
         panelDescription:
-            'Everything you saved for this phrase, gathered from your finished sessions.',
+            'Everything you saved for this phrase, gathered from your finished sessions and notebooks.',
     },
 
     grammar: {
@@ -82,12 +82,12 @@ const configs: Record<CollectionTabKey, CollectionTabConfig> = {
         unitPlural: 'notes',
         emptyTitle: 'No grammar notes yet',
         emptyDescription:
-            'Notes you save in finished sessions will appear here.',
+            'Notes you save in a finished session or add to a notebook will appear here.',
         missingTitle: 'That note is no longer here',
         missingDescription:
-            'It may have been edited or removed from its session since you saved this link. Your other notes are still below.',
+            'It may have been edited or removed from its session or notebook since you saved this link. Your other notes are still below.',
         panelDescription:
-            'Everything this note says, as you saved it in its session.',
+            'Everything this note says, as you saved it in its session or notebook.',
     },
 
     mistakes: {

@@ -26,7 +26,14 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * being filled the notes come as cleaned formatted text with the version
  * marker the editor saves with.
  *
+ * An item gathered from a notebook has no session or question to link back
+ * to. Its latest date is the moment its row was added, its seen count is null
+ * rather than an honest zero, and the panel gets the notebook's own rows
+ * instead of session appearances.
+ *
+ * @phpstan-import-type CollectionNotebook from TableCollection
  * @phpstan-import-type GroupItem from TableCollection
+ * @phpstan-import-type GroupRow from TableCollection
  */
 final class CollectionItemResource extends JsonResource
 {
@@ -52,10 +59,16 @@ final class CollectionItemResource extends JsonResource
      *     meaning: string,
      *     example: string,
      *     example_html: string,
-     *     latest_session_date: string,
-     *     seen_count: int,
+     *     latest_date: string,
+     *     seen_count: int|null,
      *     needs_attention: bool,
      *     attention_reason: string|null,
+     *     session_id: int|null,
+     *     session_date: string|null,
+     *     topic: string,
+     *     question_position: int|null,
+     *     source: 'session'|'notebook',
+     *     notebook: CollectionNotebook|null,
      *     starred: bool,
      *     status: string|null,
      *     has_notes: bool,
@@ -63,6 +76,7 @@ final class CollectionItemResource extends JsonResource
      *     notes_html?: string,
      *     notes_version?: int,
      *     match: array{label: string, segments: list<array{text: string, match: bool}>}|null,
+     *     rows: list<GroupRow>,
      *     appearances: list<array{
      *         session_id: int,
      *         session_date: string|null,
@@ -87,10 +101,16 @@ final class CollectionItemResource extends JsonResource
             'meaning' => $item['meaning'],
             'example' => $item['example'],
             'example_html' => $item['example_html'],
-            'latest_session_date' => $item['latest_at']->toIso8601String(),
+            'latest_date' => $item['latest_at']->toIso8601String(),
             'seen_count' => $item['seen_count'],
             'needs_attention' => $item['attention'] !== null,
             'attention_reason' => $item['attention'],
+            'session_id' => $item['session_id'],
+            'session_date' => $item['session_date']?->toIso8601String(),
+            'topic' => $item['topic'],
+            'question_position' => $item['question_position'],
+            'source' => $item['source'],
+            'notebook' => $item['notebook'],
             'starred' => $this->mark->starred ?? false,
             'status' => $this->mark?->status?->value,
             'has_notes' => $this->mark?->hasNotes() ?? false,
@@ -102,6 +122,7 @@ final class CollectionItemResource extends JsonResource
                 $this->terms,
                 $this->type,
             ),
+            'rows' => $item['rows'],
             'appearances' => array_map(
                 fn (array $appearance): array => [
                     'session_id' => $appearance['session_id'],

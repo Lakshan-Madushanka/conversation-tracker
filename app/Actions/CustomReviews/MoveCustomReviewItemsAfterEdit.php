@@ -73,7 +73,10 @@ final class MoveCustomReviewItemsAfterEdit
         });
     }
 
-    /** Whether the old item still appears in another finished, live session. */
+    /**
+     * Whether the old item still appears in another finished, live session,
+     * or in a notebook.
+     */
     private function appearsElsewhere(
         FeedbackType $kind,
         string $identity,
@@ -83,10 +86,12 @@ final class MoveCustomReviewItemsAfterEdit
             ->where('type', $kind->value)
             ->where('collection_key', $identity)
             ->whereKeyNot($editedEntryId)
-            ->whereHas(
-                'practiceQuestion.practiceSession',
-                fn (Builder $query): Builder => $query->study(),
-            )
+            ->where(fn (Builder $scope): Builder => $scope
+                ->whereNotNull('notebook_id')
+                ->orWhereHas(
+                    'practiceQuestion.practiceSession',
+                    fn (Builder $query): Builder => $query->study(),
+                ))
             ->exists();
     }
 }

@@ -839,7 +839,7 @@ describe('my mistakes', function (): void {
                 ->where('open_item.key', $key)
                 ->where('open_item.title', 'I am agree')
                 ->where('open_item.correction', 'I agree')
-                ->where('open_item.latest_session_date', $session->created_at?->toIso8601String())
+                ->where('open_item.latest_date', $session->created_at?->toIso8601String())
                 ->where('open_item.appearances.0.session_id', $session->id)
                 ->where('open_item.appearances.0.topic', 'Ordering at a restaurant')
                 ->where('open_item.appearances.0.question_position', 1)

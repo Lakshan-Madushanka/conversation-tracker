@@ -37,6 +37,7 @@ import {
     seenLabel,
 } from '@/lib/collections';
 import { shortDate } from '@/lib/format';
+import { index as notebooksIndex } from '@/routes/notebooks';
 import { create as sessionsCreate } from '@/routes/sessions';
 import type {
     CollectionItem,
@@ -64,7 +65,8 @@ const props = withDefaults(
         hasSearch?: boolean;
         /** True when applying a search or filter failed and can be tried again. */
         filterError?: boolean;
-        hasFinishedSessions?: boolean;
+        /** False when neither a finished session nor a saved notebook exists. */
+        hasSources?: boolean;
         /** True while the learner is choosing items to add to a review. */
         selectionMode?: boolean;
         /** The keys chosen so far. */
@@ -83,7 +85,7 @@ const props = withDefaults(
         hasFilters: false,
         hasSearch: false,
         filterError: false,
-        hasFinishedSessions: false,
+        hasSources: false,
         selectionMode: false,
         selectedKeys: () => [],
         busyKey: null,
@@ -145,9 +147,9 @@ const showEmptyState = computed(
     () => !hasItems.value && settled.value && !filtered.value,
 );
 
-/** Nothing to search yet: no session has been finished at all. */
+/** Nothing to search yet: no session or notebook has saved anything. */
 const showNoSessions = computed(
-    () => !hasItems.value && settled.value && !props.hasFinishedSessions,
+    () => !hasItems.value && settled.value && !props.hasSources,
 );
 
 /** Nothing matched, which is different from a collection with nothing in it. */
@@ -157,7 +159,7 @@ const showNoResults = computed(
         settled.value &&
         filtered.value &&
         props.total === 0 &&
-        props.hasFinishedSessions,
+        props.hasSources,
 );
 
 const allTotal = computed(() => props.allTotal ?? props.total);
@@ -193,8 +195,8 @@ const announcement = computed(() => {
     }
 
     if (props.total === 0) {
-        if (!props.hasFinishedSessions) {
-            return 'No finished sessions yet.';
+        if (!props.hasSources) {
+            return 'No saved sessions or notebooks yet.';
         }
 
         return filtered.value
@@ -284,8 +286,36 @@ function mistakeName(item: CollectionMistakeItem): string {
         : `${said}, correction: ${item.correction}`;
 }
 
+/**
+ * A note's date: the session it was said in, or — for a notebook — the moment
+ * it was added, which is the only stable date a notebook row has.
+ */
 function noteDate(note: CollectionNoteItem): string {
-    return note.session_date === null ? '' : shortDate(note.session_date);
+    const date = shortDate(note.latest_date);
+
+    return note.source === 'notebook' ? `Added ${date}` : date;
+}
+
+/** Whether an item was gathered from a notebook rather than a session. */
+function fromNotebook(item: CollectionItem | CollectionNoteItem): boolean {
+    return item.source === 'notebook' && item.notebook !== null;
+}
+
+/** The notebook an item came from, named as its source for the row. */
+function notebookName(item: CollectionItem | CollectionNoteItem): string {
+    return item.notebook?.name ?? '';
+}
+
+/** The word's own date, which for a notebook is when its row was added. */
+function itemDate(item: CollectionItem): string {
+    const date = shortDate(item.latest_date);
+
+    return item.source === 'notebook' ? `Added ${date}` : date;
+}
+
+/** Whether an item was seen in more than one question, as sessions count it. */
+function seenOften(item: CollectionItem): boolean {
+    return item.seen_count !== null && item.seen_count > 1;
 }
 
 /**
@@ -367,6 +397,14 @@ function exampleHtml(item: CollectionItem): string {
                                     >
                                         {{ note.preview }}
                                     </button>
+                                    <Badge
+                                        v-if="fromNotebook(note)"
+                                        variant="outline"
+                                        class="ml-2 align-middle"
+                                    >
+                                        <BookOpenIcon aria-hidden="true" />
+                                        {{ notebookName(note) }}
+                                    </Badge>
                                     <CollectionMatchHint
                                         v-if="note.match"
                                         :match="note.match"
@@ -630,6 +668,20 @@ function exampleHtml(item: CollectionItem): string {
                                     >
                                         Needs attention
                                     </Badge>
+                                    <Badge
+                                        v-if="fromNotebook(item)"
+                                        variant="outline"
+                                        class="ml-2 align-middle"
+                                    >
+                                        <BookOpenIcon aria-hidden="true" />
+                                        {{ notebookName(item) }}
+                                    </Badge>
+                                    <span
+                                        v-if="fromNotebook(item)"
+                                        class="mt-1 block text-xs text-muted-foreground"
+                                    >
+                                        {{ itemDate(item) }}
+                                    </span>
                                     <CollectionMatchHint
                                         v-if="item.match"
                                         :match="item.match"
@@ -678,10 +730,10 @@ function exampleHtml(item: CollectionItem): string {
 
                                 <TableCell class="text-right align-middle">
                                     <Badge
-                                        v-if="item.seen_count > 1"
+                                        v-if="seenOften(item)"
                                         variant="outline"
                                     >
-                                        {{ seenLabel(item.seen_count) }}
+                                        {{ seenLabel(item.seen_count ?? 0) }}
                                     </Badge>
                                 </TableCell>
 
@@ -751,6 +803,14 @@ function exampleHtml(item: CollectionItem): string {
                                 >
                                     {{ note.topic }} · {{ noteDate(note) }}
                                 </span>
+                                <Badge
+                                    v-if="fromNotebook(note)"
+                                    variant="outline"
+                                    class="mt-2"
+                                >
+                                    <BookOpenIcon aria-hidden="true" />
+                                    {{ notebookName(note) }}
+                                </Badge>
                                 <CollectionMatchHint
                                     v-if="note.match"
                                     :match="note.match"
@@ -972,11 +1032,25 @@ function exampleHtml(item: CollectionItem): string {
                                         Needs attention
                                     </Badge>
                                     <Badge
-                                        v-if="item.seen_count > 1"
+                                        v-if="fromNotebook(item)"
                                         variant="outline"
                                     >
-                                        {{ seenLabel(item.seen_count) }}
+                                        <BookOpenIcon aria-hidden="true" />
+                                        {{ notebookName(item) }}
                                     </Badge>
+                                    <Badge
+                                        v-if="seenOften(item)"
+                                        variant="outline"
+                                    >
+                                        {{ seenLabel(item.seen_count ?? 0) }}
+                                    </Badge>
+                                </span>
+
+                                <span
+                                    v-if="fromNotebook(item)"
+                                    class="mt-1 block text-xs text-muted-foreground"
+                                >
+                                    {{ itemDate(item) }}
                                 </span>
 
                                 <span
@@ -1110,13 +1184,19 @@ function exampleHtml(item: CollectionItem): string {
                 v-else-if="showNoSessions"
                 :icon="BookOpenIcon"
                 title="Your collections are waiting"
-                description="Finish a practice session and what you save will be gathered here automatically."
+                description="Finish a practice session or save a notebook, and what you keep will be gathered here automatically."
             >
                 <template #actions>
                     <Button size="lg" as-child>
                         <Link :href="sessionsCreate.url()">
                             <PlusIcon aria-hidden="true" />
                             Start a session
+                        </Link>
+                    </Button>
+                    <Button size="lg" variant="outline" as-child>
+                        <Link :href="notebooksIndex.url()">
+                            <BookOpenIcon aria-hidden="true" />
+                            Open notebooks
                         </Link>
                     </Button>
                 </template>

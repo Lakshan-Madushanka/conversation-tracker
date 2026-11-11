@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Queries;
 
 use App\Enums\CollectionSort;
+use App\Enums\CollectionSource;
 use App\Enums\CollectionStatusFilter;
 use App\Enums\CollectionTab;
 use App\Enums\FeedbackType;
@@ -43,6 +44,14 @@ use Illuminate\Support\Str;
  * Nothing is stored or cached: a finished session, an edit, an archive, a
  * restore or a delete changes the next read straight away.
  *
+ * @phpstan-type CollectionNotebook array{id: int, name: string, topic: string}
+ * @phpstan-type GroupRow array{
+ *     entry_id: string|null,
+ *     entry_position: int,
+ *     meaning: string,
+ *     example: string,
+ *     example_html: string
+ * }
  * @phpstan-type GroupAppearance array{
  *     session_id: int,
  *     session_date: CarbonImmutable|null,
@@ -61,8 +70,15 @@ use Illuminate\Support\Str;
  *     example: string,
  *     example_html: string,
  *     latest_at: CarbonImmutable,
- *     seen_count: int,
+ *     seen_count: int|null,
  *     attention: string|null,
+ *     session_id: int|null,
+ *     session_date: CarbonImmutable|null,
+ *     topic: string,
+ *     question_position: int|null,
+ *     source: 'session'|'notebook',
+ *     notebook: CollectionNotebook|null,
+ *     rows: list<GroupRow>,
  *     appearances: list<GroupAppearance>
  * }
  * @phpstan-type NoteItem array{
@@ -71,12 +87,14 @@ use Illuminate\Support\Str;
  *     preview: string,
  *     html: string,
  *     latest_at: CarbonImmutable,
- *     session_id: int,
+ *     session_id: int|null,
  *     session_date: CarbonImmutable|null,
  *     topic: string,
- *     question_position: int,
+ *     question_position: int|null,
  *     entry_id: string|null,
- *     entry_position: int
+ *     entry_position: int,
+ *     source: 'session'|'notebook',
+ *     notebook: CollectionNotebook|null
  * }
  * @phpstan-type MistakeAppearance array{
  *     session_id: int,
@@ -100,6 +118,9 @@ use Illuminate\Support\Str;
  *     seen_count: int,
  *     worth_practicing: bool,
  *     attention: string|null,
+ *     source: 'session',
+ *     notebook: null,
+ *     rows: list<GroupRow>,
  *     appearances: list<MistakeAppearance>
  * }
  */
@@ -279,14 +300,10 @@ final class TableCollection
         CollectionFilters $filters,
         bool $eligibleOnly = false,
     ): QueryBuilder {
-        $query = DB::table('practice_feedback_entries as e')
-            ->join('practice_questions as q', 'q.id', '=', 'e.practice_question_id')
-            ->join('practice_sessions as s', 's.id', '=', 'q.practice_session_id')
-            ->where('e.type', $type->value)
-            ->where('s.status', PracticeSession::STATUS_FINISHED)
-            ->whereNull('s.archived_at');
+        $query = $this->scopedEntries($type);
 
         $this->applyNonBlank($query, $type);
+        $this->applySourceFilter($query, $filters);
 
         if ($eligibleOnly) {
             $this->applyEligibleFilter($query, $type);
@@ -297,19 +314,24 @@ final class TableCollection
         $this->applyTopicFilter($query, $type, $filters);
 
         if ($filters->onlyNeedsAttention()) {
-            $query->whereRaw($this->attentionSql($type));
+            $this->applyAttentionFilter($query, $type);
         }
 
         $this->applyGroupSearch($query, $type, $filters);
 
-        $seconds = $this->secondsExpression('s.created_at');
+        // A grouped item is always from one source, because a notebook key
+        // and a session key can never be equal. Its date is the latest session
+        // it appeared in, or the moment its notebook row was first saved.
+        $moment = 'COALESCE(s.created_at, e.created_at)';
 
         return $query
             ->groupBy('e.collection_key')
             ->select([
                 'e.collection_key as group_key',
-                DB::raw('MAX(s.created_at) as latest_at'),
-                DB::raw($seconds.' as latest_seconds'),
+                DB::raw('MAX('.$moment.') as latest_at'),
+                DB::raw('MAX('.$this->secondsOf($moment).') as latest_seconds'),
+                // Notebook rows have no question, so they count zero. The item
+                // shape reports null for them rather than a "seen 0 times".
                 DB::raw('COUNT(DISTINCT e.practice_question_id) as seen_count'),
                 DB::raw('MIN(e.sort_text) as sort_text'),
             ]);
@@ -320,35 +342,80 @@ final class TableCollection
      */
     private function notesQuery(CollectionFilters $filters): QueryBuilder
     {
-        $query = DB::table('practice_feedback_entries as e')
-            ->join('practice_questions as q', 'q.id', '=', 'e.practice_question_id')
-            ->join('practice_sessions as s', 's.id', '=', 'q.practice_session_id')
-            ->where('e.type', FeedbackType::GrammarNote->value)
-            ->where('s.status', PracticeSession::STATUS_FINISHED)
-            ->whereNull('s.archived_at')
+        $query = $this->scopedEntries(FeedbackType::GrammarNote)
             ->whereRaw("TRIM(e.content_text) <> ''");
 
+        $this->applySourceFilter($query, $filters);
         $this->applyMarkJoin($query);
         $this->applyMarkFilters($query, $filters);
 
         $topics = $filters->topics();
 
         if ($topics !== []) {
-            $query->whereIn('s.topic_id', $topics);
+            $query->whereIn(
+                DB::raw('COALESCE(s.topic_id, nb.topic_id)'),
+                $topics,
+            );
         }
 
         $this->applyNoteSearch($query, $filters);
-
-        $seconds = $this->secondsExpression('s.created_at');
 
         return $query->select([
             'e.id',
             'e.collection_key as group_key',
             'e.sort_text',
-            's.created_at as latest_at',
-            DB::raw($seconds.' as latest_seconds'),
-            DB::raw('(q.position * '.self::NOTE_ORDER_STEP.' + e.position) as note_order'),
+            DB::raw('COALESCE(s.created_at, e.created_at) as latest_at'),
+            DB::raw($this->secondsOf('COALESCE(s.created_at, e.created_at)').' as latest_seconds'),
+            // One number that keeps a note's place inside its question, or the
+            // notebook's saved order, so the cursor can carry it.
+            DB::raw('(CASE WHEN e.notebook_id IS NOT NULL THEN e.position ELSE q.position * '.self::NOTE_ORDER_STEP.' + e.position END) as note_order'),
         ]);
+    }
+
+    /**
+     * The rows of one collection from both sources. A session row counts only
+     * while its session is finished and visible; a notebook row always counts,
+     * because a notebook has no state to finish or archive.
+     */
+    private function scopedEntries(FeedbackType $type): QueryBuilder
+    {
+        $query = DB::table('practice_feedback_entries as e')
+            ->leftJoin('practice_questions as q', 'q.id', '=', 'e.practice_question_id')
+            ->leftJoin('practice_sessions as s', 's.id', '=', 'q.practice_session_id')
+            ->leftJoin('notebooks as nb', 'nb.id', '=', 'e.notebook_id')
+            ->where('e.type', $type->value);
+
+        $this->applyRowScope($query, 'e', 's');
+
+        return $query;
+    }
+
+    /**
+     * A row counts when it lives in a notebook, or in a session the learner
+     * finished and has not archived.
+     */
+    private function applyRowScope(QueryBuilder $query, string $entry, string $session): void
+    {
+        $query->where(function (QueryBuilder $scope) use ($entry, $session): void {
+            $scope->whereNotNull($entry.'.notebook_id')
+                ->orWhere(function (QueryBuilder $live) use ($session): void {
+                    $live->where($session.'.status', PracticeSession::STATUS_FINISHED)
+                        ->whereNull($session.'.archived_at');
+                });
+        });
+    }
+
+    private function applySourceFilter(QueryBuilder $query, CollectionFilters $filters): void
+    {
+        match ($filters->source()) {
+            CollectionSource::Sessions => $query->whereNull('e.notebook_id'),
+            CollectionSource::Notebooks => $query->whereNotNull('e.notebook_id'),
+            CollectionSource::All => null,
+        };
+
+        if ($filters->notebook() !== null) {
+            $query->where('e.notebook_id', $filters->notebook());
+        }
     }
 
     private function applyNonBlank(QueryBuilder $query, FeedbackType $type): void
@@ -387,17 +454,29 @@ final class TableCollection
             return;
         }
 
-        $query->whereExists(function (QueryBuilder $exists) use ($type, $usable): void {
-            $exists->selectRaw('1')
-                ->from('practice_feedback_entries as a')
-                ->join('practice_questions as aq', 'aq.id', '=', 'a.practice_question_id')
-                ->join('practice_sessions as ss', 'ss.id', '=', 'aq.practice_session_id')
-                ->whereColumn('a.collection_key', 'e.collection_key')
-                ->where('a.type', $type->value)
-                ->where('ss.status', PracticeSession::STATUS_FINISHED)
-                ->whereNull('ss.archived_at')
-                ->whereRaw($usable);
-        });
+        $query->whereExists(
+            $this->sameItemRows($type)
+                ->whereRaw($usable),
+        );
+    }
+
+    /**
+     * The rows of the same scoped item, from either source, with the session
+     * state already checked. A notebook item can only meet notebook rows and a
+     * session item can only meet live session rows, because the keys never
+     * cross sources.
+     */
+    private function sameItemRows(FeedbackType $type): QueryBuilder
+    {
+        $query = DB::table('practice_feedback_entries as a')
+            ->leftJoin('practice_questions as aq', 'aq.id', '=', 'a.practice_question_id')
+            ->leftJoin('practice_sessions as ss', 'ss.id', '=', 'aq.practice_session_id')
+            ->whereColumn('a.collection_key', 'e.collection_key')
+            ->where('a.type', $type->value);
+
+        $this->applyRowScope($query, 'a', 'ss');
+
+        return $query;
     }
 
     /**
@@ -480,13 +559,13 @@ final class TableCollection
         $query->whereExists(function (QueryBuilder $exists) use ($type, $topics): void {
             $exists->selectRaw('1')
                 ->from('practice_feedback_entries as te')
-                ->join('practice_questions as tq', 'tq.id', '=', 'te.practice_question_id')
-                ->join('practice_sessions as ts', 'ts.id', '=', 'tq.practice_session_id')
+                ->leftJoin('practice_questions as tq', 'tq.id', '=', 'te.practice_question_id')
+                ->leftJoin('practice_sessions as ts', 'ts.id', '=', 'tq.practice_session_id')
+                ->leftJoin('notebooks as tn', 'tn.id', '=', 'te.notebook_id')
                 ->whereColumn('te.collection_key', 'e.collection_key')
                 ->where('te.type', $type->value)
-                ->where('ts.status', PracticeSession::STATUS_FINISHED)
-                ->whereNull('ts.archived_at')
-                ->whereIn('ts.topic_id', $topics);
+                ->whereIn(DB::raw('COALESCE(ts.topic_id, tn.topic_id)'), $topics);
+            $this->applyRowScope($exists, 'te', 'ts');
         });
     }
 
@@ -494,44 +573,39 @@ final class TableCollection
      * Why one grouped item asks for attention, by the same rules the item
      * shape uses: a word with no meaning anywhere, a phrase whose line could
      * not be split, or a mistake whose newest row still needs a correction.
+     */
+    private function applyAttentionFilter(QueryBuilder $query, FeedbackType $type): void
+    {
+        match ($type) {
+            FeedbackType::Vocabulary => $query->whereNotExists(
+                $this->sameItemRows($type)->whereRaw("TRIM(a.correction_text) <> ''"),
+            ),
+            FeedbackType::Phrase => $query->whereExists(
+                $this->sameItemRows($type)->where('a.split_broke', true),
+            ),
+            FeedbackType::Mistake => $query->whereRaw($this->newestMistakeAttentionSql()),
+            default => null,
+        };
+    }
+
+    /**
+     * A mistake's newest row still needs attention. Mistakes live only in
+     * sessions, so this keeps its one-source rule.
      *
      * @return literal-string
      */
-    private function attentionSql(FeedbackType $type): string
+    private function newestMistakeAttentionSql(): string
     {
-        return match ($type) {
-            FeedbackType::Vocabulary => 'NOT EXISTS (
-                SELECT 1 FROM practice_feedback_entries a
-                INNER JOIN practice_questions as aq ON aq.id = a.practice_question_id
-                INNER JOIN practice_sessions as ss ON ss.id = aq.practice_session_id
-                WHERE a.collection_key = e.collection_key
-                    AND a.type = \'vocabulary\'
-                    AND ss.status = \'finished\'
-                    AND ss.archived_at IS NULL
-                    AND TRIM(a.correction_text) <> \'\'
-            )',
-            FeedbackType::Phrase => 'EXISTS (
-                SELECT 1 FROM practice_feedback_entries a
-                INNER JOIN practice_questions as aq ON aq.id = a.practice_question_id
-                INNER JOIN practice_sessions as ss ON ss.id = aq.practice_session_id
-                WHERE a.collection_key = e.collection_key
-                    AND a.type = \'phrase\'
-                    AND ss.status = \'finished\'
-                    AND ss.archived_at IS NULL
-                    AND a.split_broke = 1
-            )',
-            FeedbackType::Mistake => '(SELECT a.attention_reason
-                FROM practice_feedback_entries a
-                INNER JOIN practice_questions as aq ON aq.id = a.practice_question_id
-                INNER JOIN practice_sessions as ss ON ss.id = aq.practice_session_id
-                WHERE a.collection_key = e.collection_key
-                    AND a.type = \'mistake\'
-                    AND ss.status = \'finished\'
-                    AND ss.archived_at IS NULL
-                ORDER BY ss.created_at DESC, a.created_at DESC, a.id DESC
-                LIMIT 1) IS NOT NULL',
-            default => '1 = 1',
-        };
+        return '(SELECT a.attention_reason
+            FROM practice_feedback_entries a
+            INNER JOIN practice_questions as aq ON aq.id = a.practice_question_id
+            INNER JOIN practice_sessions as ss ON ss.id = aq.practice_session_id
+            WHERE a.collection_key = e.collection_key
+                AND a.type = \'mistake\'
+                AND ss.status = \'finished\'
+                AND ss.archived_at IS NULL
+            ORDER BY ss.created_at DESC, a.created_at DESC, a.id DESC
+            LIMIT 1) IS NOT NULL';
     }
 
     private function applyGroupSearch(
@@ -546,13 +620,12 @@ final class TableCollection
                 $match->whereExists(function (QueryBuilder $exists) use ($pattern, $type): void {
                     $exists->selectRaw('1')
                         ->from('practice_feedback_entries as se')
-                        ->join('practice_questions as sq', 'sq.id', '=', 'se.practice_question_id')
-                        ->join('practice_sessions as ss', 'ss.id', '=', 'sq.practice_session_id')
+                        ->leftJoin('practice_questions as sq', 'sq.id', '=', 'se.practice_question_id')
+                        ->leftJoin('practice_sessions as ss', 'ss.id', '=', 'sq.practice_session_id')
                         ->whereColumn('se.collection_key', 'e.collection_key')
                         ->where('se.type', $type->value)
-                        ->where('ss.status', PracticeSession::STATUS_FINISHED)
-                        ->whereNull('ss.archived_at')
                         ->whereRaw("se.search_text LIKE ? ESCAPE '!'", [$pattern]);
+                    $this->applyRowScope($exists, 'se', 'ss');
                 })->orWhereRaw("m.notes_search_text LIKE ? ESCAPE '!'", [$pattern]);
             });
         }
@@ -774,14 +847,14 @@ final class TableCollection
      * expression keeps SQLite and MySQL agreeing about what "the same moment"
      * means.
      *
-     * @param  literal-string  $column
+     * @param  literal-string  $expression
      * @return literal-string
      */
-    private function secondsExpression(string $column): string
+    private function secondsOf(string $expression): string
     {
         return DB::connection()->getDriverName() === 'sqlite'
-            ? "CAST(strftime('%s', {$column}) AS INTEGER)"
-            : "CAST(UNIX_TIMESTAMP({$column}) AS SIGNED)";
+            ? "CAST(strftime('%s', {$expression}) AS INTEGER)"
+            : "CAST(UNIX_TIMESTAMP({$expression}) AS SIGNED)";
     }
 
     /**
@@ -833,32 +906,95 @@ final class TableCollection
             $matching->whereIn('practice_feedback_entries.collection_key', $keys);
         }
 
+        // A notebook row has no question, so the joins stay left joins and the
+        // notebook's own topic is loaded beside the session's.
         $entries = $matching
-            ->join('practice_questions as sort_question', 'sort_question.id', '=', 'practice_feedback_entries.practice_question_id')
-            ->join('practice_sessions as sort_session', 'sort_session.id', '=', 'sort_question.practice_session_id')
+            ->leftJoin('practice_questions as sort_question', 'sort_question.id', '=', 'practice_feedback_entries.practice_question_id')
+            ->leftJoin('practice_sessions as sort_session', 'sort_session.id', '=', 'sort_question.practice_session_id')
             ->select('practice_feedback_entries.*')
             ->selectSub($this->entryPositionQuery($type), 'entry_position')
-            ->with(['practiceQuestion.practiceSession.topic'])
-            ->orderByDesc('sort_session.created_at')
-            ->orderByDesc('practice_feedback_entries.created_at')
-            ->orderByDesc('practice_feedback_entries.id')
+            ->with(['practiceQuestion.practiceSession.topic', 'notebook.topic'])
             ->get();
 
-        $items = match ($type) {
-            FeedbackType::GrammarNote => $this->notesFromEntries($entries, $keys),
-            FeedbackType::Mistake => $this->mistakesFromEntries($entries, $keys, $withAllAppearances),
-            default => $this->groupsFromEntries($type, $entries, $keys, $withAllAppearances),
-        };
+        /** @var array<string, list<PracticeFeedbackEntry>> $byKey */
+        $byKey = [];
+
+        foreach ($entries as $entry) {
+            $key = $this->entryKey($type, $entry);
+
+            if ($key !== null) {
+                $byKey[$key][] = $entry;
+            }
+        }
 
         $ordered = [];
 
         foreach ($keys as $key) {
+            if (! isset($byKey[$key])) {
+                continue;
+            }
+
+            $rows = collect($this->sortGroup($byKey[$key]));
+
+            $items = match ($type) {
+                FeedbackType::GrammarNote => $this->notesFromEntries($rows, [$key]),
+                FeedbackType::Mistake => $this->mistakesFromEntries($rows, [$key], $withAllAppearances),
+                default => $this->groupsFromEntries($type, $rows, [$key], $withAllAppearances),
+            };
+
             if (isset($items[$key])) {
                 $ordered[] = $items[$key];
             }
         }
 
         return $ordered;
+    }
+
+    /** The scoped identity one loaded row carries, for gathering it again. */
+    private function entryKey(FeedbackType $type, PracticeFeedbackEntry $entry): ?string
+    {
+        if ($type === FeedbackType::GrammarNote) {
+            return $this->noteKey($entry);
+        }
+
+        if ($type === FeedbackType::Mistake) {
+            $said = (string) $entry->content_text;
+            $correction = (string) $entry->correction_text;
+
+            return MistakeIdentity::isBlank($said, $correction)
+                ? null
+                : MistakeIdentity::pairKey($said, $correction);
+        }
+
+        $key = (string) ($entry->collection_key ?? '');
+
+        return $key === '' ? null : $key;
+    }
+
+    /**
+     * One item's rows in the order it shows them: a session item newest
+     * appearance first, a notebook item in the order the learner saved it.
+     *
+     * @param  list<PracticeFeedbackEntry>  $entries
+     * @return list<PracticeFeedbackEntry>
+     */
+    private function sortGroup(array $entries): array
+    {
+        $notebook = isset($entries[0]) && $entries[0]->notebook_id !== null;
+
+        usort($entries, function (PracticeFeedbackEntry $a, PracticeFeedbackEntry $b) use ($notebook): int {
+            if ($notebook) {
+                return [$a->position, $a->id] <=> [$b->position, $b->id];
+            }
+
+            $aMoment = $a->practiceQuestion?->practiceSession?->created_at?->getTimestamp() ?? 0;
+            $bMoment = $b->practiceQuestion?->practiceSession?->created_at?->getTimestamp() ?? 0;
+
+            return [$bMoment, $b->created_at?->getTimestamp() ?? 0, $b->id]
+                <=> [$aMoment, $a->created_at?->getTimestamp() ?? 0, $a->id];
+        });
+
+        return $entries;
     }
 
     /**
@@ -885,15 +1021,33 @@ final class TableCollection
     }
 
     /**
+     * Whether there is anything to gather from at all: a finished session, or
+     * a notebook holding at least one row with words in it.
+     */
+    public function hasSources(): bool
+    {
+        return $this->hasFinishedSessions()
+            || PracticeFeedbackEntry::query()
+                ->whereNotNull('notebook_id')
+                ->whereRaw("TRIM(content_text) <> ''")
+                ->exists();
+    }
+
+    /**
      * How many items one collection holds right now, worked out from the
      * same data the list would show: grouped items by their normalised
      * subject, so a word seen many times is counted once; grammar notes one
      * by one, because they are never merged.
      */
-    public function count(FeedbackType $type, bool $eligibleOnly = false): int
-    {
+    public function count(
+        FeedbackType $type,
+        ?CollectionFilters $filters = null,
+        bool $eligibleOnly = false,
+    ): int {
+        $filters ??= CollectionFilters::for($type)->scopeOnly();
+
         if ($type === FeedbackType::GrammarNote) {
-            $notes = $this->notesQuery(CollectionFilters::for($type));
+            $notes = $this->notesQuery($filters);
 
             if ($eligibleOnly) {
                 $notes->whereIn('e.id', $this->eligibleNoteIds($notes));
@@ -902,23 +1056,9 @@ final class TableCollection
             return (int) $notes->count();
         }
 
-        $query = DB::table('practice_feedback_entries as e')
-            ->join('practice_questions as q', 'q.id', '=', 'e.practice_question_id')
-            ->join('practice_sessions as s', 's.id', '=', 'q.practice_session_id')
-            ->where('e.type', $type->value)
-            ->where('s.status', PracticeSession::STATUS_FINISHED)
-            ->whereNull('s.archived_at');
-
-        $this->applyNonBlank($query, $type);
-
-        if ($eligibleOnly) {
-            $this->applyEligibleFilter($query, $type);
-        }
-
-        return (int) $query
-            ->whereNotNull('e.collection_key')
-            ->distinct()
-            ->count('e.collection_key');
+        return (int) DB::query()
+            ->fromSub($this->groupedQuery($type, $filters, $eligibleOnly), 'g')
+            ->count();
     }
 
     /**
@@ -926,93 +1066,21 @@ final class TableCollection
      * attention, by the same rule the list uses. Grammar notes never do, so
      * their count is always zero.
      */
-    public function attentionCount(FeedbackType $type): int
-    {
+    public function attentionCount(
+        FeedbackType $type,
+        ?CollectionFilters $filters = null,
+    ): int {
         if ($type === FeedbackType::GrammarNote) {
             return 0;
         }
 
-        return match ($type) {
-            FeedbackType::Vocabulary => $this->countGroupsNeedingAttention(
-                $type,
-                "MAX(CASE WHEN TRIM(e.correction_text) <> '' THEN 1 ELSE 0 END) = 0",
-            ),
-            FeedbackType::Phrase => $this->countGroupsNeedingAttention(
-                $type,
-                'MAX(CASE WHEN e.split_broke = 1 THEN 1 ELSE 0 END) = 1',
-            ),
-            FeedbackType::Mistake => $this->countMistakesNeedingAttention(),
-            default => 0,
-        };
-    }
-
-    /**
-     * Count the words or phrases that need attention, working out the same
-     * group-level rule the list uses but in one pass: a word with no meaning
-     * anywhere, or a phrase with a line that could not be split. Doing this
-     * after grouping keeps the count off the rows themselves.
-     *
-     * @param  literal-string  $having
-     */
-    private function countGroupsNeedingAttention(FeedbackType $type, string $having): int
-    {
-        $query = DB::table('practice_feedback_entries as e')
-            ->join('practice_questions as q', 'q.id', '=', 'e.practice_question_id')
-            ->join('practice_sessions as s', 's.id', '=', 'q.practice_session_id')
-            ->where('e.type', $type->value)
-            ->where('s.status', PracticeSession::STATUS_FINISHED)
-            ->whereNull('s.archived_at')
-            ->groupBy('e.collection_key')
-            ->havingRaw($having);
-
-        $this->applyNonBlank($query, $type);
-
-        return (int) DB::query()->fromSub($query, 'g')->count();
-    }
-
-    /**
-     * Count the mistakes whose newest appearance still needs attention. Each
-     * group is asked once, rather than every row asking about its whole
-     * history.
-     */
-    private function countMistakesNeedingAttention(): int
-    {
-        $query = DB::table('practice_feedback_entries as e')
-            ->join('practice_questions as q', 'q.id', '=', 'e.practice_question_id')
-            ->join('practice_sessions as s', 's.id', '=', 'q.practice_session_id')
-            ->where('e.type', FeedbackType::Mistake->value)
-            ->where('s.status', PracticeSession::STATUS_FINISHED)
-            ->whereNull('s.archived_at')
-            ->groupBy('e.collection_key')
-            ->select('e.collection_key')
-            ->selectSub($this->newestMistakeAttentionQuery(), 'newest_attention');
-
-        $this->applyNonBlank($query, FeedbackType::Mistake);
+        // One rule for the list and the count: gather the same groups with the
+        // "needs attention" choice on, inside the scope being looked at.
+        $filters = ($filters ?? CollectionFilters::for($type))->withOnlyNeedsAttention();
 
         return (int) DB::query()
-            ->fromSub($query, 'g')
-            ->whereNotNull('newest_attention')
+            ->fromSub($this->groupedQuery($type, $filters), 'g')
             ->count();
-    }
-
-    /**
-     * The attention reason of a mistake's newest appearance, used by the
-     * attention count. The list and the item shape still read the same rows.
-     */
-    private function newestMistakeAttentionQuery(): QueryBuilder
-    {
-        return DB::table('practice_feedback_entries as attention_entry')
-            ->select('attention_entry.attention_reason')
-            ->join('practice_questions as attention_question', 'attention_question.id', '=', 'attention_entry.practice_question_id')
-            ->join('practice_sessions as attention_session', 'attention_session.id', '=', 'attention_question.practice_session_id')
-            ->whereColumn('attention_entry.collection_key', 'e.collection_key')
-            ->where('attention_entry.type', FeedbackType::Mistake->value)
-            ->where('attention_session.status', PracticeSession::STATUS_FINISHED)
-            ->whereNull('attention_session.archived_at')
-            ->orderByDesc('attention_session.created_at')
-            ->orderByDesc('attention_entry.created_at')
-            ->orderByDesc('attention_entry.id')
-            ->limit(1);
     }
 
     /**
@@ -1022,41 +1090,90 @@ final class TableCollection
      *
      * @return list<array{id: int, name: string, count: int}>
      */
-    public function topicOptions(FeedbackType $type, bool $eligibleOnly = false): array
-    {
-        if ($eligibleOnly && $type === FeedbackType::GrammarNote) {
-            $eligible = $this->eligibleNoteIds(
-                $this->notesQuery(CollectionFilters::for($type)),
-            );
+    public function topicOptions(
+        FeedbackType $type,
+        ?CollectionFilters $filters = null,
+        bool $eligibleOnly = false,
+    ): array {
+        $filters = ($filters ?? CollectionFilters::for($type))->scopeOnly();
+
+        $eligible = $eligibleOnly && $type === FeedbackType::GrammarNote
+            ? $this->eligibleNoteIds($this->notesQuery($filters))
+            : null;
+
+        // A session row takes its topic from its session; a notebook row from
+        // its notebook. The two scopes never share an item, so the choice is
+        // never ambiguous.
+        $feed = $this->scopedEntries($type)
+            ->whereNotNull('e.collection_key')
+            ->select('e.id', 'e.collection_key')
+            ->selectRaw('COALESCE(s.topic_id, nb.topic_id) as topic_id');
+
+        $this->applyNonBlank($feed, $type);
+        $this->applySourceFilter($feed, $filters);
+
+        if ($eligible !== null) {
+            $feed->whereIn('e.id', $eligible);
+        } elseif ($eligibleOnly) {
+            $this->applyEligibleFilter($feed, $type);
         }
 
-        $query = DB::table('practice_feedback_entries as e')
-            ->join('practice_questions as q', 'q.id', '=', 'e.practice_question_id')
-            ->join('practice_sessions as s', 's.id', '=', 'q.practice_session_id')
-            ->join('topics as t', 't.id', '=', 's.topic_id')
-            ->where('e.type', $type->value)
-            ->where('s.status', PracticeSession::STATUS_FINISHED)
-            ->whereNull('s.archived_at')
-            ->whereNotNull('e.collection_key');
-
-        $this->applyNonBlank($query, $type);
-
-        if ($eligibleOnly) {
-            if ($type === FeedbackType::GrammarNote) {
-                $query->whereIn('e.id', $eligible ?? []);
-            } else {
-                $this->applyEligibleFilter($query, $type);
-            }
-        }
-
-        return array_values($query
+        return array_values(DB::query()
+            ->fromSub($feed, 'f')
+            ->join('topics as t', 't.id', '=', 'f.topic_id')
             ->select([
                 't.id',
                 't.name',
-                DB::raw('COUNT(DISTINCT e.collection_key) as count'),
+                DB::raw('COUNT(DISTINCT f.collection_key) as count'),
             ])
             ->groupBy('t.id', 't.name')
             ->orderBy('t.name')
+            ->get()
+            ->map(fn (object $row): array => [
+                'id' => (int) $row->id,
+                'name' => (string) $row->name,
+                'count' => (int) $row->count,
+            ])
+            ->all());
+    }
+
+    /**
+     * The notebooks that feed one collection, alphabetically, each with how
+     * many scoped items of that collection it holds. Duplicate rows are one
+     * item, the same way the list counts them.
+     *
+     * @return list<array{id: int, name: string, count: int}>
+     */
+    public function notebookOptions(FeedbackType $type, bool $eligibleOnly = false): array
+    {
+        $eligible = $eligibleOnly && $type === FeedbackType::GrammarNote
+            ? $this->eligibleNoteIds($this->notesQuery(CollectionFilters::for($type)))
+            : null;
+
+        $feed = DB::table('practice_feedback_entries as e')
+            ->join('notebooks as nb', 'nb.id', '=', 'e.notebook_id')
+            ->where('e.type', $type->value)
+            ->whereNotNull('e.collection_key')
+            ->select('e.id', 'e.collection_key', 'nb.id as notebook_id', 'nb.name');
+
+        $this->applyNonBlank($feed, $type);
+
+        if ($eligible !== null) {
+            $feed->whereIn('e.id', $eligible);
+        } elseif ($eligibleOnly) {
+            $this->applyEligibleFilter($feed, $type);
+        }
+
+        return array_values(DB::query()
+            ->fromSub($feed, 'f')
+            ->select([
+                'f.notebook_id as id',
+                'f.name',
+                DB::raw('COUNT(DISTINCT f.collection_key) as count'),
+            ])
+            ->groupBy('f.notebook_id', 'f.name')
+            ->orderBy('f.name')
+            ->orderBy('f.notebook_id')
             ->get()
             ->map(fn (object $row): array => [
                 'id' => (int) $row->id,
@@ -1071,13 +1188,15 @@ final class TableCollection
      *
      * @return array<string, int>
      */
-    public function counts(bool $eligibleOnly = false): array
-    {
+    public function counts(
+        ?CollectionFilters $filters = null,
+        bool $eligibleOnly = false,
+    ): array {
         return [
-            CollectionTab::Vocabulary->value => $this->count(FeedbackType::Vocabulary, $eligibleOnly),
-            CollectionTab::Phrases->value => $this->count(FeedbackType::Phrase, $eligibleOnly),
-            CollectionTab::Grammar->value => $this->count(FeedbackType::GrammarNote, $eligibleOnly),
-            CollectionTab::Mistakes->value => $this->count(FeedbackType::Mistake, $eligibleOnly),
+            CollectionTab::Vocabulary->value => $this->count(FeedbackType::Vocabulary, $filters, $eligibleOnly),
+            CollectionTab::Phrases->value => $this->count(FeedbackType::Phrase, $filters, $eligibleOnly),
+            CollectionTab::Grammar->value => $this->count(FeedbackType::GrammarNote, $filters, $eligibleOnly),
+            CollectionTab::Mistakes->value => $this->count(FeedbackType::Mistake, $filters, $eligibleOnly),
         ];
     }
 
@@ -1148,18 +1267,29 @@ final class TableCollection
          *     example: string,
          *     example_html: string,
          *     latest_at: CarbonImmutable,
+         *     session_id: int|null,
+         *     session_date: CarbonImmutable|null,
+         *     topic: string,
+         *     question_position: int|null,
+         *     source: 'session'|'notebook',
+         *     notebook: CollectionNotebook|null,
          *     seen_questions: array<int, true>,
          *     split_broke: bool,
+         *     rows: list<GroupRow>,
          *     appearances: list<GroupAppearance>
          * }> $groups
          */
         $groups = [];
 
         foreach ($entries as $entry) {
+            $isNotebook = $entry->notebook_id !== null;
             $question = $entry->practiceQuestion;
-            $session = $question->practiceSession;
+            $session = $question?->practiceSession;
+            $notebook = $entry->notebook;
             $subject = trim((string) $entry->content_text);
-            $key = SearchText::normalize($subject);
+            $key = $isNotebook
+                ? (string) $entry->collection_key
+                : SearchText::normalize($subject);
 
             if ($key === '' || ! isset($wanted[$key])) {
                 continue;
@@ -1168,6 +1298,11 @@ final class TableCollection
             $meaning = trim((string) $entry->correction_text);
             $example = trim(EntrySearch::exampleText($entry));
             $exampleHtml = null;
+            $moment = $isNotebook
+                ? ($entry->created_at !== null
+                    ? CarbonImmutable::instance($entry->created_at)
+                    : CarbonImmutable::now())
+                : ($session->created_at ?? CarbonImmutable::now());
 
             $groups[$key] ??= [
                 'key' => $key,
@@ -1175,15 +1310,36 @@ final class TableCollection
                 'meaning' => '',
                 'example' => '',
                 'example_html' => '',
-                'latest_at' => $session->created_at ?? CarbonImmutable::now(),
+                'latest_at' => $moment,
+                'session_id' => null,
+                'session_date' => null,
+                'topic' => $isNotebook ? (string) $notebook->topic->name : '',
+                'question_position' => null,
+                'source' => $isNotebook ? 'notebook' : 'session',
+                'notebook' => $isNotebook
+                    ? [
+                        'id' => (int) $notebook->id,
+                        'name' => (string) $notebook->name,
+                        'topic' => (string) $notebook->topic->name,
+                    ]
+                    : null,
                 'seen_questions' => [],
                 'split_broke' => false,
+                'rows' => [],
                 'appearances' => [],
             ];
 
             $group = $groups[$key];
 
-            $group['seen_questions'][$question->id] = true;
+            if ($moment->greaterThan($group['latest_at'])) {
+                $group['latest_at'] = $moment;
+            }
+
+            // A notebook item is not "seen" in a question; its date is when it
+            // was added, so it never claims an appearance count.
+            if (! $isNotebook) {
+                $group['seen_questions'][$question->id] = true;
+            }
 
             // The shared rule says why one row asks for attention; a phrase
             // whose line would not split is the case it names for phrases.
@@ -1192,8 +1348,8 @@ final class TableCollection
                 $group['split_broke'] = true;
             }
 
-            // Rows arrive newest first, so the first meaning and the first
-            // example are the most recent ones that hold anything.
+            // Rows arrive in saved order for a notebook and newest first for a
+            // session, so the first filling value is the one the item shows.
             if ($group['meaning'] === '' && $meaning !== '') {
                 $group['meaning'] = $meaning;
             }
@@ -1203,8 +1359,20 @@ final class TableCollection
                 $group['example_html'] = $exampleHtml = RichText::inlineExampleHtml($entry->example_html);
             }
 
-            if ($withAllAppearances || $group['appearances'] === []) {
-                $group['appearances'][] = [
+            if ($isNotebook) {
+                if ($withAllAppearances) {
+                    $group['rows'][] = [
+                        'entry_id' => is_string($entry->client_id) && $entry->client_id !== ''
+                            ? $entry->client_id
+                            : null,
+                        'entry_position' => (int) $entry->position,
+                        'meaning' => $meaning,
+                        'example' => $example,
+                        'example_html' => RichText::inlineExampleHtml($entry->example_html),
+                    ];
+                }
+            } elseif ($withAllAppearances || $group['appearances'] === []) {
+                $appearance = [
                     'session_id' => (int) $session->id,
                     'session_date' => $session->created_at,
                     'topic' => (string) $session->topic->name,
@@ -1217,6 +1385,17 @@ final class TableCollection
                     'example' => $example,
                     'example_html' => $exampleHtml ?? RichText::inlineExampleHtml($entry->example_html),
                 ];
+
+                // Entries arrive newest first, so the first appearance is the
+                // one the panel links back to.
+                if ($group['session_id'] === null) {
+                    $group['session_id'] = $appearance['session_id'];
+                    $group['session_date'] = $appearance['session_date'];
+                    $group['topic'] = $appearance['topic'];
+                    $group['question_position'] = $appearance['question_position'];
+                }
+
+                $group['appearances'][] = $appearance;
             }
 
             $groups[$key] = $group;
@@ -1232,8 +1411,17 @@ final class TableCollection
                 'example' => $group['example'],
                 'example_html' => $group['example_html'],
                 'latest_at' => $group['latest_at'],
-                'seen_count' => count($group['seen_questions']),
+                'seen_count' => $group['source'] === 'notebook'
+                    ? null
+                    : count($group['seen_questions']),
                 'attention' => $this->groupAttention($type, $group),
+                'session_id' => $group['session_id'],
+                'session_date' => $group['session_date'],
+                'topic' => $group['topic'],
+                'question_position' => $group['question_position'],
+                'source' => $group['source'],
+                'notebook' => $group['notebook'],
+                'rows' => $group['rows'],
                 'appearances' => $group['appearances'],
             ];
         }
@@ -1283,8 +1471,10 @@ final class TableCollection
         $items = [];
 
         foreach ($entries as $entry) {
+            $isNotebook = $entry->notebook_id !== null;
             $question = $entry->practiceQuestion;
-            $session = $question->practiceSession;
+            $session = $question?->practiceSession;
+            $notebook = $entry->notebook;
             $key = $this->noteKey($entry);
 
             if (! isset($wanted[$key])) {
@@ -1296,15 +1486,31 @@ final class TableCollection
                 'text' => (string) $entry->content_text,
                 'preview' => NotePreview::of((string) $entry->content_text),
                 'html' => RichText::clean((string) $entry->content_html),
-                'latest_at' => $session->created_at ?? CarbonImmutable::now(),
-                'session_id' => (int) $session->id,
-                'session_date' => $session->created_at,
-                'topic' => (string) $session->topic->name,
-                'question_position' => (int) $question->position,
+                'latest_at' => $isNotebook
+                    ? ($entry->created_at !== null
+                        ? CarbonImmutable::instance($entry->created_at)
+                        : CarbonImmutable::now())
+                    : ($session->created_at ?? CarbonImmutable::now()),
+                'session_id' => $isNotebook ? null : (int) $session->id,
+                'session_date' => $isNotebook ? null : $session->created_at,
+                'topic' => $isNotebook
+                    ? (string) $notebook->topic->name
+                    : (string) $session->topic->name,
+                'question_position' => $isNotebook ? null : (int) $question->position,
                 'entry_id' => is_string($entry->client_id) && $entry->client_id !== ''
                     ? $entry->client_id
                     : null,
-                'entry_position' => (int) $entry->getAttribute('entry_position'),
+                'entry_position' => $isNotebook
+                    ? (int) $entry->position
+                    : (int) $entry->getAttribute('entry_position'),
+                'source' => $isNotebook ? 'notebook' : 'session',
+                'notebook' => $isNotebook
+                    ? [
+                        'id' => (int) $notebook->id,
+                        'name' => (string) $notebook->name,
+                        'topic' => (string) $notebook->topic->name,
+                    ]
+                    : null,
             ];
         }
 
@@ -1477,6 +1683,9 @@ final class TableCollection
                 'seen_count' => $seen,
                 'worth_practicing' => $seen >= $count,
                 'attention' => $group['attention'],
+                'source' => 'session',
+                'notebook' => null,
+                'rows' => [],
                 'appearances' => $group['appearances'],
             ];
         }
@@ -1497,10 +1706,12 @@ final class TableCollection
     {
         return PracticeFeedbackEntry::query()
             ->where('type', $type->value)
-            ->whereHas(
-                'practiceQuestion.practiceSession',
-                fn (Builder $query): Builder => $query->study(),
-            )
+            ->where(fn (Builder $scope): Builder => $scope
+                ->whereNotNull('notebook_id')
+                ->orWhereHas(
+                    'practiceQuestion.practiceSession',
+                    fn (Builder $query): Builder => $query->study(),
+                ))
             ->when(
                 $type === FeedbackType::Mistake,
                 fn (Builder $query): Builder => $query->where(

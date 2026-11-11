@@ -25,6 +25,35 @@ export interface CollectionTopicOption {
     count: number;
 }
 
+/** One notebook that currently holds items of the collection on screen. */
+export interface CollectionNotebookOption {
+    id: number;
+    name: string;
+    /** How many scoped items of this collection the notebook holds. */
+    count: number;
+}
+
+/** The notebook an item was gathered from, named as its source. */
+export interface CollectionNotebookSource {
+    id: number;
+    name: string;
+    topic: string;
+}
+
+/** Which sources feed the list. */
+export type CollectionSource = 'all' | 'sessions' | 'notebooks';
+
+/** One saved row of a notebook item, in the learner's editor order. */
+export interface CollectionRowContent {
+    /** The row's id in the editor; null for entries saved before ids existed. */
+    entry_id: string | null;
+    entry_position: number;
+    meaning: string;
+    example: string;
+    /** The example's words, with only its safe bold and italic kept. */
+    example_html: string;
+}
+
 /** The orders a collection can be shown in. */
 export type CollectionSort = 'newest' | 'az' | 'most_seen';
 
@@ -42,6 +71,9 @@ export interface CollectionFilters {
     status: CollectionStatusFilter;
     attention: boolean;
     topics: number[];
+    source: CollectionSource;
+    /** The one notebook the list is narrowed to, when one is chosen. */
+    notebook: number | null;
     sort: CollectionSort;
 }
 
@@ -87,7 +119,7 @@ export interface CollectionRow {
     entry_position: number;
 }
 
-/** One word or phrase in a collection, gathered from every finished session. */
+/** One word or phrase in a collection, gathered from its source scope. */
 export interface CollectionItem {
     /** The normalised text, used in the address and to find the item again. */
     key: string;
@@ -96,13 +128,29 @@ export interface CollectionItem {
     example: string;
     /** The example's words, with only its safe bold and italic kept. */
     example_html: string;
-    latest_session_date: string | null;
-    /** How many different questions the word or phrase appeared in. */
-    seen_count: number;
+    /** The latest session date, or the moment a notebook row was added. */
+    latest_date: string;
+    /**
+     * How many different questions the word or phrase appeared in. Null for a
+     * notebook item, which has no appearances to count.
+     */
+    seen_count: number | null;
     /** True when one of its appearances asks for the learner's attention. */
     needs_attention: boolean;
     /** Why it asks for attention, in the wording shared with the app. */
     attention_reason: string | null;
+    /** The session the newest appearance came from; null for a notebook. */
+    session_id: number | null;
+    session_date: string | null;
+    /** The source's topic: the session's or the notebook's. */
+    topic: string;
+    question_position: number | null;
+    /** Which source the item was gathered from. */
+    source: CollectionSourceValue;
+    /** The notebook it belongs to, when it came from one. */
+    notebook: CollectionNotebookSource | null;
+    /** Every saved row of a notebook item, in the learner's editor order. */
+    rows: CollectionRowContent[];
     /** The learner's own marks on this word. */
     starred: boolean;
     status: CollectionItemStatusValue | null;
@@ -121,6 +169,9 @@ export interface CollectionItem {
     appearances: CollectionAppearance[];
 }
 
+/** Which source one item came from. */
+export type CollectionSourceValue = 'session' | 'notebook';
+
 /**
  * One grammar note, priced as its own item: identical notes stay separate
  * items, so each keeps the key of the row it was saved in.
@@ -132,13 +183,17 @@ export interface CollectionNoteItem {
     preview: string;
     /** The full note, reduced again on the server to its safe formatting. */
     html: string;
-    latest_session_date: string | null;
-    session_id: number;
+    /** The session date, or the moment a notebook row was added. */
+    latest_date: string;
+    session_id: number | null;
     session_date: string | null;
+    /** The source's topic: the session's or the notebook's. */
     topic: string;
-    question_position: number;
+    question_position: number | null;
     entry_id: string | null;
     entry_position: number;
+    source: CollectionSourceValue;
+    notebook: CollectionNotebookSource | null;
     /** The note's own marks; its identity is the note itself. */
     starred: boolean;
     status: CollectionItemStatusValue | null;
@@ -184,7 +239,7 @@ export interface CollectionMistakeItem {
     /** The correction's words, with only its safe bold and italic kept. */
     correction_html: string;
     reason: string;
-    latest_session_date: string | null;
+    latest_date: string;
     /** How many different questions the mistake was seen in. */
     seen_count: number;
     /** True once the mistake is worth practicing, by the shared threshold. */
@@ -193,6 +248,11 @@ export interface CollectionMistakeItem {
     needs_attention: boolean;
     /** Why it asks for attention, in the wording shared with the app. */
     attention_reason: string | null;
+    /** Mistakes only come from sessions, so this is always 'session'. */
+    source: CollectionSourceValue;
+    notebook: CollectionNotebookSource | null;
+    /** Notebook rows only; a mistake carries none. */
+    rows: CollectionRowContent[];
     /** The learner's own marks on this mistake. */
     starred: boolean;
     status: CollectionItemStatusValue | null;
@@ -226,10 +286,14 @@ export interface CollectionPage {
     attention_count?: number;
     /** The topics that currently feed this collection. */
     topic_options?: CollectionTopicOption[];
+    /** The notebooks that currently feed this collection, with their counts. */
+    notebook_options?: CollectionNotebookOption[];
     /** The filters the server actually honoured. */
     filters?: CollectionFilters;
     /** False when the learner has never finished a session. */
     has_finished_sessions: boolean;
+    /** False when neither a finished session nor a saved notebook row exists. */
+    has_sources?: boolean;
     /** The item whose panel should open, when the address names one. */
     open_item: CollectionOpenedItem | null;
     /** True when the address names an item that is no longer there. */
@@ -264,8 +328,10 @@ export interface CollectionItemsPage {
     all_total?: number;
     attention_count?: number;
     topic_options?: CollectionTopicOption[];
+    notebook_options?: CollectionNotebookOption[];
     filters?: CollectionFilters;
     has_finished_sessions?: boolean;
+    has_sources?: boolean;
     review_target?: CustomReviewSummary | null;
     review_context?: CollectionReviewContext | null;
 }

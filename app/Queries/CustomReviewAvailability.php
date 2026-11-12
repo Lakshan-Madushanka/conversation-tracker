@@ -94,15 +94,19 @@ final readonly class CustomReviewAvailability
             return [];
         }
 
+        // Notebook rows have no question and no session state to wait on, so
+        // they are joined loosely and count as study rows the moment they
+        // exist. A matching session row never rescues a deleted notebook one:
+        // the key itself is what is looked up.
         $rows = DB::table('practice_feedback_entries as e')
-            ->join('practice_questions as q', 'q.id', '=', 'e.practice_question_id')
-            ->join('practice_sessions as s', 's.id', '=', 'q.practice_session_id')
+            ->leftJoin('practice_questions as q', 'q.id', '=', 'e.practice_question_id')
+            ->leftJoin('practice_sessions as s', 's.id', '=', 'q.practice_session_id')
             ->where('e.type', $kind->value)
             ->whereIn('e.collection_key', $keys)
             ->groupBy('e.collection_key')
             ->select('e.collection_key')
             ->selectRaw(
-                'MAX(CASE WHEN s.status = ? AND s.archived_at IS NULL THEN 1 ELSE 0 END) AS study_rows',
+                'MAX(CASE WHEN e.notebook_id IS NOT NULL OR (s.status = ? AND s.archived_at IS NULL) THEN 1 ELSE 0 END) AS study_rows',
                 [PracticeSession::STATUS_FINISHED],
             )
             ->selectRaw('COUNT(*) AS all_rows')
@@ -141,17 +145,17 @@ final readonly class CustomReviewAvailability
         $states = [];
 
         $rows = DB::table('practice_feedback_entries as e')
-            ->join('practice_questions as q', 'q.id', '=', 'e.practice_question_id')
-            ->join('practice_sessions as s', 's.id', '=', 'q.practice_session_id')
+            ->leftJoin('practice_questions as q', 'q.id', '=', 'e.practice_question_id')
+            ->leftJoin('practice_sessions as s', 's.id', '=', 'q.practice_session_id')
             ->where('e.type', FeedbackType::GrammarNote->value)
             ->whereIn('e.id', $noteIds)
-            ->select(['e.id', 's.status', 's.archived_at'])
+            ->select(['e.id', 'e.notebook_id', 's.status', 's.archived_at'])
             ->get();
 
         foreach ($rows as $row) {
             $identity = CustomReviewIdentity::noteKey((int) $row->id);
             $states[$identity] = $this->state(
-                $this->isStudySession($row) ? 1 : 0,
+                $row->notebook_id !== null || $this->isStudySession($row) ? 1 : 0,
                 1,
             );
         }

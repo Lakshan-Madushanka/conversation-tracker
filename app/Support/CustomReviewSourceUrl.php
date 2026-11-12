@@ -23,6 +23,10 @@ final class CustomReviewSourceUrl
      */
     public static function of(array $source): string
     {
+        if ($source['source_kind'] === 'notebook') {
+            return self::notebook($source);
+        }
+
         $query = [
             'from' => 'review',
             'question' => (string) $source['question_position'],
@@ -40,6 +44,31 @@ final class CustomReviewSourceUrl
 
         return route('sessions.show', [
             'session' => $source['session_id'],
+            ...$query,
+        ]);
+    }
+
+    /**
+     * The notebook board opened at the saved row, using the same
+     * `field`/`type`/`entry`/`position` query the board already understands.
+     *
+     * @param  CustomReviewSource  $source
+     */
+    private static function notebook(array $source): string
+    {
+        $query = [
+            'from' => 'review',
+            'field' => 'entry',
+            'type' => (string) $source['type'],
+            'position' => (string) $source['entry_position'],
+        ];
+
+        if ($source['entry_id'] !== null) {
+            $query['entry'] = $source['entry_id'];
+        }
+
+        return route('notebooks.show', [
+            'notebook' => $source['notebook_id'],
             ...$query,
         ]);
     }

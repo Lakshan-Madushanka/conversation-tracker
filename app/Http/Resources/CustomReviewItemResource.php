@@ -41,7 +41,9 @@ final class CustomReviewItemResource extends JsonResource
      *     available: bool,
      *     eligible: bool,
      *     reason: string|null,
+     *     source_kind: 'session'|'notebook',
      *     topic: string,
+     *     notebook: array{id: int, name: string, topic: string}|null,
      *     session_date: string|null,
      *     href: string
      * }
@@ -61,7 +63,15 @@ final class CustomReviewItemResource extends JsonResource
             'available' => $item['available'],
             'eligible' => $item['eligible'],
             'reason' => $item['reason'],
+            'source_kind' => $item['source']['source_kind'],
             'topic' => $item['source']['topic'],
+            'notebook' => $item['source']['source_kind'] === 'notebook'
+                ? [
+                    'id' => (int) $item['source']['notebook_id'],
+                    'name' => (string) $item['source']['notebook_name'],
+                    'topic' => (string) $item['source']['topic'],
+                ]
+                : null,
             'session_date' => $item['source']['session_date']?->toIso8601String(),
             'href' => CustomReviewSourceUrl::of($item['source']),
         ];

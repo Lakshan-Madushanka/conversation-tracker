@@ -7,12 +7,15 @@ namespace App\Queries;
 use App\Enums\FeedbackType;
 use App\Models\CustomReview;
 use App\Models\CustomReviewItem;
+use App\Models\Notebook;
 use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeSession;
 use App\Support\BlankExercise;
 use App\Support\CustomReviewEligibility;
 use App\Support\CustomReviewIdentity;
 use App\Support\MistakeIdentity;
+use App\Support\NotebookIdentity;
+use App\Support\NotebookItemContent;
 use App\Support\NotePreview;
 use App\Support\RichText;
 use Carbon\CarbonImmutable;
@@ -37,10 +40,13 @@ use stdClass;
  * number of items.
  *
  * @phpstan-type CustomReviewSource array{
- *     session_id: int,
+ *     source_kind: 'session'|'notebook',
+ *     session_id: int|null,
+ *     notebook_id: int|null,
+ *     notebook_name: string|null,
  *     session_date: CarbonImmutable|null,
  *     topic: string,
- *     question_position: int,
+ *     question_position: int|null,
  *     entry_id: string|null,
  *     entry_position: int,
  *     field: 'question'|'entry',
@@ -237,8 +243,37 @@ final readonly class CustomReviewContents
      */
     private function feedbackItems(FeedbackType $kind, array $identities): array
     {
-        $wanted = array_fill_keys($identities, true);
         $available = $this->availability->available($kind, $identities);
+
+        $notebookIdentities = array_values(array_filter(
+            $identities,
+            NotebookIdentity::isWordKey(...),
+        ));
+        $sessionIdentities = array_values(array_diff($identities, $notebookIdentities));
+
+        $items = $sessionIdentities === []
+            ? []
+            : $this->sessionFeedbackItems($kind, $sessionIdentities, $available);
+
+        // A notebook item is read only from its own notebook. A matching
+        // session spelling is another item and is never consulted here.
+        foreach ($this->notebookFeedbackItems($kind, $notebookIdentities, $available) as $identity => $item) {
+            $items[$identity] = $item;
+        }
+
+        return $items;
+    }
+
+    /**
+     * The words and phrases of sessions, newest appearance first.
+     *
+     * @param  list<string>  $identities
+     * @param  array<string, true>  $available
+     * @return array<string, CustomReviewItemData>
+     */
+    private function sessionFeedbackItems(FeedbackType $kind, array $identities, array $available): array
+    {
+        $wanted = array_fill_keys($identities, true);
 
         // The identities are applied outside the positioned rows so the window
         // still numbers every entry in the box, as the reading page does, even
@@ -302,6 +337,69 @@ final readonly class CustomReviewContents
     }
 
     /**
+     * The words and phrases saved in notebooks, in the board's own order. The
+     * first row supplies the spelling, the first with a meaning or example
+     * supplies that, and any complete row makes the item usable — the same
+     * rule the candidate list and Collections read.
+     *
+     * @param  list<string>  $identities
+     * @param  array<string, true>  $available
+     * @return array<string, CustomReviewItemData>
+     */
+    private function notebookFeedbackItems(FeedbackType $kind, array $identities, array $available): array
+    {
+        if ($identities === []) {
+            return [];
+        }
+
+        $rows = PracticeFeedbackEntry::query()
+            ->whereNotNull('notebook_id')
+            ->where('type', $kind->value)
+            ->whereIn('collection_key', $identities)
+            ->with('notebook.topic')
+            ->orderBy('notebook_id')
+            ->orderBy('position')
+            ->orderBy('id')
+            ->get()
+            ->groupBy(fn (PracticeFeedbackEntry $entry): string => (string) $entry->collection_key);
+
+        /** @var array<string, CustomReviewItemData> $items */
+        $items = [];
+
+        foreach ($rows as $identity => $entryRows) {
+            $content = NotebookItemContent::of($kind, $entryRows->values()->all());
+            $first = $entryRows->first();
+
+            if (! $first instanceof PracticeFeedbackEntry) {
+                continue;
+            }
+
+            $isAvailable = isset($available[$identity]);
+            $reason = CustomReviewEligibility::reason(
+                $kind,
+                $isAvailable,
+                $content['usable'],
+                $content['split_broke'],
+            );
+
+            $items[$identity] = [
+                'id' => $kind->value.'|'.$identity,
+                'kind' => $kind->value,
+                'identity' => $identity,
+                'title' => $content['title'],
+                'correction' => '',
+                'correction_html' => '',
+                'available' => $isAvailable,
+                'eligible' => $reason === null,
+                'reason' => $reason,
+                'source' => $this->notebookSource($first, $kind),
+            ];
+        }
+
+        return $items;
+    }
+
+    /**
      * @param  list<string>  $identities
      * @return array<string, CustomReviewItemData>
      */
@@ -317,6 +415,50 @@ final readonly class CustomReviewContents
         }
 
         $available = $this->availability->available(FeedbackType::GrammarNote, $identities);
+
+        /** @var array<string, CustomReviewItemData> $items */
+        $items = [];
+
+        $notebookRows = PracticeFeedbackEntry::query()
+            ->whereIn('id', $noteIds)
+            ->where('type', FeedbackType::GrammarNote)
+            ->whereNotNull('notebook_id')
+            ->with('notebook.topic')
+            ->get();
+
+        $notebookIds = array_map(
+            fn (PracticeFeedbackEntry $entry): int => (int) $entry->id,
+            $notebookRows->all(),
+        );
+
+        foreach ($notebookRows as $row) {
+            $identity = CustomReviewIdentity::noteKey((int) $row->id);
+            $isAvailable = isset($available[$identity]);
+            $reason = CustomReviewEligibility::reason(
+                FeedbackType::GrammarNote,
+                $isAvailable,
+                BlankExercise::build($row) !== null,
+            );
+
+            $items[$identity] = [
+                'id' => FeedbackType::GrammarNote->value.'|'.$identity,
+                'kind' => FeedbackType::GrammarNote->value,
+                'identity' => $identity,
+                'title' => NotePreview::of((string) $row->content_text),
+                'correction' => '',
+                'correction_html' => '',
+                'available' => $isAvailable,
+                'eligible' => $reason === null,
+                'reason' => $reason,
+                'source' => $this->notebookSource($row, FeedbackType::GrammarNote),
+            ];
+        }
+
+        $sessionIds = array_values(array_diff($noteIds, $notebookIds));
+
+        if ($sessionIds === []) {
+            return $items;
+        }
 
         $rows = DB::query()
             ->fromSub(
@@ -335,11 +477,8 @@ final readonly class CustomReviewContents
                     ->selectRaw($this->entryPositionExpression()),
                 'rows',
             )
-            ->whereIn('rows.id', $noteIds)
+            ->whereIn('rows.id', $sessionIds)
             ->get();
-
-        /** @var array<string, CustomReviewItemData> $items */
-        $items = [];
 
         foreach ($rows as $row) {
             $identity = CustomReviewIdentity::noteKey((int) $row->id);
@@ -605,7 +744,10 @@ final readonly class CustomReviewContents
             : null;
 
         return [
+            'source_kind' => 'session',
             'session_id' => (int) $row->session_id,
+            'notebook_id' => null,
+            'notebook_name' => null,
             'session_date' => $row->session_date === null
                 ? null
                 : CarbonImmutable::parse((string) $row->session_date),
@@ -615,6 +757,35 @@ final readonly class CustomReviewContents
             'entry_position' => $field === 'entry' ? (int) ($row->entry_position ?? 0) : 0,
             'field' => $field,
             'type' => $field === 'entry' ? $kind->value : null,
+        ];
+    }
+
+    /**
+     * Where a notebook item came from: its notebook's own name and topic. No
+     * session date or question number is invented for it.
+     *
+     * @return CustomReviewSource
+     */
+    private function notebookSource(PracticeFeedbackEntry $row, FeedbackType $kind): array
+    {
+        $notebook = $row->notebook;
+        $notebookName = $notebook instanceof Notebook ? (string) $notebook->name : '';
+        $topic = $notebook instanceof Notebook ? (string) $notebook->topic->name : '';
+
+        return [
+            'source_kind' => 'notebook',
+            'session_id' => null,
+            'notebook_id' => (int) $row->notebook_id,
+            'notebook_name' => $notebookName,
+            'session_date' => null,
+            'topic' => $topic,
+            'question_position' => null,
+            'entry_id' => is_string($row->client_id) && $row->client_id !== ''
+                ? $row->client_id
+                : null,
+            'entry_position' => (int) $row->position,
+            'field' => 'entry',
+            'type' => $kind->value,
         ];
     }
 

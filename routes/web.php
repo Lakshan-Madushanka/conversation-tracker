@@ -147,6 +147,14 @@ Route::get('/notebooks/{notebook}', [NotebooksController::class, 'show'])
 Route::put('/notebooks/{notebook}/autosave', [NotebooksController::class, 'autosaveUpdate'])
     ->whereNumber('notebook')
     ->name('notebooks.autosave.update');
+// Create review and practise. The candidate list is read-only; the creation
+// revalidates it, marks only its new review Finished, and starts the attempt.
+Route::get('/notebooks/{notebook}/review-candidates', [NotebooksController::class, 'reviewCandidates'])
+    ->whereNumber('notebook')
+    ->name('notebooks.reviewCandidates');
+Route::post('/notebooks/{notebook}/review', [NotebooksController::class, 'storeReview'])
+    ->whereNumber('notebook')
+    ->name('notebooks.review.store');
 
 // Review and re-practice. The sitting is named in the exercise page's address,
 // so a refresh returns to the next item not yet rated and a finished review

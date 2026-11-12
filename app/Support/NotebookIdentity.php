@@ -29,4 +29,14 @@ final class NotebookIdentity
 
         return 'Notebook-'.substr(sha1($pair), 0, 24);
     }
+
+    /**
+     * Whether an identity is one of these keys rather than a session word.
+     * Normalising text would lower-case the key, so every caller that reduces
+     * an identity must ask this first.
+     */
+    public static function isWordKey(string $identity): bool
+    {
+        return preg_match('/^Notebook-[0-9a-f]{24}$/', $identity) === 1;
+    }
 }

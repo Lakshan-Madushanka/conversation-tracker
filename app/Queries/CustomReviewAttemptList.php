@@ -44,7 +44,7 @@ use Carbon\CarbonImmutable;
  *     snapshot_text: string,
  *     topic: string,
  *     session_date: CarbonImmutable|null,
- *     source_session_id: int,
+ *     source_session_id: int|null,
  *     source_url: string
  * }
  * @phpstan-type PendingAttemptItem array{
@@ -55,7 +55,7 @@ use Carbon\CarbonImmutable;
  *     snapshot_text: string,
  *     topic: string,
  *     session_date: CarbonImmutable|null,
- *     source_session_id: int,
+ *     source_session_id: int|null,
  *     source_url: string
  * }
  */
@@ -139,7 +139,11 @@ final readonly class CustomReviewAttemptList
                 'exercise' => $entry['exercise'],
                 'card' => $card,
                 'snapshot_text' => $this->snapshotText($entry['exercise'], $card),
-                'topic' => $source['topic'],
+                // A notebook names itself rather than inventing a session
+                // date or question number.
+                'topic' => $source['source_kind'] === 'notebook'
+                    ? (string) $source['notebook_name']
+                    : $source['topic'],
                 'session_date' => $source['session_date'],
                 'source_session_id' => $source['session_id'],
                 'source_url' => CustomReviewSourceUrl::of($source),

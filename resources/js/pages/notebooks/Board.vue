@@ -3,6 +3,7 @@ import { onBeforeUnmount, onMounted, ref } from 'vue';
 import { Head, Link } from '@inertiajs/vue3';
 import { ArrowLeftIcon, RefreshCwIcon, TriangleAlertIcon } from '@lucide/vue';
 import FeedbackBox from '@/components/FeedbackBox.vue';
+import NotebookReviewDialog from '@/components/NotebookReviewDialog.vue';
 import RichTextEditor from '@/components/RichTextEditor.vue';
 import SaveIndicator from '@/components/SaveIndicator.vue';
 import TopicField from '@/components/TopicField.vue';
@@ -45,6 +46,7 @@ const {
     loadLatest,
     keepMine,
     flush,
+    saveNow,
 } = useAutoSave<NotebookSnapshot, NotebookData>({
     snapshot: () => ({
         name: name.value,
@@ -153,6 +155,42 @@ onMounted(revealTargetFromAddress);
 function errorFor(key: string): string | undefined {
     return errors.value[key];
 }
+
+/** The review dialog is only opened once the board is confirmed saved. */
+const reviewOpen = ref(false);
+const reviewPreparing = ref(false);
+const reviewNotice = ref('');
+
+/**
+ * Practising reads the notebook's saved items, so pending edits are saved
+ * first. A save that cannot be confirmed blocks the shortcut rather than
+ * starting from content the server has not seen.
+ */
+async function prepareReview(): Promise<void> {
+    if (reviewPreparing.value) {
+        return;
+    }
+
+    reviewPreparing.value = true;
+    reviewNotice.value = '';
+
+    try {
+        const saved = await saveNow();
+
+        if (!saved) {
+            reviewNotice.value =
+                status.value === 'needs_topic'
+                    ? 'Give this notebook a topic before practising.'
+                    : 'Your latest changes are not saved yet. Retry saving before practising.';
+
+            return;
+        }
+
+        reviewOpen.value = true;
+    } finally {
+        reviewPreparing.value = false;
+    }
+}
 </script>
 
 <template>
@@ -252,6 +290,40 @@ function errorFor(key: string): string | undefined {
         </div>
 
         <div class="space-y-4">
+            <div class="rounded-lg border bg-muted/30 px-3 py-3">
+                <div
+                    class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+                >
+                    <div>
+                        <p class="text-sm font-medium">
+                            Practise this notebook
+                        </p>
+                        <p class="text-xs text-muted-foreground">
+                            Saves a new review from these items and starts it.
+                        </p>
+                    </div>
+                    <Button
+                        type="button"
+                        class="min-h-11 md:min-h-9"
+                        :disabled="
+                            reviewPreparing ||
+                            status === 'deleted' ||
+                            status === 'archived'
+                        "
+                        @click="prepareReview"
+                    >
+                        Create review and practise
+                    </Button>
+                </div>
+                <p
+                    v-if="reviewNotice"
+                    role="alert"
+                    class="mt-2 text-sm text-destructive"
+                >
+                    {{ reviewNotice }}
+                </p>
+            </div>
+
             <div>
                 <label for="nb-name" class="mb-1 block text-sm font-medium">
                     Name
@@ -317,5 +389,11 @@ function errorFor(key: string): string | undefined {
                 :error="errorFor('feedback.grammar_note')"
             />
         </div>
+
+        <NotebookReviewDialog
+            v-model:open="reviewOpen"
+            :notebook-id="props.notebook.id"
+            :notebook-name="props.notebook.name"
+        />
     </div>
 </template>

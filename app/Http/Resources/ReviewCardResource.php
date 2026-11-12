@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Resources;
 
 use App\Enums\FeedbackType;
+use App\Models\Notebook;
 use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeSession;
 use App\Support\EntrySearch;
@@ -46,6 +47,7 @@ final class ReviewCardResource extends JsonResource
      *     correction_html?: string,
      *     reason?: string|null,
      *     more_reasons?: list<string>,
+     *     source_kind: 'session'|'notebook',
      *     session_url: string|null
      * }
      */
@@ -55,6 +57,7 @@ final class ReviewCardResource extends JsonResource
         $entry = $this->resource;
 
         $session = $entry->practiceQuestion?->practiceSession;
+        $notebook = $entry->notebook_id === null ? null : $entry->notebook;
 
         if ($entry->type === FeedbackType::Mistake) {
             return $this->mistake($entry, $session === null ? null : $this->sessionUrl($entry, $session));
@@ -68,9 +71,10 @@ final class ReviewCardResource extends JsonResource
             'front' => (string) $entry->content_text,
             'meaning' => (string) $entry->correction_text,
             'example' => EntrySearch::exampleText($entry),
-            'session_url' => $session === null
-                ? null
-                : route('sessions.show', $session),
+            'source_kind' => $notebook instanceof Notebook ? 'notebook' : 'session',
+            'session_url' => $notebook instanceof Notebook
+                ? $this->notebookUrl($entry, $notebook)
+                : ($session === null ? null : route('sessions.show', $session)),
         ];
     }
 
@@ -84,6 +88,7 @@ final class ReviewCardResource extends JsonResource
      *     correction_html: string,
      *     reason: string|null,
      *     more_reasons: list<string>,
+     *     source_kind: 'session'|'notebook',
      *     session_url: string|null
      * }
      */
@@ -108,8 +113,26 @@ final class ReviewCardResource extends JsonResource
             'correction_html' => $correction,
             'reason' => $this->reasons[0] ?? null,
             'more_reasons' => array_slice($this->reasons, 1),
+            'source_kind' => 'session',
             'session_url' => $sessionUrl,
         ];
+    }
+
+    /** The notebook board opened at this saved row. */
+    private function notebookUrl(PracticeFeedbackEntry $entry, Notebook $notebook): string
+    {
+        $query = [
+            'from' => 'review',
+            'field' => 'entry',
+            'type' => $entry->type->value,
+            'position' => (string) $entry->position,
+        ];
+
+        if ($entry->client_id !== null && $entry->client_id !== '') {
+            $query['entry'] = $entry->client_id;
+        }
+
+        return route('notebooks.show', ['notebook' => $notebook->id, ...$query]);
     }
 
     /**

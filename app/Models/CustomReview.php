@@ -29,6 +29,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $description
  * @property list<string>|null $allowed_kinds
  * @property string|null $search_text
+ * @property string|null $creation_key
  * @property CustomReviewStatus $status
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at

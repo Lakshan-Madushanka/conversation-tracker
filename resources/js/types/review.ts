@@ -39,6 +39,8 @@ export interface FlashcardCard {
     front: string;
     meaning: string;
     example: string | null;
+    /** Whether the words come from a finished session or a notebook. */
+    source_kind: 'session' | 'notebook';
     session_url: string | null;
 }
 
@@ -52,6 +54,7 @@ export interface MistakeCard {
     correction_html: string;
     reason: string | null;
     more_reasons: string[];
+    source_kind: 'session' | 'notebook';
     session_url: string | null;
 }
 
@@ -65,6 +68,7 @@ export interface SayItAgainCard {
     question_text: string;
     natural_html: string;
     natural_text: string;
+    source_kind: 'session' | 'notebook';
     session_url: string | null;
 }
 
@@ -79,6 +83,7 @@ export interface FillInTheBlankCard {
     answer_text: string;
     hint: string | null;
     hint_label: string | null;
+    source_kind: 'session' | 'notebook';
     session_url: string | null;
 }
 

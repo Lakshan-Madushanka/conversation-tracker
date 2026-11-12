@@ -74,6 +74,12 @@ const moreNotesOpen = ref(false);
 
 const hasAttempt = computed(() => props.attempt.trim() !== '');
 const canRate = computed(() => props.checked && props.rating === null);
+/** A notebook card opens the notebook, not a session that happens to match. */
+const sourceLabel = computed(() =>
+    props.card.source_kind === 'notebook'
+        ? 'Open notebook'
+        : 'Open original session',
+);
 
 watch(
     [canRate, () => props.processing],
@@ -365,7 +371,7 @@ onBeforeUnmount(() => {
                     rel="noopener noreferrer"
                     class="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-primary hover:underline focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
                 >
-                    Open original session
+                    {{ sourceLabel }}
                     <ExternalLinkIcon class="size-3.5" aria-hidden="true" />
                     <span class="sr-only">(opens in a new tab)</span>
                 </a>

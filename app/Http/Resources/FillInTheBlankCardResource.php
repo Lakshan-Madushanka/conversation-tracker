@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Resources;
 
+use App\Models\Notebook;
 use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeSession;
 use Illuminate\Http\Request;
@@ -45,6 +46,7 @@ final class FillInTheBlankCardResource extends JsonResource
      *     answer_text: string,
      *     hint: string|null,
      *     hint_label: string|null,
+     *     source_kind: 'session'|'notebook',
      *     session_url: string|null
      * }
      */
@@ -54,6 +56,7 @@ final class FillInTheBlankCardResource extends JsonResource
         $entry = $this->resource;
 
         $session = $entry->practiceQuestion?->practiceSession;
+        $notebook = $entry->notebook_id === null ? null : $entry->notebook;
 
         return [
             'kind' => $entry->type->value,
@@ -65,10 +68,28 @@ final class FillInTheBlankCardResource extends JsonResource
             'answer_text' => $this->blank['answer_text'],
             'hint' => $this->blank['hint'],
             'hint_label' => $this->blank['hint_label'],
-            'session_url' => $session instanceof PracticeSession
-                ? $this->sessionUrl($entry, $session)
-                : null,
+            'source_kind' => $notebook instanceof Notebook ? 'notebook' : 'session',
+            'session_url' => $notebook instanceof Notebook
+                ? $this->notebookUrl($entry, $notebook)
+                : ($session instanceof PracticeSession ? $this->sessionUrl($entry, $session) : null),
         ];
+    }
+
+    /** The notebook board opened at this saved row. */
+    private function notebookUrl(PracticeFeedbackEntry $entry, Notebook $notebook): string
+    {
+        $query = [
+            'from' => 'review',
+            'field' => 'entry',
+            'type' => $entry->type->value,
+            'position' => (string) $entry->position,
+        ];
+
+        if ($entry->client_id !== null && $entry->client_id !== '') {
+            $query['entry'] = $entry->client_id;
+        }
+
+        return route('notebooks.show', ['notebook' => $notebook->id, ...$query]);
     }
 
     /**

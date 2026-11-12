@@ -8,10 +8,15 @@ use App\Enums\FeedbackType;
 use App\Http\Resources\FillInTheBlankCardResource;
 use App\Http\Resources\QuestionCardResource;
 use App\Http\Resources\ReviewCardResource;
+use App\Models\Notebook;
 use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeQuestion;
 use App\Models\PracticeSession;
 use App\Support\BlankExercise;
+use App\Support\CustomReviewIdentity;
+use App\Support\EntrySearch;
+use App\Support\NotebookIdentity;
+use App\Support\NotebookItemContent;
 use App\Support\ReviewFilters;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
@@ -132,19 +137,53 @@ final class ReviewCandidates
             return [];
         }
 
+        /** @var array<string, FeedbackType> $notebookWords */
+        $notebookWords = [];
+        /** @var list<int> $noteIds */
+        $noteIds = [];
+
+        foreach ($items as $item) {
+            if (
+                in_array($item['kind'], [FeedbackType::Vocabulary, FeedbackType::Phrase], true)
+                && NotebookIdentity::isWordKey($item['identity'])
+            ) {
+                $notebookWords[$item['identity']] = $item['kind'];
+
+                continue;
+            }
+
+            if ($item['kind'] === FeedbackType::GrammarNote) {
+                $noteId = CustomReviewIdentity::noteId($item['identity']);
+
+                if ($noteId !== null) {
+                    $noteIds[] = $noteId;
+                }
+            }
+        }
+
+        /** @var array<string, array{entry: PracticeFeedbackEntry, reasons: list<string>}> $cards */
+        $cards = $this->notebookWordCards($notebookWords);
+        $notebookNoteIds = $this->notebookNoteCards($noteIds, $cards);
+
+        $sessionItems = array_values(array_filter(
+            $items,
+            fn (array $item): bool => (! in_array($item['kind'], [FeedbackType::Vocabulary, FeedbackType::Phrase], true) || ! NotebookIdentity::isWordKey($item['identity'])) && ($item['kind'] !== FeedbackType::GrammarNote || ! in_array(CustomReviewIdentity::noteId($item['identity']), $notebookNoteIds, true)),
+        ));
+
+        if ($sessionItems === []) {
+            return $cards;
+        }
+
         $entries = $this->entriesBase(self::blankTypes())
             ->with('practiceQuestion.practiceSession.topic')
-            ->where(function (EloquentBuilder $query) use ($items): void {
-                foreach ($items as $item) {
+            ->where(function (EloquentBuilder $query) use ($sessionItems): void {
+                foreach ($sessionItems as $item) {
                     $query->orWhere(fn (EloquentBuilder $pair): EloquentBuilder => $pair
                         ->where('practice_feedback_entries.type', $item['kind']->value)
                         ->where('practice_feedback_entries.collection_key', $item['identity']));
                 }
             })
             ->get();
-
-        /** @var array<string, array{entry: PracticeFeedbackEntry, reasons: list<string>}> $cards */
-        $cards = [];
 
         foreach ($entries as $entry) {
             $key = $this->key($entry->type, (string) $entry->collection_key);
@@ -159,6 +198,103 @@ final class ReviewCandidates
         }
 
         return $cards;
+    }
+
+    /**
+     * The current notebook row behind each scoped word or phrase, shaped as
+     * the item the shared resolution rule reads: the first saved spelling,
+     * the first meaning, the first example, and the row that supplied each.
+     *
+     * @param  array<string, FeedbackType>  $identities  keyed by identity
+     * @return array<string, array{entry: PracticeFeedbackEntry, reasons: list<string>}>
+     */
+    private function notebookWordCards(array $identities): array
+    {
+        if ($identities === []) {
+            return [];
+        }
+
+        $rows = PracticeFeedbackEntry::query()
+            ->whereNotNull('notebook_id')
+            ->whereIn('type', [FeedbackType::Vocabulary->value, FeedbackType::Phrase->value])
+            ->whereIn('collection_key', array_keys($identities))
+            ->with('notebook.topic')
+            ->orderBy('notebook_id')
+            ->orderBy('position')
+            ->orderBy('id')
+            ->get()
+            ->groupBy(fn (PracticeFeedbackEntry $entry): string => (string) $entry->collection_key);
+
+        $cards = [];
+
+        foreach ($rows as $identity => $entryRows) {
+            $kind = $identities[$identity] ?? null;
+            $first = $entryRows->first();
+
+            if ($kind === null || ! $first instanceof PracticeFeedbackEntry) {
+                continue;
+            }
+
+            $content = NotebookItemContent::of($kind, $entryRows->values()->all());
+            $exampleRow = $entryRows->first(
+                fn (PracticeFeedbackEntry $entry): bool => trim(EntrySearch::exampleText($entry)) !== '',
+            );
+            $exampleHtml = $exampleRow instanceof PracticeFeedbackEntry
+                ? $exampleRow->example_html
+                : [];
+
+            $entry = new PracticeFeedbackEntry;
+            $entry->forceFill([
+                'notebook_id' => $first->notebook_id,
+                'type' => $kind,
+                'position' => $first->position,
+                'client_id' => $first->client_id,
+                'content_text' => $content['title'],
+                'correction_text' => $content['meaning'],
+                'example' => $content['example'],
+                'example_html' => $exampleHtml,
+                'collection_key' => $identity,
+            ]);
+            $entry->setRelation('notebook', $first->notebook);
+
+            $cards[$this->key($kind, $identity)] = ['entry' => $entry, 'reasons' => []];
+        }
+
+        return $cards;
+    }
+
+    /**
+     * The notebook-backed grammar notes among these identities, which keep
+     * their own saved row as the card's content.
+     *
+     * @param  list<int>  $noteIds
+     * @param  array<string, array{entry: PracticeFeedbackEntry, reasons: list<string>}>  $cards
+     * @return list<int> the note ids that belong to a notebook
+     */
+    private function notebookNoteCards(array $noteIds, array &$cards): array
+    {
+        if ($noteIds === []) {
+            return [];
+        }
+
+        $rows = PracticeFeedbackEntry::query()
+            ->whereIn('id', $noteIds)
+            ->where('type', FeedbackType::GrammarNote)
+            ->whereNotNull('notebook_id')
+            ->with('notebook.topic')
+            ->get();
+
+        $found = [];
+
+        foreach ($rows as $row) {
+            $found[] = (int) $row->id;
+            $cards[$this->key(FeedbackType::GrammarNote, CustomReviewIdentity::noteKey((int) $row->id))] = [
+                'entry' => $row,
+                'reasons' => [],
+            ];
+        }
+
+        return $found;
     }
 
     /**
@@ -181,7 +317,10 @@ final class ReviewCandidates
             }
 
             $entry = $card['entry'];
-            $topic = (string) ($entry->practiceQuestion?->practiceSession?->topic->name ?? '');
+            $notebook = $entry->notebook;
+            $topic = $notebook instanceof Notebook
+                ? (string) $notebook->name
+                : (string) ($entry->practiceQuestion?->practiceSession?->topic->name ?? '');
             $blank = BlankExercise::build($entry, $topic, $card['reasons'][0] ?? null);
 
             // An item edited into something that cannot hold a blank is

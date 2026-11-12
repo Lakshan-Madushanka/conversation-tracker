@@ -31,6 +31,12 @@ final class CustomReviewIdentity
     {
         $identity = trim($identity);
 
+        // A notebook's key is already exact and opaque; normalising it as
+        // text would lower-case the prefix and store an item nothing matches.
+        if (NotebookIdentity::isWordKey($identity)) {
+            return $identity;
+        }
+
         return match ($kind) {
             FeedbackType::Vocabulary, FeedbackType::Phrase => SearchText::normalize($identity),
             default => $identity,

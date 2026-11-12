@@ -581,9 +581,18 @@ function checkboxId(item: CustomReviewItemData): string {
 }
 
 function sourceLabel(item: CustomReviewItemData): string {
+    if (item.source_kind === 'notebook' && item.notebook !== null) {
+        return `Notebook · ${item.notebook.name}`;
+    }
+
     const date = item.session_date === null ? '' : shortDate(item.session_date);
 
     return [item.topic, date].filter((piece) => piece !== '').join(' · ');
+}
+
+/** A notebook item opens its notebook; a session item opens its session. */
+function seeOriginalLabel(item: CustomReviewItemData): string {
+    return item.source_kind === 'notebook' ? 'Open notebook' : 'See original';
 }
 
 function groupByKind(
@@ -1395,7 +1404,7 @@ onBeforeUnmount(() => {
                                                 <ArrowUpRightIcon
                                                     aria-hidden="true"
                                                 />
-                                                See original
+                                                {{ seeOriginalLabel(item) }}
                                                 <span class="sr-only">
                                                     for the
                                                     {{ unitFor(item.kind) }}

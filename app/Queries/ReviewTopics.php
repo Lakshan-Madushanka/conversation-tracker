@@ -12,10 +12,10 @@ use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Facades\DB;
 
 /**
- * The topics a custom review can be restricted to: only the topics of finished,
- * non-archived sessions that still hold reviewable items, each with how many it
- * holds, alphabetically. A topic the learner no longer uses simply is not
- * offered, so the list can never go stale.
+ * The topics a custom review can be restricted to: only the shared topics of
+ * finished, non-archived sessions and saved notebooks that still hold
+ * reviewable items, each with how many it holds, alphabetically. A topic the
+ * learner no longer uses simply is not offered, so the list can never go stale.
  *
  * The counts come from the same shared candidate queries the composer reads,
  * narrowed by the other choices already on the page (collections, starred only,
@@ -113,7 +113,11 @@ final readonly class ReviewTopics
                 ->where('marks.status', CollectionItemStatus::Learned->value));
         }
 
-        return $query->select(['sessions.topic_id as topic_id', 'entries.type as type', 'entries.collection_key as identity'])
+        return $query->select([
+            DB::raw('COALESCE(sessions.topic_id, notebooks.topic_id) as topic_id'),
+            'entries.type as type',
+            'entries.collection_key as identity',
+        ])
             ->distinct();
     }
 

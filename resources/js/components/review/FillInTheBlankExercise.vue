@@ -262,17 +262,24 @@ onBeforeUnmount(() => {
                     </p>
                 </section>
 
-                <a
-                    v-if="props.card.session_url"
-                    :href="props.card.session_url"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-primary hover:underline focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
-                >
-                    {{ sourceLabel }}
-                    <ExternalLinkIcon class="size-3.5" aria-hidden="true" />
-                    <span class="sr-only">(opens in a new tab)</span>
-                </a>
+                <div v-if="props.card.session_url" class="space-y-1">
+                    <p
+                        v-if="props.card.source_label"
+                        class="text-xs font-medium text-muted-foreground"
+                    >
+                        From {{ props.card.source_label }}
+                    </p>
+                    <a
+                        :href="props.card.session_url"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-primary hover:underline focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+                    >
+                        {{ sourceLabel }}
+                        <ExternalLinkIcon class="size-3.5" aria-hidden="true" />
+                        <span class="sr-only">(opens in a new tab)</span>
+                    </a>
+                </div>
             </div>
         </CardContent>
 

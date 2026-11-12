@@ -47,6 +47,7 @@ final class FillInTheBlankCardResource extends JsonResource
      *     hint: string|null,
      *     hint_label: string|null,
      *     source_kind: 'session'|'notebook',
+     *     source_label: string|null,
      *     session_url: string|null
      * }
      */
@@ -69,10 +70,21 @@ final class FillInTheBlankCardResource extends JsonResource
             'hint' => $this->blank['hint'],
             'hint_label' => $this->blank['hint_label'],
             'source_kind' => $notebook instanceof Notebook ? 'notebook' : 'session',
+            'source_label' => $notebook instanceof Notebook
+                ? $this->notebookLabel($notebook)
+                : null,
             'session_url' => $notebook instanceof Notebook
                 ? $this->notebookUrl($entry, $notebook)
                 : ($session instanceof PracticeSession ? $this->sessionUrl($entry, $session) : null),
         ];
+    }
+
+    /** The notebook whose entry this card came from, with its shared topic. */
+    private function notebookLabel(Notebook $notebook): string
+    {
+        $topic = (string) $notebook->topic->name;
+
+        return $topic === '' ? $notebook->name : $notebook->name.' · '.$topic;
     }
 
     /** The notebook board opened at this saved row. */

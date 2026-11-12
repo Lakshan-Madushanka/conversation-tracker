@@ -18,6 +18,7 @@ use App\Support\EntrySearch;
 use App\Support\NotebookIdentity;
 use App\Support\NotebookItemContent;
 use App\Support\ReviewFilters;
+use Closure;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Facades\DB;
@@ -26,12 +27,13 @@ use Illuminate\Support\Facades\DB;
  * The items a review can be built from: the words and phrases that carry a
  * meaning (or use), the mistakes that carry a correction, the questions that
  * carry a more natural version, and the grammar notes that can make a blank,
- * from finished sessions that are not archived.
+ * from finished sessions that are not archived or from saved notebook entries.
  *
  * An item is the same identity Collections groups by, so two sessions that
- * mention the same word — or the same mistake pair — make one item. The text
- * is deliberately not copied: `cardsFor()` reads the current entries straight
- * from the session, so an edit is shown and a removed item is skipped.
+ * mention the same word — or the same mistake pair — make one item, while a
+ * notebook word keeps its own scoped identity. The text is deliberately not
+ * copied: `cardsFor()` reads the current entries straight from their source,
+ * so an edit is shown and a removed item is skipped.
  *
  * A mistake's exercise text comes from its most recent appearance (latest
  * session, ties by latest entry). Its reason comes from the most recent
@@ -128,10 +130,13 @@ final class ReviewCandidates
      * review, plus every distinct reason its mistake appearances carry.
      *
      * @param  array<int, array{kind: FeedbackType, identity: string}>  $items
+     * @param  bool  $withSource  read the topic behind each entry too, for the
+     *                            payloads that name it; an eligibility check
+     *                            only needs the entry itself
      * @return array<string, array{entry: PracticeFeedbackEntry, reasons: list<string>}>
      *                                                                                   keyed by kind and identity
      */
-    public function cardsFor(array $items): array
+    public function cardsFor(array $items, bool $withSource = true): array
     {
         if ($items === []) {
             return [];
@@ -162,8 +167,8 @@ final class ReviewCandidates
         }
 
         /** @var array<string, array{entry: PracticeFeedbackEntry, reasons: list<string>}> $cards */
-        $cards = $this->notebookWordCards($notebookWords);
-        $notebookNoteIds = $this->notebookNoteCards($noteIds, $cards);
+        $cards = $this->notebookWordCards($notebookWords, $withSource);
+        $notebookNoteIds = $this->notebookNoteCards($noteIds, $cards, $withSource);
 
         $sessionItems = array_values(array_filter(
             $items,
@@ -174,15 +179,20 @@ final class ReviewCandidates
             return $cards;
         }
 
+        // The identities are already scoped by kind, so one `where in` read
+        // finds every wanted row without growing the query tree per item.
+        $identities = array_values(array_unique(array_map(
+            fn (array $item): string => $item['identity'],
+            $sessionItems,
+        )));
+
         $entries = $this->entriesBase(self::blankTypes())
-            ->with('practiceQuestion.practiceSession.topic')
-            ->where(function (EloquentBuilder $query) use ($sessionItems): void {
-                foreach ($sessionItems as $item) {
-                    $query->orWhere(fn (EloquentBuilder $pair): EloquentBuilder => $pair
-                        ->where('practice_feedback_entries.type', $item['kind']->value)
-                        ->where('practice_feedback_entries.collection_key', $item['identity']));
-                }
-            })
+            ->when(
+                $withSource,
+                fn (EloquentBuilder $query): EloquentBuilder => $query
+                    ->with('practiceQuestion.practiceSession.topic'),
+            )
+            ->whereIn('practice_feedback_entries.collection_key', $identities)
             ->get();
 
         foreach ($entries as $entry) {
@@ -208,7 +218,7 @@ final class ReviewCandidates
      * @param  array<string, FeedbackType>  $identities  keyed by identity
      * @return array<string, array{entry: PracticeFeedbackEntry, reasons: list<string>}>
      */
-    private function notebookWordCards(array $identities): array
+    private function notebookWordCards(array $identities, bool $withSource): array
     {
         if ($identities === []) {
             return [];
@@ -218,7 +228,7 @@ final class ReviewCandidates
             ->whereNotNull('notebook_id')
             ->whereIn('type', [FeedbackType::Vocabulary->value, FeedbackType::Phrase->value])
             ->whereIn('collection_key', array_keys($identities))
-            ->with('notebook.topic')
+            ->when($withSource, fn (EloquentBuilder $query): EloquentBuilder => $query->with('notebook.topic'))
             ->orderBy('notebook_id')
             ->orderBy('position')
             ->orderBy('id')
@@ -255,7 +265,9 @@ final class ReviewCandidates
                 'example_html' => $exampleHtml,
                 'collection_key' => $identity,
             ]);
-            $entry->setRelation('notebook', $first->notebook);
+            if ($withSource) {
+                $entry->setRelation('notebook', $first->notebook);
+            }
 
             $cards[$this->key($kind, $identity)] = ['entry' => $entry, 'reasons' => []];
         }
@@ -271,7 +283,7 @@ final class ReviewCandidates
      * @param  array<string, array{entry: PracticeFeedbackEntry, reasons: list<string>}>  $cards
      * @return list<int> the note ids that belong to a notebook
      */
-    private function notebookNoteCards(array $noteIds, array &$cards): array
+    private function notebookNoteCards(array $noteIds, array &$cards, bool $withSource): array
     {
         if ($noteIds === []) {
             return [];
@@ -281,7 +293,7 @@ final class ReviewCandidates
             ->whereIn('id', $noteIds)
             ->where('type', FeedbackType::GrammarNote)
             ->whereNotNull('notebook_id')
-            ->with('notebook.topic')
+            ->when($withSource, fn (EloquentBuilder $query): EloquentBuilder => $query->with('notebook.topic'))
             ->get();
 
         $found = [];
@@ -319,7 +331,7 @@ final class ReviewCandidates
             $entry = $card['entry'];
             $notebook = $entry->notebook;
             $topic = $notebook instanceof Notebook
-                ? (string) $notebook->name
+                ? (string) $notebook->topic->name
                 : (string) ($entry->practiceQuestion?->practiceSession?->topic->name ?? '');
             $blank = BlankExercise::build($entry, $topic, $card['reasons'][0] ?? null);
 
@@ -404,9 +416,9 @@ final class ReviewCandidates
 
     /**
      * The candidate keys that can build a blank right now, keyed by kind and
-     * identity. Each item is tested through its current appearance — the same
-     * newest-entry rule cardsFor() uses — in one bulk read for the whole
-     * suggestion.
+     * identity. Each item is tested through the very card the exercise will
+     * show — the current notebook resolution or the newest session
+     * appearance — in one bulk read for the whole suggestion.
      *
      * @param  array<int, array{kind: FeedbackType, identity: string}>  $items
      * @return array<string, true>
@@ -414,38 +426,31 @@ final class ReviewCandidates
     public function blankableKeys(array $items): array
     {
         $wanted = [];
+        $pairs = [];
 
         foreach ($items as $item) {
             if (! in_array($item['kind'], self::blankTypes(), true)) {
                 continue;
             }
 
-            $wanted[$this->key($item['kind'], $item['identity'])] = true;
+            $key = $this->key($item['kind'], $item['identity']);
+
+            if (isset($wanted[$key])) {
+                continue;
+            }
+
+            $wanted[$key] = true;
+            $pairs[] = ['kind' => $item['kind'], 'identity' => $item['identity']];
         }
 
-        if ($wanted === []) {
+        if ($pairs === []) {
             return [];
         }
 
         $blankable = [];
-        $seen = [];
 
-        foreach ($this->entriesBase(self::blankTypes())->get() as $entry) {
-            $key = $this->key($entry->type, (string) $entry->collection_key);
-
-            // Only the newest appearance decides, so an older row that still
-            // holds a usable example cannot bring a removed one back.
-            if (isset($seen[$key])) {
-                continue;
-            }
-
-            $seen[$key] = true;
-
-            if (! isset($wanted[$key])) {
-                continue;
-            }
-
-            if (BlankExercise::build($entry) !== null) {
+        foreach ($this->cardsFor($pairs, false) as $key => $card) {
+            if (isset($wanted[$key]) && BlankExercise::build($card['entry']) !== null) {
                 $blankable[$key] = true;
             }
         }
@@ -456,7 +461,8 @@ final class ReviewCandidates
     /**
      * How many visible grammar notes cannot make a blank yet, for the friendly
      * tip on Review Home. Two notes with identical text count separately, and
-     * a note with neither a bold part nor a quoted example counts.
+     * a note with neither a bold part nor a quoted example counts. Notes from
+     * finished sessions and from notebooks are counted by the same rule.
      */
     public function unusableGrammarNotesCount(): int
     {
@@ -468,12 +474,15 @@ final class ReviewCandidates
                 'practice_feedback_entries.content_html',
                 'practice_feedback_entries.content_text',
             ])
-            ->join('practice_questions as questions', 'questions.id', '=', 'practice_feedback_entries.practice_question_id')
-            ->join('practice_sessions as sessions', 'sessions.id', '=', 'questions.practice_session_id')
             ->where('practice_feedback_entries.type', FeedbackType::GrammarNote->value)
-            ->where('sessions.status', PracticeSession::STATUS_FINISHED)
-            ->whereNull('sessions.archived_at')
             ->whereRaw("TRIM(practice_feedback_entries.content_text) <> ''")
+            ->where(function (EloquentBuilder $scope): void {
+                $scope->whereNotNull('practice_feedback_entries.notebook_id')
+                    ->orWhereHas(
+                        'practiceQuestion.practiceSession',
+                        fn (EloquentBuilder $query): EloquentBuilder => $query->study(),
+                    );
+            })
             ->get();
 
         $unusable = 0;
@@ -521,28 +530,33 @@ final class ReviewCandidates
     }
 
     /**
-     * The shared starting point: finished, non-archived sessions and entries
-     * that can actually be practiced. A word or phrase needs its meaning; a
-     * mistake needs both the sentence the learner said and its correction.
+     * The shared starting point: finished, non-archived sessions and saved
+     * notebook entries, of the kinds that can actually be practiced. A word or
+     * phrase needs its meaning; a mistake needs both the sentence the learner
+     * said and its correction.
      *
      * The learner's choices narrow the same query: their topics and, when they
-     * picked collections, the kinds those collections hold.
+     * picked collections, the kinds those collections hold. A notebook item
+     * matches its notebook's shared topic.
      */
     public function base(ReviewFilters $filters): QueryBuilder
     {
         $types = $filters->types();
 
         return DB::table('practice_feedback_entries as entries')
-            ->join('practice_questions as questions', 'questions.id', '=', 'entries.practice_question_id')
-            ->join('practice_sessions as sessions', 'sessions.id', '=', 'questions.practice_session_id')
-            ->whereNull('sessions.archived_at')
-            ->where('sessions.status', PracticeSession::STATUS_FINISHED)
+            ->leftJoin('practice_questions as questions', 'questions.id', '=', 'entries.practice_question_id')
+            ->leftJoin('practice_sessions as sessions', 'sessions.id', '=', 'questions.practice_session_id')
+            ->leftJoin('notebooks as notebooks', 'notebooks.id', '=', 'entries.notebook_id')
+            ->where($this->liveScope())
             ->when($types !== null, fn (QueryBuilder $query): QueryBuilder => $query->whereIn(
                 'entries.type',
                 array_map(fn (FeedbackType $type): string => $type->value, $types),
             ))
             ->when($filters->topicFilter() !== null, fn (QueryBuilder $query): QueryBuilder => $query
-                ->whereIn('sessions.topic_id', $filters->topicFilter()))
+                ->whereIn(
+                    DB::raw('COALESCE(sessions.topic_id, notebooks.topic_id)'),
+                    $filters->topicFilter(),
+                ))
             ->where(function (QueryBuilder $reviewable): void {
                 $reviewable
                     ->where(function (QueryBuilder $words): void {
@@ -593,22 +607,40 @@ final class ReviewCandidates
 
     /**
      * The starting point for fill-in-the-blank's grammar notes: a note with
-     * words, from a finished session that is not archived. A note's identity is
-     * its own row id, so two notes with identical text stay two items and an
-     * edit never moves a rating.
+     * words, from a finished non-archived session or from a notebook. A note's
+     * identity is its own row id, so two notes with identical text stay two
+     * items and an edit never moves a rating.
      */
     public function grammarNotesBase(ReviewFilters $filters): QueryBuilder
     {
         return DB::table('practice_feedback_entries as entries')
-            ->join('practice_questions as questions', 'questions.id', '=', 'entries.practice_question_id')
-            ->join('practice_sessions as sessions', 'sessions.id', '=', 'questions.practice_session_id')
-            ->whereNull('sessions.archived_at')
-            ->where('sessions.status', PracticeSession::STATUS_FINISHED)
+            ->leftJoin('practice_questions as questions', 'questions.id', '=', 'entries.practice_question_id')
+            ->leftJoin('practice_sessions as sessions', 'sessions.id', '=', 'questions.practice_session_id')
+            ->leftJoin('notebooks as notebooks', 'notebooks.id', '=', 'entries.notebook_id')
+            ->where($this->liveScope())
             ->when($filters->topicFilter() !== null, fn (QueryBuilder $query): QueryBuilder => $query
-                ->whereIn('sessions.topic_id', $filters->topicFilter()))
+                ->whereIn(
+                    DB::raw('COALESCE(sessions.topic_id, notebooks.topic_id)'),
+                    $filters->topicFilter(),
+                ))
             ->where('entries.type', FeedbackType::GrammarNote->value)
             ->whereNotNull('entries.collection_key')
             ->where('entries.collection_key', '!=', '')
             ->whereRaw("TRIM(entries.content_text) <> ''");
+    }
+
+    /**
+     * A row counts when it lives in a notebook, or in a session the learner
+     * finished and has not archived.
+     */
+    private function liveScope(): Closure
+    {
+        return function (QueryBuilder $scope): void {
+            $scope->whereNotNull('entries.notebook_id')
+                ->orWhere(function (QueryBuilder $live): void {
+                    $live->where('sessions.status', PracticeSession::STATUS_FINISHED)
+                        ->whereNull('sessions.archived_at');
+                });
+        };
     }
 }

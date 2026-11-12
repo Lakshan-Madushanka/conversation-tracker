@@ -70,6 +70,8 @@ function item(position: number): CustomReviewItemData {
         eligible: true,
         reason: null,
         topic: 'Ordering coffee',
+        source_kind: 'session',
+        notebook: null,
         session_date: '2026-10-12T09:00:00.000000Z',
         href: '/sessions/7',
     };

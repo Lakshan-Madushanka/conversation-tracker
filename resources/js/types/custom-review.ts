@@ -44,6 +44,10 @@ export interface CustomReviewItemData {
     /** Why it cannot be used yet, in the review's own words. */
     reason: string | null;
     topic: string;
+    /** Whether the words come from a finished session or a notebook. */
+    source_kind: 'session' | 'notebook';
+    /** The notebook the words were saved in, when they came from one. */
+    notebook: { id: number; name: string; topic: string } | null;
     session_date: string | null;
     /** The reading page address that opens the item in a new tab. */
     href: string;
@@ -289,3 +293,85 @@ export interface RemoveReviewResult {
     removed_identities: string[];
     total: number;
 }
+
+/** Every kind a notebook can offer a review. */
+export type NotebookReviewKind = 'vocabulary' | 'phrase' | 'grammar_note';
+
+/** One item Create review and practise can offer, as the server reads it. */
+export interface NotebookReviewCandidateData {
+    kind: NotebookReviewKind;
+    identity: string;
+    title: string;
+    meaning: string;
+    example: string;
+    eligible: boolean;
+    /** Why it cannot be practised yet, in the review's own words. */
+    reason: string | null;
+}
+
+/** What one notebook currently offers a new review. */
+export interface NotebookReviewCandidatesData {
+    candidates: NotebookReviewCandidateData[];
+    count: number;
+    eligible_count: number;
+    /** The size the warning is written around. */
+    recommended: number;
+    /** The most a review can hold. */
+    maximum: number;
+}
+
+/** What Create review and practise came to, in the server's own words. */
+export type NotebookReviewAnswer =
+    | {
+          outcome: 'created';
+          review_id: number;
+          review_url: string;
+          attempt_url: string;
+          count: number;
+          maximum: number;
+          message: null;
+      }
+    | {
+          /** The review was saved; its first attempt could not start. */
+          outcome: 'created_start_failed';
+          review_id: number;
+          review_url: string;
+          attempt_url: null;
+          count: number;
+          maximum: number;
+          message: string;
+      }
+    | {
+          /** More items than the maximum: the learner must choose. */
+          outcome: 'needs_selection';
+          review_id: null;
+          review_url: null;
+          attempt_url: null;
+          count: number;
+          maximum: number;
+          message: null;
+      }
+    | {
+          /** Past the recommended size: the learner must agree. */
+          outcome: 'needs_confirmation';
+          review_id: null;
+          review_url: null;
+          attempt_url: null;
+          count: number;
+          maximum: number;
+          message: null;
+      }
+    | {
+          /** Nothing was written, and the server said why. */
+          outcome:
+              | 'too_many_selected'
+              | 'no_candidates'
+              | 'no_eligible'
+              | 'stale_selection';
+          review_id: null;
+          review_url: null;
+          attempt_url: null;
+          count: number;
+          maximum: number;
+          message: string;
+      };

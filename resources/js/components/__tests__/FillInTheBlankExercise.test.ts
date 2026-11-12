@@ -20,6 +20,7 @@ function card(overrides: Partial<FillInTheBlankCard> = {}): FillInTheBlankCard {
         answer_text: 'walk',
         hint: null,
         hint_label: null,
+        source_kind: 'session',
         session_url: '/sessions/7?question=2&field=entry',
         ...overrides,
     };

@@ -18,6 +18,7 @@ function card(overrides: Partial<SayItAgainCard> = {}): SayItAgainCard {
         question_text: 'Why did he leave early?',
         natural_html: '<p>What made him leave so early?</p>',
         natural_text: 'What made him leave so early?',
+        source_kind: 'session',
         session_url: '/sessions/7?question=2&field=question',
         ...overrides,
     };

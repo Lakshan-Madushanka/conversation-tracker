@@ -2,9 +2,11 @@
 import { computed } from 'vue';
 import { Link, useForm } from '@inertiajs/vue3';
 import {
+    BookOpenIcon,
     CheckCheckIcon,
     GraduationCapIcon,
     PlayIcon,
+    SlidersHorizontalIcon,
     SquarePenIcon,
 } from '@lucide/vue';
 import { Badge } from '@/components/ui/badge';
@@ -17,7 +19,8 @@ import {
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
-import { store as reviewStore } from '@/routes/review';
+import { custom as customReview, store as reviewStore } from '@/routes/review';
+import { index as notebooksIndex } from '@/routes/notebooks';
 import { create as sessionsCreate } from '@/routes/sessions';
 import type { TodayReviewData } from '@/types';
 
@@ -134,7 +137,7 @@ function reviewABitMore(): void {
         <CardContent v-else>
             <p class="text-sm text-muted-foreground">
                 Nothing more needs review right now. Come back tomorrow, or save
-                a new session.
+                a new session or notebook entry.
             </p>
         </CardContent>
     </Card>
@@ -156,11 +159,24 @@ function reviewABitMore(): void {
                 <h2>Nothing needs review right now</h2>
             </CardTitle>
             <CardDescription>
-                Come back tomorrow, or save a new session.
+                Come back tomorrow, pick your own short review, or save
+                something worth practising.
             </CardDescription>
         </CardHeader>
 
-        <CardFooter>
+        <CardFooter class="flex flex-wrap gap-2">
+            <Button size="lg" variant="outline" as-child class="h-11">
+                <Link :href="customReview.url()">
+                    <SlidersHorizontalIcon aria-hidden="true" />
+                    Custom review
+                </Link>
+            </Button>
+            <Button size="lg" variant="outline" as-child class="h-11">
+                <Link :href="notebooksIndex.url()">
+                    <BookOpenIcon aria-hidden="true" />
+                    Open notebooks
+                </Link>
+            </Button>
             <Button size="lg" variant="outline" as-child class="h-11">
                 <Link :href="sessionsCreate.url()">
                     <SquarePenIcon aria-hidden="true" />
@@ -181,19 +197,25 @@ function reviewABitMore(): void {
             </span>
 
             <CardTitle class="text-xl font-semibold">
-                <h2>Review fills up after your first session</h2>
+                <h2>Review fills up after your first session or notebook</h2>
             </CardTitle>
             <CardDescription>
-                Finish a practice session and the words, phrases and mistakes
-                you save will show up here as exercises.
+                Finish a practice session, or save words, phrases and grammar
+                notes in a notebook, and they will show up here as exercises.
             </CardDescription>
         </CardHeader>
 
-        <CardFooter>
+        <CardFooter class="flex flex-wrap gap-2">
             <Button size="lg" as-child class="h-11">
                 <Link :href="sessionsCreate.url()">
                     <SquarePenIcon aria-hidden="true" />
                     Start a session
+                </Link>
+            </Button>
+            <Button size="lg" variant="outline" as-child class="h-11">
+                <Link :href="notebooksIndex.url()">
+                    <BookOpenIcon aria-hidden="true" />
+                    Open notebooks
                 </Link>
             </Button>
         </CardFooter>

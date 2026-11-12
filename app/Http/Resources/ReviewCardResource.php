@@ -48,6 +48,7 @@ final class ReviewCardResource extends JsonResource
      *     reason?: string|null,
      *     more_reasons?: list<string>,
      *     source_kind: 'session'|'notebook',
+     *     source_label?: string|null,
      *     session_url: string|null
      * }
      */
@@ -72,6 +73,9 @@ final class ReviewCardResource extends JsonResource
             'meaning' => (string) $entry->correction_text,
             'example' => EntrySearch::exampleText($entry),
             'source_kind' => $notebook instanceof Notebook ? 'notebook' : 'session',
+            'source_label' => $notebook instanceof Notebook
+                ? $this->notebookLabel($notebook)
+                : null,
             'session_url' => $notebook instanceof Notebook
                 ? $this->notebookUrl($entry, $notebook)
                 : ($session === null ? null : route('sessions.show', $session)),
@@ -116,6 +120,14 @@ final class ReviewCardResource extends JsonResource
             'source_kind' => 'session',
             'session_url' => $sessionUrl,
         ];
+    }
+
+    /** The notebook whose entry this card came from, with its shared topic. */
+    private function notebookLabel(Notebook $notebook): string
+    {
+        $topic = (string) $notebook->topic->name;
+
+        return $topic === '' ? $notebook->name : $notebook->name.' · '.$topic;
     }
 
     /** The notebook board opened at this saved row. */

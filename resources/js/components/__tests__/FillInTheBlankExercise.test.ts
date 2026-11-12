@@ -21,6 +21,7 @@ function card(overrides: Partial<FillInTheBlankCard> = {}): FillInTheBlankCard {
         hint: null,
         hint_label: null,
         source_kind: 'session',
+        source_label: null,
         session_url: '/sessions/7?question=2&field=entry',
         ...overrides,
     };
@@ -215,6 +216,27 @@ describe('rating and the original session', () => {
         expect(link.attributes('target')).toBe('_blank');
         expect(link.attributes('rel')).toContain('noopener');
         expect(link.text()).toContain('(opens in a new tab)');
+
+        wrapper.unmount();
+    });
+
+    it('names the notebook and its topic for a notebook card', async () => {
+        const wrapper = mountExercise({
+            card: card({
+                source_kind: 'notebook',
+                source_label: 'Tense notes · Grammar',
+                session_url: '/notebooks/4?entry=abc',
+            }),
+        });
+
+        await checkButton(wrapper)!.trigger('click');
+
+        expect(wrapper.text()).toContain('From Tense notes · Grammar');
+
+        const link = wrapper.get('a');
+
+        expect(link.text()).toContain('Open notebook');
+        expect(link.attributes('href')).toBe('/notebooks/4?entry=abc');
 
         wrapper.unmount();
     });

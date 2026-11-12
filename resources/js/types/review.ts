@@ -41,6 +41,8 @@ export interface FlashcardCard {
     example: string | null;
     /** Whether the words come from a finished session or a notebook. */
     source_kind: 'session' | 'notebook';
+    /** The notebook and its shared topic, or null for a session source. */
+    source_label: string | null;
     session_url: string | null;
 }
 
@@ -84,6 +86,8 @@ export interface FillInTheBlankCard {
     hint: string | null;
     hint_label: string | null;
     source_kind: 'session' | 'notebook';
+    /** The notebook and its shared topic, or null for a session source. */
+    source_label: string | null;
     session_url: string | null;
 }
 

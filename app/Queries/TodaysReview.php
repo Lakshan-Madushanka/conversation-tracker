@@ -8,6 +8,7 @@ use App\Enums\CollectionItemStatus;
 use App\Enums\FeedbackType;
 use App\Enums\ReviewRating;
 use App\Models\CollectionItemMark;
+use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeSession;
 use App\Models\Rating;
 use App\Models\Review;
@@ -26,10 +27,11 @@ use Illuminate\Http\Request;
  * Choosing today's items, in one place on the server.
  *
  * Candidates are reviewable words, phrases, mistakes and questions from
- * finished, non-archived sessions that are either due again (by the item's
- * schedule) or never reviewed. Learned items are left out unless they are due
- * again; a never-reviewed Learned item is never suggested. A question has no
- * star or status, so it takes part through its schedule alone.
+ * finished, non-archived sessions, plus the words, phrases and grammar notes
+ * saved in notebooks, that are either due again (by the item's schedule) or
+ * never reviewed. Learned items are left out unless they are due again; a
+ * never-reviewed Learned item is never suggested. A question has no star or
+ * status, so it takes part through its schedule alone.
  *
  * The sitting is split between the built exercise kinds by the target shares
  * in `ReviewSettings`, renormalised over the kinds that actually have
@@ -485,7 +487,12 @@ final readonly class TodaysReview
      */
     public function card(?Request $request = null): array
     {
-        if (! PracticeSession::query()->study()->exists()) {
+        // The starting nudge is about having saved nothing at all: a notebook
+        // entry needs no finish step, so its learner reviews from day one.
+        $nothingSaved = ! PracticeSession::query()->study()->exists()
+            && ! PracticeFeedbackEntry::query()->whereNotNull('notebook_id')->exists();
+
+        if ($nothingSaved) {
             return ['state' => 'empty', 'count' => null, 'minutes' => null, 'mix' => null, 'canReviewMore' => null];
         }
 

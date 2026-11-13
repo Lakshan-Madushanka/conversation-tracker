@@ -40,3 +40,41 @@ export interface NotebookSnapshot {
     description: string;
     feedback: NotebookFeedback;
 }
+
+/** Saved entries per kind, and the distinct study items they add up to. */
+export interface NotebookDeletionCounts {
+    words: number;
+    phrases: number;
+    grammar_notes: number;
+}
+
+/** A saved custom review that loses items when the notebook goes. */
+export interface NotebookDeletionReview {
+    id: number;
+    name: string;
+    removed: number;
+    remaining: number;
+    becomes_empty: boolean;
+}
+
+export interface NotebookDeletionPreview {
+    notebook: {
+        id: number;
+        name: string;
+        topic: string;
+    };
+    counts: NotebookDeletionCounts;
+    items: NotebookDeletionCounts;
+    reviews: NotebookDeletionReview[];
+    token: string;
+}
+
+export interface NotebookDeletionResult {
+    deleted: true;
+    already_deleted: boolean;
+    notebook: {
+        id: number;
+        name: string;
+    };
+    counts: NotebookDeletionCounts;
+}

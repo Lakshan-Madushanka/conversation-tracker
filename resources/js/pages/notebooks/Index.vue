@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
-import { BookOpenIcon, PlusIcon } from '@lucide/vue';
+import { BookOpenIcon, PlusIcon, Trash2Icon } from '@lucide/vue';
 import LibrarySearch from '@/components/LibrarySearch.vue';
+import NotebookDeleteDialog from '@/components/NotebookDeleteDialog.vue';
 import PageHeader from '@/components/PageHeader.vue';
 import TopicField from '@/components/TopicField.vue';
 import { Button } from '@/components/ui/button';
@@ -39,6 +40,27 @@ const cards = ref<NotebookCardData[]>([...props.notebooks]);
 const hasMore = ref(props.has_more);
 const nextCursor = ref(props.next_cursor);
 const loadingMore = ref(false);
+const visibleTotal = ref(props.total);
+
+const deletingCard = ref<NotebookCardData | null>(null);
+const deleteOpen = ref(false);
+
+/** The card and its count leave together once the server says it is gone. */
+function removeCard(notebookId: number): void {
+    cards.value = cards.value.filter((card) => card.id !== notebookId);
+    visibleTotal.value = Math.max(0, visibleTotal.value - 1);
+    deleteOpen.value = false;
+    deletingCard.value = null;
+}
+
+function removeDeleted(notebook: { id: number }): void {
+    removeCard(notebook.id);
+}
+
+function askDelete(card: NotebookCardData): void {
+    deletingCard.value = card;
+    deleteOpen.value = true;
+}
 
 const searching = ref(false);
 const searchTerm = ref(props.search);
@@ -165,8 +187,9 @@ function formatDate(iso: string | null): string {
             />
         </div>
 
-        <p v-if="total > 0" class="mb-3 text-sm text-muted-foreground">
-            {{ total }} {{ total === 1 ? 'notebook' : 'notebooks' }}
+        <p v-if="visibleTotal > 0" class="mb-3 text-sm text-muted-foreground">
+            {{ visibleTotal }}
+            {{ visibleTotal === 1 ? 'notebook' : 'notebooks' }}
         </p>
 
         <!-- Empty state -->
@@ -205,10 +228,10 @@ function formatDate(iso: string | null): string {
 
         <!-- Card list -->
         <ul v-else class="space-y-3" role="list">
-            <li v-for="card in cards" :key="card.id">
+            <li v-for="card in cards" :key="card.id" class="relative">
                 <Link
                     :href="notebooksShow.url(card.id)"
-                    class="block rounded-lg border border-border bg-card px-4 py-3 transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                    class="block rounded-lg border border-border bg-card px-4 py-3 pr-14 transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 >
                     <div class="flex items-start justify-between gap-2">
                         <h2 class="leading-snug font-medium">
@@ -233,6 +256,18 @@ function formatDate(iso: string | null): string {
                         <span>{{ card.counts.grammar_notes }} notes</span>
                     </div>
                 </Link>
+
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    class="absolute top-2 right-2 min-h-11 text-muted-foreground hover:text-destructive md:min-h-9"
+                    @click="askDelete(card)"
+                >
+                    <Trash2Icon aria-hidden="true" />
+                    Delete
+                    <span class="sr-only"> {{ card.name }}</span>
+                </Button>
             </li>
         </ul>
 
@@ -287,4 +322,14 @@ function formatDate(iso: string | null): string {
             </form>
         </DialogContent>
     </Dialog>
+
+    <NotebookDeleteDialog
+        v-if="deletingCard !== null"
+        v-model:open="deleteOpen"
+        :notebook-id="deletingCard.id"
+        :notebook-name="deletingCard.name"
+        :notebook-topic="deletingCard.topic"
+        @deleted="removeDeleted"
+        @missing="removeCard"
+    />
 </template>

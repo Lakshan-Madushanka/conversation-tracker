@@ -6,18 +6,23 @@ namespace App\Http\Controllers;
 
 use App\Actions\CustomReviews\CreateReviewFromNotebook;
 use App\Actions\Notebooks\CreateNotebook;
+use App\Actions\Notebooks\DeleteNotebook;
 use App\Actions\Notebooks\UpdateNotebook;
 use App\Exceptions\NotebookConflictException;
+use App\Exceptions\NotebookDeletionStaleException;
 use App\Http\Requests\AutosaveNotebookRequest;
 use App\Http\Requests\CreateNotebookReviewRequest;
+use App\Http\Requests\DeleteNotebookRequest;
 use App\Http\Requests\NotebookReviewCandidatesRequest;
 use App\Http\Requests\NotebooksListingRequest;
 use App\Http\Requests\StoreNotebookRequest;
 use App\Http\Resources\NotebookCardResource;
+use App\Http\Resources\NotebookDeletionPreviewResource;
 use App\Http\Resources\NotebookEditorResource;
 use App\Http\Resources\NotebookReviewCandidateResource;
 use App\Models\Notebook;
 use App\Models\Topic;
+use App\Queries\NotebookDeletionPreview;
 use App\Queries\NotebookReviewCandidates;
 use App\Queries\NotebooksListing;
 use App\Support\CustomReviewRules;
@@ -167,6 +172,50 @@ class NotebooksController extends Controller
         return response()->json([
             'notebook' => NotebookEditorResource::make($notebook)->resolve(),
             'saved_at' => now()->toIso8601String(),
+        ]);
+    }
+
+    /**
+     * What deleting this notebook would remove, worked out without altering
+     * anything. The warning opens with these exact numbers and this token.
+     */
+    public function deletePreview(
+        Notebook $notebook,
+        NotebookDeletionPreview $preview,
+    ): JsonResponse {
+        return response()->json(
+            NotebookDeletionPreviewResource::make($preview->for($notebook))->resolve(),
+        );
+    }
+
+    /**
+     * Deletes a notebook and everything in it for good. The signed token says
+     * which state the learner confirmed; a changed notebook is refused with
+     * the fresh numbers.
+     */
+    public function destroy(
+        Notebook $notebook,
+        DeleteNotebookRequest $request,
+        DeleteNotebook $deleteNotebook,
+    ): JsonResponse {
+        try {
+            $result = $deleteNotebook->handle((int) $notebook->id, $request->token());
+        } catch (NotebookDeletionStaleException $exception) {
+            return response()->json([
+                'stale' => true,
+                'message' => 'This notebook changed since you opened the warning. Check the numbers and confirm again.',
+                'preview' => NotebookDeletionPreviewResource::make($exception->effect)->resolve(),
+            ], 409);
+        }
+
+        return response()->json([
+            'deleted' => true,
+            'already_deleted' => $result->alreadyDeleted,
+            'notebook' => [
+                'id' => $result->notebookId,
+                'name' => $result->name,
+            ],
+            'counts' => $result->counts,
         ]);
     }
 }

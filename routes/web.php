@@ -147,6 +147,15 @@ Route::get('/notebooks/{notebook}', [NotebooksController::class, 'show'])
 Route::put('/notebooks/{notebook}/autosave', [NotebooksController::class, 'autosaveUpdate'])
     ->whereNumber('notebook')
     ->name('notebooks.autosave.update');
+// Hard deletion reads its impact first and confirms with the signed state the
+// warning showed, so a notebook changed in another tab is never removed under
+// stale numbers.
+Route::get('/notebooks/{notebook}/delete-preview', [NotebooksController::class, 'deletePreview'])
+    ->whereNumber('notebook')
+    ->name('notebooks.deletePreview');
+Route::delete('/notebooks/{notebook}', [NotebooksController::class, 'destroy'])
+    ->whereNumber('notebook')
+    ->name('notebooks.destroy');
 // Create review and practise. The candidate list is read-only; the creation
 // revalidates it, marks only its new review Finished, and starts the attempt.
 Route::get('/notebooks/{notebook}/review-candidates', [NotebooksController::class, 'reviewCandidates'])

@@ -6,9 +6,11 @@ namespace App\Actions\Notebooks;
 
 use App\Actions\Collections\MoveMarkAfterEdit;
 use App\Actions\CustomReviews\MoveCustomReviewItemsAfterEdit;
+use App\Actions\CustomReviews\PruneCustomReviewItems;
 use App\Enums\FeedbackType;
 use App\Models\Notebook;
 use App\Models\PracticeFeedbackEntry;
+use App\Support\CustomReviewDeletedIdentities;
 use App\Support\FeedbackTable;
 use App\Support\ListEntries;
 use App\Support\NotebookIdentity;
@@ -32,6 +34,7 @@ final readonly class SaveNotebookFeedback
     public function __construct(
         private MoveMarkAfterEdit $moveMarkAfterEdit,
         private MoveCustomReviewItemsAfterEdit $moveCustomReviewItems,
+        private PruneCustomReviewItems $pruneCustomReviewItems,
     ) {}
 
     /**
@@ -92,8 +95,12 @@ final readonly class SaveNotebookFeedback
             $stored[] = $row;
         }
 
+        /** @var list<PracticeFeedbackEntry> $removed */
+        $removed = [];
+
         foreach ($rows as $row) {
             if (! isset($claimed[spl_object_id($row)])) {
+                $removed[] = $row;
                 $row->delete();
             }
         }
@@ -113,6 +120,15 @@ final readonly class SaveNotebookFeedback
                 $move['from'],
                 $move['to'],
                 $move['entry_id'],
+            );
+        }
+
+        // A removed row takes its review reference with it only when no
+        // duplicate row still keeps that scoped item alive. A matching word in
+        // another notebook or a session is never a substitute.
+        if ($removed !== []) {
+            $this->pruneCustomReviewItems->handleFor(
+                CustomReviewDeletedIdentities::grouped($removed, []),
             );
         }
     }

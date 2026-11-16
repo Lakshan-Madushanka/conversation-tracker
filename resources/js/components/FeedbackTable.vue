@@ -606,6 +606,16 @@ function confirmCell(event: KeyboardEvent): void {
                                         <CopyIcon aria-hidden="true" />
                                         Duplicate
                                     </Badge>
+
+                                    <span
+                                        v-if="
+                                            duplicateIds.has(entry.id) &&
+                                            props.config.duplicateHint
+                                        "
+                                        class="text-xs text-muted-foreground"
+                                    >
+                                        {{ props.config.duplicateHint }}
+                                    </span>
                                 </div>
                             </td>
                         </tr>

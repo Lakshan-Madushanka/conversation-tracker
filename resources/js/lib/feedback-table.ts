@@ -58,6 +58,8 @@ export interface FeedbackTableConfig {
     attentionMoreThanOne: string;
     /** Whether a duplicate is only a duplicate when the attention column is filled too. */
     duplicateNeedsSecondColumn: boolean;
+    /** What to do about a duplicate row, shown beside its tag. Omit it when a repeat needs no advice. */
+    duplicateHint?: string;
 }
 
 /** A table row holding its columns plus a client id. */

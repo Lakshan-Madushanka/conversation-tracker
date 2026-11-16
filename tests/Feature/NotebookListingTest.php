@@ -49,6 +49,20 @@ describe('the notebook listing', function (): void {
             ]);
     });
 
+    it('counts saved rows, so a repeated word still counts', function (): void {
+        $notebook = Notebook::factory()->create();
+
+        // A repeated word is a mistake to fix on the board, not a second
+        // meaning: the listing shows what was typed, tag included.
+        listingEntry($notebook, FeedbackType::Vocabulary, 'bank', 'a financial institution');
+        listingEntry($notebook, FeedbackType::Vocabulary, 'Bank', 'the edge of a river');
+        listingEntry($notebook, FeedbackType::Vocabulary, 'river', 'a watercourse');
+
+        $this->getJson(route('notebooks.index'))
+            ->assertOk()
+            ->assertJsonPath('notebooks.0.counts.words', 3);
+    });
+
     it('finds a notebook by entry meaning, example and note, returning it once', function (): void {
         $notebook = Notebook::factory()->create();
         listingEntry($notebook, FeedbackType::Vocabulary, 'bank', 'a financial institution', 'I went to the bank');

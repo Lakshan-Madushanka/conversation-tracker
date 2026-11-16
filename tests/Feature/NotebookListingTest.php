@@ -6,6 +6,7 @@ use App\Enums\FeedbackType;
 use App\Models\Notebook;
 use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeQuestion;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
@@ -96,5 +97,21 @@ describe('the notebook listing', function (): void {
             ->assertOk()
             ->assertJsonCount(1, 'notebooks')
             ->assertJsonPath('notebooks.0.id', $notebook->id);
+    });
+
+    it('reads a page in the same number of queries whatever it holds', function (): void {
+        Notebook::factory()->count(25)->create();
+
+        DB::enableQueryLog();
+        $this->getJson(route('notebooks.index', ['per_page' => 5]))->assertJsonCount(5, 'notebooks');
+        $small = count(DB::getQueryLog());
+        DB::flushQueryLog();
+
+        $this->getJson(route('notebooks.index', ['per_page' => 25]))->assertJsonCount(25, 'notebooks');
+        $large = count(DB::getQueryLog());
+        DB::disableQueryLog();
+        DB::flushQueryLog();
+
+        expect($large)->toBe($small);
     });
 });

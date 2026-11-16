@@ -25,6 +25,7 @@ final class NotebooksListing
     public function paginate(string $search, ?string $cursor, int $perPage): CursorPaginator
     {
         return $this->query($search)
+            ->with('topic')
             ->withCount([
                 'entries as words_count' => fn (Builder $entries): Builder => $entries->where('type', FeedbackType::Vocabulary->value),
                 'entries as phrases_count' => fn (Builder $entries): Builder => $entries->where('type', FeedbackType::Phrase->value),

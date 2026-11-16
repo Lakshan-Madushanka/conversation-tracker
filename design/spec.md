@@ -70,7 +70,7 @@ The explicit **Create review and practise** action creates a new saved custom re
 | **Collections**      | Combined study index with All/Sessions/Notebooks, notebook and topic filters, scoped marks, and source-specific panels                      |
 | **Review**           | Daily and Quick review exercises using eligible content from both sources                                                                   |
 | **Custom reviews**   | Saved practice sets with fixed membership, repeatable attempts, and snapshot history                                                        |
-| **Progress**         | Session-derived totals and streaks; planned daily/Quick review-activity reporting with measures still to be defined                         |
+| **Progress**         | Session-derived totals and streaks; a separate daily/Quick review-activity area counting items practised, review days, and reviews finished |
 | **Settings**         | Preferences, import, and export                                                                                                             |
 
 ## 7. Experience Principles
@@ -122,7 +122,7 @@ The app is successful if the learner:
 - Notebook word/phrase identities and marks stay scoped to their notebook. Several comma-separated meanings remain one item; identical grammar notes remain separate items.
 - Notebooks use hard deletion with an impact preview and explicit acknowledgement, never archiving. Other scopes are unaffected, the deleted items' marks, review schedules and suggestion declines are removed with them, and existing custom-attempt snapshots survive source deletion.
 - Saved custom-review membership does not track later notebook additions. The 50-item limit counts every held scoped item, including ineligible items; a started attempt uses eligible members and preserves its snapshot.
-- Daily/Quick notebook practice belongs in planned review-activity reporting. Merely collecting entries does not prove learning or create finished sessions. Exact Progress measures remain open; session-derived totals, practice days, and streaks keep their existing definitions.
+- Daily/Quick notebook practice counts in the separate review-activity area under the agreed measures. Merely collecting entries does not prove learning or create finished sessions. Session-derived totals, practice days, and streaks keep their existing definitions, and deleting a source never lowers review activity.
 - Saved custom-review activity does not change marks, daily schedules, daily/Quick result totals, streaks, or Progress. Its finished attempts appear in recent results only as read-only history, alongside daily and Quick sittings.
 
 ## 11. Open Questions
@@ -132,5 +132,4 @@ The app is successful if the learner:
 3. Which matters more at launch: strong review exercises or detailed progress reports?
 4. Should the app work without an internet connection?
 5. If the learner pastes raw markdown symbols as plain text, should the app convert them into formatting?
-6. Which daily/Quick review-activity measures should Progress show for both notebook and session sources, and how should repeated practice and source deletion affect them? Do not silently revise session streaks or include saved custom attempts.
-7. Before implementing Notebooks, resolve the [Notebook open decisions](feature-Notebooks.md#open-questions): parent representation, mixed-source date/frequency presentation, duplicate-row content resolution, metadata limits and the General default's lifecycle, and export/backup delivery. These remain questions, not approved implementation choices.
+6. Before implementing Notebooks, settle export/backup delivery for notebook metadata, entries, scopes and marks. The other [Notebook decisions](feature-Notebooks.md#open-questions) are resolved and recorded there.

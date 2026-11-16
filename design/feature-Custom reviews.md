@@ -34,7 +34,7 @@ This is different from the **Quick review** described in the Review feature. Qui
 
 - **Practice sessions:** the only source of questions, natural versions, and mistakes; also a source of vocabulary, phrases, and grammar notes, with a reading page for the original.
 - **Library:** the study sessions rule, archiving, restoring, and deleting for session sources only.
-- [Notebooks](feature-Notebooks.md): saved vocabulary, phrases, and grammar notes; notebook-scoped identities, autosave before practice, scoped edit/deletion rules, and Open notebook navigation. Its duplicate-row representative rule remains an open decision.
+- [Notebooks](feature-Notebooks.md): saved vocabulary, phrases, and grammar notes; notebook-scoped identities, autosave before practice, scoped edit/deletion rules, and Open notebook navigation. Its duplicate-row representative rule is resolved there.
 - **Collections:** scoped item identity, the "Needs attention" rule, the learner's scoped stars and statuses (shown, never changed, by custom reviews), and the bulk-selection pattern from Library Step 6, reused by Add to review for either source.
 - [Review and re-practice](feature-F4-Review%20and%20re-practice.md): exercise eligibility, sections and stepper, exercise shell (ratings, undo, early finish, saving), and the separate Quick review chooser. Daily/Quick reviews resolve live source changes during practice; custom attempts keep their started snapshots.
 - **Base app layout:** navigation (a link from the Review page), the page header, and the focus layout used for attempts.
@@ -127,7 +127,7 @@ This is different from the **Quick review** described in the Review feature. Qui
 ### Attempting a custom review
 
 39. **Start practice** appears on a review's card and page only while it is **Finished** with at least one eligible item, and it names how many items the attempt holds — for example "26 items".
-40. Starting an attempt builds its fixed list from **every eligible scoped member**, using the daily rules for mixing kinds and never repeating the same scoped identity. Resolve content and eligibility live at that moment **only within each reference's source**. Same-spelling items in different scopes can each appear; neither supplies another's meaning/example or makes it eligible. Duplicate notebook rows use the deterministic shared representative rule once that open decision in Notebooks is resolved, never accidental SQL row order.
+40. Starting an attempt builds its fixed list from **every eligible scoped member**, using the daily rules for mixing kinds and never repeating the same scoped identity. Resolve content and eligibility live at that moment **only within each reference's source**. Same-spelling items in different scopes can each appear; neither supplies another's meaning/example or makes it eligible. Duplicate notebook rows use the deterministic shared representative rule [resolved in Notebooks](feature-Notebooks.md#open-questions), never accidental SQL row order.
 41. An attempt uses the **same exercise screen, sections, stepper, rating buttons, undo, early finish, and saving** as Review. The stepper shows one step per kind that has items in the attempt.
 42. Ratings made in an attempt are stored **on that attempt only**. They do not change the item's schedule, marks, statuses, or any other review.
 43. Undo, early finish, and resuming a half-finished attempt work as in Review, but only within the attempt.
@@ -437,7 +437,7 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 
 ## Open Questions
 
-- **Duplicate notebook-row representative:** [Notebooks — Open Questions](feature-Notebooks.md#open-questions) must define deterministic meanings/examples and eligibility for duplicate word/phrase rows, including incomplete rows. Collections and review resolution must share that rule within the notebook. Do not silently settle it through SQL row order or session dates. Notebook parent representation is also unresolved there; this spec does not choose a schema.
+- **Notebook rules used here are resolved:** [Notebooks — Open Questions](feature-Notebooks.md#open-questions) fixes the parent representation (two nullable foreign keys with an exactly-one-parent guard) and the duplicate-row rule (saved editor order, first non-blank meaning and example, eligibility when any row supplies usable content). Collections, review resolution and this feature use that one rule within the notebook; SQL row order and session dates never settle it.
 
 ## Decisions Made
 

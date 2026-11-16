@@ -26,7 +26,7 @@ This feature has to be fast and low-effort. If recording a session feels like a 
 - **[Notebooks](feature-Notebooks.md):** shares topics, applicable entry editors, autosave/conflict handling, rich text, and paste components, not the session page or a fabricated session. Each notebook has one vocabulary/phrases/grammar board, with no questions, answers, mistakes, natural versions, or session finish/archive workflow.
 - **Collections:** vocabulary, phrases, grammar notes, and common mistakes from finished, non-archived sessions feed Collections. Notebook items also feed Collections but remain separate scoped identities, even with the same spelling.
 - **Review and re-practice:** eligible session entries become exercise material under the existing session rules. Notebook support must not change session grouping, marks, schedules, or custom-review references.
-- **Progress and motivation:** session counts, session-based practice days and streaks, and session-content totals remain session-derived. Planned notebook daily/Quick review-activity reporting is separate; its exact measures remain open in [Notebooks](feature-Notebooks.md#open-questions).
+- **Progress and motivation:** session counts, session-based practice days and streaks, and session-content totals remain session-derived. Notebook daily/Quick review-activity reporting is separate and uses the [measures settled in F5](feature-F5-Progress%20and%20motivation.md).
 - **Import from spreadsheets:** imported session records must end up in the same shape as sessions created here, so both are treated identically afterward.
 
 ### Related notes

@@ -163,7 +163,7 @@ _Screen: Collections_
 - **Top:** four tabs and source, notebook, shared-topic, starred, status, and attention filters.
 - **Main area:** source-labelled items with meaning/correction, star, and status. Counts, search, and selection distinguish scoped identities rather than combining matching spellings across sources.
 - **Item detail:** its own content, notes, marks, and an appropriate source link. Notebook items never borrow meanings or examples from sessions.
-- **Sorting and provenance:** existing session dates and seen counts keep their meaning. Notebook items show notebook provenance, not fabricated session counts. Mixed-source date/frequency presentation and duplicate notebook-row content resolution remain open in the Notebook specification.
+- **Sorting and provenance:** existing session dates and seen counts keep their meaning. Notebook items show notebook provenance, not fabricated session counts. Mixed-source date/frequency presentation and duplicate notebook-row content resolution are resolved in the Notebook specification.
 - **Empty states:** notebook-only learners see their saved content, not a demand to finish a session first.
 - **My mistakes tab:** session-sourced groups retain their frequency counters; Notebooks filtering produces an honest empty result.
 
@@ -258,7 +258,7 @@ _Screen: Exercise_
 
 ## F5. Progress and Motivation 🟢
 
-Shows session-derived totals, streaks, and weekly summaries. The Notebook extension also requires **daily/Quick review-activity reporting**, with its exact measures still to be defined separately from session content totals.
+Shows session-derived totals, streaks, and weekly summaries. The Notebook extension also includes a separate **daily/Quick review-activity area**: items practised, review days, and reviews finished, kept apart from session content totals.
 
 **What the learner can see**
 
@@ -267,17 +267,17 @@ Shows session-derived totals, streaks, and weekly summaries. The Notebook extens
 - Existing word, phrase, and grammar-point totals from finished sessions, including archived ones. These are session-content totals, not the learner's manual Learned labels or proof of mastery; deleting a finished session lowers them. Typing notebook entries or adding comma-separated meanings does not increase these totals.
 - **Mistakes reduced over time**, based on session-sourced mistakes; notebooks introduce no mistake entries.
 - A **weekly summary**.
-- Planned review-activity reporting that treats notebook and session items consistently for **daily and Quick reviews**. Saved custom-review attempts remain excluded.
+- A **review-activity area** that treats notebook and session items consistently for **daily and Quick reviews**, counting items practised, review days, and reviews finished. A review left part-way still counts its items and that day, deleting a source never lowers the numbers, and saved custom-review attempts remain excluded.
 
-**Open decision before implementing review-activity reporting:** define which measures and labels F5 shows, whether they count rated items or completed reviews, how repeated practice is represented, and what source deletion does to those measures. Do not invent a new “words learned” formula, change session-derived totals/streaks, or copy custom-attempt ratings into Progress. See [Notebook Progress requirements and open questions](feature-Notebooks.md#open-questions).
+**Review-activity decision (confirmed 16 November 2026):** items practised, review days, and reviews finished. Leaving a review part-way counts its items and that day; deleting a session or notebook never lowers the numbers; custom attempts never contribute. Do not invent a “words learned” formula, change session-derived totals/streaks, or copy custom-attempt ratings into Progress. See [Notebook Progress requirements](feature-Notebooks.md#open-questions).
 
 **User flow**
 
 1. The learner taps **"Progress"** in the main menu.
 2. The top of the screen shows the current streak and total practice days.
-3. Below, they see counts for sessions completed, words learned, phrases learned, and grammar points learned.
+3. Below, they see counts for sessions completed and the words, phrases, and grammar points collected in them.
 4. A simple chart shows how often each common mistake appeared over recent weeks, so the learner can see which ones are fading.
-5. At the end of each week, a summary appears, for example: "This week you learned 18 new words and fixed 6 recurring mistakes."
+5. At the end of each week, a summary appears, for example: "This week you finished 4 sessions and collected 18 new words."
 6. A short encouraging message highlights one win, for example "Your longest streak so far."
 
 **UI overview**
@@ -285,7 +285,7 @@ Shows session-derived totals, streaks, and weekly summaries. The Notebook extens
 _Screen: Progress_
 
 - **Top row:** large friendly numbers for the current **streak** and total practice days.
-- **Stat tiles:** existing cards for sessions and session-derived word, phrase, and grammar-point totals. Keep planned daily/Quick review-activity measures visibly separate once their definitions are agreed.
+- **Stat tiles:** existing cards for sessions and session-derived word, phrase, and grammar-point totals. Show daily/Quick review-activity measures in a visibly separate area.
 - **Mistakes chart:** one simple chart showing how often common mistakes appear week by week, going down over time.
 - **Weekly summary card:** a short sentence with the week's highlights and a small celebration icon when there is a win.
 - **Tone:** encouraging and uncluttered. No scores that make the learner feel judged.
@@ -504,7 +504,7 @@ Notebooks are named containers for language found outside conversations. They re
 - **Source context:** Collections and practice show the notebook name and Open notebook at the entry, not invented session dates or questions.
 - **Accessibility:** mobile-first layout, dark mode, visible keyboard focus, accessible editors, and clear save, selection, and deletion announcements.
 
-**Remaining decisions:** parent representation, exact daily/Quick Progress measures, mixed-source sorting, duplicate-row content resolution, metadata limits/General default lifecycle, and export delivery remain in [Notebook Open Questions](feature-Notebooks.md#open-questions). Neither the 20-item recommendation nor the 50-item review maximum limits notebook storage.
+**Remaining decision:** export delivery remains in [Notebook Open Questions](feature-Notebooks.md#open-questions); the other entries there are resolved. Neither the 20-item recommendation nor the 50-item review maximum limits notebook storage.
 
 ---
 

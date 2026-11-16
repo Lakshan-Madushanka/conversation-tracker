@@ -8,7 +8,7 @@ Notebooks are **not Collections**. A notebook is a container the learner creates
 
 **Words are scoped to their notebook.** A notebook's “bank” and a session's “bank” are separate study items, even when their spelling matches. Their meanings, examples, marks, and daily-review schedules must never be mixed. Multiple meanings of one word in one notebook are entered together, separated by commas, and remain **one item**.
 
-This document specifies the new feature; it is not a claim that the feature has been implemented or tested. Confirmed product decisions are recorded below. The remaining creation details, Progress measures, and export/backup delivery are listed under **Open Questions**. The **Related document updates** section maps the shared requirements to the other feature specifications; documentation alignment does not imply implementation.
+This document specifies the new feature; it is not a claim that the feature has been implemented or tested. Confirmed product decisions are recorded below. Export/backup delivery remains under **Open Questions**; the other entries there are resolved and kept for reference. The **Related document updates** section maps the shared requirements to the other feature specifications; documentation alignment does not imply implementation.
 
 ### Assumptions
 
@@ -185,7 +185,7 @@ Collections shows **three items**. The two comma-separated meanings in Nature re
 77. Notebook topics participate in the existing topic-based review chooser. Exercise hints and source actions identify the notebook rather than inventing a session date or question number. No notebook question or mistake exercise is generated.
 78. Deleting an entry or notebook removes its scoped items from future candidate selection. Existing handling of unavailable items during an active daily/Quick review applies without selecting a same-spelling replacement from another source.
 79. **Progress integration is in scope**, but entry collection and actual practice are different activities. Merely creating a notebook, typing words, or writing comma-separated meanings must not be counted as finished conversation sessions or as proof that words were learned.
-80. Daily/Quick practice of notebook items must be represented consistently in review-activity reporting, alongside the equivalent session-sourced practice. The exact F5 measures and deletion/history treatment require the decision listed under Open Questions before this part is implemented.
+80. Daily/Quick practice of notebook items must be represented consistently in review-activity reporting, alongside the equivalent session-sourced practice. The measures are settled in [F5](feature-F5-Progress%20and%20motivation.md): items practised, review days, and reviews finished, where notebook and session practice count the same way under their own scoped items, and deleting a source never lowers them.
 81. Existing **session-based streaks, practice days, and session-content totals** remain session-based unless separately changed by an explicit product decision. Notebook practice is not a fabricated finished session. Saved custom-review attempts remain excluded under requirement 73.
 
 ### Hard deletion
@@ -293,7 +293,7 @@ These are proposed reviewable stages, not permission to ship a partially integra
 
 ### Step 5: Daily Review and Progress integration
 
-**What it delivers:** Eligible notebook items participate in daily/Quick practice, with separately specified review-activity reporting.
+**What it delivers:** Eligible notebook items participate in daily/Quick practice, with review-activity reporting under the agreed Progress measures.
 
 **Tests**
 
@@ -333,12 +333,12 @@ These are proposed reviewable stages, not permission to ship a partially integra
 - Notebook deletion is **hard deletion**, with a clear impact warning. It never deletes matching items in other scopes.
 - The notebook can start a new saved custom review immediately when constraints are met; above 50 distinct selected items the learner chooses a smaller set instead of receiving a silently truncated review.
 - Custom-review membership is **fixed unless explicitly edited**; source content remains live for future attempts, while started attempts keep snapshots.
-- Notebook items participate in daily Review and Progress integration, without inventing completed conversation sessions. Exact Progress measures remain to be specified.
+- Notebook items participate in daily Review and Progress integration, without inventing completed conversation sessions. Their practice counts under the agreed review-activity measures: items practised, review days, and reviews finished.
 - Full notebook descriptions are rich text; list previews are plain text. Search includes entries, not only metadata.
 
 ## Related document updates
 
-These documents share the Notebook integration requirements. Keep their descriptions aligned with this specification while preserving the open decisions below and the distinction between planned behaviour and verified implementation.
+These documents share the Notebook integration requirements. Keep their descriptions aligned with this specification while preserving any remaining open entry below and the distinction between planned behaviour and verified implementation.
 
 | Document                                                                               | Required coordination                                                                                                                                                                             |
 | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -354,10 +354,10 @@ Existing quality reports remain historical evidence. Do not rewrite their test r
 
 ## Open Questions
 
-Entries 1, 3, 4, and 6 are resolved and kept here so other documents can link to the agreed rules. Entries 2 and 5 remain open.
+Entries 1, 2, 3, 4, and 6 are resolved and kept here so other documents can link to the agreed rules. Entry 5 remains open.
 
 1. **Parent representation — resolved.** An entry carries two nullable foreign keys, `practice_question_id` and `notebook_id`, each with database-level cascade deletion for its own children. A model save guard enforces exactly one parent, because SQLite cannot express that as an alterable CHECK constraint. Notebook entries are further limited to vocabulary, phrases, and grammar notes. No polymorphic parent is used.
-2. **Exact Progress measures:** Notebook participation is agreed, but F5 currently defines session-derived totals and days. Specify which daily/Quick review activity measures are shown, how repeated practice and source deletion affect those measures, and their wording. Preserve session-based streaks and custom-review isolation unless explicitly revised. Do not implement a guessed “words learned” formula.
+2. **Exact Progress measures — resolved.** Progress shows daily/Quick review activity in its own area using three measures: **items practised** (one per rating given, where a changed rating replaces the old one and an undone rating is removed), **review days** (the learner's local days with at least one rating), and **reviews finished** (sittings ended with every item rated or an early finish, holding at least one rating). A sitting left part-way adds its items and its day but no finished review, so leaving is never penalized. Repeated practice counts each rating, and no “words learned” figure is shown. Deleting a session or notebook never lowers these measures, because the practice happened; archiving or restoring a session changes nothing either. Session-derived totals, practice days, and streaks keep their existing definitions, and saved custom-review attempts stay excluded. The measures count the rating history that already exists from when Review was introduced, with no backfill or start date. An honest empty state replaces zeros when there is no history.
 3. **Mixed-source date and frequency presentation — resolved.** A notebook item's date is the moment its most recently first-saved scoped row was created (`MAX(created_at)` across that identity's rows), shown as "Added 12 Nov 2026". Editing existing rows, the notebook name, its description, or its topic never changes it; adding another duplicate row does. Session dates and seen counts are unchanged, and typing is never counted as an appearance. Under **Newest**, session items keep their latest session date and notebook items use their added date on one descending timeline, ties broken by public key so pages neither repeat nor skip. Under **Most often seen**, session items keep their appearance counts; notebook items carry no appearance count, sort after the counted session items by added date descending then key, and never display "Seen 0 times" or a fabricated session date. Notebook grammar notes take "Added <date>" in the date slot; session notes keep the session date.
 4. **Remaining creation details — resolved.** Notebook metadata limits are fixed: a name of 120 characters, a topic of 120 characters, and a description of 100,000 characters, the same content limit sessions use. **General** is resolved by name through the shared topic mechanism: a notebook saved without a topic finds the topic normalised as “general” and creates it only if missing. A General that was renamed is not reused; the next topic-less notebook creates a fresh General alongside the renamed one, and the renamed topic keeps the notebooks and sessions already using it. An unused General may be deleted, and the next topic-less notebook creates it again. Renaming and reference-protected deletion remain available, and no read path creates a topic.
 5. **Export/backup delivery:** the feature list promises all-data backup. Confirm the delivery stage for notebook metadata, entries, scopes, and marks so exports do not silently omit the new source; spreadsheet-to-notebook import is not part of this feature.

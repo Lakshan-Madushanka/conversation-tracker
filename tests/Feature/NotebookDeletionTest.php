@@ -16,7 +16,10 @@ use App\Models\Notebook;
 use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeQuestion;
 use App\Models\PracticeSession;
+use App\Models\Rating;
+use App\Models\Review;
 use App\Models\ReviewSchedule;
+use App\Models\ReviewSuggestionDecline;
 use App\Models\Topic;
 use App\Queries\TodaysReview;
 use App\Support\NotebookIdentity;
@@ -109,6 +112,40 @@ function nbDeletePreview(Notebook $notebook): TestResponse
 function nbDeleteConfirm(object $test, Notebook $notebook, string $token): TestResponse
 {
     return $test->deleteJson(route('notebooks.destroy', $notebook), ['token' => $token]);
+}
+
+/** The stored schedule a practised word is due by. */
+function nbDeleteSchedule(string $identity): ReviewSchedule
+{
+    return ReviewSchedule::query()->create([
+        'kind' => FeedbackType::Vocabulary,
+        'item_identity' => $identity,
+        'due_on' => now()->toDateString(),
+        'last_rated_on' => now()->toDateString(),
+        'last_rating' => ReviewRating::Okay,
+        'rated_count' => 1,
+        'easy_run' => 0,
+    ]);
+}
+
+/** A "Not now" said about a word, tied to the rating that began its run. */
+function nbDeleteDecline(string $identity): ReviewSuggestionDecline
+{
+    $review = Review::query()->create();
+    $rating = Rating::query()->create([
+        'review_id' => $review->id,
+        'kind' => FeedbackType::Vocabulary->value,
+        'item_identity' => $identity,
+        'rating' => ReviewRating::Easy->value,
+        'unique_key' => Rating::keyFor($review->id, FeedbackType::Vocabulary, $identity),
+    ]);
+
+    return ReviewSuggestionDecline::query()->create([
+        'kind' => FeedbackType::Vocabulary,
+        'item_identity' => $identity,
+        'status' => CollectionItemStatus::Learned,
+        'run_started_id' => $rating->id,
+    ]);
 }
 
 /**
@@ -254,15 +291,10 @@ describe('deleting a notebook', function (): void {
         app(SaveItemMark::class)->handle(FeedbackType::Vocabulary, $goingKey, true, CollectionItemStatus::StillDifficult);
         app(SaveItemMark::class)->handle(FeedbackType::Vocabulary, $sessionKey, true, CollectionItemStatus::Learned);
 
-        ReviewSchedule::query()->create([
-            'kind' => FeedbackType::Vocabulary,
-            'item_identity' => $sessionKey,
-            'due_on' => now()->toDateString(),
-            'last_rated_on' => now()->toDateString(),
-            'last_rating' => ReviewRating::Okay,
-            'rated_count' => 1,
-            'easy_run' => 0,
-        ]);
+        nbDeleteSchedule($goingKey);
+        nbDeleteSchedule($sessionKey);
+        nbDeleteDecline($goingKey);
+        nbDeleteDecline($sessionKey);
 
         $review = CustomReview::factory()->draft()->create(['name' => 'Everywhere']);
         CustomReviewItem::factory()->create([
@@ -295,13 +327,16 @@ describe('deleting a notebook', function (): void {
             ->and($sessionWord->fresh())->not->toBeNull()
             ->and(Topic::query()->whereKey($topic->id)->exists())->toBeTrue();
 
-        // Marks stay under the identity that held them. The notebook's mark is
-        // quietly kept, the other notebook does not inherit it, and the
-        // session's mark and schedule are untouched.
-        expect(CollectionItemMark::query()->where('group_key', $goingKey)->exists())->toBeTrue()
+        // The deleted notebook's own marks, schedule and decline go with it.
+        // The other notebook was never marked, and the session's rows are
+        // untouched.
+        expect(CollectionItemMark::query()->where('group_key', $goingKey)->exists())->toBeFalse()
             ->and(CollectionItemMark::query()->where('group_key', $stayingKey)->exists())->toBeFalse()
             ->and(CollectionItemMark::query()->where('group_key', $sessionKey)->exists())->toBeTrue()
-            ->and(ReviewSchedule::query()->where('item_identity', $sessionKey)->exists())->toBeTrue();
+            ->and(ReviewSchedule::query()->where('item_identity', $goingKey)->exists())->toBeFalse()
+            ->and(ReviewSchedule::query()->where('item_identity', $sessionKey)->exists())->toBeTrue()
+            ->and(ReviewSuggestionDecline::query()->where('item_identity', $goingKey)->exists())->toBeFalse()
+            ->and(ReviewSuggestionDecline::query()->where('item_identity', $sessionKey)->exists())->toBeTrue();
 
         $held = CustomReviewItem::query()
             ->where('custom_review_id', $review->id)
@@ -311,6 +346,40 @@ describe('deleting a notebook', function (): void {
         expect($held)->not->toContain($goingKey)
             ->and($held)->toContain($stayingKey)
             ->and($held)->toContain($sessionKey);
+    });
+
+    it('removes the marks and review records of the deleted notebook, so a replacement starts fresh', function (): void {
+        $notebook = nbDeleteNotebook();
+        nbDeleteWord($notebook, 'bank', 'money');
+        $key = nbDeleteKey($notebook, 'bank');
+
+        app(SaveItemMark::class)->handle(FeedbackType::Vocabulary, $key, true, CollectionItemStatus::Learned);
+        nbDeleteSchedule($key);
+        nbDeleteDecline($key);
+
+        $token = nbDeletePreview($notebook)->json('token');
+
+        nbDeleteConfirm($this, $notebook, $token)->assertOk();
+
+        expect(CollectionItemMark::query()->where('group_key', $key)->exists())->toBeFalse()
+            ->and(ReviewSchedule::query()->where('item_identity', $key)->exists())->toBeFalse()
+            ->and(ReviewSuggestionDecline::query()->where('item_identity', $key)->exists())->toBeFalse();
+
+        // The same name and words make a new identity, with nothing to inherit.
+        $replacement = Notebook::factory()->create(['name' => 'Kitchen words']);
+        nbDeleteWord($replacement, 'bank', 'money');
+
+        $this->get(route('collections.index', ['notebook' => $replacement->id]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page): Assert => $page
+                ->where('items.0.starred', false)
+                ->where('items.0.status', null)
+                ->where('items.0.has_notes', false));
+
+        $replacementKey = nbDeleteKey($replacement, 'bank');
+
+        expect(ReviewSchedule::query()->where('item_identity', $replacementKey)->exists())->toBeFalse()
+            ->and(ReviewSuggestionDecline::query()->where('item_identity', $replacementKey)->exists())->toBeFalse();
     });
 
     it('refuses a stale confirmation and answers with fresh numbers', function (): void {

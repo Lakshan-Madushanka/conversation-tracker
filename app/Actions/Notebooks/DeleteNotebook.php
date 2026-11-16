@@ -5,9 +5,13 @@ declare(strict_types=1);
 namespace App\Actions\Notebooks;
 
 use App\Actions\CustomReviews\PruneCustomReviewItems;
+use App\Enums\FeedbackType;
 use App\Exceptions\NotebookDeletionStaleException;
+use App\Models\CollectionItemMark;
 use App\Models\Notebook;
 use App\Models\PracticeFeedbackEntry;
+use App\Models\ReviewSchedule;
+use App\Models\ReviewSuggestionDecline;
 use App\Queries\NotebookDeletionPreview;
 use App\Support\DeletionToken;
 use Illuminate\Support\Facades\DB;
@@ -20,12 +24,12 @@ use Illuminate\Support\Facades\DB;
  * refused instead of deleting rows the learner has not seen.
  *
  * Only this notebook's own rows go: its topic, matching words in sessions and
- * other notebooks, and the marks stored under their own scopes stay as they
- * are. The custom-review references to the items that stop existing leave
- * every review in the same transaction, and the attempts that recorded them
- * gain their Deleted marker; a review left with nothing becomes Empty. Marks
- * and daily schedules are not removed, exactly as a scoped item that disappears
- * is treated in Collections.
+ * other notebooks stay as they are. The custom-review references to the items
+ * that stop existing leave every review in the same transaction, the attempts
+ * that recorded them gain their Deleted marker, and the learner's marks (star,
+ * status and notes), their review schedules and their suggestion declines go
+ * with them: a notebook's identity never returns, so these rows could never be
+ * reached again. A review left with nothing becomes Empty.
  *
  * A notebook that is already gone is treated as success, so a double click or
  * a retried request stays safe.
@@ -68,6 +72,7 @@ final readonly class DeleteNotebook
             $notebook->delete();
 
             $this->pruneCustomReviewItems->handleFor($effect->items);
+            $this->deleteScopedRecords($effect->items);
 
             return new NotebookDeletionResult(
                 notebookId: (int) $notebook->id,
@@ -76,5 +81,39 @@ final readonly class DeleteNotebook
                 alreadyDeleted: false,
             );
         });
+    }
+
+    /**
+     * The records kept for items that stop existing go with them: marks,
+     * review schedules and suggestion declines. All three are keyed by the
+     * item's identity, and no other scope can hold a notebook's identities, so
+     * nothing else matches. Rating history stays, because it belongs to the
+     * review it was given in, not to the item.
+     *
+     * @param  array<string, list<string>>  $items
+     */
+    private function deleteScopedRecords(array $items): void
+    {
+        foreach ($items as $kind => $identities) {
+            $type = FeedbackType::from($kind);
+
+            CollectionItemMark::query()
+                ->where('kind', $kind)
+                ->whereIn('item_key', array_map(
+                    fn (string $identity): string => CollectionItemMark::keyFor($type, $identity),
+                    $identities,
+                ))
+                ->delete();
+
+            ReviewSchedule::query()
+                ->where('kind', $kind)
+                ->whereIn('item_identity', $identities)
+                ->delete();
+
+            ReviewSuggestionDecline::query()
+                ->where('kind', $kind)
+                ->whereIn('item_identity', $identities)
+                ->delete();
+        }
     }
 }

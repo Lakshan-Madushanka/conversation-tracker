@@ -214,6 +214,26 @@ describe('the delete warning', function (): void {
             $note->fresh()?->collection_key,
         ])->toBe($before);
     });
+
+    it('leaves blank rows out of the counts and the study items', function (): void {
+        $notebook = nbDeleteNotebook();
+        nbDeleteWord($notebook, 'bank', 'money');
+        nbDeleteRow($notebook, FeedbackType::Vocabulary, '');
+        nbDeleteNote($notebook, '', '');
+
+        $response = nbDeletePreview($notebook)->assertOk();
+
+        expect($response->json('counts'))->toBe([
+            'words' => 1,
+            'phrases' => 0,
+            'grammar_notes' => 0,
+        ])
+            ->and($response->json('items'))->toBe([
+                'words' => 1,
+                'phrases' => 0,
+                'grammar_notes' => 0,
+            ]);
+    });
 });
 
 describe('deleting a notebook', function (): void {

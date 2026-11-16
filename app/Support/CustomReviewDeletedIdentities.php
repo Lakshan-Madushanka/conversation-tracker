@@ -52,44 +52,58 @@ final class CustomReviewDeletedIdentities
      */
     public static function grouped(iterable $entries, array $questionIds): array
     {
-        /** @var array<string, array<string, true>> $found */
+        /** @var array<string, array<array-key, true>> $found */
         $found = [];
 
         foreach ($entries as $entry) {
-            if (! $entry->type->isCustomReviewType()) {
-                continue;
-            }
-
-            $identity = self::identityOf($entry);
-
-            if ($identity === null) {
-                continue;
-            }
-
-            $found[$entry->type->value][$identity] = true;
+            self::remember($found, $entry);
         }
 
         foreach ($questionIds as $questionId) {
             $found[FeedbackType::Question->value][(string) $questionId] = true;
         }
 
+        return self::groupedFrom($found);
+    }
+
+    /**
+     * Adds one row to a grouping being built, if it names anything. The caller
+     * decides which rows count; a row whose key is blank names nothing.
+     *
+     * @param  array<string, array<array-key, true>>  $found
+     */
+    public static function remember(array &$found, PracticeFeedbackEntry $entry): void
+    {
+        if (! $entry->type->isCustomReviewType()) {
+            return;
+        }
+
+        $identity = $entry->collection_key;
+
+        if ($identity === null || $identity === '') {
+            return;
+        }
+
+        $found[$entry->type->value][$identity] = true;
+    }
+
+    /**
+     * The grouping in the shape callers read. A question id is digits, and PHP
+     * turns such a key into an int, so every identity is handed back as the
+     * words it stores.
+     *
+     * @param  array<string, array<array-key, true>>  $found
+     * @return array<string, list<string>>
+     */
+    public static function groupedFrom(array $found): array
+    {
         /** @var array<string, list<string>> $grouped */
         $grouped = [];
 
         foreach ($found as $kind => $identities) {
-            // A question id is digits, and PHP turns such a key into an int,
-            // so every identity is read back as the words it stores.
             $grouped[$kind] = array_map(strval(...), array_keys($identities));
         }
 
         return $grouped;
-    }
-
-    /** The identity this row names, or null when it names nothing. */
-    private static function identityOf(PracticeFeedbackEntry $entry): ?string
-    {
-        $identity = $entry->collection_key;
-
-        return ($identity === null || $identity === '') ? null : $identity;
     }
 }

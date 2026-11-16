@@ -13,6 +13,7 @@ use App\Support\CustomReviewDeletedIdentities;
 use App\Support\NotebookDeletionEffect;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\LazyCollection;
 
 /**
  * What deleting a notebook would remove, worked out without changing anything.
@@ -23,34 +24,54 @@ use Illuminate\Support\Collection;
  * how many of their items would go and whether that empties them. Nothing here
  * writes: Collections marks, daily schedules and attempt snapshots are left to
  * the deletion itself.
+ *
+ * The rows are read one at a time and only in the columns the counts and
+ * identities need, so a notebook at scale is never held in one array.
  */
 final readonly class NotebookDeletionPreview
 {
+    /** The columns the blank rule and a row's identity read. */
+    private const array ENTRY_COLUMNS = [
+        'type',
+        'collection_key',
+        'content_html',
+        'content_text',
+        'correction_html',
+        'correction_text',
+        'reason',
+        'example',
+        'example_html',
+    ];
+
     public function __construct(
         private CustomReviewItems $reviewItems,
     ) {}
 
     public function for(Notebook $notebook): NotebookDeletionEffect
     {
-        $notebook->load(['topic', 'entries']);
-
-        /** @var Collection<int, PracticeFeedbackEntry> $entries */
-        $entries = $notebook->entries->reject(
-            fn (PracticeFeedbackEntry $entry): bool => $entry->isBlank(),
-        );
+        $notebook->loadMissing('topic');
 
         $counts = ['words' => 0, 'phrases' => 0, 'grammar_notes' => 0];
 
-        foreach ($entries as $entry) {
+        /** @var array<string, array<string, true>> $found */
+        $found = [];
+
+        foreach ($this->entries($notebook) as $entry) {
+            if ($entry->isBlank()) {
+                continue;
+            }
+
             match ($entry->type) {
                 FeedbackType::Vocabulary => $counts['words']++,
                 FeedbackType::Phrase => $counts['phrases']++,
                 FeedbackType::GrammarNote => $counts['grammar_notes']++,
                 default => null,
             };
+
+            CustomReviewDeletedIdentities::remember($found, $entry);
         }
 
-        $items = CustomReviewDeletedIdentities::grouped($entries, []);
+        $items = CustomReviewDeletedIdentities::groupedFrom($found);
 
         return new NotebookDeletionEffect(
             notebook: $notebook,
@@ -58,6 +79,18 @@ final readonly class NotebookDeletionPreview
             items: $items,
             reviews: $this->affectedReviews($items),
         );
+    }
+
+    /**
+     * One notebook's rows, streamed in the columns the preview reads.
+     *
+     * @return LazyCollection<int, PracticeFeedbackEntry>
+     */
+    private function entries(Notebook $notebook): LazyCollection
+    {
+        return $notebook->entries()
+            ->select(self::ENTRY_COLUMNS)
+            ->cursor();
     }
 
     /**

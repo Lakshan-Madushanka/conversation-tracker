@@ -9,7 +9,6 @@ use App\Exceptions\NotebookDeletionStaleException;
 use App\Models\Notebook;
 use App\Models\PracticeFeedbackEntry;
 use App\Queries\NotebookDeletionPreview;
-use App\Support\CustomReviewDeletedIdentities;
 use App\Support\DeletionToken;
 use Illuminate\Support\Facades\DB;
 
@@ -62,21 +61,13 @@ final readonly class DeleteNotebook
                 throw new NotebookDeletionStaleException($effect);
             }
 
-            /** @var list<PracticeFeedbackEntry> $entries */
-            $entries = $notebook->entries()->get()->all();
-
-            $goneIdentities = CustomReviewDeletedIdentities::grouped(
-                array_filter($entries, fn (PracticeFeedbackEntry $entry): bool => ! $entry->isBlank()),
-                [],
-            );
-
             PracticeFeedbackEntry::query()
                 ->where('notebook_id', $notebook->id)
                 ->delete();
 
             $notebook->delete();
 
-            $this->pruneCustomReviewItems->handleFor($goneIdentities);
+            $this->pruneCustomReviewItems->handleFor($effect->items);
 
             return new NotebookDeletionResult(
                 notebookId: (int) $notebook->id,

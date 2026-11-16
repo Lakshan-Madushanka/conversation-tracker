@@ -91,10 +91,16 @@ final class CustomReviewAttemptLabel
      */
     public static function heading(string $reviewName, CustomReviewAttempt $attempt): string
     {
-        if ($attempt->number === null) {
+        return self::headingForName($reviewName, $attempt->number);
+    }
+
+    /** The same heading when only the number is known, as a list row keeps it. */
+    public static function headingForName(string $reviewName, ?int $number): string
+    {
+        if ($number === null) {
             return $reviewName.' · Not started';
         }
 
-        return $reviewName.' · '.self::numberLabel($attempt->number);
+        return $reviewName.' · '.self::numberLabel($number);
     }
 }

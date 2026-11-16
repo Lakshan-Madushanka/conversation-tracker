@@ -4,12 +4,18 @@ declare(strict_types=1);
 
 use App\Enums\FeedbackType;
 use App\Enums\ReviewRating;
+use App\Models\CustomReview;
+use App\Models\CustomReviewAttempt;
+use App\Models\CustomReviewAttemptItem;
+use App\Models\CustomReviewItem;
+use App\Models\Notebook;
 use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeQuestion;
 use App\Models\PracticeSession;
 use App\Models\Rating;
 use App\Models\Review;
 use App\Models\Topic;
+use App\Support\CustomReviewAttemptLabel;
 use App\Support\ReviewSettings;
 use Carbon\Carbon;
 use Carbon\CarbonImmutable;
@@ -345,5 +351,222 @@ describe('a past sitting opened as a result', function (): void {
 
     it('refuses a result that names no review', function (): void {
         test()->get(route('review.results', ['review' => 999]))->assertNotFound();
+    });
+});
+
+/** A notebook under its own named topic. */
+function resultsNotebook(string $name = 'Kitchen words', string $topic = 'Kitchen'): Notebook
+{
+    return Notebook::factory()->create([
+        'name' => $name,
+        'topic_id' => Topic::query()->firstOrCreate(['name' => $topic])->id,
+    ]);
+}
+
+/** One word saved on a notebook board. */
+function resultsNotebookWord(Notebook $notebook, string $word, string $meaning = 'a meaning'): PracticeFeedbackEntry
+{
+    $next = (int) $notebook->entries()->where('type', FeedbackType::Vocabulary->value)->max('position') + 1;
+
+    return PracticeFeedbackEntry::factory()->for($notebook)->create([
+        'practice_question_id' => null,
+        'type' => FeedbackType::Vocabulary,
+        'position' => $next,
+        'client_id' => (string) Str::uuid(),
+        'content_html' => '',
+        'content_text' => $word,
+        'correction_html' => '',
+        'correction_text' => $meaning,
+        'reason' => '',
+        'example' => '',
+        'example_html' => [],
+        'is_split' => true,
+    ])->refresh();
+}
+
+/**
+ * A finished attempt at a saved review over the given identities, with the
+ * ratings the learner gave.
+ *
+ * @param  list<string>  $identities
+ * @param  array<string, ReviewRating>  $ratings  identity => rating
+ */
+function resultsAttempt(
+    array $identities,
+    array $ratings,
+    string $name = 'Custom Review 3',
+    int $number = 1,
+): CustomReviewAttempt {
+    $review = CustomReview::factory()->finished()->create(['name' => $name]);
+
+    foreach ($identities as $identity) {
+        CustomReviewItem::factory()->for($review, 'review')->create([
+            'kind' => FeedbackType::Vocabulary,
+            'item_identity' => $identity,
+        ]);
+    }
+
+    $attempt = CustomReviewAttempt::factory()
+        ->for($review, 'review')
+        ->withNumber($number)
+        ->completed()
+        ->create(['finished_at' => CarbonImmutable::now()]);
+
+    $position = 1;
+
+    foreach ($ratings as $identity => $rating) {
+        CustomReviewAttemptItem::factory()
+            ->for($attempt, 'attempt')
+            ->rated($rating)
+            ->create([
+                'position' => $position++,
+                'item_identity' => $identity,
+            ]);
+    }
+
+    return $attempt;
+}
+
+describe('saved reviews in recent results', function (): void {
+    it('lists a finished attempt with its review name, ratings and notebook source', function (): void {
+        Carbon::setTestNow('2026-11-06 09:00:00');
+        $notebook = resultsNotebook();
+        $word = resultsNotebookWord($notebook, 'bank');
+        $attempt = resultsAttempt([(string) $word->collection_key], [
+            (string) $word->collection_key => ReviewRating::Hard,
+        ]);
+
+        test()->get(route('review.index'))->assertInertia(fn (Assert $page): Assert => $page
+            ->has('recentReviews', 1)
+            ->where('recentReviews.0.id', $attempt->id)
+            ->where('recentReviews.0.key', 'attempt-'.$attempt->id)
+            ->where('recentReviews.0.type', 'custom')
+            ->where('recentReviews.0.type_label', 'Custom review')
+            ->where('recentReviews.0.title', CustomReviewAttemptLabel::heading('Custom Review 3', $attempt))
+            ->where('recentReviews.0.rated', 1)
+            ->where('recentReviews.0.counts', ['hard' => 1, 'okay' => 0, 'easy' => 0])
+            ->where('recentReviews.0.url', route('customReviews.attempts.show', [
+                'customReview' => $attempt->custom_review_id,
+                'attempt' => $attempt->id,
+            ]))
+            ->where('recentReviews.0.source', [
+                'label' => 'Kitchen words',
+                'url' => route('notebooks.show', $notebook),
+            ]));
+    });
+
+    it('leaves out an attempt that has not ended or has nothing rated', function (): void {
+        Carbon::setTestNow('2026-11-06 09:00:00');
+        $review = CustomReview::factory()->finished()->create();
+
+        $running = CustomReviewAttempt::factory()->for($review, 'review')->create();
+        CustomReviewAttemptItem::factory()->for($running, 'attempt')->rated()->create();
+
+        $empty = CustomReviewAttempt::factory()
+            ->for($review, 'review')
+            ->withNumber(2)
+            ->completed()
+            ->create();
+        CustomReviewAttemptItem::factory()->for($empty, 'attempt')->skipped()->create();
+
+        test()->get(route('review.index'))->assertInertia(fn (Assert $page): Assert => $page
+            ->where('recentReviews', []));
+    });
+
+    it('filters the list by the kind of review, before the five-row limit', function (): void {
+        foreach (range(1, 6) as $day) {
+            resultsSitting('2026-10-0'.$day, ["word-{$day}" => ReviewRating::Easy], daily: true);
+        }
+
+        Carbon::setTestNow('2026-09-01 09:00:00');
+        $attempt = resultsAttempt(['older-word'], ['older-word' => ReviewRating::Hard]);
+
+        test()->get(route('review.index', ['kind' => 'daily']))->assertInertia(fn (Assert $page): Assert => $page
+            ->where('recentKind', 'daily')
+            ->has('recentReviews', ReviewSettings::RECENT_RESULTS)
+            ->where('recentReviews.0.type', 'daily'));
+
+        // The attempt is older than every daily sitting, so it survives only
+        // because the filter is applied before the list is cut to five.
+        test()->get(route('review.index', ['kind' => 'custom']))->assertInertia(fn (Assert $page): Assert => $page
+            ->where('recentKind', 'custom')
+            ->has('recentReviews', 1)
+            ->where('recentReviews.0.id', $attempt->id));
+
+        test()->get(route('review.index', ['kind' => 'everything']))->assertInertia(fn (Assert $page): Assert => $page
+            ->where('recentKind', 'all')
+            ->has('recentReviews', ReviewSettings::RECENT_RESULTS));
+    });
+
+    it('shows no source when the review holds both notebook and session items', function (): void {
+        Carbon::setTestNow('2026-11-06 09:00:00');
+        $notebook = resultsNotebook();
+        $word = resultsNotebookWord($notebook, 'bank');
+
+        $review = CustomReview::factory()->finished()->create();
+        CustomReviewItem::factory()->for($review, 'review')->create([
+            'kind' => FeedbackType::Vocabulary,
+            'item_identity' => (string) $word->collection_key,
+        ]);
+        CustomReviewItem::factory()->for($review, 'review')->create([
+            'kind' => FeedbackType::Vocabulary,
+            'item_identity' => 'session-word',
+        ]);
+
+        $attempt = CustomReviewAttempt::factory()
+            ->for($review, 'review')
+            ->withNumber(1)
+            ->completed()
+            ->create();
+        CustomReviewAttemptItem::factory()->for($attempt, 'attempt')->rated()->create([
+            'item_identity' => (string) $word->collection_key,
+        ]);
+
+        test()->get(route('review.index'))->assertInertia(fn (Assert $page): Assert => $page
+            ->where('recentReviews.0.source', null));
+    });
+
+    it('names the notebook a daily sitting drew its items from', function (): void {
+        Carbon::setTestNow('2026-11-03 10:00:00');
+        $notebook = resultsNotebook();
+        $word = resultsNotebookWord($notebook, 'spatula');
+
+        $review = resultsStart();
+        resultsRate($review, (string) $word->collection_key, ReviewRating::Easy);
+
+        test()->get(route('review.session', ['review' => $review->id]))->assertOk();
+
+        test()->get(route('review.index'))->assertInertia(fn (Assert $page): Assert => $page
+            ->has('recentReviews', 1)
+            ->where('recentReviews.0.key', 'review-'.$review->id)
+            ->where('recentReviews.0.title', null)
+            ->where('recentReviews.0.source', [
+                'label' => 'Kitchen words',
+                'url' => route('notebooks.show', $notebook),
+            ]));
+    });
+
+    it('keeps a session-only sitting without a source', function (): void {
+        Carbon::setTestNow('2026-11-05 09:00:00');
+        $session = resultsSession();
+        resultsRow($session, 'serendipity');
+
+        $review = resultsStart();
+        resultsFinish($review);
+
+        test()->get(route('review.index'))->assertInertia(fn (Assert $page): Assert => $page
+            ->where('recentReviews.0.source', null));
+    });
+
+    it('reads a numeric item identity as a session word, not a notebook', function (): void {
+        Carbon::setTestNow('2026-11-06 09:00:00');
+        $session = resultsSession();
+        resultsRow($session, '2024');
+
+        $review = resultsStart();
+        resultsFinish($review);
+
+        test()->get(route('review.index'))->assertInertia(fn (Assert $page): Assert => $page
+            ->where('recentReviews.0.source', null));
     });
 });

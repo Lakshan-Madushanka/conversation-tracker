@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import {
     InfoIcon,
     LightbulbIcon,
@@ -16,10 +16,11 @@ import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { index as collectionsIndex } from '@/routes/collections';
 import { index as customReviewsIndex } from '@/routes/customReviews';
-import { custom as customReview } from '@/routes/review';
+import { custom as customReview, index as reviewIndex } from '@/routes/review';
 import type {
     GrammarNotesTipData,
     RecentReviewData,
+    RecentReviewKind,
     ReviewRulesData,
     TodayReviewData,
     WaitingForFixData,
@@ -36,9 +37,19 @@ const props = defineProps<{
     grammarNotesTip: GrammarNotesTipData;
     /** The last few sittings and what their ratings came to. */
     recentReviews: RecentReviewData[];
+    /** Which kinds the recent list shows. */
+    recentKind: RecentReviewKind;
     /** The rules the info button explains, as the app runs them. */
     reviewRules: ReviewRulesData;
 }>();
+
+/** The recent list's kind is part of its address, so a refresh keeps it. */
+function onRecentKindChange(kind: RecentReviewKind): void {
+    router.get(reviewIndex.url(), kind === 'all' ? {} : { kind }, {
+        preserveState: true,
+        preserveScroll: true,
+    });
+}
 
 const waitingGroups = computed(() =>
     [
@@ -148,7 +159,11 @@ const grammarNotesLink = computed(() =>
             </Button>
         </div>
 
-        <ReviewRecentResults :reviews="props.recentReviews" />
+        <ReviewRecentResults
+            :reviews="props.recentReviews"
+            :kind="props.recentKind"
+            @update:kind="onRecentKindChange"
+        />
 
         <!-- Items waiting for a fix, by the same shared rule as the collections -->
         <Alert v-if="waitingCount > 0" class="mt-4">

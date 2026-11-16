@@ -41,6 +41,7 @@ function mountPage(grammarNotesTip: GrammarNotesTipData) {
             waitingForFix,
             grammarNotesTip,
             recentReviews: [] as RecentReviewData[],
+            recentKind: 'all',
             reviewRules,
         },
     });

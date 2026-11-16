@@ -166,20 +166,36 @@ export interface CompletedSection {
     next_url: string | null;
 }
 
+/** Which recent results the list shows: everything, or one kind alone. */
+export type RecentReviewKind = 'all' | 'daily' | 'custom';
+
+/** The notebook a result's items all came from. */
+export interface RecentReviewSource {
+    label: string;
+    url: string;
+}
+
 /**
- * One sitting the learner recently ended, as Review Home lists it. The counts
- * come from the saved ratings, so they always match what was actually rated.
+ * One result the learner recently ended, as Review Home lists it: a sitting
+ * or a finished attempt at a saved review. The counts come from the saved
+ * ratings, so they always match what was actually rated.
  */
 export interface RecentReviewData {
+    /** The row's own key; a sitting and an attempt can share an id. */
+    key: string;
     id: number;
     type: 'daily' | 'custom';
     /** The same fact in words, so nothing is conveyed by colour alone. */
     type_label: string;
+    /** An attempt's review and number, or null for a sitting. */
+    title: string | null;
     /** The instant the sitting ended, shown as the learner's own local date. */
     finished_at: string;
     rated: number;
     counts: ReviewCounts;
     url: string;
+    /** The one notebook every item came from, or null when it has no one source. */
+    source: RecentReviewSource | null;
 }
 
 /** What the custom review page was asked for, as the server understood it. */

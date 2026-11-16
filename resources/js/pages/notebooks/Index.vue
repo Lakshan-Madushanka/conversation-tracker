@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { BookOpenIcon, PlusIcon, Trash2Icon } from '@lucide/vue';
 import LibrarySearch from '@/components/LibrarySearch.vue';
@@ -65,6 +65,42 @@ function askDelete(card: NotebookCardData): void {
 const searching = ref(false);
 const searchTerm = ref(props.search);
 
+// A next page that was already on its way when a new list arrived must not
+// be appended to it.
+let listGeneration = 0;
+
+// Inertia keeps this component alive between visits, so a new page has to
+// replace the list the first one brought and not only the address.
+watch(
+    () => props.notebooks,
+    (notebooks) => {
+        listGeneration += 1;
+        cards.value = [...notebooks];
+    },
+);
+
+watch(
+    () => props.total,
+    (total) => {
+        visibleTotal.value = total;
+    },
+);
+
+watch(
+    () => [props.next_cursor, props.has_more] as const,
+    ([cursor, more]) => {
+        nextCursor.value = cursor;
+        hasMore.value = more;
+    },
+);
+
+watch(
+    () => props.search,
+    (search) => {
+        searchTerm.value = search;
+    },
+);
+
 const createOpen = ref(false);
 const createName = ref('');
 const createTopic = ref('');
@@ -88,6 +124,7 @@ async function loadMore(): Promise<void> {
     }
 
     loadingMore.value = true;
+    const generation = listGeneration;
 
     try {
         const params = new URLSearchParams({ cursor: nextCursor.value });
@@ -106,6 +143,10 @@ async function loadMore(): Promise<void> {
                 next_cursor: string | null;
                 has_more: boolean;
             };
+
+            if (generation !== listGeneration) {
+                return;
+            }
 
             cards.value = [...cards.value, ...page.notebooks];
             nextCursor.value = page.next_cursor;

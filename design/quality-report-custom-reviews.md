@@ -57,7 +57,7 @@
 
 ## 2. Exclusivity proof
 
-`tests/Feature/CustomReviewExclusivityTest.php` keeps an automated proof in the suite. It takes a snapshot of the whole application — every row in `topics`, `practice_sessions`, `practice_questions`, `practice_feedback_entries`, `collection_item_marks`, `reviews`, `review_items`, `ratings`, `review_schedules`, `review_suggestion_declines`, plus the rendered props of Home, Library, Review Home, Collections, the suggestion panel, and the session-delete preview — and asserts it is byte-for-byte unchanged after every learner action inside a custom review.
+`tests/Feature/CustomReviewExclusivityTest.php` keeps an automated proof in the suite. It takes a snapshot of the whole application — every row in `topics`, `practice_sessions`, `practice_questions`, `practice_feedback_entries`, `collection_item_marks`, `reviews`, `review_items`, `ratings`, `review_schedules`, `review_suggestion_declines`, plus the rendered props of Home, Library, Review Home, Collections, the suggestion panel, and the session-delete preview — and asserts it is byte-for-byte unchanged after every learner action inside a custom review. Review Home's `recentReviews` prop is excluded, because finished saved-review activity legitimately appears there as read-only history; the custom tables it reads are compared separately.
 
 Three tests:
 

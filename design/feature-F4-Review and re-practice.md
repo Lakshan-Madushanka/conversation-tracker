@@ -35,7 +35,7 @@ Every day the Home screen suggests a **short review of about five minutes** with
 - **Library:** the study sessions rule, shared text normalisation, and session archive/restore/delete behaviour, unchanged by notebooks.
 - [Notebooks](feature-Notebooks.md): saved vocabulary, phrases, and individual grammar notes; shared topics; source-scoped content/identity, edit/deletion rules, and Open notebook navigation. Duplicate-row representative selection remains open there.
 - **Collections:** scoped identity, the shared "Needs attention" rule, and scoped stars/statuses used for suggestions. Review may suggest a status change; only learner confirmation changes that scoped mark.
-- [Custom reviews](feature-Custom%20reviews.md): separate saved named sets (F13), not this feature's Quick chooser. Their fixed membership and started snapshots do not adopt daily/Quick live-source handling, and their attempts never feed daily ratings/schedules, recent results, marks, streaks, or Progress.
+- [Custom reviews](feature-Custom%20reviews.md): separate saved named sets (F13), not this feature's Quick chooser. Their fixed membership and started snapshots do not adopt daily/Quick live-source handling, and their finished activity appears in recent results only as read-only history; it never feeds daily ratings/schedules, marks, streaks, or Progress.
 - **Base app layout:** the main navigation (with a Review link), the **focus layout** used by exercises, the page header, and the empty-state pieces.
 - **Home screen:** shows today's review suggestion and starts it.
 - **Progress and motivation (F5):** daily/Quick review-activity integration for notebook and session sources is in scope. Define exact measures, repeated-practice handling, wording, and source-deletion/history effects before implementation. Session-derived totals, streaks, and practice days stay unchanged, and saved custom attempts are excluded.
@@ -77,7 +77,7 @@ Every day the Home screen suggests a **short review of about five minutes** with
 8. The empty state depends on **reviewable items across both sources**, not on finished-session count. A notebook-only learner with eligible items can review normally; otherwise explain how to add/fix notebook content or finish a session, with appropriate actions. Never require a session just to review notebook items.
 9. Review Home counts **scoped items waiting for a fix**, with guidance and links to the relevant Collections attention view or source entry. Counts cannot merge matching words across scopes or equate all per-exercise ineligibility with an attention error.
 10. Review Home also counts unusable **grammar notes from either source**, with the existing bold-key-part/quoted-example tip and a link to the relevant Grammar notes view/source.
-11. The **recent results** list shows only daily and Quick reviews: date, item count, and Easy/Okay/Hard counts. It includes notebook-sourced practice, never saved custom attempts. Daily/Quick review-activity reporting in Progress is also in scope, with exact F5 measures and deletion/history effects still open; it does not alter session totals, streaks, or practice days.
+11. The **recent results** list shows the learner's recent endings newest first: daily and Quick sittings, and saved-review activity (a sitting started from a saved review and finished attempts). Each row shows the date, item count, and Easy/Okay/Hard counts, and names its notebook when every item resolves to the same notebook that still exists. An **All results / Daily reviews / Custom reviews** filter narrows the list before its five-row limit, so narrowing can surface an older result. A row with nothing rated never appears. This list is history only: saved-review activity in it never feeds daily ratings, schedules, streaks, or Progress. Daily/Quick review-activity reporting in Progress is also in scope, with exact F5 measures and deletion/history effects still open; it does not alter session totals, streaks, or practice days.
 
 ### Choosing what to review (Quick review)
 
@@ -152,7 +152,7 @@ Every day the Home screen suggests a **short review of about five minutes** with
 59. A Hard rating **resets** an item's gap, so something that was getting easy but slips returns soon again.
 60. Nothing disappears from review forever. Even items rated Easy repeatedly come back eventually.
 61. An item's schedule is the same whichever kind of exercise it was reviewed with.
-62. Schedules and ratings belong to the **scoped item**. They **follow it when the learner fixes a typo** in a session or a successfully saved notebook edit (using the same rule as marks in Collections, confined to that source scope), are **kept quietly** when the item disappears, and **return** when it comes back. A remaining duplicate appearance in the same notebook keeps the old state; existing destination state is never overwritten, and another scope is never a destination.
+62. Schedules and ratings belong to the **scoped item**. They **follow it when the learner fixes a typo** in a session or a successfully saved notebook edit (using the same rule as marks in Collections, confined to that source scope), are **kept quietly** when the item disappears, and **return** when it comes back. A remaining duplicate appearance in the same notebook keeps the old state; existing destination state is never overwritten, and another scope is never a destination. Deleting a whole notebook is the exception: its identity never returns, so its items' schedules and suggestion declines are removed with it, while their rating history stays with the reviews it was given in.
 63. The learner's **status** (Learned or Still difficult) only influences what is suggested. Review never changes a status automatically.
 
 ### Finishing a review
@@ -186,7 +186,7 @@ Every day the Home screen suggests a **short review of about five minutes** with
 - **A phrase and a word with the same text:** treated as separate items, because they are different kinds.
 - **The same spelling in a notebook and a session (or two notebooks):** separate scoped items with independent ratings and schedules; rating one never reschedules the others.
 - **A typo fixed in a session or a saved notebook edit:** the item's schedule and ratings follow it within that scope, using the same rule as marks. A remaining duplicate in the notebook keeps the old state; an existing destination is never overwritten.
-- **A notebook hard-deleted during or after practice:** its scoped items leave future selection; stored schedules stay under the old identity and are not inherited by a same-named replacement notebook or a same-spelling item elsewhere.
+- **A notebook hard-deleted during or after practice:** its scoped items leave future selection; their schedules and suggestion declines are removed with it, while rating history stays with its reviews, and nothing is inherited by a same-named replacement notebook or a same-spelling item elsewhere.
 - **A double tap or retried request on a rating:** counted once.
 - **Two tabs reviewing the same items:** ratings from both are kept, the later rating wins for the schedule, and nothing breaks.
 - **A review left open for a long time:** continues normally, and the day's suggestion recalculates for the next visit.
@@ -230,7 +230,7 @@ This describes the intended approach at a high level, using the agreed stack (La
 9. **Create the finish screen and suggestions.** A summary of the review, gentle suggestions to mark items as Learned or Still difficult that the learner confirms, and links back to Collections.
 10. **Add Quick review.** The choices for topics, collections, starred only, number of items, and learned items, with a live count of matching items, using the same selection piece.
 11. **Keep Review in step.** Make sure finishing, editing, archiving, restoring, and deleting sessions, saving and hard-deleting notebook entries/notebooks, and changing stars and statuses, update what Review suggests straight away, without keeping copies that can go out of date. Scope every content/eligibility read to the item's source.
-12. **Connect to other features.** Expose review history in a stable form for Progress and Export later, keep session-based streaks separate, and leave room for voice recording in say-it-again. Daily/Quick review-activity reporting for notebook and session sources is in scope, but its exact F5 measures and deletion/history treatment await the [Notebook open decisions](feature-Notebooks.md#open-questions); saved custom attempts stay excluded.
+12. **Connect to other features.** Expose review history in a stable form for Progress and Export later, keep session-based streaks separate, and leave room for voice recording in say-it-again. Daily/Quick review-activity reporting for notebook and session sources is in scope, but its exact F5 measures and deletion/history treatment await the [Notebook open decisions](feature-Notebooks.md#open-questions); saved custom activity appears only as recent-results history and stays out of those measures.
 13. **Make it work everywhere.** Test on phone, tablet, and computer, in light and dark mode, with the keyboard and a screen reader, and with large numbers of items.
 
 ### UI components: use shadcn-vue wherever possible
@@ -394,7 +394,7 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 - A Quick review mixes exercise types, never repeats an item, and uses the same rating and scheduling rules.
 - Only items from finished, non-archived sessions and saved notebook entries are used, and Learned items are left out unless included.
 - Quick review counts distinct eligible scoped items: same-spelling items in different notebooks/sessions count separately and are labelled by source, while duplicate notebook rows and comma-separated meanings count once. Shared topics match notebook items through their notebook's topic; mistakes and past questions stay session-only.
-- The recent results list shows the date, number of items, and Easy, Okay, and Hard counts of the last reviews, and updates after each review.
+- The recent results list shows the date, number of items, and Easy, Okay, and Hard counts of the last sittings and finished saved-review activity, newest first, updates after each review, and narrows under the All results / Daily reviews / Custom reviews filter before its five-row limit.
 - After several Easy ratings in a row, the summary may suggest marking an item Learned, and after several Hard ratings, Still difficult. The learner can confirm or ignore each suggestion, and confirming sets the status, while ignoring changes nothing.
 - Review never changes a status by itself.
 - The number of ratings needed for a suggestion lives in one named setting.
@@ -411,14 +411,14 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 - Finishing a session or successfully saving notebook entries adds items to future reviews; an unfinished session never contributes, and notebook entries need no finish step.
 - In the full journey, steps are opened in an unusual order, a step is left half-finished and finished later, an item is undone from another step, and the review is finished early once and completed fully once, with the daily review message appearing only after a complete review.
 - Editing a finished session or a saved notebook entry changes the text shown in later exercises, within that item's own scope only.
-- Archiving removes session items from future reviews, restoring brings them back with their schedules, and deleting removes them. Hard-deleting a notebook or entry removes its scoped items without touching matching text elsewhere.
+- Archiving removes session items from future reviews, restoring brings them back with their schedules, and deleting removes them. Hard-deleting a notebook removes its scoped items, their schedules and their suggestion declines without touching matching text elsewhere; deleting one entry leaves that identity's stored records quietly in place, as Collections does.
 - Starring an item or changing its status changes what is suggested.
-- Review history and schedules follow typo fixes within the source scope, are kept when items disappear, and return only with that identity, in every case that Collections' marks handle.
+- Review history and schedules follow typo fixes within the source scope, are kept when items disappear, and return only with that identity, in every case that Collections' marks handle — except a deleted notebook, whose schedules and suggestion declines are removed because its identity never returns.
 - Counts, estimates, and mixes on Home and Review Home are always correct for what would actually be shown.
 - Nothing is stale and only the latest request updates the screen.
 - A full journey works: finish a session, see the suggestion appear, start the daily review, work through each kind of exercise, rate items, see the summary, return the next day, see Hard items back sooner and Easy items later, star an item and see it favored, and archive a session and see its items leave.
-- A notebook-only journey works: save notebook entries with no sessions, receive a daily suggestion and use Quick review, rate a notebook word without rescheduling a same-spelling session word, then hard-delete the notebook and see its items leave future selection while stored state stays under the old identity.
-- Daily/Quick notebook practice changes no session-based streak, practice day, or session-content total, and saved custom attempts stay excluded from recent results and review-activity reporting; exact Progress measures await the Notebook decision.
+- A notebook-only journey works: save notebook entries with no sessions, receive a daily suggestion and use Quick review, rate a notebook word without rescheduling a same-spelling session word, then hard-delete the notebook and see its items leave future selection while their marks, schedules and suggestion declines are removed and the same-spelling session word keeps its state.
+- Daily/Quick notebook practice changes no session-based streak, practice day, or session-content total, and saved custom activity appears in recent results only as history while staying excluded from review-activity reporting; exact Progress measures await the Notebook decision.
 - Wording is friendly, calm, and consistent, and nothing makes the learner feel judged, rushed, or scored.
 - All screens work on a phone, tablet, and computer, with no sideways scrolling, and at 200 percent zoom.
 - All text, buttons, and focus outlines have good contrast in light and dark mode, and no meaning relies on color alone.
@@ -442,7 +442,7 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 - **Daily and Quick review draw from both sources.** Eligible session items and saved notebook vocabulary, phrases, and grammar notes are candidates; mistakes and past questions stay session-only. Notebook entries need no finish step, and a notebook-only learner can review normally.
 - **The one-off chooser is named Quick review.** It is not the saved, named Custom reviews feature (F13); it starts straight away, is not saved as a set, and never invokes F13's Finished status.
 - **Ratings and schedules belong to the scoped item.** Rating a notebook word never reschedules a same-spelling session word or another notebook's word, and exercise content comes only from the item's own scope.
-- **Session-based streaks, practice days, and totals are unchanged by reviewing or by notebooks.** Daily/Quick review-activity reporting for both sources is in scope, but its exact measures and deletion/history treatment remain open in Notebooks; saved custom attempts stay excluded.
+- **Session-based streaks, practice days, and totals are unchanged by reviewing or by notebooks.** Daily/Quick review-activity reporting for both sources is in scope, but its exact measures and deletion/history treatment remain open in Notebooks; saved custom activity appears only as recent-results history and stays out of those measures.
 
 ## Open Questions
 

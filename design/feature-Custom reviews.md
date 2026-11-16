@@ -6,7 +6,7 @@ Custom reviews let the learner build **their own named practice sets** from the 
 
 Notebook integration below is a **planned requirement**, aligned with [Notebooks](feature-Notebooks.md), not evidence of implementation or passing tests.
 
-Custom reviews are **completely separate from the rest of the app**. Ratings made inside a custom review, its attempts, its statuses, and the items being gathered affect nothing else. They do not change item marks, schedules, the daily suggestion, recent results, status suggestions, streaks, or Progress.
+Custom reviews are **completely separate from the rest of the app**. Ratings made inside a custom review, its attempts, its statuses, and the items being gathered affect nothing else. They do not change item marks, schedules, the daily suggestion, status suggestions, streaks, or Progress. Finished saved-review activity appears in recent results only as read-only history.
 
 This is different from the **Quick review** described in the Review feature. Quick review is a one-off chooser that starts straight away and is not saved. Custom reviews are saved, named, and repeatable.
 
@@ -23,7 +23,7 @@ This is different from the **Quick review** described in the Review feature. Qui
 - **The recommended size is 20 items.** Past it the app warns while adding, and tags the review **"Too Many Items"**. The number is advice, not a rule: the warning never refuses an add and no attempt is truncated.
 - **The maximum size is 50 items**, counting every item the review holds, including items not eligible yet and items not available right now. An add that would cross it is refused as a whole, with the room left named. An attempt is never truncated.
 - **A review allows all item kinds by default**, or a chosen subset of them. The choice is shown on the review and can be changed later; a kind the review still holds items of cannot be turned off until those items are removed.
-- **Custom review attempts never change item ratings, schedules, statuses, or marks**, and never feed the daily suggestion, recent results, status suggestions, streaks, or Progress.
+- **Custom review attempts never change item ratings, schedules, statuses, or marks**, and never feed the daily suggestion, status suggestions, streaks, or Progress. Their finished activity appears in recent results only as read-only history.
 - A custom review's attempt is **self-rated** (Hard, Okay, or Easy), like the rest of Review.
 - Archived sessions' items are **not available** while archived and return on restore. Notebooks are hard-deleted, never archived; saved notebook items do not wait for Finished.
 - Deleted scoped items are **removed permanently** from every custom review that references them. A duplicate appearance in the same scope can keep the item alive; matching text in another notebook or a session cannot. Losing the last member makes a review Empty; started attempts retain snapshots with Deleted indicators.
@@ -82,7 +82,7 @@ This is different from the **Quick review** described in the Review feature. Qui
 14. Adding items never changes an item's marks, statuses, ratings, schedule, or source session/notebook.
 15. When an add would take a review past the recommended **20 items**, the app warns first — for example "This review will hold 26 items. Long reviews take a while to practise." — and offers **Continue** and **Cancel**. Continue adds the items anyway.
 16. The warning never blocks anything below the maximum. No item is left out by it; the recommendation only says how long the practice is likely to be. The hard maximum is a separate, clearly named refusal (requirements 78–80).
-17. Custom-review activity never feeds Collections, daily/Quick Review results, or Progress. Entry links, Add to review controls, and the notebook shortcut can lead to saved reviews, but there is no basket bar or separate basket page — every review lives on the custom-review listing.
+17. Custom-review activity never feeds Collections, daily/Quick ratings, or Progress; its finished activity appears in recent results only as read-only history. Entry links, Add to review controls, and the notebook shortcut can lead to saved reviews, but there is no basket bar or separate basket page — every review lives on the custom-review listing.
 
 ### Create review and practise from a notebook
 
@@ -135,7 +135,7 @@ This is different from the **Quick review** described in the Review feature. Qui
 45. Every attempt is numbered. The screen shows the **current attempt number** ("1st attempt", "2nd attempt", "3rd attempt"), counting **every attempt started**, so an unfinished attempt is visible as the latest one.
 46. Every started attempt keeps a **snapshot** of each item's text, meaning, example, kind, and scoped reference. In-progress/resumed and past attempts keep that content after source edits or removal; sharing the Review screen does not import daily/Quick live-source replacement or skipping into this snapshot contract.
 47. A session item that has been **archived** is shown as **Not available right now** and skipped in new attempts. Its membership is retained and it returns when its session is restored. Notebooks have no archived state.
-48. A **deleted scoped item** is pruned permanently from review membership. Deleting a notebook removes only its references; deleting one duplicate row leaves the reference while another appearance remains in that notebook. Another scope's matching word never keeps a reference alive or replaces it, and a recreated notebook never revives it. Started attempts retain their snapshots with **Deleted** indicators. Losing the last member makes the review Empty, not deleted.
+48. A **deleted scoped item** is pruned permanently from review membership. Deleting a notebook removes its items' references together with their marks, review schedules and suggestion declines; deleting one duplicate row leaves the reference while another appearance remains in that notebook. Another scope's matching word never keeps a reference alive or replaces it, and a recreated notebook never revives it. Started attempts retain their snapshots with **Deleted** indicators. Losing the last member makes the review Empty, not deleted.
 49. Future attempts resolve current content and eligibility in the original scope. An included item losing required content stays a member but is skipped until eligible again. Existing attempt snapshots remain unchanged.
 50. Attempts never change the learner's marks: stars, statuses, and notes stay exactly as they were. They never change the review's own status either.
 51. A learner can open the **source item** in a new tab without losing the attempt: **See original session** for session context or **Open notebook** at the notebook entry. A deleted source has a calm unavailable indication, no broken link and no same-spelling fallback in another scope.
@@ -176,9 +176,9 @@ This is different from the **Quick review** described in the Review feature. Qui
 
 ### Exclusivity
 
-67. Custom reviews are **exclusive**. Nothing done inside a custom review (attempts, ratings, statuses shown, its own Empty, Draft, or Finished status, names, or history) affects any other page or calculation in the app, including Collections, the daily review, Quick review, the schedule, the "waiting for a fix" note, recent results, status suggestions, streaks, practice days, Progress totals, and marks.
+67. Custom reviews are **exclusive**. Nothing done inside a custom review (attempts, ratings, statuses shown, its own Empty, Draft, or Finished status, names, or history) affects any other page or calculation in the app, including Collections, the daily review, Quick review, the schedule, the "waiting for a fix" note, status suggestions, streaks, practice days, Progress totals, and marks. Its finished activity is shown in recent results only as read-only history, which changes no other value.
 68. Custom review ratings never count toward the "runs of ratings" that trigger status suggestions.
-69. Custom review attempts never appear in **recent results**. The Review page's recent results list shows only daily and Quick reviews.
+69. Custom review activity appears in **recent results** as history: a sitting started from a saved review and finished attempts, newest first, alongside daily and Quick sittings. The **All results / Daily reviews / Custom reviews** filter narrows the list. These rows never change daily ratings, schedules, streaks, or Progress.
 70. Custom reviews appear in **exports** with their attempts, but exports do not change anything in the app.
 
 ### Staying in step
@@ -235,7 +235,7 @@ This is different from the **Quick review** described in the Review feature. Qui
 This describes the intended approach at a high level, using the agreed stack (Laravel, Inertia, Vue, Tailwind, shadcn-vue). It is a plan to refine, not a final design.
 
 1. **Build on scoped sources.** Preserve existing session identities/grouping and study-session eligibility. Add saved notebook words/phrases keyed by notebook identity, kind, and normalised main text, plus individual grammar-row references with parent checks. Reuse Review eligibility and the Collections bulk-selection pattern. Constrain source content, eligibility, typo-following, and deletion to that same scope; resolve the shared duplicate-row representative rule from Notebooks before implementation.
-2. **Keep custom reviews in their own space.** Store custom reviews, their items, their statuses, their attempts, and each attempt's ratings separately from the daily review's ratings, schedules, and history, so no code path can mix them up. Mark attempt ratings so the schedule, suggestions, recent results, and Progress never read them.
+2. **Keep custom reviews in their own space.** Store custom reviews, their items, their statuses, their attempts, and each attempt's ratings separately from the daily review's ratings, schedules, and history, so no code path can mix them up. Mark attempt ratings so the schedule, suggestions and Progress never read them; recent results may show the attempt's own tally as history.
 3. **Stage in the review itself.** A review the learner is still building is an ordinary custom review record, so the existing review storage is the staging area. There is no basket table, no basket bar, and no save-as-review conversion.
 4. **One status column, three values, two automatic moves.** Store `Empty`, `Draft`, and `Finished` as an enum. Ordinary creation is Empty and the first ordinary add makes it Draft; losing the last member makes any status Empty. Finished is learner-chosen through the status control or the explicit notebook create-and-practise request for a new review only. Eligibility alone never chooses Finished.
 5. **One answer to "can this be practised".** A single read helper — `Finished` status and at least one eligible item — gates the card's Start action, the page's Start action, and the attempt-creation Action, so the three can never disagree. The listing's status filter reads the stored column straight from the query.
@@ -389,11 +389,11 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 
 **Tests**
 
-- Custom attempt ratings never count toward the daily schedule, status suggestions, recent results, streaks, practice days, Progress totals, marks, or the "waiting for a fix" note.
-- Custom reviews never appear in recent results, and the daily review's suggestion is unchanged by any custom activity.
+- Custom attempt ratings never count toward the daily schedule, status suggestions, streaks, practice days, Progress totals, marks, or the "waiting for a fix" note; recent results show only the attempt's own history row.
+- Custom reviews appear in recent results only as read-only history, and the daily review's suggestion is unchanged by any custom activity.
 - A review's Empty, Draft, or Finished status never appears on, or changes, anything in Collections, Review, or Progress.
 - Session edits/archive/restore/deletion and notebook saves/hard deletion update current custom-review membership/content/counts on the next load without rewriting started snapshots or changing other scopes.
-- Notebook-backed custom attempts, ratings, undo, early finish, and resume change no daily/Quick ratings or schedules, recent results, marks, status suggestions, streaks, practice days, or Progress metrics. Daily/Quick review-activity integration must still exclude saved custom attempts.
+- Notebook-backed custom attempts, ratings, undo, early finish, and resume change no daily/Quick ratings or schedules, marks, status suggestions, streaks, practice days, or Progress metrics; they appear in recent results only as their own history rows. Daily/Quick review-activity integration must still exclude saved custom attempts.
 - Only the latest request updates the screen; stale starts are revalidated at the request boundary.
 - Exports include custom reviews, their statuses, and their attempts without changing anything in the app.
 - A full journey works: create a review, gather items from several collections with the size warning answered, mark it Finished, attempt every item it holds, undo one rating, finish early, see the attempt in history, put the review back to Draft and see Start disappear, archive a session and see its items become not available, delete an item and see the Deleted indicator in past attempts, and delete the review with its attempts.
@@ -443,7 +443,7 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 
 - **Custom reviews are saved, named, and repeatable.** Quick review remains a one-off chooser in the Review feature.
 - **Custom reviews are exclusive.** Nothing done inside them affects any other page or calculation.
-- **Custom attempts do not change item marks, ratings, schedules, or statuses**, and never feed the daily suggestion, recent results, status suggestions, streaks, or Progress.
+- **Custom attempts do not change item marks, ratings, schedules, or statuses**, and never feed the daily suggestion, status suggestions, streaks, or Progress. Their finished activity appears in recent results only as read-only history.
 - **A review still being built is the staging area.** Ordinary creation saves an Empty review named "Custom Review N", and Add to review fills it. No basket or save-as conversion is introduced.
 - **Notebook Create review and practise creates a new saved review only.** Save pending input first; require 1–50 distinct valid selected scoped members with at least one eligible. Above 50 opens selection before creation; above 20 retains the warning. No truncation, partial membership, or duplicate creation on stale/retried requests. Recover a failed attempt start through the saved review.
 - **Three statuses — Empty, Draft, and Finished — and only Finished can be practised.** Empty follows zero membership and the first ordinary add makes Draft. Finished is the learner's mark alone, including the explicit notebook shortcut for its new review; it is never inferred from content. Existing review statuses are not changed by that shortcut.
@@ -462,7 +462,7 @@ The steps are ordered so each one leaves a usable, reviewable piece of the featu
 - **The attempt history is paginated; the item list is not.** Ten attempts per page with Load more bounds a history that can grow forever, while the 50-item maximum makes paging the item list unnecessary.
 - **Default names are sequential**, using the next unused number, given when the review is created.
 - **Deleted scoped items are pruned permanently** from reviews, with the last loss making the review Empty and started snapshots retaining text with Deleted indicators. A surviving duplicate in the same scope preserves the item; matching text elsewhere or a recreated notebook does not.
-- **Session archive is unchanged; notebooks are hard-deleted, never archived.** Archived session members remain held but unavailable for new attempts, and return on restore. Notebook deletion touches only its own scoped references, not other sources or custom-attempt history.
+- **Session archive is unchanged; notebooks are hard-deleted, never archived.** Archived session members remain held but unavailable for new attempts, and return on restore. Notebook deletion touches only its own scoped items — references, marks, review schedules and suggestion declines — not other sources or custom-attempt history.
 - **Deleting a review deletes its attempts** as well, after confirmation.
 - **Attempt statuses are Not started, In progress, Completed, and Finished early**, described without pass or fail wording.
-- **Custom review attempts never appear in recent results.**
+- **Custom review activity appears in recent results as history.** A sitting started from a saved review and finished attempts are listed newest first with daily and Quick sittings, under the All results / Daily reviews / Custom reviews filter, and never feed daily ratings, schedules, streaks, or Progress.

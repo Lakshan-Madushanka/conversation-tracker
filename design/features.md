@@ -230,7 +230,7 @@ Turns eligible saved material from finished, non-archived sessions and from note
 _Screen: Review Home_
 
 - **Top card:** today's suggested review ("5 minutes · 8 items") with a large **Start review** button.
-- **Below:** a **Quick review** option, a link to saved **Custom reviews**, and recent daily/Quick review results. Saved custom attempts never enter this recent-results list.
+- **Below:** a **Quick review** option, a link to saved **Custom reviews**, and recent results: daily and Quick sittings plus finished saved-review activity, newest first, with an **All results / Daily reviews / Custom reviews** filter.
 
 _Screen: Exercise_
 
@@ -465,7 +465,7 @@ The app is built with a modern, single-codebase web stack:
 - Choose allowed kinds, with all kinds allowed by default. A notebook's populated boxes do not automatically narrow this setting; kinds already represented cannot be turned off until those items are removed.
 - Add or remove members explicitly. New notebook entries never join automatically. Current source edits affect future attempts; started attempts, including those in progress, retain their snapshots.
 - Attempt a Finished review with eligible content and browse its paged history. A notebook source link opens that notebook, never a same-spelling session item.
-- Keep existing attempt snapshots with Deleted indications if a source notebook/item is deleted. Its references are removed; losing the last member makes the review Empty, not deleted.
+- Keep existing attempt snapshots with Deleted indications if a source notebook/item is deleted. Its references are removed, the deleted notebook's marks, review schedules and suggestion declines go with it, and losing the last member makes the review Empty, not deleted.
 - Search/filter reviews and delete a review with confirmation. Deleting the review removes its attempts but not source notebooks, sessions, or their items.
 
 **Full details:** [Custom reviews](feature-Custom%20reviews.md) and [Notebooks](feature-Notebooks.md).
@@ -487,7 +487,7 @@ Notebooks are named containers for language found outside conversations. They re
 - Search notebooks by name, topic, description, and entry content, including meanings and examples; open a matching entry directly.
 - Use their notebook items in Collections, daily/Quick Review, and saved custom reviews, with marks shared only for each scoped item.
 - Create a ready saved review and practise immediately when constraints are met; choose a subset above 50 distinct candidates. Later notebook additions do not join that review automatically.
-- Hard-delete a notebook after an impact preview and explicit acknowledgement. The shared topic and other sources survive; custom-review references are pruned within scope and existing attempt snapshots remain readable.
+- Hard-delete a notebook after an impact preview and explicit acknowledgement. The shared topic and other sources survive; custom-review references are pruned within scope, the deleted items' marks, review schedules and suggestion declines are removed with it, and existing attempt snapshots remain readable.
 
 **User flow**
 
@@ -499,7 +499,7 @@ Notebooks are named containers for language found outside conversations. They re
 
 **UI overview**
 
-- **Notebooks listing:** searchable names, topics, item counts, last-updated information, and plain-text description previews, with New notebook and a topic filter.
+- **Notebooks listing:** searchable names, topics, item counts that count every saved row (duplicates included), last-updated information, and plain-text description previews, with New notebook and a topic filter.
 - **Notebook page:** editable metadata and the full rich-text description above one familiar entry board, save feedback, Create review and practise, and a deliberate Delete action.
 - **Source context:** Collections and practice show the notebook name and Open notebook at the entry, not invented session dates or questions.
 - **Accessibility:** mobile-first layout, dark mode, visible keyboard focus, accessible editors, and clear save, selection, and deletion announcements.

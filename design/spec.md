@@ -120,10 +120,10 @@ The app is successful if the learner:
 - **Notebooks** are named editable containers, distinct from **Collections**, the combined study index. The Library remains session-only.
 - Notebooks and sessions share topics. Renaming a topic affects all its references; deleting one requires no notebook or session references, including empty notebooks and unfinished/archived sessions. Source deletion does not automatically delete its topic.
 - Notebook word/phrase identities and marks stay scoped to their notebook. Several comma-separated meanings remain one item; identical grammar notes remain separate items.
-- Notebooks use hard deletion with an impact preview and explicit acknowledgement, never archiving. Other scopes are unaffected, and existing custom-attempt snapshots survive source deletion.
+- Notebooks use hard deletion with an impact preview and explicit acknowledgement, never archiving. Other scopes are unaffected, the deleted items' marks, review schedules and suggestion declines are removed with them, and existing custom-attempt snapshots survive source deletion.
 - Saved custom-review membership does not track later notebook additions. The 50-item limit counts every held scoped item, including ineligible items; a started attempt uses eligible members and preserves its snapshot.
 - Daily/Quick notebook practice belongs in planned review-activity reporting. Merely collecting entries does not prove learning or create finished sessions. Exact Progress measures remain open; session-derived totals, practice days, and streaks keep their existing definitions.
-- Saved custom-review attempts do not change marks, daily schedules, recent daily/Quick results, streaks, or Progress.
+- Saved custom-review activity does not change marks, daily schedules, daily/Quick result totals, streaks, or Progress. Its finished attempts appear in recent results only as read-only history, alongside daily and Quick sittings.
 
 ## 11. Open Questions
 

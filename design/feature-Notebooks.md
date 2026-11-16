@@ -80,7 +80,7 @@ Collections shows **three items**. The two comma-separated meanings in Nature re
 ### Creating, finding, and opening notebooks
 
 1. **Notebooks** has its own main-navigation destination. **Collections** keeps its existing name and destination.
-2. The notebook listing shows the name, topic, item counts, last-updated information, and a shortened description when present. Description previews are plain text; the full description is displayed with supported formatting on the notebook page.
+2. The notebook listing shows the name, topic, item counts (every saved row, duplicates included), last-updated information, and a shortened description when present. Description previews are plain text; the full description is displayed with supported formatting on the notebook page.
 3. The listing provides **New notebook**, search, and a topic filter. Search/filter choices survive refresh through the page address, using the app's existing navigation conventions.
 4. Creation asks for a name, a topic defaulting to General, and an optional rich-text description. A blank or whitespace-only name is refused with a field error. Reuse established field-length limits where applicable and make any new limits explicit before implementation.
 5. A successful creation opens the saved notebook and its one board. An empty notebook is valid, remains on the listing, and can be reopened or deleted. Cancelling before creation does not leave a notebook behind.
@@ -118,7 +118,7 @@ Collections shows **three items**. The two comma-separated meanings in Nature re
 28. Navigating away makes the existing best effort to save, and warns when work remains unsaved. Starting practice must first save pending notebook changes; a failed or conflicting save blocks the shortcut rather than practising stale content without warning.
 29. Descriptions and grammar notes use the shared rich-text editor and supported formatting. Formatted examples retain the existing example editor. The server sanitises stored rich text and derives plain-text copies for search and previews.
 30. Rich text that is only whitespace or empty markup is treated as empty. Unsupported or unsafe pasted markup must not execute or load unwanted external content in the editor, listing, panel, or review.
-31. Adding or editing entries updates the notebook's last-updated information. Opening a notebook, changing a Collection mark, or attempting a review does not masquerade as editing its source content.
+31. Adding or editing entries, or changing the notebook's name, topic or description, updates its last-updated information. Opening a notebook, changing a Collection mark, or attempting a review does not masquerade as editing its source content.
 
 ### Scoped identities and shared marks
 
@@ -175,7 +175,7 @@ Collections shows **three items**. The two comma-separated meanings in Nature re
 70. Fixed membership is **not frozen content or permanently frozen eligibility**. An included word that gains a meaning later may become usable in a future attempt without being re-added; an included item that loses required content stays a member but is skipped until eligible again.
 71. Every started custom-review attempt keeps the existing snapshot contract. Later source edits do not rewrite an in-progress or past attempt. History remains paged according to the Custom reviews specification.
 72. Source navigation from a notebook-backed attempt opens the notebook at its entry when it still exists. A deleted source is represented calmly without a broken link or fallback to another scope.
-73. **Custom-review isolation is preserved.** Its ratings and attempts stay in its own history and do not change scoped marks, daily schedules, recent daily/Quick results, streaks, or Progress. Displaying source marks is not permission for the attempt to change them.
+73. **Custom-review isolation is preserved.** Its ratings and attempts stay in its own history and do not change scoped marks, daily schedules, daily/Quick result totals, streaks, or Progress; finished activity appears in recent results only as read-only history. Displaying source marks is not permission for the attempt to change them.
 
 ### Daily Review and Progress
 
@@ -289,7 +289,7 @@ These are proposed reviewable stages, not permission to ship a partially integra
 - A later notebook addition does not join the review. Explicit Add to review still works under the shared rules.
 - Editing included content changes future attempts but not existing attempt snapshots; becoming eligible later does not require re-adding a member.
 - Matching text in another source never supplies the attempt answer or rescues a deleted notebook reference.
-- Custom attempts leave daily schedules, scoped marks, recent daily results, streaks, and Progress unchanged.
+- Custom attempts leave daily schedules, scoped marks, daily/Quick result totals, streaks, and Progress unchanged; they appear in recent results only as read-only history.
 
 ### Step 5: Daily Review and Progress integration
 

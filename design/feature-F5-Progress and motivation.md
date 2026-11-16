@@ -109,7 +109,7 @@ This document specifies F5 and does not claim that the feature is implemented or
 - **[Collections](feature-F3-Personal%20collections.md):** session mistake identity, appearance counting, seen counts, and the distinction between collected content and mastery. Collections' “Learned” marks do not change Progress totals.
 - **[Review and re-practice](feature-F4-Review%20and%20re-practice.md):** daily and Quick review history, ratings, local-day handling, and the boundary that reviewing never extends the session-based streak. Saved custom attempts remain isolated.
 - **[Notebooks](feature-Notebooks.md):** the rule that notebook entries are not finished sessions, notebooks have no mistakes, and notebook daily/Quick practice belongs in planned review-activity reporting. The exact F5 measures remain an open decision there.
-- **[Custom reviews](feature-Custom%20reviews.md):** saved attempts and snapshots that must never appear in Progress, recent daily/Quick results, streaks, or session totals.
+- **[Custom reviews](feature-Custom%20reviews.md):** saved attempts and snapshots that must never appear in Progress, streaks, or session totals. Their finished activity may appear in recent results as read-only history, which changes none of these measures.
 - **Base app layout:** the main navigation with the Progress link, page header, stat tiles, cards, empty states, and responsive layout.
 - **Home screen:** the session-based streak must agree with the number Home shows.
 

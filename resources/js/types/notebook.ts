@@ -1,3 +1,4 @@
+import type { CollectionMatch } from '@/types/collections';
 import type {
     GrammarNote,
     PhraseEntry,
@@ -21,6 +22,17 @@ export interface NotebookData {
     feedback: NotebookFeedback;
 }
 
+/**
+ * A search match found in a saved row rather than in the card's own words.
+ * The pieces are plain text cut by the server; the coordinates open the board
+ * at that row.
+ */
+export interface NotebookCardMatch extends CollectionMatch {
+    type: 'vocabulary' | 'phrase' | 'grammar_note';
+    entry: string | null;
+    position: number;
+}
+
 export interface NotebookCardData {
     id: number;
     name: string;
@@ -32,6 +44,7 @@ export interface NotebookCardData {
         phrases: number;
         grammar_notes: number;
     };
+    match: NotebookCardMatch | null;
 }
 
 export interface NotebookSnapshot {

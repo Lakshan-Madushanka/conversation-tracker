@@ -50,13 +50,23 @@ export function newNotebookReviewKey(): string {
 /**
  * The items the notebook offers for the chosen kinds. Read-only: nothing is
  * saved, so opening and closing the dialog leaves the notebook untouched.
+ * A large notebook arrives a page at a time; `offset` asks for the next one.
  */
 export async function loadNotebookReviewCandidates(
     notebookId: number,
     kinds: NotebookReviewKind[],
+    offset = 0,
 ): Promise<NotebookReviewCandidatesData> {
+    const query: Record<string, string | number | NotebookReviewKind[]> = {
+        kinds,
+    };
+
+    if (offset > 0) {
+        query.offset = offset;
+    }
+
     const response = await jsonRequest(
-        reviewCandidates.url(notebookId, { query: { kinds } }),
+        reviewCandidates.url(notebookId, { query }),
     );
 
     if (!response.ok) {

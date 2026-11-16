@@ -69,6 +69,10 @@ const kinds = ref<NotebookReviewKind[]>([...NOTEBOOK_REVIEW_KINDS]);
 const selected = ref<string[]>([]);
 /** Whether membership came from the learner's choice above the maximum. */
 const selectionActive = ref(false);
+/** Where the next page of candidates starts; null on the last page. */
+const nextOffset = ref<number | null>(null);
+const hasMore = ref(false);
+const loadingMore = ref(false);
 const notice = ref('');
 const busy = ref(false);
 const creationKey = ref(newNotebookReviewKey());
@@ -151,6 +155,9 @@ function reset(): void {
     kinds.value = [...NOTEBOOK_REVIEW_KINDS];
     selected.value = [];
     selectionActive.value = false;
+    nextOffset.value = null;
+    hasMore.value = false;
+    loadingMore.value = false;
     notice.value = '';
     busy.value = false;
     creationKey.value = newNotebookReviewKey();
@@ -180,14 +187,34 @@ async function load(): Promise<void> {
     }
 }
 
-/** The saved items decide the flow: all of them, a choice, or nothing. */
-function apply(data: NotebookReviewCandidatesData): void {
-    candidates.value = data.candidates;
+/** One page arrives at a time; a later page adds to the screen, never replaces it. */
+function apply(data: NotebookReviewCandidatesData, append = false): void {
+    if (append) {
+        const known = new Set(
+            candidates.value.map((candidate) => candidate.identity),
+        );
+
+        candidates.value = [
+            ...candidates.value,
+            ...data.candidates.filter(
+                (candidate) => !known.has(candidate.identity),
+            ),
+        ];
+    } else {
+        candidates.value = data.candidates;
+        selected.value = [];
+    }
+
     count.value = data.count;
     eligibleCount.value = data.eligible_count;
     recommended.value = data.recommended;
     maximum.value = data.maximum;
-    selected.value = [];
+    nextOffset.value = data.next_offset;
+    hasMore.value = data.has_more;
+
+    if (append) {
+        return;
+    }
 
     if (count.value === 0) {
         selectionActive.value = false;
@@ -207,6 +234,31 @@ function apply(data: NotebookReviewCandidatesData): void {
 
     selectionActive.value = false;
     phase.value = 'review';
+}
+
+/** Ask for the next page of items while the selection screen stays as it is. */
+async function loadMoreCandidates(): Promise<void> {
+    if (loadingMore.value || !hasMore.value || nextOffset.value === null) {
+        return;
+    }
+
+    loadingMore.value = true;
+    notice.value = '';
+
+    try {
+        apply(
+            await loadNotebookReviewCandidates(
+                props.notebookId,
+                kinds.value,
+                nextOffset.value,
+            ),
+            true,
+        );
+    } catch {
+        notice.value = 'More items could not be read just now. Try again.';
+    } finally {
+        loadingMore.value = false;
+    }
 }
 
 function toggleKind(kind: NotebookReviewKind): void {
@@ -554,6 +606,21 @@ watch(
                             </li>
                         </ul>
                     </section>
+                </div>
+
+                <div v-if="hasMore" class="space-y-1 text-center">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        class="min-h-11 md:min-h-9"
+                        :disabled="loadingMore || busy"
+                        @click="loadMoreCandidates"
+                    >
+                        {{ loadingMore ? 'Loading…' : 'Show more items' }}
+                    </Button>
+                    <p class="text-xs text-muted-foreground">
+                        Showing {{ candidates.length }} of {{ count }}.
+                    </p>
                 </div>
 
                 <p

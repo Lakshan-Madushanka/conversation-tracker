@@ -37,6 +37,9 @@ use App\Support\NotePreview;
  */
 final readonly class NotebookReviewCandidates
 {
+    /** How many candidates one selection screen asks for at a time. */
+    public const int PAGE_SIZE = 50;
+
     /**
      * The kinds a notebook can hold, in the order reviews list them.
      *
@@ -133,6 +136,35 @@ final readonly class NotebookReviewCandidates
         }
 
         return array_values($candidates);
+    }
+
+    /**
+     * One page of candidates, with the counts that describe the whole
+     * notebook. Above the maximum the selection screen asks for the next page
+     * as the learner scrolls, so a very large notebook never arrives in one
+     * response. The identities are still read in full here and again when a
+     * selection is saved, because each page must name the same items.
+     *
+     * @param  list<FeedbackType>|null  $kinds
+     * @return array{candidates: list<NotebookReviewCandidate>, count: int, eligible_count: int, next_offset: int|null, has_more: bool}
+     */
+    public function page(Notebook $notebook, ?array $kinds, int $offset): array
+    {
+        $candidates = $this->for($notebook, $kinds);
+        $count = count($candidates);
+        $slice = array_slice($candidates, max(0, $offset), self::PAGE_SIZE);
+        $next = $offset + count($slice);
+
+        return [
+            'candidates' => $slice,
+            'count' => $count,
+            'eligible_count' => count(array_filter(
+                $candidates,
+                fn (array $candidate): bool => $candidate['eligible'],
+            )),
+            'next_offset' => $next < $count ? $next : null,
+            'has_more' => $next < $count,
+        ];
     }
 
     /**

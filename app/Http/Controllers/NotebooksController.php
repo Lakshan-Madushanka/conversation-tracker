@@ -24,8 +24,10 @@ use App\Models\Notebook;
 use App\Models\Topic;
 use App\Queries\NotebookDeletionPreview;
 use App\Queries\NotebookReviewCandidates;
+use App\Queries\NotebookSearchMatches;
 use App\Queries\NotebooksListing;
 use App\Support\CustomReviewRules;
+use App\Support\SearchText;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
@@ -37,25 +39,42 @@ class NotebooksController extends Controller
      * The notebook listing. A normal visit renders the page; the same address
      * asked for JSON returns the next page for "load more".
      */
-    public function index(NotebooksListingRequest $request, NotebooksListing $listing): Response|JsonResponse
-    {
+    public function index(
+        NotebooksListingRequest $request,
+        NotebooksListing $listing,
+        NotebookSearchMatches $searchMatches,
+    ): Response|JsonResponse {
         $search = $request->search();
+        $filterTopics = $listing->topics();
+        $topic = $request->topicId(array_column($filterTopics, 'id'));
 
         $paginator = $listing->paginate(
             $search,
+            $topic,
             $request->cursor(),
             $request->wantsJson() ? $request->perPage() : NotebooksListing::PAGE_SIZE,
         );
 
+        $notebooks = $paginator->items();
+        $terms = SearchText::terms($search);
+        $matches = $searchMatches->firstFor(
+            array_map(fn (Notebook $notebook): int => (int) $notebook->id, array_values($notebooks)),
+            $terms,
+        );
+
         $page = [
             'notebooks' => array_map(
-                fn (Notebook $notebook): array => NotebookCardResource::make($notebook)->resolve(),
-                $paginator->items(),
+                fn (Notebook $notebook): array => NotebookCardResource::make($notebook)
+                    ->withEntryMatch($matches[(int) $notebook->id] ?? null, $terms)
+                    ->resolve(),
+                $notebooks,
             ),
             'next_cursor' => $paginator->nextCursor()?->encode(),
             'has_more' => $paginator->hasMorePages(),
-            'total' => $listing->total($search),
+            'total' => $listing->total($search, $topic),
             'topics' => Topic::pickerOptions(),
+            'filter_topics' => $filterTopics,
+            'topic' => $topic,
             'search' => $search,
         ];
 
@@ -91,20 +110,17 @@ class NotebooksController extends Controller
         NotebookReviewCandidatesRequest $request,
         NotebookReviewCandidates $candidates,
     ): JsonResponse {
-        $list = $candidates->for($notebook, $request->kinds());
-
-        $eligible = count(array_filter(
-            $list,
-            fn (array $candidate): bool => $candidate['eligible'],
-        ));
+        $page = $candidates->page($notebook, $request->kinds(), $request->offset());
 
         return response()->json([
             'candidates' => array_map(
                 fn (array $candidate): array => NotebookReviewCandidateResource::make($candidate)->resolve(),
-                $list,
+                $page['candidates'],
             ),
-            'count' => count($list),
-            'eligible_count' => $eligible,
+            'count' => $page['count'],
+            'eligible_count' => $page['eligible_count'],
+            'next_offset' => $page['next_offset'],
+            'has_more' => $page['has_more'],
             'recommended' => CustomReviewRules::RECOMMENDED_ITEMS,
             'maximum' => CustomReviewRules::MAX_ITEMS,
         ]);

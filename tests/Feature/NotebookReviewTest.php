@@ -109,10 +109,19 @@ function nbReviewBody(string $key, ?array $identities = null, ?array $kinds = nu
 /** Every identity the candidates endpoint would offer for a notebook. */
 function nbReviewIdentities(Notebook $notebook): array
 {
-    return array_column(
-        test()->getJson(route('notebooks.reviewCandidates', $notebook))->json('candidates'),
-        'identity',
-    );
+    $identities = [];
+    $offset = 0;
+
+    do {
+        $page = test()
+            ->getJson(route('notebooks.reviewCandidates', ['notebook' => $notebook, 'offset' => $offset]))
+            ->assertOk();
+
+        $identities = [...$identities, ...array_column($page->json('candidates'), 'identity')];
+        $offset = $page->json('next_offset');
+    } while ($offset !== null);
+
+    return $identities;
 }
 
 it('offers one candidate per scoped notebook item with deterministic content and eligibility', function (): void {
@@ -288,6 +297,50 @@ it('opens selection over fifty items, refuses fifty-one, and creates a review fr
 
     expect(CustomReviewItem::query()->where('custom_review_id', $review->id)->count())->toBe(50)
         ->and(CustomReviewAttempt::query()->sole()->items()->count())->toBe(50);
+});
+
+it('reads candidates a page at a time so a large notebook is not one payload', function (): void {
+    $notebook = Notebook::factory()->create();
+
+    foreach (range(1, 51) as $number) {
+        nbReviewWord($notebook, 'word '.$number, 'meaning '.$number);
+    }
+
+    $first = $this->getJson(route('notebooks.reviewCandidates', $notebook))
+        ->assertOk()
+        ->assertJsonPath('count', 51)
+        ->assertJsonPath('has_more', true)
+        ->assertJsonPath('next_offset', 50);
+
+    expect($first->json('candidates'))->toHaveCount(50);
+
+    $second = $this->getJson(route('notebooks.reviewCandidates', ['notebook' => $notebook, 'offset' => 50]))
+        ->assertOk()
+        ->assertJsonPath('count', 51)
+        ->assertJsonPath('has_more', false)
+        ->assertJsonPath('next_offset', null);
+
+    expect($second->json('candidates'))->toHaveCount(1);
+});
+
+it('accepts a chosen item that sat on a later candidate page', function (): void {
+    $notebook = Notebook::factory()->create();
+
+    foreach (range(1, 51) as $number) {
+        nbReviewWord($notebook, 'word '.$number, 'meaning '.$number);
+    }
+
+    $late = $this->getJson(route('notebooks.reviewCandidates', ['notebook' => $notebook, 'offset' => 50]))
+        ->assertOk()
+        ->json('candidates.0.identity');
+
+    $this->postJson(route('notebooks.review.store', $notebook), nbReviewBody('late-page', [$late], confirmed: true))
+        ->assertOk()
+        ->assertJsonPath('outcome', 'created');
+
+    $review = CustomReview::query()->sole();
+
+    expect(CustomReviewItem::query()->where('custom_review_id', $review->id)->count())->toBe(1);
 });
 
 it('counts duplicate saved rows once, so many rows can still fit fifty identities', function (): void {

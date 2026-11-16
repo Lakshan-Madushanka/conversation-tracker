@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { nextTick, ref, watch } from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { BookOpenIcon, PlusIcon, Trash2Icon } from '@lucide/vue';
+import CollectionMatchHint from '@/components/CollectionMatchHint.vue';
 import LibrarySearch from '@/components/LibrarySearch.vue';
 import NotebookDeleteDialog from '@/components/NotebookDeleteDialog.vue';
 import PageHeader from '@/components/PageHeader.vue';
@@ -16,6 +17,10 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import {
+    NativeSelect,
+    NativeSelectOption,
+} from '@/components/ui/native-select';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { jsonRequest } from '@/lib/http';
 import {
@@ -33,6 +38,8 @@ const props = defineProps<{
     has_more: boolean;
     total: number;
     topics: TopicSummary[];
+    filter_topics: TopicSummary[];
+    topic: number | null;
     search: string;
 }>();
 
@@ -45,12 +52,38 @@ const visibleTotal = ref(props.total);
 const deletingCard = ref<NotebookCardData | null>(null);
 const deleteOpen = ref(false);
 
+const searchBox = ref<InstanceType<typeof LibrarySearch> | null>(null);
+
 /** The card and its count leave together once the server says it is gone. */
 function removeCard(notebookId: number): void {
+    const index = cards.value.findIndex((card) => card.id === notebookId);
+
     cards.value = cards.value.filter((card) => card.id !== notebookId);
     visibleTotal.value = Math.max(0, visibleTotal.value - 1);
     deleteOpen.value = false;
     deletingCard.value = null;
+
+    void nextTick(() => focusAfterRemoval(index));
+}
+
+/**
+ * The removed card's place: the card that took it, the one above, or the
+ * search box when the list is now empty.
+ */
+function focusAfterRemoval(index: number): void {
+    const next =
+        cards.value[index] ??
+        cards.value[index - 1] ??
+        cards.value[cards.value.length - 1] ??
+        null;
+
+    if (next !== null) {
+        document.getElementById(`notebook-link-${next.id}`)?.focus();
+
+        return;
+    }
+
+    searchBox.value?.focus();
 }
 
 function removeDeleted(notebook: { id: number }): void {
@@ -64,6 +97,8 @@ function askDelete(card: NotebookCardData): void {
 
 const searching = ref(false);
 const searchTerm = ref(props.search);
+const selectedTopic = ref(props.topic === null ? '' : String(props.topic));
+const filtering = ref(false);
 
 // A next page that was already on its way when a new list arrived must not
 // be appended to it.
@@ -101,21 +136,58 @@ watch(
     },
 );
 
+// A topic that no notebook uses any more comes back as no filter at all.
+watch(
+    () => props.topic,
+    (topic) => {
+        selectedTopic.value = topic === null ? '' : String(topic);
+    },
+);
+
 const createOpen = ref(false);
 const createName = ref('');
 const createTopic = ref('');
 const creating = ref(false);
 const createError = ref('');
 
-function onSearch(value: string): void {
-    searching.value = true;
-    router.get(notebooksIndex.url(), value ? { q: value } : {}, {
+/** The list's current address: the search and the topic together. */
+function visit(): void {
+    const params: Record<string, string> = {};
+
+    if (searchTerm.value) {
+        params.q = searchTerm.value;
+    }
+
+    if (selectedTopic.value) {
+        params.topic = selectedTopic.value;
+    }
+
+    filtering.value = true;
+    router.get(notebooksIndex.url(), params, {
         preserveState: true,
         preserveScroll: true,
         onFinish: () => {
+            filtering.value = false;
             searching.value = false;
         },
     });
+}
+
+function onSearch(value: string): void {
+    searchTerm.value = value;
+    searching.value = true;
+    visit();
+}
+
+function onTopicChange(value: unknown): void {
+    selectedTopic.value =
+        value === null || value === undefined ? '' : String(value);
+    visit();
+}
+
+function clearTopic(): void {
+    selectedTopic.value = '';
+    visit();
 }
 
 async function loadMore(): Promise<void> {
@@ -131,6 +203,10 @@ async function loadMore(): Promise<void> {
 
         if (searchTerm.value) {
             params.set('q', searchTerm.value);
+        }
+
+        if (selectedTopic.value) {
+            params.set('topic', selectedTopic.value);
         }
 
         const response = await jsonRequest(
@@ -204,6 +280,31 @@ function formatDate(iso: string | null): string {
         year: 'numeric',
     });
 }
+
+/**
+ * A card opens its notebook at the top. When the search matched a saved row
+ * instead of the card's own words, it opens the board at that row, using the
+ * same address a Collections item uses.
+ */
+function cardHref(card: NotebookCardData): string {
+    const match = card.match;
+
+    if (match === null) {
+        return notebooksShow.url(card.id);
+    }
+
+    const query: Record<string, string> = {
+        field: 'entry',
+        type: match.type,
+        position: String(match.position),
+    };
+
+    if (match.entry !== null && match.entry !== '') {
+        query.entry = match.entry;
+    }
+
+    return notebooksShow.url(card.id, { query });
+}
 </script>
 
 <template>
@@ -219,13 +320,34 @@ function formatDate(iso: string | null): string {
             </template>
         </PageHeader>
 
-        <div class="mb-4">
-            <LibrarySearch
-                v-model="searchTerm"
-                :updating="searching"
-                label="Search notebooks"
-                @search="onSearch"
-            />
+        <div class="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div class="min-w-0 flex-1">
+                <LibrarySearch
+                    ref="searchBox"
+                    v-model="searchTerm"
+                    :updating="searching"
+                    label="Search notebooks"
+                    @search="onSearch"
+                />
+            </div>
+            <NativeSelect
+                v-if="filter_topics.length > 0"
+                id="notebook-topic-filter"
+                :model-value="selectedTopic"
+                class="w-full sm:w-48"
+                aria-label="Filter by topic"
+                :disabled="filtering"
+                @update:model-value="onTopicChange"
+            >
+                <NativeSelectOption value="">All topics</NativeSelectOption>
+                <NativeSelectOption
+                    v-for="option in filter_topics"
+                    :key="option.id"
+                    :value="String(option.id)"
+                >
+                    {{ option.name }}
+                </NativeSelectOption>
+            </NativeSelect>
         </div>
 
         <p v-if="visibleTotal > 0" class="mb-3 text-sm text-muted-foreground">
@@ -243,21 +365,39 @@ function formatDate(iso: string | null): string {
                 aria-hidden="true"
             />
             <p class="font-medium">
-                {{
-                    searchTerm
-                        ? 'No notebooks match your search.'
-                        : 'No notebooks yet.'
-                }}
+                <template v-if="searchTerm">
+                    No notebooks match your search.
+                </template>
+                <template v-else-if="selectedTopic">
+                    No notebooks in this topic.
+                </template>
+                <template v-else> No notebooks yet. </template>
             </p>
             <p class="mt-1 text-sm text-muted-foreground">
-                {{
-                    searchTerm
-                        ? 'Try different words.'
-                        : 'Create a notebook to keep your words, phrases and grammar notes.'
-                }}
+                <template v-if="searchTerm">
+                    Try different words{{
+                        selectedTopic ? ' or another topic' : ''
+                    }}.
+                </template>
+                <template v-else-if="selectedTopic">
+                    Choose another topic or show them all.
+                </template>
+                <template v-else>
+                    Create a notebook to keep your words, phrases and grammar
+                    notes.
+                </template>
             </p>
             <Button
-                v-if="!searchTerm"
+                v-if="selectedTopic"
+                type="button"
+                variant="outline"
+                class="mt-4"
+                @click="clearTopic"
+            >
+                Show all topics
+            </Button>
+            <Button
+                v-else-if="!searchTerm"
                 type="button"
                 class="mt-4"
                 @click="openCreate"
@@ -271,7 +411,8 @@ function formatDate(iso: string | null): string {
         <ul v-else class="space-y-3" role="list">
             <li v-for="card in cards" :key="card.id" class="relative">
                 <Link
-                    :href="notebooksShow.url(card.id)"
+                    :id="`notebook-link-${card.id}`"
+                    :href="cardHref(card)"
                     class="block rounded-lg border border-border bg-card px-4 py-3 pr-14 transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 >
                     <div class="flex items-start justify-between gap-2">
@@ -291,6 +432,10 @@ function formatDate(iso: string | null): string {
                     >
                         {{ card.description }}
                     </p>
+                    <CollectionMatchHint
+                        v-if="card.match"
+                        :match="card.match"
+                    />
                     <div class="mt-2 flex gap-3 text-xs text-muted-foreground">
                         <span>{{ card.counts.words }} words</span>
                         <span>{{ card.counts.phrases }} phrases</span>

@@ -8,7 +8,7 @@
 | Sources of truth | `design/spec.md`, `design/features.md` (F14), `design/feature-Notebooks.md`; the shared sections of `feature-F3-Personal collections.md`, `feature-F4-Review and re-practice.md`, `feature-Custom reviews.md`, and `feature-F5-Progress and motivation.md`                                                                                                                                                                                                                                                                                                                               |
 | Dataset          | Seeded local database: **1 notebook with 1 saved word**, 52 sessions, 17 topics. The browser checks used the same database. It is a development dataset, not a scale fixture; the query-flatness tests create their own rows.                                                                                                                                                                                                                                                                                                                                                            |
 | Result           | Steps 1–6 are implemented and covered by 102 notebook backend tests and 32 notebook component/page tests. The first pass found and fixed two listing defects (a topic read per card, and stale cards after a search). A follow-up pass fixed all five remaining code issues: the listing's topic filter, the matched-entry preview and deep link, paginated review candidates, focus after deleting a card, and the deletion preview's full-table read. Progress reporting remains unimplemented by design while its F5 measures are open, and export shape is still a product decision. |
-| Repository       | Branch `notebook/step6-hard-deletion-polish`; Steps 5–6 in `bf7b513`, `d0abc8d`, `909444c`, PR #47. The quality-pass fixes described here are in the working tree, uncommitted at the time of writing, after `96c7eb3`. `design/feature-F5-Progress and motivation.md` was not modified in this pass.                                                                                                                                                                                                                                                                                    |
+| Repository       | Branch `notebook/step6-hard-deletion-polish`; Steps 5–6 in `bf7b513`, `d0abc8d`, `909444c`, PR #47. The quality-pass fixes described here are committed after `96c7eb3` in `3a12db7` (listing, preview, candidates, focus), `90eff6a` (deletion preview read) and `b68c11d` (this report). `design/feature-Notebooks.md` records the resolved General default (open question 4) and, in requirement 21, the duplicate guidance; `design/feature-F5-Progress and motivation.md` was not modified in this pass.                                                                            |
 
 **Verdict in one paragraph:** Notebooks behaves as the F14 document describes: a real notebook parent with shared topics, one autosaving board built from the session editors, identities scoped to the notebook so that a session's “bank” and a notebook's “bank” stay separate, Collections rows and marks that follow the scoped item, a Create review and practise shortcut with the 20/50 limits and selection step, daily/Quick practice for a notebook-only learner, and a stale-safe hard deletion that never touches its topic, other notebooks, sessions, or attempt snapshots. The listing now combines search with a topic filter, shows where a search matched inside an entry with safe highlighting, and opens that entry on the board; review candidates arrive fifty at a time; deleting a card keeps focus useful; and the deletion preview streams one notebook's rows in the columns it needs. What remains is the deliberately unimplemented Progress review-activity area, export coverage, server-side grouping still reading a whole notebook before candidate pages are cut, and the evidence gaps (no screenshots, screen reader, real device, or scale fixture).
 
@@ -74,19 +74,19 @@ The steps are exercised through the routes the learner uses, with component test
 
 ## 2. Fixes made (by area)
 
-### 2.1 The notebook listing reads its topic once per card (this pass, uncommitted)
+### 2.1 The notebook listing reads its topic once per card (first pass)
 
 - **Problem:** `NotebooksListing::paginate()` counted the three boxes in the database but did not eager-load the topic, and `NotebookCardResource` then called `loadMissing('topic')` for every card. A 25-row page ran **28 queries** where a 5-row page ran **8**.
 - **Change:** the listing query now selects `topic` with the page (`->with('topic')` before the counts). The resource keeps its `loadMissing` fallback for any other caller.
 - **Result:** the small and large pages now run the same number of queries. `NotebookListingTest` holds it with a page-size comparison rather than a brittle fixed count.
 
-### 2.2 A search changed the address but not the list (this pass, uncommitted)
+### 2.2 A search changed the address but not the list (first pass)
 
 - **Problem:** Inertia visits use `preserveState: true`, so the page component stays alive. Its cards, total, cursor and has-more refs were copied from the first props once and never followed later visits. Searching `zzzz` moved the address, but the page kept showing the first visit's card and “1 notebook”; the empty state never appeared. A search that found a different notebook would likewise have shown the old cards under the new address.
 - **Change:** `resources/js/pages/notebooks/Index.vue` now watches the page props: a new `notebooks` list replaces the cards, and `total`, `next_cursor`, `has_more` and `search` follow their props. The search box stays in step with the address for Back/Forward and restored visits.
 - **Result:** a search replaces the cards and the count together; clearing it restores the list. Verified in the browser (`?q=zzzz` → empty state, clearing → the card returns) and pinned by five page tests.
 
-### 2.3 A next page could arrive after a new search (this pass, uncommitted)
+### 2.3 A next page could arrive after a new search (first pass)
 
 - **Problem:** “Load more” is a plain JSON request. If it was already in flight when a search brought a new first page, its older page was appended to the new list, mixing results from two searches.
 - **Change:** the page keeps a list generation counter, raised whenever new notebook props arrive. A load-more response from an older generation is discarded.
@@ -101,31 +101,31 @@ The steps are exercised through the routes the learner uses, with component test
 
 No test was deleted or weakened. The new backend test was confirmed red before the eager load (**28 vs 8 queries**) and green after; the page tests were confirmed red before the watchers and the generation guard.
 
-### 2.5 The listing had no topic filter (follow-up, uncommitted)
+### 2.5 The listing had no topic filter (follow-up)
 
 - **Problem:** requirement 3 asks the listing to search and filter by topic, and requirement 56 asks the two to combine. The page's topic picker belonged to the create dialog only, so a learner could not narrow a long list to one topic.
 - **Change:** `NotebooksListingRequest` accepts an optional `topic` (checked with `is_numeric`, because validated values are strings), `NotebooksListing` narrows the page and the total by it, and `topics()` offers only topics at least one notebook uses. The controller drops an unknown or removed id and sends the applied filter back, so the address and the select stay in step. The page renders a native select beside the search box and includes the topic in both the visit and the load-more URL; an empty topic offers “Show all topics”.
 - **Result:** search and topic combine (`?q=garden&topic=5`) and the load-more page keeps both. `NotebookListingTest` covers narrowing, the combination, the used-topics list and an unknown id; three page tests cover the options, the combined visit and the empty-topic reset.
 
-### 2.6 A search hit inside an entry had no preview or way to open it (follow-up, uncommitted)
+### 2.6 A search hit inside an entry had no preview or way to open it (follow-up)
 
 - **Problem:** search could match through an entry while the card showed only name, topic and description. Requirements 54 and 55 ask for safe highlighting, a meaningful matching-entry preview, and a way to open that entry.
 - **Change:** a page-level `NotebookSearchMatches` query finds the first matching row per notebook in board order (words, phrases, notes, then position). `CollectionMatch::forEntry` reuses the existing field labels and `SearchText` segments, and `NotebookCardResource` returns `{label, segments, type, entry, position}` only when the card's own visible metadata does not already explain the hit. The page renders the existing `CollectionMatchHint` and deep-links the card with the same `field=entry` address Collections uses; the board reveals, focuses and highlights that row, and says calmly when it has moved.
 - **Result:** the snippet is plain text (formatting cannot inject markup), metadata matches show no preview, and the first row in board order is the one previewed. Covered by listing feature tests and two page tests (preview text and deep link).
 
-### 2.7 Review candidates arrived in one payload (follow-up, uncommitted)
+### 2.7 Review candidates arrived in one payload (follow-up)
 
 - **Problem:** the selection screen read every saved row of the notebook and sent every candidate in one response, so a very large notebook produced a large payload and PHP grouping work (technical note 10).
 - **Change:** `NotebookReviewCandidates::page()` keeps the server-side identity grouping and revalidation but returns 50 candidates per page with `count`, `eligible_count`, `next_offset` and `has_more`. The dialog asks for the next page from “Show more items”, appends by identity and keeps what was already chosen. Creation still revalidates the chosen identities and the 20 recommended / 50 maximum rules are unchanged.
-- **Result:** the dialog test drives a 50 + 1 notebook, chooses an item, loads the next page and creates a review from both pages; backend tests read both pages and create from a later-page identity. **Limit to record:** the server still groups the whole notebook before slicing a page, so the response and screen are bounded but the PHP work is not (section 7, question 5).
+- **Result:** the dialog test drives a 50 + 1 notebook, chooses an item, loads the next page and creates a review from both pages; backend tests read both pages and create from a later-page identity. **Limit to record:** the server still groups the whole notebook before slicing a page, so the response and screen are bounded but the PHP work is not (section 7, question 4).
 
-### 2.8 Deleting a card dropped focus to the document body (follow-up, uncommitted)
+### 2.8 Deleting a card dropped focus to the document body (follow-up)
 
 - **Problem:** the focused Delete button left with its card, so focus fell to the body. The warning itself focuses Cancel, but it cannot return to a trigger that no longer exists.
 - **Change:** each card link carries `notebook-link-{id}`; after removal focus goes to the card that took its place, the card above, or the search box when the list is empty — the same pattern the Library already uses.
 - **Result:** three page tests cover the next card, the last card and the empty list.
 
-### 2.9 The deletion preview read every entry twice (follow-up, uncommitted)
+### 2.9 The deletion preview read every entry twice (follow-up)
 
 - **Problem:** the preview hydrated every non-blank entry of the notebook, and the delete action then loaded every entry again to recompute the same identities.
 - **Change:** the preview now streams one notebook's rows with `cursor()` in the nine columns the blank rule and identity need, counting rows and collecting identities in one pass through `CustomReviewDeletedIdentities::remember()` / `groupedFrom()`. The delete action reuses the identities already computed for the checked warning instead of reading the rows a second time. The read path still writes nothing.
@@ -158,13 +158,13 @@ The five issues fixed in the follow-up pass (3.1 topic filter, 3.2 matched-entry
 
 ## 4. Differences from the documents (including decisions to verify)
 
-| #   | Decision taken                                                                                          | What the documents say / imply                                                                             | Why                                                                                                                                       | Action for the product owner                                                            |
-| --- | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| 4.1 | A renamed **General** topic is not reused; a later notebook created without a topic gets a new General. | Open question 4 asks how the default is resolved if the shared General is renamed or deleted while unused. | The covered behaviour is “find or create General again after it was renamed”, which keeps creation predictable and writes only on create. | Confirm this is the intended rule, or define a stable default marker.                   |
-| 4.2 | Notebook practice appears in the Review page's recent-review list and never as a session total.         | F5 requirements 7–9, 34–35 and Notebooks 79–81.                                                            | Matches the documents; notebooks feed daily/Quick and leave session measures alone.                                                       | None.                                                                                   |
-| 4.3 | The listing shows counts of saved rows per kind, not distinct study items.                              | Requirement 2 asks for item counts; requirement 21 says repeated rows are one study identity.              | The card is a source summary and the editor is where duplicates are resolved; deletion preview separately distinguishes rows from items.  | Confirm whether the card should show “3 saved rows” or “2 items” when duplicates exist. |
-| 4.4 | Editing a notebook updates its last-updated time; marking or practising does not.                       | Requirement 31.                                                                                            | Matches; `last_changed_at` changes only on metadata/entry saves.                                                                          | None.                                                                                   |
-| 4.5 | Notebook deletion is hard deletion; marks remain stored under the old scope and are not inherited.      | Requirements 82, 87 and 41.                                                                                | Matches; a later notebook with the same name and words does not inherit them.                                                             | None.                                                                                   |
+| #   | Decision taken                                                                                                                                                                                                                                     | What the documents say / imply                                                                                                                                                             | Why                                                                                                                                                                                                                        | Action for the product owner                                                                                        |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| 4.1 | A renamed **General** topic is not reused; a later notebook created without a topic gets a new General.                                                                                                                                            | Notebooks open question 4 asked how the default is resolved if the shared General is renamed or deleted while unused; it is now resolved in the Notebooks document in favour of this rule. | Resolving General by name keeps creation predictable and writes only on create; the renamed topic keeps the notebooks and sessions already using it.                                                                       | Confirmed as intended on 16 November 2026.                                                                          |
+| 4.2 | Notebook practice appears in the Review page's recent-review list and never as a session total.                                                                                                                                                    | F5 requirements 7–9, 34–35 and Notebooks 79–81.                                                                                                                                            | Matches the documents; notebooks feed daily/Quick and leave session measures alone.                                                                                                                                        | None.                                                                                                               |
+| 4.3 | The listing card keeps counting saved rows per kind, duplicates included, not distinct study items; a repeated word or phrase is tagged **Duplicate** on the board with the fix: extra meanings go in the same meaning field, separated by commas. | Requirement 2 asks for item counts; requirement 21 says repeated rows are one study identity.                                                                                              | Requirement 19 makes a comma the way to add a meaning, so a repeated subject row is a mistake to fix rather than an intended second meaning; the card shows the total the learner typed and the board explains any repeat. | Confirmed on 16 November 2026. The card stays a row count; the tag and guidance live in the shared table component. |
+| 4.4 | Editing a notebook updates its last-updated time; marking or practising does not.                                                                                                                                                                  | Requirement 31.                                                                                                                                                                            | Matches; `last_changed_at` changes only on metadata/entry saves.                                                                                                                                                           | None.                                                                                                               |
+| 4.5 | Notebook deletion is hard deletion; marks remain stored under the old scope and are not inherited.                                                                                                                                                 | Requirements 82, 87 and 41.                                                                                                                                                                | Matches; a later notebook with the same name and words does not inherit them.                                                                                                                                              | None.                                                                                                               |
 
 ---
 
@@ -235,12 +235,10 @@ The dataset has one notebook and one saved word, so these numbers describe fixed
 
 ## 7. Open questions
 
-1. Should the card's counts show saved rows or distinct study items when duplicates exist (4.3)?
-2. Is re-creating General after a rename the intended default rule (4.1, Notebooks open question 4)?
-3. What are the F5 review-activity measures, and when do they start (3.3, Notebooks open question 2)?
-4. What is the export shape for notebooks, and does it ship with F7 (3.4, Notebooks open question 5)?
-5. How large may a notebook grow before candidate grouping itself must move into SQL rather than PHP (3.8)?
-6. Is a 50-candidate page the right size for the selection screen, or should it follow the 20/50 review rules more directly?
+1. What are the F5 review-activity measures, and when do they start (3.3, Notebooks open question 2)?
+2. What is the export shape for notebooks, and does it ship with F7 (3.4, Notebooks open question 5)?
+3. How large may a notebook grow before candidate grouping itself must move into SQL rather than PHP (3.8)?
+4. Is a 50-candidate page the right size for the selection screen, or should it follow the 20/50 review rules more directly?
 
 ---
 
@@ -250,8 +248,8 @@ The dataset has one notebook and one saved word, so these numbers describe fixed
 2. **Decide notebook export** before F7, so the all-data promise stays honest (3.4).
 3. **Seed a scale fixture** and measure listing, board, preview and candidate requests; if candidate grouping is slow, group identities in SQL (3.8).
 4. **One manual accessibility and device pass** (3.7).
-5. **Commit and review the follow-up fixes** on the existing branch; they are test-pinned and independent of the open decisions above.
+5. **Review the committed follow-up fixes** on the existing branch; they are test-pinned and independent of the open decisions above.
 
 ---
 
-_No product documents were edited. The first-pass and follow-up fixes are uncommitted at the time of writing; everything else follows the steps as specified._
+_The Notebooks document records the resolved General default (open question 4) and the duplicate guidance in requirement 21, both confirmed 16 November 2026. No other product document was edited, and `design/feature-F5-Progress and motivation.md` is untouched. The first-pass and follow-up fixes are committed on the branch; everything else follows the steps as specified._

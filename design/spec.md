@@ -124,6 +124,8 @@ The app is successful if the learner:
 - Saved custom-review membership does not track later notebook additions. The 50-item limit counts every held scoped item, including ineligible items; a started attempt uses eligible members and preserves its snapshot.
 - Daily/Quick notebook practice counts in the separate review-activity area under the agreed measures. Merely collecting entries does not prove learning or create finished sessions. Session-derived totals, practice days, and streaks keep their existing definitions, and deleting a source never lowers review activity.
 - Saved custom-review activity does not change marks, daily schedules, daily/Quick result totals, streaks, or Progress. Its finished attempts appear in recent results only as read-only history, alongside daily and Quick sittings.
+- Notebooks are included in **F7's all-data export/backup**, carrying their metadata, shared-topic references, entries, scoped identities, marks, review schedules and suggestion declines; a session-only export must say what it includes.
+- Notebook **review candidates are grouped and paged in the database**, 50 per page, so the selection screen stays responsive as a notebook grows; the page size never limits selection and is independent of the 20/50 review rules.
 
 ## 11. Open Questions
 
@@ -132,4 +134,3 @@ The app is successful if the learner:
 3. Which matters more at launch: strong review exercises or detailed progress reports?
 4. Should the app work without an internet connection?
 5. If the learner pastes raw markdown symbols as plain text, should the app convert them into formatting?
-6. Before implementing Notebooks, settle export/backup delivery for notebook metadata, entries, scopes and marks. The other [Notebook decisions](feature-Notebooks.md#open-questions) are resolved and recorded there.

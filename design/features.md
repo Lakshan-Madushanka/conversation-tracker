@@ -2,7 +2,7 @@
 
 A plain-language specification of the app's intended behaviour, written so anyone on the team can follow it. Each feature gives a short description, what the learner can do, a **step-by-step user flow** showing how it feels to use, and a **UI overview** describing what the screen looks like.
 
-The Notebook extension below is planned behaviour, not a claim of completed implementation or testing. Its detailed requirements and remaining decisions are in [Notebooks](feature-Notebooks.md). Priority labels do not report implementation status.
+The Notebook extension below is planned behaviour, not a claim of completed implementation or testing. Its detailed requirements and agreed decisions are in [Notebooks](feature-Notebooks.md). Priority labels do not report implementation status.
 
 **Priority key:** 🟢 First version · ⚪ Idea for the future
 
@@ -350,9 +350,9 @@ _Screen: Import (inside Settings)_
 
 ## F7. Export and Backup 🟢
 
-Lets the learner download their data as a personal backup. **An export described as “all data” must include notebooks**, their shared-topic references, rich descriptions, entries, scoped identities and marks, as well as session data, review state, and custom-review attempt snapshots within the existing backup scope.
+Lets the learner download their data as a personal backup. **An export described as “all data” must include notebooks** (confirmed 18 November 2026): their shared-topic references, rich descriptions, entries, scoped identities, marks, review schedules and suggestion declines, as well as session data, review state, and custom-review attempt snapshots within the existing backup scope. Same-spelling session and notebook items stay separate in the file.
 
-Notebook export delivery and the representation of scoped relationships must be confirmed before this extension ships with an all-data backup promise. A session-only export must say what it includes rather than silently omit notebooks. This is a coverage requirement, not a claim that the current exporter already supports notebook parents; spreadsheet-to-notebook import is not introduced here.
+A session-only export must say what it includes rather than silently omit notebooks. This is a coverage requirement, not a claim that the current exporter already supports notebook parents; spreadsheet-to-notebook import is not introduced here.
 
 **What the learner can do**
 
@@ -371,7 +371,7 @@ Notebook export delivery and the representation of scoped relationships must be 
 _Screen: Export (inside Settings)_
 
 - **Simple panel** with a short explanation: "Your data is yours. Download it any time."
-- **Choices:** name exactly which sources and data are included, including notebooks when supported. Filtering vocabulary or phrases must retain their source scopes rather than merging same-spelling items across sources. Export format and notebook delivery details remain to be confirmed.
+- **Choices:** name exactly which sources and data are included, including notebooks. Filtering vocabulary or phrases must retain their source scopes rather than merging same-spelling items across sources. Notebook inclusion is agreed; the exact file layout is settled when F7 is built.
 - **Action:** one large **Download** button.
 - **After download:** a small confirmation message with the file name and the date of the last backup, shown for reassurance.
 
@@ -459,7 +459,7 @@ The app is built with a modern, single-codebase web stack:
 
 - Start an ordinary review and get it saved straight away as **Empty**, named "Custom Review N", surviving refresh. Adding its first item moves it to Draft; the learner chooses Finished when ready.
 - Add session- or notebook-sourced items from Collections with **Add to review**, choosing which unfinished review takes them, or use **+ Add items** on a review's page for eligible items of allowed kinds.
-- Choose **Create review and practise** on a notebook to create a **new** saved review and explicitly mark it Finished as part of that action. It requires 1–50 distinct selected members and at least one eligible item, after saving pending source edits. More than 50 candidates opens selection before any review is created; nothing is silently truncated.
+- Choose **Create review and practise** on a notebook to create a **new** saved review and explicitly mark it Finished as part of that action. It requires 1–50 distinct selected members and at least one eligible item, after saving pending source edits. More than 50 candidates opens selection before any review is created; nothing is silently truncated. Candidates arrive 50 at a time, and the page size is a loading detail rather than a review limit.
 - Name and describe a review at any time. An attempt uses every **eligible** member; ineligible members remain listed with reasons and still count toward the maximum.
 - Keep the **recommended 20-item** warning and tag. Continue allows a valid set above 20, but cannot override the **50-item maximum**. Ordinary adds that cross 50 remain refused as a whole, with the room left named.
 - Choose allowed kinds, with all kinds allowed by default. A notebook's populated boxes do not automatically narrow this setting; kinds already represented cannot be turned off until those items are removed.
@@ -474,7 +474,7 @@ The app is built with a modern, single-codebase web stack:
 
 ## F14. Notebooks
 
-**Status:** Planned extension. [The Notebook specification](feature-Notebooks.md) records the agreed behaviour, implementation stages, acceptance criteria, and remaining decisions; this section does not claim it is implemented.
+**Status:** Planned extension. [The Notebook specification](feature-Notebooks.md) records the agreed behaviour, implementation stages, and acceptance criteria; this section does not claim it is implemented.
 
 Notebooks are named containers for language found outside conversations. They reuse familiar entry editors without requiring a session, question, answer, or finish step. Collections remains the combined index; the Library remains session-only.
 
@@ -504,7 +504,7 @@ Notebooks are named containers for language found outside conversations. They re
 - **Source context:** Collections and practice show the notebook name and Open notebook at the entry, not invented session dates or questions.
 - **Accessibility:** mobile-first layout, dark mode, visible keyboard focus, accessible editors, and clear save, selection, and deletion announcements.
 
-**Remaining decision:** export delivery remains in [Notebook Open Questions](feature-Notebooks.md#open-questions); the other entries there are resolved. Neither the 20-item recommendation nor the 50-item review maximum limits notebook storage.
+**Export and candidates:** notebooks are part of F7's all-data backup, and review candidates are grouped and paged in the database 50 at a time so a large notebook stays responsive; the page size never limits selection and is independent of the review rules. These decisions are recorded in [Notebook Open Questions](feature-Notebooks.md#open-questions). Neither the 20-item recommendation nor the 50-item review maximum limits notebook storage.
 
 ---
 

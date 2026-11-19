@@ -2,9 +2,9 @@
 
 ## Summary
 
-Progress and motivation gives the learner an honest, encouraging view of what their practice is adding up to. It shows the **streak**, total **practice days**, finished **sessions**, and the **words, phrases, and grammar points** collected in finished sessions. It also shows how the learner's **common mistakes** are changing over recent weeks, a **weekly summary**, and one small highlight to celebrate.
+Progress and motivation gives the learner an honest, encouraging view of what their practice is adding up to. It shows the **streak**, total **practice days**, finished **sessions**, and the **words, phrases, and grammar points** collected in finished sessions. It also shows how the learner's **common mistakes** are changing over recent weeks, a **weekly summary**, and one small highlight to celebrate. The Home screen shows the same streak and practice-day numbers, so the two screens cannot disagree.
 
-The session-derived measures in this feature are part of the first version. Notebook entries are not sessions and do not create session totals, practice days, or streaks. Daily and Quick review practice appears as **separate review-activity reporting**: items practised, review days, and reviews finished, kept apart from every session-derived number.
+The session-derived measures in this feature are part of the first version. Notebook entries are not sessions and do not create session totals, practice days, or streaks. Practice in a daily, Review a bit more, or Quick review appears as **separate review-activity reporting**: items practised, review days, and reviews finished, kept apart from every session-derived number.
 
 This document specifies F5 and does not claim that the feature is implemented or tested. It is written to be planned and reviewed in detail before implementation.
 
@@ -12,11 +12,12 @@ This document specifies F5 and does not claim that the feature is implemented or
 
 - Show the learner that their practice is adding up, without turning progress into a score or a judgement.
 - Keep the meaning of every number clear: a finished session, a practice day, a collected word, or a reviewed item are different things.
+- Show the same streak and practice-day numbers wherever they appear, so Progress and Home never contradict each other.
 - Make the learner's streak feel motivating but honest, including when it is short or has been broken.
 - Help the learner notice which recurring mistakes are fading and which still need attention.
 - Give a short weekly summary and one genuine highlight that encourage the learner to come back.
 - Keep session-derived progress stable and predictable when sessions are archived, restored, edited, or deleted.
-- Give daily and Quick review activity from both sessions and notebooks its own clearly labelled place, separate from every session-derived number.
+- Give daily, Review a bit more, and Quick review activity from both sessions and notebooks its own clearly labelled place, separate from every session-derived number.
 - Work comfortably on a phone, tablet, and computer, in light and dark mode, with the keyboard and a screen reader.
 
 ## Requirements
@@ -53,11 +54,11 @@ This document specifies F5 and does not claim that the feature is implemented or
 
 ### Weekly summary and encouragement
 
-25. Progress includes a **weekly summary card**. It shows the current week when at least one finished session is dated in it; otherwise it shows the most recent week with a finished session, clearly labelled with the week it covers, so a learner returning after a gap still sees a meaningful summary.
+25. Progress includes a **weekly summary card**. It shows the current week when at least one finished session has its **session date** in that week; otherwise it shows the most recent week with a finished session, clearly labelled with the week it covers, so a learner returning after a gap still sees a meaningful summary.
 26. The weekly summary reports the learner's real activity for that week, such as:
     - finished sessions whose session date falls in that week, including archived ones;
     - words, phrases, and grammar points collected in sessions dated that week;
-    - how many times recurring mistakes appeared compared with the previous week, when enough data exists.
+    - how many mistake appearances that week held compared with the previous week, when enough data exists, using the same mistake identity and session-date rules as the chart.
 27. The weekly summary uses **session dates** for its activity, content, and mistakes, and the learner's local calendar week. Practice days and the streak remain separate measures based on the finish date.
 28. The summary must not call collected words “learned” or “mastered”, and must not claim mistakes were “fixed” unless the data actually supports that statement. It may celebrate what the learner did: sessions finished, words collected, phrases saved, or a recurring mistake appearing less often.
 29. The weekly summary offers one short **highlight** drawn from real data, for example the longest streak so far, the most sessions dated in a week, or a recurring mistake that appeared less often than the week before. It never invents a win.
@@ -66,25 +67,25 @@ This document specifies F5 and does not claim that the feature is implemented or
 
 ### Review-activity reporting
 
-32. Progress shows **daily and Quick review activity** as its own clearly labelled area, visibly separate from session-content totals and from the session-based streak.
+32. Progress shows **daily, Review a bit more, and Quick review activity** as its own clearly labelled area, visibly separate from session-content totals and from the session-based streak.
 33. That reporting must treat **session-sourced and notebook-sourced** daily/Quick practice consistently. A notebook word and a session word with the same spelling remain separate scoped items, and neither one's practice is silently counted as the other.
-34. Only **daily and Quick reviews** belong in review-activity reporting. Saved **custom-review attempts** never contribute, even when they use the same items.
+34. Only the learner's **started review sittings** belong in review-activity reporting: the daily suggestion, **Review a bit more**, and **Quick review**, which all use the ordinary review record. Saved **custom-review attempts** keep their own rating records and never contribute, even when they use the same items.
 35. Review activity must not change the learner's session count, session-content totals, practice days, or session-based streak.
-36. The area uses three measures:
-    - **Items practised** — one for every rating given in a daily or Quick review. Rating the same item again replaces its rating rather than adding a second, and undoing a rating removes it.
-    - **Review days** — the learner's local days on which at least one item was rated in a daily or Quick review.
-    - **Reviews finished** — daily or Quick sittings that ended with every item rated or an early finish, and that hold at least one rating.
+36. The area uses three all-time measures, with no week filter or start date:
+    - **Items practised** — one for every rating the review history holds. Rating the same item again **in the same sitting** replaces its rating rather than adding a second; practising it again in another sitting adds another; undoing a rating removes it.
+    - **Review days** — the learner's local days on which at least one rating was first given, taken from the rating's own timestamp. A rating changed later in an open sitting keeps its first day.
+    - **Reviews finished** — sittings that ended with every item rated or an early finish and that still hold at least one rating.
 
-    A review left part-way still adds its items and its day; only the finished-review count stays put, so leaving early is never a penalty. Repeated practice counts each rating, and the area never shows a “words learned” figure.
+    A review left part-way still adds its items and its day; only the finished-review count stays put, so leaving early is never a penalty. Undoing every rating removes that sitting's items and day, and it no longer counts as a finished review. Repeated practice counts each rating, and the area never shows a “words learned” figure.
 
-37. **Deleting a source never lowers these measures.** A deleted session or notebook leaves its past ratings as practice that happened, so the three numbers stay; editing an item follows the existing typo-following rule for ratings, and archiving or restoring a session changes nothing. This is deliberately different from session-derived totals, which describe what the learner has now and do fall when a finished session is deleted. The measures count the rating history that already exists from when Review was introduced, need no backfill, and are worded “practised”, never “learned”.
+37. **Deleting a source never lowers these measures.** A deleted session or notebook leaves its past ratings as practice that happened, so the three numbers stay; editing an item follows the existing typo-following rule for ratings, which moves the same rating record with its item, so neither the counts nor the day change; and archiving or restoring a session changes nothing. This is deliberately different from session-derived totals, which describe what the learner has now and do fall when a finished session is deleted. The measures count the rating history that already exists from when Review was introduced, need no backfill, and are worded “practised”, never “learned”.
 
 ### Experience
 
 38. Progress works comfortably on a phone, tablet, and computer, with no sideways scrolling. The stat tiles, chart, weekly summary, and any review-activity area stack cleanly on narrow screens.
 39. The page supports light and dark mode, visible keyboard focus, meaningful headings, and controls with accessible names.
 40. The chart has a text alternative and announces its meaning calmly. The streak, practice days, totals, weekly summary, and any highlight are available to screen readers as plain text, not only as icons or colours.
-41. The page stays fast and responsive with a large history, and its loading time does not grow noticeably with the number of sessions, mistakes, or reviews being summarised.
+41. The page stays fast and responsive with a large history: totals, chart buckets, and review activity are aggregated in the database, and the number of queries stays fixed as sessions, mistakes, or reviews grow.
 42. Loading shows a calm skeleton or progress state. A failure shows a friendly message with a way to try again; it never leaves a blank page or made-up numbers.
 43. Wording is encouraging and uncluttered. Hard weeks and broken streaks are described gently, and no number is presented as a judgement of the learner.
 
@@ -98,7 +99,7 @@ This document specifies F5 and does not claim that the feature is implemented or
 - The learner's **local day** decides day and week boundaries, including around midnight and daylight-saving changes. A week starts on Monday.
 - **Collections** already defines session mistake identity, appearance counting, and the “Seen N times” rules. Progress reuses those rules rather than defining its own.
 - **Notebooks** supply no mistakes, questions, answers, natural versions, session dates, or finished sessions. Notebook entries do not change the session-derived measures.
-- Daily/Quick **review** history already records which scoped items were reviewed and how they were rated. Saved custom reviews keep their own separate attempts and snapshots.
+- Daily, Review a bit more, and Quick **review** sittings already record which scoped items were reviewed, how they were rated, and when. A Quick sitting is stored as a review marked custom by the Review feature; that flag predates the Quick rename and does not make it a saved review. Saved custom reviews keep their own attempts, ratings, and snapshots on separate records.
 - Progress is a **read-only view**. It does not repair data, create missing sessions, or change a learner's marks.
 - The app needs an internet connection; offline progress is not introduced here.
 - The app contains **no AI** and does not generate meanings, grades, or progress claims.
@@ -108,11 +109,11 @@ This document specifies F5 and does not claim that the feature is implemented or
 - **[Practice sessions](feature-Practice%20sessions%20%28copy%20and%20paste%20entry%29.md):** finished state, session date, finish date, archived state, content counts, and the source of all session-derived progress.
 - **[Library](feature-F2%20Library%20of%20saved%20sessions.md):** archive, restore, delete, and the exact effect of deleting a finished session, including the deletion preview that must agree with Progress.
 - **[Collections](feature-F3-Personal%20collections.md):** session mistake identity, appearance counting, seen counts, and the distinction between collected content and mastery. Collections' “Learned” marks do not change Progress totals.
-- **[Review and re-practice](feature-F4-Review%20and%20re-practice.md):** daily and Quick review history, ratings, local-day handling, and the boundary that reviewing never extends the session-based streak. Saved custom attempts remain isolated.
+- **[Review and re-practice](feature-F4-Review%20and%20re-practice.md):** daily, Review a bit more, and Quick review history, ratings, local-day handling, and the boundary that reviewing never extends the session-based streak. Saved custom attempts remain isolated.
 - **[Notebooks](feature-Notebooks.md):** the rule that notebook entries are not finished sessions, notebooks have no mistakes, and notebook daily/Quick practice counts in review-activity reporting under the same agreed measures as session practice.
 - **[Custom reviews](feature-Custom%20reviews.md):** saved attempts and snapshots that must never appear in Progress, streaks, or session totals. Their finished activity may appear in recent results as read-only history, which changes none of these measures.
 - **Base app layout:** the main navigation with the Progress link, page header, stat tiles, cards, empty states, and responsive layout.
-- **Home screen:** the session-based streak must agree with the number Home shows.
+- **Home screen:** its streak and practice-day tiles move to the same calculation in Step 1, so the two screens cannot disagree.
 
 ### Edge cases
 
@@ -137,13 +138,15 @@ This document specifies F5 and does not claim that the feature is implemented or
 - **Only one week of mistakes:** show the data that exists and explain that a trend needs more weeks.
 - **Notebooks contain the same words as sessions:** they do not change session totals, the mistakes chart, practice days, or the streak.
 - **A notebook item marked Learned:** it does not change session-content totals or prove mastery.
-- **A daily/Quick review completed:** it does not extend the session-based streak, practice days, or session totals.
+- **A daily, Review a bit more, or Quick review completed:** it does not extend the session-based streak, practice days, or session totals.
 - **A daily/Quick review left part-way:** its rated items and its review day count; the finished-review count does not.
+- **A rating changed in an open sitting after midnight:** its review day stays the day it was first given; a rating first given after midnight starts a new day.
+- **Every rating in a finished sitting undone:** its items and day go, and it no longer counts as a finished review.
 - **A saved custom review completed:** it changes nothing in Progress.
 - **Review activity has no data:** the review-activity area has an honest empty state, not zeroes that look like a failure.
 - **A review source is deleted later:** its past ratings stay counted as practice that happened, so the review-activity numbers do not fall; they never turn into a session-derived total or a custom-review result.
 - **A very long streak or very large total:** the number stays readable and does not break the layout.
-- **A very large history:** the page stays responsive, with a bounded number of queries.
+- **A very large history:** the page stays responsive, with a fixed number of queries.
 - **Two tabs open:** each shows correct numbers after its next load; no real-time subscription is promised.
 - **Slow or failed loading:** the learner sees a calm loading or error state with a retry, never invented sample data.
 
@@ -155,8 +158,8 @@ This document specifies F5 and does not claim that the feature is implemented or
 - **Experience principles:** simple first, calm and encouraging, quick on any device, distraction-free, and rewarding.
 - **Feature-list user flow:** open Progress, see the streak and total practice days, then finished-session and content totals, a mistakes chart over recent weeks, a weekly summary, and one encouraging highlight.
 - **Feature-list screen:** large numbers for the streak and practice days, stat tiles for sessions and session-derived content, one mistakes chart, and a weekly summary card with a small celebration icon for a genuine win.
-- **Existing placeholder:** the current Progress page is a visual placeholder using sample data. This specification replaces sample numbers with real session-derived progress and adds the review-activity area separately.
-- **Review-activity decision:** items practised, review days, and reviews finished; a review left part-way counts its items and day; deleting a source session or notebook never lowers them; custom attempts never contribute. Confirmed 16 November 2026, with the full definition in [Notebooks — Open Questions](feature-Notebooks.md#open-questions).
+- **Existing placeholder:** the current Progress page is a visual placeholder using sample data, and Home's streak and practice-day tiles also show sample values. This specification replaces both with real session-derived progress and adds the review-activity area separately.
+- **Review-activity decision:** all-time items practised, review days, and reviews finished; a review left part-way counts its items and day; undoing every rating removes it; deleting a source session or notebook never lowers the numbers; custom attempts never contribute. Confirmed 16 November 2026, with the full definition in [Notebooks — Open Questions](feature-Notebooks.md#open-questions).
 - **Not part of this feature:** changing session totals, streaks, practice days, or session grouping; word-sense splitting; AI-generated insights; grades, scores, or rankings; detailed learning analytics; saved custom-review history; Notebook storage limits; import, export, reminders, sharing, voice, or learning goals.
 
 ## Technical
@@ -165,16 +168,16 @@ This describes the intended approach at a high level, using the agreed stack (La
 
 1. **Build on the existing progress calculation.** The app already has a progress reader that loads finished sessions, including archived ones, and a calculator that produces words, phrases, mistakes, grammar notes, practice days, and the current streak from a list of finished sessions. Reuse those rules as the single source of truth so Progress, the Library deletion warning, and Home cannot disagree.
 2. **Replace the placeholder page with a real read model.** Keep the existing `/progress` address and main-navigation link. Replace the sample data with a server-side read query and an Inertia payload resource. Keep the page read-only: no writes, repairs, or task creation during rendering.
-3. **Add the missing session-derived measures.** Extend the existing progress result with the finished-session count, the set of practice days needed for the longest-streak highlight, and any values the weekly summary needs. Derive them from the same finished-session source, not from a second tally.
+3. **Add the missing session-derived measures.** Extend the existing progress result with the finished-session count and the longest streak, both worked out in the same calculator from the same practice-day set, plus any values the weekly summary needs. Derive them from the same finished-session source, not from a second tally. Home's streak and practice-day tiles read the same result.
 4. **Make day and week handling explicit.** Use the learner's timezone for the local day and the Monday-based week. Practice days and streak use the finish date; weekly content, mistake weeks, and the weekly summary use the session date. Keep this rule in one place and test midnight and daylight-saving boundaries.
-5. **Build the mistakes trend as a bounded read.** Query session mistake entries from finished sessions, including archived ones, group them with the shared mistake identity, and bucket appearances by the local week of the session date. Select the top common mistakes and return weekly counts plus a plain-text/table representation for accessibility. Do not load every session into the page just to draw the chart.
-6. **Build the weekly summary from the same data.** Use the session-derived counts and the mistake trend for the week being summarised and the week before it. Show the current week when a finished session is dated in it; otherwise show the most recent week with a finished session. Do not create a separate tally that can drift. Keep the wording honest: report sessions, collected content, and measured changes, not “mastery” or unsupported “fixed” claims.
+5. **Build the mistakes trend as a bounded read.** Read session mistake entries from finished sessions, including archived ones, group them with the shared mistake identity, and bucket appearances by the local week of the session date in the database, the same way Notebooks groups its review candidates. Select the top common mistakes there and return only their weekly counts plus a plain-text/table representation for accessibility. Do not load every entry or session into the page just to draw the chart.
+6. **Build the weekly summary from the same data.** Use the session-derived counts and the mistake trend for the week being summarised and the week before it. Show the current week when a finished session has its session date in it; otherwise show the most recent week with a finished session. Do not create a separate tally that can drift. Keep the wording honest: report sessions, collected content, and measured changes, not “mastery” or unsupported “fixed” claims.
 7. **Choose the highlight from real measures.** The longest streak can be calculated from the practice-day set. A weekly or mistake highlight must be backed by the same data. When the data cannot support a highlight, show the activity that exists without inventing a win.
-8. **Add a separate review-activity area.** Add a read query over daily/Quick sittings and ratings that produces items practised, review days, and reviews finished, and expose them as their own payload area. Keep it visually and conceptually separate from session-content totals and the streak. Exclude saved custom-review attempts at the query level, not only in the UI.
+8. **Add a separate review-activity area.** Add a read query over the started review sittings and their ratings — daily, Review a bit more, and Quick — producing items practised, review days, and reviews finished, and expose them as their own payload area. Keep it visually and conceptually separate from session-content totals and the streak. The Quick chooser's sittings are stored as reviews marked custom by the Review feature, which is not a saved F13 review; saved attempts keep their ratings on their own attempt records. Read the review sittings and their ratings directly, so saved attempts cannot leak in and a flag name is never mistaken for the distinction.
 9. **Respect scoped review sources.** Review activity must use the same scoped identities as Review and Collections, so a notebook word and a same-spelling session word stay separate. Do not guess a source from text.
 10. **Present the page with shared pieces.** Use the existing page header, stat tiles, cards, badges, empty states, and loading pieces. Use shadcn-vue components where possible. Build the chart from accessible cards, text, and bars or an accessible chart component; always provide the same values as text. Do not add a new component library.
 11. **Keep it mobile-first and accessible.** Stack tiles and cards on narrow screens, keep numbers readable, support dark mode, make the chart available to screen readers, and verify keyboard focus and heading order.
-12. **Keep reads efficient and honest.** Use database-side filtering and aggregation where practical, keep queries bounded and independent of row counts, and never show sample or stale numbers. Progress should reflect source changes on the next load without keeping a duplicate copy that can drift.
+12. **Keep reads efficient and honest.** Filter and aggregate in the database, keep the number of queries fixed as the history grows, and never show sample or stale numbers. Progress should reflect source changes on the next load without keeping a duplicate copy that can drift.
 
 ## Implementation Steps
 
@@ -182,11 +185,12 @@ These steps are ordered so each one leaves a usable, reviewable piece of Progres
 
 ### Step 1: The session-derived Progress dashboard
 
-**What it delivers:** A real Progress page reachable from the main navigation, showing the current streak, total practice days, finished-session count, and session-derived words, phrases, and grammar points. The page replaces the sample data, handles the no-session state honestly, and keeps archived and unfinished sessions in their correct places.
+**What it delivers:** A real Progress page reachable from the main navigation, showing the current streak, total practice days, finished-session count, and session-derived words, phrases, and grammar points. The page replaces the sample data, handles the no-session state honestly, and keeps archived and unfinished sessions in their correct places. Home's streak and practice-day tiles show the same calculated numbers.
 
 #### Tests
 
 - The Progress link in the main navigation opens the Progress page.
+- Home and Progress show the same streak and practice days, including at zero before any session is finished.
 - The page shows the current streak and total practice days as plain, readable numbers.
 - A learner with no finished sessions sees `0` for the streak, practice days, session count, and content totals, with a friendly explanation and a way to start a session.
 - A learner with only unfinished sessions sees the same zero values; unfinished sessions never count.
@@ -224,7 +228,7 @@ These steps are ordered so each one leaves a usable, reviewable piece of Progres
 - With no mistakes, the page shows an honest empty state and does not draw a fake downward trend.
 - With only one week of mistake data, the page shows that week and explains that a trend needs more weeks.
 - The chart has a plain-text summary and an accessible table or list with the same values.
-- The weekly summary shows the current week when a finished session is dated in it, and otherwise shows the most recent week with a finished session, clearly labelled with the week it covers.
+- The weekly summary shows the current week when a finished session has its session date in it, and otherwise shows the most recent week with a finished session, clearly labelled with the week it covers.
 - The weekly summary reports finished sessions dated in that week, including archived ones, plus collected words, phrases, and grammar points, accurately.
 - Weekly content and mistake comparisons use the session date; practice days and streak continue to use the finish date.
 - The summary does not describe collected content as “learned” or “mastered”, and does not claim mistakes were “fixed” without supporting data.
@@ -234,25 +238,29 @@ These steps are ordered so each one leaves a usable, reviewable piece of Progres
 
 ### Step 3: Review-activity reporting
 
-**What it delivers:** A separate, clearly labelled review-activity area on Progress for daily and Quick reviews from session and notebook sources. It shows items practised, review days, and reviews finished, excludes saved custom attempts, and never changes session-derived totals or the streak.
+**What it delivers:** A separate, clearly labelled review-activity area on Progress for daily, Review a bit more, and Quick sittings from session and notebook sources. It shows items practised, review days, and reviews finished as all-time totals, excludes saved custom attempts, and never changes session-derived totals or the streak.
 
 #### Tests
 
-- The area shows items practised, review days, and reviews finished as separate, plainly explained numbers.
+- The area shows items practised, review days, and reviews finished as separate, plainly explained numbers, each an all-time total with no week filter.
 - The review-activity area is visually and conceptually separate from session-content totals and the session-based streak.
 - Daily review activity appears for session-sourced items.
 - Quick review activity appears for session-sourced items.
+- A Review a bit more sitting counts under the same measures as daily and Quick sittings.
 - Daily and Quick activity from notebook items appears consistently with session-sourced activity under the agreed measures.
 - A notebook item and a same-spelling session item remain separate scoped items; practising one does not count as practising the other.
 - Saved custom-review attempts never appear in Progress, even when they use the same items.
+- A Quick sitting is counted even though the Review feature marks it custom when it stores it.
 - A learner with only custom-review history sees an honest empty review-activity state, not custom-attempt numbers.
 - A review left part-way adds its rated items and its day, but not a finished review.
-- Rating the same item again counts once with its latest rating, and does not add a second item practised.
+- Rating the same item again in the same sitting counts once with its latest rating; rating it in another sitting adds another.
 - Undoing a rating removes it, and its day drops only when it was that day's only rating; re-rating never counts twice.
+- A rating changed in an open sitting after midnight keeps its first day; a rating first given after midnight starts a new day.
+- Undoing every rating in a finished sitting removes its items and day and stops it counting as a finished review.
 - Deleting a source session or notebook leaves all three numbers unchanged, as does archiving or restoring a session.
-- Completing a daily or Quick review does not change the session count, session-content totals, practice days, or the session-based streak.
-- The review-activity area has a clear empty state when there is no daily or Quick history.
-- The area uses the learner's local day for day and week boundaries, consistent with the rest of Progress.
+- Completing a review sitting does not change the session count, session-content totals, practice days, or the session-based streak.
+- The review-activity area has a clear empty state when there is no review-sitting history.
+- The area uses the learner's own calendar days for review days, consistent with the rest of Progress.
 - The labels make clear that review activity is not proof of mastery and not the same as session content.
 - The page still works on a phone, in dark mode, and with a screen reader.
 
@@ -266,7 +274,7 @@ These steps are ordered so each one leaves a usable, reviewable piece of Progres
 - The chart's values are available as text, and the page does not rely on colour alone to communicate a trend.
 - The streak, totals, weekly summary, and highlight are announced calmly and correctly by a screen reader.
 - Long streak numbers, large totals, long words, and long mistake text do not break the layout.
-- With a large session history, the page loads quickly and the number of queries does not grow with the number of sessions or mistakes.
+- With a large history, the page loads quickly and the number of queries does not grow as sessions, mistakes, or reviews grow.
 - Loading shows a calm skeleton or progress state; a failure shows a friendly message with a retry and never shows invented numbers.
 - The page works on a phone, tablet, and computer, in light and dark mode, with no sideways scrolling.
 - Refreshing after finishing, editing, archiving, restoring, or deleting a session shows the correct updated values.
@@ -274,6 +282,6 @@ These steps are ordered so each one leaves a usable, reviewable piece of Progres
 - Completing a daily or Quick review changes no session-derived measure or streak.
 - Completing a saved custom review changes nothing on Progress.
 - The Library deletion warning and Progress show the same session-derived totals and streak after a deletion.
-- Home and Progress show the same session-based streak.
-- Opening Progress performs no writes, and no sample data remains anywhere on the page.
-- Existing session, Library, Collections, Review, Notebooks, Custom reviews, and Home behaviour is unchanged.
+- Home and Progress show the same session-based streak and practice days.
+- Opening Progress performs no writes, and no sample progress values remain on Progress or Home.
+- Existing session, Library, Collections, Review, Notebooks, and Custom reviews behaviour is unchanged; Home changes only in its streak and practice-day tiles.

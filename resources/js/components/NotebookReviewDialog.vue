@@ -81,6 +81,10 @@ const lastConfirmed = ref(false);
 /** What Try again should repeat: reading the items, or one creation. */
 const retryAction = ref<'load' | 'submit'>('load');
 
+// A read that is no longer the latest must not change the screen: a page can
+// arrive after the learner changed kinds, or after the dialog was reopened.
+let readGeneration = 0;
+
 const kindChoices = NOTEBOOK_REVIEW_KINDS.map((kind) => ({
     value: kind,
     label: NOTEBOOK_REVIEW_KIND_LABELS[kind],
@@ -169,21 +173,35 @@ function reset(): void {
 }
 
 async function load(): Promise<void> {
+    const generation = ++readGeneration;
     phase.value = 'loading';
     busy.value = true;
     notice.value = '';
 
     try {
-        apply(
-            await loadNotebookReviewCandidates(props.notebookId, kinds.value),
+        const data = await loadNotebookReviewCandidates(
+            props.notebookId,
+            kinds.value,
         );
+
+        if (generation !== readGeneration) {
+            return;
+        }
+
+        apply(data);
     } catch {
+        if (generation !== readGeneration) {
+            return;
+        }
+
         phase.value = 'error';
         notice.value =
             'The notebook items could not be read. Try again in a moment.';
         retryAction.value = 'load';
     } finally {
-        busy.value = false;
+        if (generation === readGeneration) {
+            busy.value = false;
+        }
     }
 }
 
@@ -242,19 +260,28 @@ async function loadMoreCandidates(): Promise<void> {
         return;
     }
 
+    const generation = readGeneration;
+    const offset = nextOffset.value;
     loadingMore.value = true;
     notice.value = '';
 
     try {
-        apply(
-            await loadNotebookReviewCandidates(
-                props.notebookId,
-                kinds.value,
-                nextOffset.value,
-            ),
-            true,
+        const data = await loadNotebookReviewCandidates(
+            props.notebookId,
+            kinds.value,
+            offset,
         );
+
+        if (generation !== readGeneration) {
+            return;
+        }
+
+        apply(data, true);
     } catch {
+        if (generation !== readGeneration) {
+            return;
+        }
+
         notice.value = 'More items could not be read just now. Try again.';
     } finally {
         loadingMore.value = false;
@@ -372,11 +399,9 @@ async function handle(answer: NotebookReviewAnswer): Promise<void> {
             return;
 
         case 'needs_selection':
-            count.value = answer.count;
-            maximum.value = answer.maximum;
-            selectionActive.value = true;
-            selected.value = [];
-            phase.value = 'selection';
+            // The notebook grew past the maximum elsewhere, so read the first
+            // page again: the selection step needs its paging offsets.
+            await load();
 
             return;
 

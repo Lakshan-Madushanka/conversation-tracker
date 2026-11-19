@@ -353,6 +353,123 @@ describe('Create review and practise', () => {
         expect(posts[0].identities).toEqual(['word-0', 'word-50']);
     });
 
+    it('reads the first page of the selection step when the notebook grew elsewhere', async () => {
+        const firstPage = Array.from({ length: 50 }, (_, index) =>
+            candidate({
+                identity: `word-${index}`,
+                title: `word ${index + 1}`,
+            }),
+        );
+
+        mockServer([
+            offers([candidate({ identity: 'word-0', title: 'word 1' })]),
+            offers(firstPage, {
+                count: 60,
+                eligible_count: 60,
+                next_offset: 50,
+                has_more: true,
+            }),
+        ]);
+        answers = [
+            {
+                outcome: 'needs_selection',
+                review_id: null,
+                review_url: null,
+                attempt_url: null,
+                count: 60,
+                maximum: 50,
+                message: null,
+            },
+        ];
+
+        await openDialog();
+
+        buttonWith('Create review and practise')?.click();
+        await flushPromises();
+
+        expect(reads).toHaveLength(2);
+        expect(document.body.textContent).toContain('Showing 50 of 60.');
+        expect(document.body.textContent).toContain('Show more items');
+    });
+
+    it('drops a later page that arrives after the chosen kinds change', async () => {
+        const firstPage = Array.from({ length: 50 }, (_, index) =>
+            candidate({
+                identity: `word-${index}`,
+                title: `word ${index + 1}`,
+            }),
+        );
+        const oldKindsPage = [
+            candidate({ identity: 'word-50', title: 'word 51' }),
+            ...Array.from({ length: 30 }, (_, index) =>
+                candidate({
+                    identity: `phrase-${index}`,
+                    kind: 'phrase',
+                    title: `phrase ${index + 1}`,
+                }),
+            ),
+        ];
+
+        let releaseOldKinds!: (response: Response) => void;
+        const oldKindsPending = new Promise<Response>((resolve) => {
+            releaseOldKinds = resolve;
+        });
+        let calls = 0;
+
+        request.mockImplementation(async () => {
+            calls += 1;
+
+            if (calls === 1) {
+                return respond(
+                    offers(firstPage, {
+                        count: 81,
+                        eligible_count: 81,
+                        next_offset: 50,
+                        has_more: true,
+                    }),
+                );
+            }
+
+            if (calls === 2) {
+                return oldKindsPending;
+            }
+
+            return respond(
+                offers(firstPage, {
+                    count: 51,
+                    eligible_count: 51,
+                    next_offset: 50,
+                    has_more: true,
+                }),
+            );
+        });
+
+        await openDialog();
+
+        buttonWith('Show more items')?.click();
+        await flushPromises();
+
+        // The learner narrows the kinds while that page is still on its way.
+        document
+            .querySelector<HTMLElement>('[aria-label="Include Phrases"]')
+            ?.click();
+        await flushPromises();
+
+        // The older page lands with phrases the learner has just unticked.
+        releaseOldKinds(
+            respond(
+                offers(oldKindsPage, {
+                    count: 81,
+                    eligible_count: 81,
+                }),
+            ),
+        );
+        await flushPromises();
+
+        expect(document.body.textContent).not.toContain('phrase 1');
+        expect(document.body.textContent).toContain('Showing 50 of 51.');
+    });
+
     it('cannot start when nothing chosen can be practised yet', async () => {
         mockServer(
             offers([

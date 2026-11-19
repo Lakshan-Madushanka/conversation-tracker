@@ -13,6 +13,10 @@ use App\Support\SearchText;
  * the whole page in one query. Rows keep the order the board shows its boxes,
  * so the entry the list names is the one the learner meets first after opening
  * the notebook.
+ *
+ * The database ranks the matching rows per notebook and only the first of each
+ * is returned, so a word that matches hundreds of rows still costs one row per
+ * card rather than every match.
  */
 final class NotebookSearchMatches
 {
@@ -27,30 +31,30 @@ final class NotebookSearchMatches
             return [];
         }
 
-        $query = PracticeFeedbackEntry::query()
+        $ranked = PracticeFeedbackEntry::query()
             ->whereIn('notebook_id', $notebookIds)
             ->whereIn('type', [
                 FeedbackType::Vocabulary->value,
                 FeedbackType::Phrase->value,
                 FeedbackType::GrammarNote->value,
-            ]);
-
-        SearchText::whereAll($query, 'practice_feedback_entries.search_text', $terms);
-
-        $entries = $query
-            ->orderBy('notebook_id')
-            ->orderByRaw(
-                'CASE practice_feedback_entries.type WHEN ? THEN 0 WHEN ? THEN 1 ELSE 2 END',
+            ])
+            ->select(['practice_feedback_entries.*'])
+            ->selectRaw(
+                'ROW_NUMBER() OVER (PARTITION BY notebook_id ORDER BY CASE practice_feedback_entries.type WHEN ? THEN 0 WHEN ? THEN 1 ELSE 2 END, position, id) AS match_rank',
                 [FeedbackType::Vocabulary->value, FeedbackType::Phrase->value],
-            )
-            ->orderBy('position')
-            ->orderBy('id')
+            );
+
+        SearchText::whereAll($ranked, 'practice_feedback_entries.search_text', $terms);
+
+        $entries = PracticeFeedbackEntry::query()
+            ->fromSub($ranked, 'ranked')
+            ->where('match_rank', 1)
             ->get();
 
         $first = [];
 
         foreach ($entries as $entry) {
-            $first[(int) $entry->notebook_id] ??= $entry;
+            $first[(int) $entry->notebook_id] = $entry;
         }
 
         return $first;

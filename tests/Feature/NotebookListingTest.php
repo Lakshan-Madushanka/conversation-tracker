@@ -241,6 +241,27 @@ describe('the notebook listing', function (): void {
             ->assertJsonPath('notebooks.0.match.type', 'vocabulary');
     });
 
+    it('asks the database for one matching row per notebook', function (): void {
+        $notebook = Notebook::factory()->create();
+
+        foreach (range(1, 3) as $number) {
+            listingEntry($notebook, FeedbackType::Vocabulary, 'bank '.$number, 'river '.$number);
+        }
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $this->getJson(route('notebooks.index', ['q' => 'bank']))->assertOk();
+        $queries = collect(DB::getQueryLog())->pluck('query');
+        DB::disableQueryLog();
+        DB::flushQueryLog();
+
+        expect($queries->contains(
+            fn (string $sql): bool => str_contains(strtolower($sql), 'row_number()')
+                && str_contains(strtolower($sql), 'partition by')
+                && str_contains(strtolower($sql), 'match_rank'),
+        ))->toBeTrue();
+    });
+
     it('reads a page in the same number of queries whatever it holds', function (): void {
         Notebook::factory()->count(25)->create();
 

@@ -318,6 +318,9 @@ export interface NotebookReviewCandidatesData {
     recommended: number;
     /** The most a review can hold. */
     maximum: number;
+    /** Where the next page of candidates starts; null on the last page. */
+    next_offset: number | null;
+    has_more: boolean;
 }
 
 /** What Create review and practise came to, in the server's own words. */

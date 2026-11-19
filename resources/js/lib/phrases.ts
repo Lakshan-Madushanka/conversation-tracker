@@ -74,6 +74,7 @@ export const PHRASE_TABLE: FeedbackTableConfig = {
     headerLabels: HEADER_LABELS,
     attentionMoreThanOne: ATTENTION_MORE_THAN_ONE,
     duplicateNeedsSecondColumn: false,
+    duplicateHint: 'Add extra uses to the same phrase, separated by commas.',
 };
 
 /** A new phrases row, ready to edit or save. */

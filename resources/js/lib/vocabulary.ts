@@ -75,6 +75,7 @@ export const VOCABULARY_TABLE: FeedbackTableConfig = {
     attentionMissing: ATTENTION_ADD_MEANING,
     attentionMoreThanOne: ATTENTION_MORE_THAN_ONE,
     duplicateNeedsSecondColumn: false,
+    duplicateHint: 'Add extra meanings to the same word, separated by commas.',
 };
 
 /** A new vocabulary row, ready to edit or save. */

@@ -8,13 +8,16 @@ const finishedAt = '2026-11-03T18:42:11.000000Z';
 
 function review(overrides: Partial<RecentReviewData> = {}): RecentReviewData {
     return {
+        key: 'review-41',
         id: 41,
         type: 'daily',
         type_label: 'Daily review',
+        title: null,
         finished_at: finishedAt,
         rated: 5,
         counts: { hard: 1, okay: 1, easy: 3 },
         url: '/review/41/results',
+        source: null,
         ...overrides,
     };
 }
@@ -82,8 +85,16 @@ describe('one finished sitting', () => {
 describe('the last few sittings', () => {
     it('keeps them in the order the server sent them', () => {
         const wrapper = mountResults([
-            review({ id: 44, finished_at: '2026-11-04T09:00:00.000000Z' }),
-            review({ id: 43, finished_at: '2026-11-03T09:00:00.000000Z' }),
+            review({
+                key: 'review-44',
+                id: 44,
+                finished_at: '2026-11-04T09:00:00.000000Z',
+            }),
+            review({
+                key: 'review-43',
+                id: 43,
+                finished_at: '2026-11-03T09:00:00.000000Z',
+            }),
             review({ id: 41, finished_at: '2026-11-01T09:00:00.000000Z' }),
         ]);
         const dates = wrapper
@@ -101,6 +112,7 @@ describe('the last few sittings', () => {
         const wrapper = mountResults([
             review(),
             review({
+                key: 'review-42',
                 id: 42,
                 type: 'custom',
                 type_label: 'Custom review',
@@ -136,5 +148,83 @@ describe('the last few sittings', () => {
 
         expect(wrapper.text()).toContain('8 items rated');
         expect(wrapper.text()).toContain('Easy 3 · Okay 0 · Hard 5');
+    });
+});
+
+describe('a finished attempt at a saved review', () => {
+    it('names the review and the attempt it belonged to', () => {
+        const wrapper = mountResults([
+            review({
+                key: 'attempt-9',
+                id: 9,
+                type: 'custom',
+                type_label: 'Custom review',
+                title: 'Custom Review 3 · 1st attempt',
+                url: '/custom-reviews/3/attempts/9',
+            }),
+        ]);
+
+        expect(wrapper.text()).toContain('Custom Review 3 · 1st attempt');
+        expect(wrapper.findAll('a')[0]?.attributes('aria-label')).toContain(
+            'Open Custom Review 3 · 1st attempt',
+        );
+    });
+
+    it('links the result and the notebook its words came from', () => {
+        const wrapper = mountResults([
+            review({
+                source: { label: 'Kitchen words', url: '/notebooks/7' },
+            }),
+        ]);
+
+        const hrefs = wrapper
+            .findAll('a')
+            .map((link) => link.attributes('href'));
+
+        // The phone card and the wide table each carry the result and the notebook.
+        expect(hrefs).toEqual([
+            '/review/41/results',
+            '/notebooks/7',
+            '/review/41/results',
+            '/notebooks/7',
+        ]);
+        expect(wrapper.text()).toContain('Kitchen words');
+    });
+});
+
+describe('the kind filter', () => {
+    it('starts on everything and offers the three choices', () => {
+        const wrapper = mountResults([]);
+        const select = wrapper.find('#recent-results-kind');
+
+        expect((select.element as HTMLSelectElement).value).toBe('all');
+        expect(
+            select
+                .findAll('option')
+                .map((option) => [
+                    option.attributes('value'),
+                    option.text().trim(),
+                ]),
+        ).toEqual([
+            ['all', 'All results'],
+            ['daily', 'Daily reviews'],
+            ['custom', 'Custom reviews'],
+        ]);
+    });
+
+    it('tells the page which kind was chosen', async () => {
+        const wrapper = mountResults([]);
+
+        await wrapper.find('#recent-results-kind').setValue('custom');
+
+        expect(wrapper.emitted('update:kind')).toEqual([['custom']]);
+    });
+
+    it('says which kind is empty rather than sounding like no results at all', () => {
+        const wrapper = mount(ReviewRecentResults, {
+            props: { reviews: [], kind: 'custom' },
+        });
+
+        expect(wrapper.text()).toContain('No custom reviews yet.');
     });
 });

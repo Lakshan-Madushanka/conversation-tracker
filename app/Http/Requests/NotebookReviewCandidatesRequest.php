@@ -23,7 +23,16 @@ final class NotebookReviewCandidatesRequest extends FormRequest
         return [
             'kinds' => ['nullable', 'array', 'min:1'],
             'kinds.*' => ['string', 'distinct', Rule::in(FeedbackType::customReviewValues())],
+            'offset' => ['nullable', 'integer', 'min:0'],
         ];
+    }
+
+    /** Where the next page of candidates starts; the first page starts at zero. */
+    public function offset(): int
+    {
+        $offset = $this->validated('offset');
+
+        return is_numeric($offset) ? max(0, (int) $offset) : 0;
     }
 
     /**

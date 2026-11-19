@@ -6,6 +6,7 @@ namespace App\Support;
 
 use App\Enums\FeedbackType;
 use App\Models\CollectionItemMark;
+use App\Models\PracticeFeedbackEntry;
 
 /**
  * The server-computed hint that says where a search found an item.
@@ -77,6 +78,46 @@ final class CollectionMatch
             'Note' => (string) ($item['text'] ?? ''),
             'Your notes' => (string) ($mark->notes_text ?? ''),
         ], $terms);
+    }
+
+    /**
+     * The hint for one saved row, named by the field the learner sees in the
+     * editor. The row's own type decides what each column is called.
+     *
+     * @param  list<string>  $terms
+     * @return array{label: string, segments: list<array{text: string, match: bool}>}|null
+     */
+    public static function forEntry(PracticeFeedbackEntry $entry, array $terms): ?array
+    {
+        $labels = match ($entry->type) {
+            FeedbackType::Vocabulary => [
+                'content' => 'Word',
+                'correction' => 'Meaning',
+                'reason' => 'Why',
+                'example' => 'Example',
+            ],
+            FeedbackType::Phrase => [
+                'content' => 'Phrase',
+                'correction' => 'Meaning',
+                'reason' => 'Why',
+                'example' => 'Example',
+            ],
+            FeedbackType::GrammarNote => ['content' => 'Note'],
+            default => [
+                'content' => 'What I said',
+                'correction' => 'Correction',
+                'reason' => 'Why',
+                'example' => 'Example',
+            ],
+        };
+
+        $fields = [];
+
+        foreach (EntrySearch::fields($entry) as $field => $text) {
+            $fields[$labels[$field] ?? ucfirst($field)] = $text;
+        }
+
+        return self::fromFields($fields, $terms);
     }
 
     /**

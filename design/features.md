@@ -2,7 +2,7 @@
 
 A plain-language specification of the app's intended behaviour, written so anyone on the team can follow it. Each feature gives a short description, what the learner can do, a **step-by-step user flow** showing how it feels to use, and a **UI overview** describing what the screen looks like.
 
-The Notebook extension below is planned behaviour, not a claim of completed implementation or testing. Its detailed requirements and remaining decisions are in [Notebooks](feature-Notebooks.md). Priority labels do not report implementation status.
+The Notebook extension below is planned behaviour, not a claim of completed implementation or testing. Its detailed requirements and agreed decisions are in [Notebooks](feature-Notebooks.md). Priority labels do not report implementation status.
 
 **Priority key:** 🟢 First version · ⚪ Idea for the future
 
@@ -163,7 +163,7 @@ _Screen: Collections_
 - **Top:** four tabs and source, notebook, shared-topic, starred, status, and attention filters.
 - **Main area:** source-labelled items with meaning/correction, star, and status. Counts, search, and selection distinguish scoped identities rather than combining matching spellings across sources.
 - **Item detail:** its own content, notes, marks, and an appropriate source link. Notebook items never borrow meanings or examples from sessions.
-- **Sorting and provenance:** existing session dates and seen counts keep their meaning. Notebook items show notebook provenance, not fabricated session counts. Mixed-source date/frequency presentation and duplicate notebook-row content resolution remain open in the Notebook specification.
+- **Sorting and provenance:** existing session dates and seen counts keep their meaning. Notebook items show notebook provenance, not fabricated session counts. Mixed-source date/frequency presentation and duplicate notebook-row content resolution are resolved in the Notebook specification.
 - **Empty states:** notebook-only learners see their saved content, not a demand to finish a session first.
 - **My mistakes tab:** session-sourced groups retain their frequency counters; Notebooks filtering produces an honest empty result.
 
@@ -230,7 +230,7 @@ Turns eligible saved material from finished, non-archived sessions and from note
 _Screen: Review Home_
 
 - **Top card:** today's suggested review ("5 minutes · 8 items") with a large **Start review** button.
-- **Below:** a **Quick review** option, a link to saved **Custom reviews**, and recent daily/Quick review results. Saved custom attempts never enter this recent-results list.
+- **Below:** a **Quick review** option, a link to saved **Custom reviews**, and recent results: daily and Quick sittings plus finished saved-review activity, newest first, with an **All results / Daily reviews / Custom reviews** filter.
 
 _Screen: Exercise_
 
@@ -258,7 +258,7 @@ _Screen: Exercise_
 
 ## F5. Progress and Motivation 🟢
 
-Shows session-derived totals, streaks, and weekly summaries. The Notebook extension also requires **daily/Quick review-activity reporting**, with its exact measures still to be defined separately from session content totals.
+Shows session-derived totals, streaks, and weekly summaries. The Notebook extension also includes a separate **daily/Quick review-activity area**: items practised, review days, and reviews finished, kept apart from session content totals.
 
 **What the learner can see**
 
@@ -267,17 +267,17 @@ Shows session-derived totals, streaks, and weekly summaries. The Notebook extens
 - Existing word, phrase, and grammar-point totals from finished sessions, including archived ones. These are session-content totals, not the learner's manual Learned labels or proof of mastery; deleting a finished session lowers them. Typing notebook entries or adding comma-separated meanings does not increase these totals.
 - **Mistakes reduced over time**, based on session-sourced mistakes; notebooks introduce no mistake entries.
 - A **weekly summary**.
-- Planned review-activity reporting that treats notebook and session items consistently for **daily and Quick reviews**. Saved custom-review attempts remain excluded.
+- A **review-activity area** that treats notebook and session items consistently for **daily and Quick reviews**, counting items practised, review days, and reviews finished. A review left part-way still counts its items and that day, deleting a source never lowers the numbers, and saved custom-review attempts remain excluded.
 
-**Open decision before implementing review-activity reporting:** define which measures and labels F5 shows, whether they count rated items or completed reviews, how repeated practice is represented, and what source deletion does to those measures. Do not invent a new “words learned” formula, change session-derived totals/streaks, or copy custom-attempt ratings into Progress. See [Notebook Progress requirements and open questions](feature-Notebooks.md#open-questions).
+**Review-activity decision (confirmed 16 November 2026):** items practised, review days, and reviews finished. Leaving a review part-way counts its items and that day; deleting a session or notebook never lowers the numbers; custom attempts never contribute. Do not invent a “words learned” formula, change session-derived totals/streaks, or copy custom-attempt ratings into Progress. See [Notebook Progress requirements](feature-Notebooks.md#open-questions).
 
 **User flow**
 
 1. The learner taps **"Progress"** in the main menu.
 2. The top of the screen shows the current streak and total practice days.
-3. Below, they see counts for sessions completed, words learned, phrases learned, and grammar points learned.
+3. Below, they see counts for sessions completed and the words, phrases, and grammar points collected in them.
 4. A simple chart shows how often each common mistake appeared over recent weeks, so the learner can see which ones are fading.
-5. At the end of each week, a summary appears, for example: "This week you learned 18 new words and fixed 6 recurring mistakes."
+5. At the end of each week, a summary appears, for example: "This week you finished 4 sessions and collected 18 new words."
 6. A short encouraging message highlights one win, for example "Your longest streak so far."
 
 **UI overview**
@@ -285,7 +285,7 @@ Shows session-derived totals, streaks, and weekly summaries. The Notebook extens
 _Screen: Progress_
 
 - **Top row:** large friendly numbers for the current **streak** and total practice days.
-- **Stat tiles:** existing cards for sessions and session-derived word, phrase, and grammar-point totals. Keep planned daily/Quick review-activity measures visibly separate once their definitions are agreed.
+- **Stat tiles:** existing cards for sessions and session-derived word, phrase, and grammar-point totals. Show daily/Quick review-activity measures in a visibly separate area.
 - **Mistakes chart:** one simple chart showing how often common mistakes appear week by week, going down over time.
 - **Weekly summary card:** a short sentence with the week's highlights and a small celebration icon when there is a win.
 - **Tone:** encouraging and uncluttered. No scores that make the learner feel judged.
@@ -350,9 +350,9 @@ _Screen: Import (inside Settings)_
 
 ## F7. Export and Backup 🟢
 
-Lets the learner download their data as a personal backup. **An export described as “all data” must include notebooks**, their shared-topic references, rich descriptions, entries, scoped identities and marks, as well as session data, review state, and custom-review attempt snapshots within the existing backup scope.
+Lets the learner download their data as a personal backup. **An export described as “all data” must include notebooks** (confirmed 18 November 2026): their shared-topic references, rich descriptions, entries, scoped identities, marks, review schedules and suggestion declines, as well as session data, review state, and custom-review attempt snapshots within the existing backup scope. Same-spelling session and notebook items stay separate in the file.
 
-Notebook export delivery and the representation of scoped relationships must be confirmed before this extension ships with an all-data backup promise. A session-only export must say what it includes rather than silently omit notebooks. This is a coverage requirement, not a claim that the current exporter already supports notebook parents; spreadsheet-to-notebook import is not introduced here.
+A session-only export must say what it includes rather than silently omit notebooks. This is a coverage requirement, not a claim that the current exporter already supports notebook parents; spreadsheet-to-notebook import is not introduced here.
 
 **What the learner can do**
 
@@ -371,7 +371,7 @@ Notebook export delivery and the representation of scoped relationships must be 
 _Screen: Export (inside Settings)_
 
 - **Simple panel** with a short explanation: "Your data is yours. Download it any time."
-- **Choices:** name exactly which sources and data are included, including notebooks when supported. Filtering vocabulary or phrases must retain their source scopes rather than merging same-spelling items across sources. Export format and notebook delivery details remain to be confirmed.
+- **Choices:** name exactly which sources and data are included, including notebooks. Filtering vocabulary or phrases must retain their source scopes rather than merging same-spelling items across sources. Notebook inclusion is agreed; the exact file layout is settled when F7 is built.
 - **Action:** one large **Download** button.
 - **After download:** a small confirmation message with the file name and the date of the last backup, shown for reassurance.
 
@@ -459,13 +459,13 @@ The app is built with a modern, single-codebase web stack:
 
 - Start an ordinary review and get it saved straight away as **Empty**, named "Custom Review N", surviving refresh. Adding its first item moves it to Draft; the learner chooses Finished when ready.
 - Add session- or notebook-sourced items from Collections with **Add to review**, choosing which unfinished review takes them, or use **+ Add items** on a review's page for eligible items of allowed kinds.
-- Choose **Create review and practise** on a notebook to create a **new** saved review and explicitly mark it Finished as part of that action. It requires 1–50 distinct selected members and at least one eligible item, after saving pending source edits. More than 50 candidates opens selection before any review is created; nothing is silently truncated.
+- Choose **Create review and practise** on a notebook to create a **new** saved review and explicitly mark it Finished as part of that action. It requires 1–50 distinct selected members and at least one eligible item, after saving pending source edits. More than 50 candidates opens selection before any review is created; nothing is silently truncated. Candidates arrive 50 at a time, and the page size is a loading detail rather than a review limit.
 - Name and describe a review at any time. An attempt uses every **eligible** member; ineligible members remain listed with reasons and still count toward the maximum.
 - Keep the **recommended 20-item** warning and tag. Continue allows a valid set above 20, but cannot override the **50-item maximum**. Ordinary adds that cross 50 remain refused as a whole, with the room left named.
 - Choose allowed kinds, with all kinds allowed by default. A notebook's populated boxes do not automatically narrow this setting; kinds already represented cannot be turned off until those items are removed.
 - Add or remove members explicitly. New notebook entries never join automatically. Current source edits affect future attempts; started attempts, including those in progress, retain their snapshots.
 - Attempt a Finished review with eligible content and browse its paged history. A notebook source link opens that notebook, never a same-spelling session item.
-- Keep existing attempt snapshots with Deleted indications if a source notebook/item is deleted. Its references are removed; losing the last member makes the review Empty, not deleted.
+- Keep existing attempt snapshots with Deleted indications if a source notebook/item is deleted. Its references are removed, the deleted notebook's marks, review schedules and suggestion declines go with it, and losing the last member makes the review Empty, not deleted.
 - Search/filter reviews and delete a review with confirmation. Deleting the review removes its attempts but not source notebooks, sessions, or their items.
 
 **Full details:** [Custom reviews](feature-Custom%20reviews.md) and [Notebooks](feature-Notebooks.md).
@@ -474,7 +474,7 @@ The app is built with a modern, single-codebase web stack:
 
 ## F14. Notebooks
 
-**Status:** Planned extension. [The Notebook specification](feature-Notebooks.md) records the agreed behaviour, implementation stages, acceptance criteria, and remaining decisions; this section does not claim it is implemented.
+**Status:** Planned extension. [The Notebook specification](feature-Notebooks.md) records the agreed behaviour, implementation stages, and acceptance criteria; this section does not claim it is implemented.
 
 Notebooks are named containers for language found outside conversations. They reuse familiar entry editors without requiring a session, question, answer, or finish step. Collections remains the combined index; the Library remains session-only.
 
@@ -487,7 +487,7 @@ Notebooks are named containers for language found outside conversations. They re
 - Search notebooks by name, topic, description, and entry content, including meanings and examples; open a matching entry directly.
 - Use their notebook items in Collections, daily/Quick Review, and saved custom reviews, with marks shared only for each scoped item.
 - Create a ready saved review and practise immediately when constraints are met; choose a subset above 50 distinct candidates. Later notebook additions do not join that review automatically.
-- Hard-delete a notebook after an impact preview and explicit acknowledgement. The shared topic and other sources survive; custom-review references are pruned within scope and existing attempt snapshots remain readable.
+- Hard-delete a notebook after an impact preview and explicit acknowledgement. The shared topic and other sources survive; custom-review references are pruned within scope, the deleted items' marks, review schedules and suggestion declines are removed with it, and existing attempt snapshots remain readable.
 
 **User flow**
 
@@ -499,12 +499,12 @@ Notebooks are named containers for language found outside conversations. They re
 
 **UI overview**
 
-- **Notebooks listing:** searchable names, topics, item counts, last-updated information, and plain-text description previews, with New notebook and a topic filter.
+- **Notebooks listing:** searchable names, topics, item counts that count every saved row (duplicates included), last-updated information, and plain-text description previews, with New notebook and a topic filter.
 - **Notebook page:** editable metadata and the full rich-text description above one familiar entry board, save feedback, Create review and practise, and a deliberate Delete action.
 - **Source context:** Collections and practice show the notebook name and Open notebook at the entry, not invented session dates or questions.
 - **Accessibility:** mobile-first layout, dark mode, visible keyboard focus, accessible editors, and clear save, selection, and deletion announcements.
 
-**Remaining decisions:** parent representation, exact daily/Quick Progress measures, mixed-source sorting, duplicate-row content resolution, metadata limits/General default lifecycle, and export delivery remain in [Notebook Open Questions](feature-Notebooks.md#open-questions). Neither the 20-item recommendation nor the 50-item review maximum limits notebook storage.
+**Export and candidates:** notebooks are part of F7's all-data backup, and review candidates are grouped and paged in the database 50 at a time so a large notebook stays responsive; the page size never limits selection and is independent of the review rules. These decisions are recorded in [Notebook Open Questions](feature-Notebooks.md#open-questions). Neither the 20-item recommendation nor the 50-item review maximum limits notebook storage.
 
 ---
 

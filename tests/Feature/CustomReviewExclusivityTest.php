@@ -250,7 +250,13 @@ function exclusivityWorld(object $test, PracticeSession $session, Review $sugges
 
     $snapshot['home'] = exclusivityProps($test, route('home'));
     $snapshot['library'] = exclusivityProps($test, route('sessions.index'));
-    $snapshot['review_home'] = exclusivityProps($test, route('review.index'));
+
+    // A finished attempt legitimately shows in Review Home's recent results,
+    // which read the custom tables; those tables are compared separately.
+    $reviewHome = exclusivityProps($test, route('review.index'));
+    unset($reviewHome['recentReviews']);
+
+    $snapshot['review_home'] = $reviewHome;
     $snapshot['collections'] = exclusivityCollectionFacts($test);
     $snapshot['suggestions'] = exclusivityProps($test, route('review.session', [
         'review' => $suggestionReview->id,

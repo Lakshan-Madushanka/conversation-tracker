@@ -90,20 +90,24 @@ final readonly class CreateReviewFromNotebook
             return $this->start($existing);
         }
 
-        $map = $this->candidates->map($notebook, $kinds);
+        $count = $this->candidates->count($notebook, $kinds);
 
-        if ($map === []) {
+        if ($count === 0) {
             return $this->answer(NotebookReviewOutcome::NoCandidates, null, null, 0, self::NO_CANDIDATES);
         }
 
         if ($identities === null) {
-            if (count($map) > CustomReviewRules::MAX_ITEMS) {
-                return $this->answer(NotebookReviewOutcome::NeedsSelection, null, null, count($map), null);
+            if ($count > CustomReviewRules::MAX_ITEMS) {
+                return $this->answer(NotebookReviewOutcome::NeedsSelection, null, null, $count, null);
             }
 
+            // The notebook fits one page, so every candidate is read. When
+            // the learner names items, only those items' rows are read.
+            $map = $this->candidates->map($notebook, $kinds);
             $selected = array_keys($map);
         } else {
             $requested = array_values(array_unique($identities));
+            $map = $this->candidates->map($notebook, $kinds, $requested);
             $selected = array_values(array_filter(
                 $requested,
                 fn (string $identity): bool => isset($map[$identity]),

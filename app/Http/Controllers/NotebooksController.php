@@ -6,21 +6,28 @@ namespace App\Http\Controllers;
 
 use App\Actions\CustomReviews\CreateReviewFromNotebook;
 use App\Actions\Notebooks\CreateNotebook;
+use App\Actions\Notebooks\DeleteNotebook;
 use App\Actions\Notebooks\UpdateNotebook;
 use App\Exceptions\NotebookConflictException;
+use App\Exceptions\NotebookDeletionStaleException;
 use App\Http\Requests\AutosaveNotebookRequest;
 use App\Http\Requests\CreateNotebookReviewRequest;
+use App\Http\Requests\DeleteNotebookRequest;
 use App\Http\Requests\NotebookReviewCandidatesRequest;
 use App\Http\Requests\NotebooksListingRequest;
 use App\Http\Requests\StoreNotebookRequest;
 use App\Http\Resources\NotebookCardResource;
+use App\Http\Resources\NotebookDeletionPreviewResource;
 use App\Http\Resources\NotebookEditorResource;
 use App\Http\Resources\NotebookReviewCandidateResource;
 use App\Models\Notebook;
 use App\Models\Topic;
+use App\Queries\NotebookDeletionPreview;
 use App\Queries\NotebookReviewCandidates;
+use App\Queries\NotebookSearchMatches;
 use App\Queries\NotebooksListing;
 use App\Support\CustomReviewRules;
+use App\Support\SearchText;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
@@ -32,25 +39,42 @@ class NotebooksController extends Controller
      * The notebook listing. A normal visit renders the page; the same address
      * asked for JSON returns the next page for "load more".
      */
-    public function index(NotebooksListingRequest $request, NotebooksListing $listing): Response|JsonResponse
-    {
+    public function index(
+        NotebooksListingRequest $request,
+        NotebooksListing $listing,
+        NotebookSearchMatches $searchMatches,
+    ): Response|JsonResponse {
         $search = $request->search();
+        $filterTopics = $listing->topics();
+        $topic = $request->topicId(array_column($filterTopics, 'id'));
 
         $paginator = $listing->paginate(
             $search,
+            $topic,
             $request->cursor(),
             $request->wantsJson() ? $request->perPage() : NotebooksListing::PAGE_SIZE,
         );
 
+        $notebooks = $paginator->items();
+        $terms = SearchText::terms($search);
+        $matches = $searchMatches->firstFor(
+            array_map(fn (Notebook $notebook): int => (int) $notebook->id, array_values($notebooks)),
+            $terms,
+        );
+
         $page = [
             'notebooks' => array_map(
-                fn (Notebook $notebook): array => NotebookCardResource::make($notebook)->resolve(),
-                $paginator->items(),
+                fn (Notebook $notebook): array => NotebookCardResource::make($notebook)
+                    ->withEntryMatch($matches[(int) $notebook->id] ?? null, $terms)
+                    ->resolve(),
+                $notebooks,
             ),
             'next_cursor' => $paginator->nextCursor()?->encode(),
             'has_more' => $paginator->hasMorePages(),
-            'total' => $listing->total($search),
+            'total' => $listing->total($search, $topic),
             'topics' => Topic::pickerOptions(),
+            'filter_topics' => $filterTopics,
+            'topic' => $topic,
             'search' => $search,
         ];
 
@@ -86,20 +110,17 @@ class NotebooksController extends Controller
         NotebookReviewCandidatesRequest $request,
         NotebookReviewCandidates $candidates,
     ): JsonResponse {
-        $list = $candidates->for($notebook, $request->kinds());
-
-        $eligible = count(array_filter(
-            $list,
-            fn (array $candidate): bool => $candidate['eligible'],
-        ));
+        $page = $candidates->page($notebook, $request->kinds(), $request->offset());
 
         return response()->json([
             'candidates' => array_map(
                 fn (array $candidate): array => NotebookReviewCandidateResource::make($candidate)->resolve(),
-                $list,
+                $page['candidates'],
             ),
-            'count' => count($list),
-            'eligible_count' => $eligible,
+            'count' => $page['count'],
+            'eligible_count' => $page['eligible_count'],
+            'next_offset' => $page['next_offset'],
+            'has_more' => $page['has_more'],
             'recommended' => CustomReviewRules::RECOMMENDED_ITEMS,
             'maximum' => CustomReviewRules::MAX_ITEMS,
         ]);
@@ -167,6 +188,50 @@ class NotebooksController extends Controller
         return response()->json([
             'notebook' => NotebookEditorResource::make($notebook)->resolve(),
             'saved_at' => now()->toIso8601String(),
+        ]);
+    }
+
+    /**
+     * What deleting this notebook would remove, worked out without altering
+     * anything. The warning opens with these exact numbers and this token.
+     */
+    public function deletePreview(
+        Notebook $notebook,
+        NotebookDeletionPreview $preview,
+    ): JsonResponse {
+        return response()->json(
+            NotebookDeletionPreviewResource::make($preview->for($notebook))->resolve(),
+        );
+    }
+
+    /**
+     * Deletes a notebook and everything in it for good. The signed token says
+     * which state the learner confirmed; a changed notebook is refused with
+     * the fresh numbers.
+     */
+    public function destroy(
+        Notebook $notebook,
+        DeleteNotebookRequest $request,
+        DeleteNotebook $deleteNotebook,
+    ): JsonResponse {
+        try {
+            $result = $deleteNotebook->handle((int) $notebook->id, $request->token());
+        } catch (NotebookDeletionStaleException $exception) {
+            return response()->json([
+                'stale' => true,
+                'message' => 'This notebook changed since you opened the warning. Check the numbers and confirm again.',
+                'preview' => NotebookDeletionPreviewResource::make($exception->effect)->resolve(),
+            ], 409);
+        }
+
+        return response()->json([
+            'deleted' => true,
+            'already_deleted' => $result->alreadyDeleted,
+            'notebook' => [
+                'id' => $result->notebookId,
+                'name' => $result->name,
+            ],
+            'counts' => $result->counts,
         ]);
     }
 }

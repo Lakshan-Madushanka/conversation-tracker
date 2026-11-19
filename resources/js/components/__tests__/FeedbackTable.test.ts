@@ -414,6 +414,52 @@ describe('the vocabulary table', () => {
 
         expect(component.text()).toContain('Duplicate');
     });
+
+    it('says how to add another meaning to a repeated word', () => {
+        const component = mountVocabulary([
+            {
+                id: 'v1',
+                text: 'reservation',
+                meaning: 'a booking',
+                example_html: '',
+            },
+            {
+                id: 'v2',
+                text: 'reservation',
+                meaning: 'something else',
+                example_html: '',
+            },
+        ]);
+
+        expect(component.text()).toContain(
+            'Add extra meanings to the same word, separated by commas.',
+        );
+    });
+
+    it('keeps the comma guidance off a box with no repeated rows', () => {
+        const component = mountVocabulary([
+            {
+                id: 'v1',
+                text: 'reservation',
+                meaning: 'a booking',
+                example_html: '',
+            },
+        ]);
+
+        expect(component.text()).not.toContain('separated by commas');
+    });
+});
+
+describe('the mistakes table', () => {
+    it('tags a repeat without offering the meanings guidance', () => {
+        const component = mountTable([
+            row(),
+            row({ id: 'r2', correction_html: '<p>I went</p>' }),
+        ]);
+
+        expect(component.text()).toContain('Duplicate');
+        expect(component.text()).not.toContain('separated by commas');
+    });
 });
 
 describe('the phrases table', () => {
@@ -486,6 +532,27 @@ describe('the phrases table', () => {
         ]);
 
         expect(component.text()).toContain('Duplicate');
+    });
+
+    it('says how to add another use to a repeated phrase', () => {
+        const component = mountPhrases([
+            {
+                id: 'p1',
+                text: 'a long way',
+                meaning: 'far away',
+                example_html: '',
+            },
+            {
+                id: 'p2',
+                text: 'a long way',
+                meaning: 'something else',
+                example_html: '',
+            },
+        ]);
+
+        expect(component.text()).toContain(
+            'Add extra uses to the same phrase, separated by commas.',
+        );
     });
 });
 

@@ -9,6 +9,7 @@ use App\Actions\Reviews\RecordRating;
 use App\Actions\Reviews\StartReview;
 use App\Actions\Reviews\UndoRating;
 use App\Enums\FeedbackType;
+use App\Enums\RecentReviewKind;
 use App\Http\Requests\RateReviewItemRequest;
 use App\Http\Requests\StartReviewRequest;
 use App\Http\Requests\UndoReviewItemRequest;
@@ -56,6 +57,8 @@ class ReviewController extends Controller
         ReviewCandidates $candidates,
         RecentReviews $recentReviews,
     ): Response {
+        $recentKind = RecentReviewKind::fromQuery($request->query('kind'));
+
         return Inertia::render('review/Index', [
             'todayReview' => $todaysReview->card($request),
             // The same shared "needs attention" rule the collections use, so
@@ -71,10 +74,13 @@ class ReviewController extends Controller
                 'count' => $candidates->unusableGrammarNotesCount(),
             ],
             // What the last few sittings actually came to, counted from the
-            // saved ratings rather than any separate tally.
+            // saved ratings rather than any separate tally. The kind is chosen
+            // before the list is cut, so an older attempt can still be found
+            // when the learner asks for custom reviews alone.
+            'recentKind' => $recentKind->value,
             'recentReviews' => array_map(
                 fn (array $row): array => (new RecentReviewResource($row))->resolve(),
-                $recentReviews->list(),
+                $recentReviews->list($recentKind),
             ),
             // The numbers the "how this works" explanation is written around.
             'reviewRules' => ReviewRules::values(),

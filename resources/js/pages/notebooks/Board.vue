@@ -1,8 +1,14 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue';
-import { Head, Link } from '@inertiajs/vue3';
-import { ArrowLeftIcon, RefreshCwIcon, TriangleAlertIcon } from '@lucide/vue';
+import { Head, Link, router } from '@inertiajs/vue3';
+import {
+    ArrowLeftIcon,
+    RefreshCwIcon,
+    Trash2Icon,
+    TriangleAlertIcon,
+} from '@lucide/vue';
 import FeedbackBox from '@/components/FeedbackBox.vue';
+import NotebookDeleteDialog from '@/components/NotebookDeleteDialog.vue';
 import NotebookReviewDialog from '@/components/NotebookReviewDialog.vue';
 import RichTextEditor from '@/components/RichTextEditor.vue';
 import SaveIndicator from '@/components/SaveIndicator.vue';
@@ -70,6 +76,13 @@ const {
         };
     },
 });
+
+/** The delete warning, and where to go once the notebook is gone. */
+const deleteOpen = ref(false);
+
+function notebookGone(): void {
+    router.visit(notebooksIndex.url());
+}
 
 onBeforeUnmount(() => {
     flush();
@@ -204,7 +217,21 @@ async function prepareReview(): Promise<void> {
                     Notebooks
                 </Link>
             </Button>
-            <SaveIndicator :status="status" :last-saved-at="lastSavedAt" />
+            <div class="flex items-center gap-2">
+                <SaveIndicator :status="status" :last-saved-at="lastSavedAt" />
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    class="min-h-11 text-muted-foreground hover:text-destructive md:min-h-9"
+                    :disabled="status === 'deleted'"
+                    @click="deleteOpen = true"
+                >
+                    <Trash2Icon aria-hidden="true" />
+                    Delete
+                    <span class="sr-only"> {{ props.notebook.name }}</span>
+                </Button>
+            </div>
         </div>
 
         <div
@@ -394,6 +421,15 @@ async function prepareReview(): Promise<void> {
             v-model:open="reviewOpen"
             :notebook-id="props.notebook.id"
             :notebook-name="props.notebook.name"
+        />
+
+        <NotebookDeleteDialog
+            v-model:open="deleteOpen"
+            :notebook-id="props.notebook.id"
+            :notebook-name="name || props.notebook.name"
+            :notebook-topic="topic || props.notebook.topic.name"
+            @deleted="notebookGone"
+            @missing="notebookGone"
         />
     </div>
 </template>

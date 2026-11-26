@@ -197,7 +197,7 @@ describe('deleting a selection with finished sessions', () => {
         );
 
         // Words, practice days and the streak change; phrases do not.
-        expect(document.body.textContent).toContain('Words learned');
+        expect(document.body.textContent).toContain('Words collected');
         expect(document.body.textContent).toContain('Practice days');
         expect(document.body.textContent).toContain('Current streak');
         expect(document.body.textContent).not.toContain('Phrases saved');

@@ -36,7 +36,7 @@ function dayCount(value: number): string {
 const streakHint = computed(() =>
     props.progress.current_streak === 0
         ? 'Complete a conversation to begin'
-        : 'Learning days in a row',
+        : 'Practice days in a row',
 );
 </script>
 

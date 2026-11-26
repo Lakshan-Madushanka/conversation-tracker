@@ -180,7 +180,7 @@ describe('deleting a finished session', () => {
         );
 
         // Words and streak change; phrases do not, because both sides are 4.
-        expect(document.body.textContent).toContain('Words learned');
+        expect(document.body.textContent).toContain('Words collected');
         expect(document.body.textContent).toContain('Current streak');
         expect(document.body.textContent).not.toContain('Phrases saved');
     });

@@ -146,7 +146,7 @@ const progressChanges = computed<ProgressChange[]>(() => {
     const rows: ProgressChange[] = [
         {
             key: 'words',
-            label: 'Words learned',
+            label: 'Words collected',
             before: String(before.words),
             after: String(after.words),
         },
@@ -158,7 +158,7 @@ const progressChanges = computed<ProgressChange[]>(() => {
         },
         {
             key: 'mistakes',
-            label: 'Mistakes reviewed',
+            label: 'Mistakes collected',
             before: String(before.mistakes),
             after: String(after.mistakes),
         },

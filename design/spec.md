@@ -87,7 +87,7 @@ The explicit **Create review and practise** action creates a new saved custom re
 
 1. The learner finishes a practice chat about "Ordering at a restaurant."
 2. They create a session with that topic and enter the questions, answers, and tutor feedback.
-3. They mark the session finished. Its items enter Collections, and the finished session contributes to session-based practice days and streaks.
+3. As each question gains an answer and a natural version, its conversation counts towards the learner's practice days and streak, even before the session is finished. They mark the session finished: its items enter Collections, and its content and session count join Progress.
 4. The next morning, Home suggests a five-minute review of eligible items, including words and mistakes from the session.
 5. They complete it and rate the items; difficult items return sooner. Reviewing itself does not extend the session-based streak.
 6. Later summaries help them see which material is becoming easier, without automatically changing their Learned labels.

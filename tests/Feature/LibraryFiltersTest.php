@@ -231,6 +231,52 @@ it('filters by each content type and by several at once', function (): void {
         ->and(libraryIds($several))->not->toContain($blank->id);
 });
 
+it('filters by overall feedback and combines it with a box type', function (): void {
+    $topic = Topic::factory()->create();
+
+    $overallOnly = librarySession($topic, now()->subMinutes(1)->toImmutable());
+    PracticeQuestion::factory()->for($overallOnly)->create([
+        'position' => 1,
+        'question_html' => '',
+        'question_text' => '',
+        'answer_html' => '',
+        'answer_text' => '',
+        'feedback_html' => '<p>Good effort.</p>',
+        'feedback_text' => 'Good effort.',
+    ]);
+
+    $mistake = librarySession($topic, now()->subMinutes(2)->toImmutable());
+    libraryEntry($mistake, FeedbackType::Mistake, [
+        'content_text' => 'I go',
+        'correction_text' => 'I went',
+    ]);
+
+    $blank = librarySession($topic, now()->subMinutes(3)->toImmutable());
+    PracticeQuestion::factory()->for($blank)->create([
+        'position' => 1,
+        'question_html' => '',
+        'question_text' => '',
+        'answer_html' => '',
+        'answer_text' => '',
+        'feedback_html' => '',
+        'feedback_text' => '',
+    ]);
+
+    $overall = $this->getJson(route('sessions.index', [
+        'types' => 'overall_feedback',
+    ]))->assertOk()->json();
+
+    expect(libraryIds($overall))->toBe([$overallOnly->id])
+        ->and(libraryIds($overall))->not->toContain($blank->id);
+
+    $combined = $this->getJson(route('sessions.index', [
+        'types' => 'overall_feedback,mistake',
+    ]))->assertOk()->json();
+
+    expect(libraryIds($combined))->toBe([$overallOnly->id, $mistake->id])
+        ->and(libraryIds($combined))->not->toContain($blank->id);
+});
+
 it('filters by status without mixing unfinished sessions in', function (): void {
     $topic = Topic::factory()->create();
 
@@ -365,6 +411,12 @@ it('ignores values it cannot understand and offers only topics in use', function
         ->and($response['timezone'])->toBe(config('app.timezone'))
         ->and(array_column($response['topics'], 'id'))->toBe([$used->id])
         ->and(array_column($response['topics'], 'id'))->not->toContain($unused->id);
+
+    $accepted = $this->getJson(route('sessions.index', [
+        'types' => 'overall_feedback,not-a-type',
+    ]))->assertOk()->json();
+
+    expect($accepted['filters']['types'])->toBe(['overall_feedback']);
 });
 
 it('loads more within the chosen filters without leaking other sessions', function (): void {

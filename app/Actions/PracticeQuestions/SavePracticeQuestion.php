@@ -9,8 +9,9 @@ use App\Models\PracticeSession;
 use App\Support\RichText;
 
 /**
- * Saves a single question for a session (identified by its position) and
- * persists its feedback boxes.
+ * Saves a single question for a session (identified by its position), the
+ * learner's answer, the tutor's overall remark about it, and its feedback
+ * boxes.
  */
 final readonly class SavePracticeQuestion
 {
@@ -27,11 +28,16 @@ final readonly class SavePracticeQuestion
 
         $questionContent = RichText::cleanWithText((string) ($data['question_html'] ?? ''));
         $answerContent = RichText::cleanWithText((string) ($data['answer_html'] ?? ''));
+        $feedbackContent = RichText::cleanWithText((string) ($data['feedback_html'] ?? ''));
 
         $question->question_html = $questionContent['html'];
         $question->question_text = $questionContent['text'];
         $question->answer_html = $answerContent['html'];
         $question->answer_text = $answerContent['text'];
+        // The tutor's overall remark about the answer. It is not one of the
+        // feedback entries saved below.
+        $question->feedback_html = $feedbackContent['html'];
+        $question->feedback_text = $feedbackContent['text'];
         $question->save();
 
         $feedback = $data['feedback'] ?? [];

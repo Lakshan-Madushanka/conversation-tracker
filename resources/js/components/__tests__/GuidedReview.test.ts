@@ -15,6 +15,7 @@ function question(
         uid: 'q1',
         question_html: '<p>Why did he leave so early?</p>',
         answer_html: '<p>Because his train was at six.</p>',
+        feedback_html: '',
         feedback: emptyFeedbackValues(),
         ...overrides,
     };

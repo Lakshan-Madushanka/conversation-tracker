@@ -173,6 +173,42 @@ it('searches only the chosen content types', function (): void {
         ->and($mistake['sessions'][0]['matches'][0]['type'])->toBe('mistake');
 });
 
+it('finds and reports overall feedback, respecting chosen content types', function (): void {
+    $session = searchSession('Travel plans');
+    $question = searchQuestion($session, 2, 'Where did you go?', 'I went to the beach.');
+    $question->update([
+        'feedback_html' => '<p>Watch your articles.</p>',
+        'feedback_text' => 'Watch your articles.',
+    ]);
+    searchEntry($question, 'mistake', ['content_text' => 'tense']);
+
+    $found = searchResponse(['q' => 'articles']);
+
+    expect($found['sessions'])->toHaveCount(1);
+
+    $matches = $found['sessions'][0]['matches'];
+    $feedback = collect($matches)->firstWhere('kind', 'feedback');
+
+    expect($feedback)->not->toBeNull()
+        ->and($feedback['question_position'])->toBe(2)
+        ->and($feedback['type'])->toBeNull()
+        ->and($feedback['segments'])->not->toBeEmpty();
+
+    $hidden = searchResponse(['q' => 'articles', 'types' => 'mistake']);
+
+    expect($hidden['sessions'])->toBe([]);
+
+    $chosen = searchResponse(['q' => 'articles', 'types' => 'overall_feedback']);
+
+    expect($chosen['sessions'])->toHaveCount(1)
+        ->and(collect($chosen['sessions'][0]['matches'])->pluck('kind')->all())
+        ->toBe(['feedback']);
+
+    $boxHidden = searchResponse(['q' => 'tense', 'types' => 'overall_feedback']);
+
+    expect($boxHidden['sessions'])->toBe([]);
+});
+
 it('searches together with the topic filter', function (): void {
     $travel = searchSession('Travel');
     searchQuestion($travel, 1, 'A nice place', 'The sea.');
@@ -320,12 +356,17 @@ it('keeps the number of queries the same as the page grows', function (): void {
 it('backfills search text without touching timestamps and can run again', function (): void {
     $session = searchSession('Café');
     $question = searchQuestion($session, 1, 'Crème brûlée?', 'Oui.');
+    $question->update([
+        'feedback_html' => '<p>Très bien</p>',
+        'feedback_text' => 'Très bien',
+    ]);
     searchEntry($question, 'vocabulary', ['content_text' => 'Café']);
 
     DB::table('topics')->update(['search_text' => null]);
     DB::table('practice_questions')->update([
         'question_search_text' => null,
         'answer_search_text' => null,
+        'feedback_search_text' => null,
     ]);
     DB::table('practice_feedback_entries')->update(['search_text' => null]);
 
@@ -336,6 +377,7 @@ it('backfills search text without touching timestamps and can run again', functi
     expect($first)->toBe(['topics' => 1, 'questions' => 1, 'entries' => 1])
         ->and(DB::table('topics')->value('search_text'))->toBe('cafe')
         ->and(DB::table('practice_questions')->value('question_search_text'))->toBe('creme brulee?')
+        ->and(DB::table('practice_questions')->value('feedback_search_text'))->toBe('tres bien')
         ->and(DB::table('practice_feedback_entries')->value('search_text'))->toBe('cafe')
         ->and(DB::table('practice_questions')->value('updated_at'))->toBe($updatedAt);
 

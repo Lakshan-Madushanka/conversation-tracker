@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Actions\PracticeQuestions\SavePracticeFeedback;
 use App\Enums\FeedbackType;
+use App\Http\Requests\StorePracticeSessionRequest;
 use App\Http\Resources\SessionEditorResource;
 use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeQuestion;
@@ -416,4 +417,126 @@ test('feedback examples can be stored', function (): void {
                 'html' => 'c',
             ],
         ]);
+});
+
+test('blank overall feedback is accepted and stored as empty', function (): void {
+    $user = User::factory()->create();
+
+    $this->actingAs($user)->post(route('sessions.store'), [
+        'topic' => 'Travel',
+        'questions' => [
+            [
+                'question_html' => '<p>Where did you go?</p>',
+                'answer_html' => '',
+                'feedback_html' => '',
+                'feedback' => [],
+            ],
+        ],
+    ])->assertRedirect();
+
+    expect(PracticeQuestion::firstOrFail()->feedback_html)->toBe('');
+});
+
+test('overall feedback longer than the content limit is refused', function (): void {
+    $user = User::factory()->create();
+
+    $response = $this->actingAs($user)->post(route('sessions.store'), [
+        'topic' => 'Travel',
+        'questions' => [
+            [
+                'question_html' => '<p>Where did you go?</p>',
+                'answer_html' => '',
+                'feedback_html' => str_repeat('a', StorePracticeSessionRequest::MAX_CONTENT_LENGTH + 1),
+                'feedback' => [],
+            ],
+        ],
+    ]);
+
+    $response->assertSessionHasErrors('questions.0.feedback_html');
+
+    expect(PracticeSession::count())->toBe(0)
+        ->and(PracticeQuestion::count())->toBe(0);
+});
+
+test('overall feedback keeps its formatting and its plain text', function (): void {
+    $user = User::factory()->create();
+
+    $this->actingAs($user)->post(route('sessions.store'), [
+        'topic' => 'Travel',
+        'questions' => [
+            [
+                'question_html' => '<p>Where did you go?</p>',
+                'answer_html' => '',
+                'feedback_html' => '<p>Good use of the <strong>past tense</strong> and <em>linkers</em>.</p>',
+                'feedback' => [],
+            ],
+        ],
+    ])->assertRedirect();
+
+    $question = PracticeQuestion::firstOrFail();
+
+    expect($question->feedback_html)->toBe('<p>Good use of the <strong>past tense</strong> and <em>linkers</em>.</p>')
+        ->and($question->feedback_text)->toBe('Good use of the past tense and linkers.')
+        ->and($question->feedback_search_text)->toBe('good use of the past tense and linkers.');
+});
+
+test('unsafe markup is stripped from overall feedback', function (): void {
+    $user = User::factory()->create();
+
+    $this->actingAs($user)->post(route('sessions.store'), [
+        'topic' => 'Travel',
+        'questions' => [
+            [
+                'question_html' => '<p>Where did you go?</p>',
+                'answer_html' => '',
+                'feedback_html' => '<p onclick="alert(1)">Safe</p><script>alert(1)</script><img src=x onerror=alert(1)>',
+                'feedback' => [],
+            ],
+        ],
+    ])->assertRedirect();
+
+    expect(PracticeQuestion::firstOrFail()->feedback_html)->toBe('<p>Safe</p>');
+});
+
+test('formatting-only overall feedback is stored as empty', function (): void {
+    $user = User::factory()->create();
+
+    $this->actingAs($user)->post(route('sessions.store'), [
+        'topic' => 'Travel',
+        'questions' => [
+            [
+                'question_html' => '<p>Where did you go?</p>',
+                'answer_html' => '',
+                'feedback_html' => '<p></p><p>   </p><br>',
+                'feedback' => [],
+            ],
+        ],
+    ])->assertRedirect();
+
+    $question = PracticeQuestion::firstOrFail();
+
+    expect($question->feedback_html)->toBe('')
+        ->and($question->feedback_text)->toBe('');
+});
+
+test('overall feedback does not create a feedback entry', function (): void {
+    $user = User::factory()->create();
+
+    $this->actingAs($user)->post(route('sessions.store'), [
+        'topic' => 'Travel',
+        'questions' => [
+            [
+                'question_html' => '<p>Where did you go?</p>',
+                'answer_html' => '',
+                'feedback_html' => '<p>Good effort overall.</p>',
+                'feedback' => ['mistake' => 'I go -> I went'],
+            ],
+        ],
+    ])->assertRedirect();
+
+    $question = PracticeQuestion::firstOrFail();
+
+    expect($question->feedback_text)->toBe('Good effort overall.')
+        ->and($question->feedbackEntries)->toHaveCount(1)
+        ->and($question->feedbackEntries->first()?->type)->toBe(FeedbackType::Mistake);
 });

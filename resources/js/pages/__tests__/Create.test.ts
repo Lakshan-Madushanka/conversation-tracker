@@ -13,6 +13,7 @@ function question(
         position: 1,
         question_html: '<p>What would you like to start with?</p>',
         answer_html: '<p>I want a soup.</p>',
+        feedback_html: '',
         feedback: {},
         ...overrides,
     };
@@ -471,5 +472,90 @@ describe('an editor opened from a search result', () => {
         await nextTick();
 
         expect(document.getElementById('question-q6')).not.toBeNull();
+    });
+});
+
+describe('overall feedback', () => {
+    it('types overall feedback and sends it on save', async () => {
+        vi.useFakeTimers();
+
+        // oxlint-disable typescript/unbound-method
+        const originalGetClientRects = Range.prototype.getClientRects;
+        const originalGetBoundingClientRect =
+            Range.prototype.getBoundingClientRect;
+        // oxlint-enable typescript/unbound-method
+
+        Range.prototype.getClientRects = function getClientRects() {
+            return {
+                length: 0,
+                item: () => null,
+                [Symbol.iterator]: function* iterator() {},
+            } as unknown as DOMRectList;
+        };
+
+        Range.prototype.getBoundingClientRect =
+            function getBoundingClientRect() {
+                return new DOMRect(0, 0, 0, 0);
+            };
+
+        try {
+            const fetchMock = vi.fn(async () =>
+                Response.json({
+                    saved: true,
+                    session: savedSession({
+                        questions: [
+                            question({
+                                feedback_html: '<p>Good effort overall.</p>',
+                            }),
+                        ],
+                    }),
+                }),
+            );
+            vi.stubGlobal('fetch', fetchMock);
+
+            const wrapper = await mountCreate({ session: savedSession() });
+            await nextTick();
+
+            const editor = wrapper
+                .findAllComponents({ name: 'RichTextEditor' })
+                .find(
+                    (candidate) =>
+                        candidate.props('label') === 'Overall feedback',
+                );
+
+            expect(editor).toBeDefined();
+            await editor?.vm.$emit(
+                'update:modelValue',
+                '<p>Good effort overall.</p>',
+            );
+            await nextTick();
+
+            await vi.advanceTimersByTimeAsync(2000);
+            await nextTick();
+
+            expect(fetchMock).toHaveBeenCalled();
+
+            const lastCall = fetchMock.mock.calls[
+                fetchMock.mock.calls.length - 1
+            ] as unknown as [string, RequestInit] | undefined;
+
+            expect(lastCall).toBeDefined();
+
+            const [, init] = lastCall!;
+            const body = JSON.parse(
+                (init.body as string | undefined) ?? '',
+            ) as {
+                questions: Array<{ feedback_html: string }>;
+            };
+
+            expect(body.questions[0]?.feedback_html).toBe(
+                '<p>Good effort overall.</p>',
+            );
+        } finally {
+            Range.prototype.getClientRects = originalGetClientRects;
+            Range.prototype.getBoundingClientRect =
+                originalGetBoundingClientRect;
+            vi.useRealTimers();
+        }
     });
 });

@@ -71,6 +71,18 @@ describe('a safe filter state', () => {
         expect(normalized.types).toEqual(['mistake', 'phrase', 'grammar_note']);
     });
 
+    it('keeps overall feedback as a content choice in the shown order', () => {
+        const normalized = normalizeLibraryFilters({
+            types: [
+                'overall_feedback',
+                'mistake',
+                'nonsense',
+            ] as LibraryFilters['types'],
+        });
+
+        expect(normalized.types).toEqual(['mistake', 'overall_feedback']);
+    });
+
     it('corrects a custom range whose end comes before its start', () => {
         const normalized = normalizeLibraryFilters({
             date: 'custom',
@@ -117,7 +129,7 @@ describe('the address a filter state travels in', () => {
             filtersToQuery(
                 filters({
                     topics: [1, 2],
-                    types: ['mistake', 'vocabulary'],
+                    types: ['mistake', 'vocabulary', 'overall_feedback'],
                     date: 'custom',
                     from: '2026-10-01',
                     to: '2026-10-14',
@@ -128,7 +140,7 @@ describe('the address a filter state travels in', () => {
             ),
         ).toEqual({
             topics: '1,2',
-            types: 'mistake,vocabulary',
+            types: 'mistake,vocabulary,overall_feedback',
             date: 'custom',
             from: '2026-10-01',
             to: '2026-10-14',
@@ -242,6 +254,23 @@ describe('the chips that show active filters', () => {
         });
 
         expect(removeFilterChip(filtersInForce, chips[1]!).sort).toBe('oldest');
+    });
+
+    it('shows and removes an overall feedback chip', () => {
+        const filtersInForce = filters({
+            types: ['mistake', 'overall_feedback'],
+        });
+
+        const chips = libraryFilterChips(filtersInForce, topics);
+
+        expect(chips.map((chip) => chip.label)).toEqual([
+            'Mistakes',
+            'Overall feedback',
+        ]);
+
+        expect(removeFilterChip(filtersInForce, chips[1]!)).toMatchObject({
+            types: ['mistake'],
+        });
     });
 
     it('names a custom range with its days', () => {

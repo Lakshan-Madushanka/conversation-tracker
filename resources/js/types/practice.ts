@@ -83,13 +83,16 @@ export type FeedbackValue = FeedbackValues[FeedbackType];
 
 /**
  * A question as it comes back from the backend. Saved boxes are present in
- * `feedback`; boxes that were left empty are simply absent.
+ * `feedback`; boxes that were left empty are simply absent. `feedback_html` is
+ * the tutor's overall remark about the whole answer — it is not one of the
+ * five boxes in `feedback`.
  */
 export interface PracticeQuestionData {
     id: number;
     position: number;
     question_html: string;
     answer_html: string;
+    feedback_html: string;
     feedback: Partial<FeedbackValues>;
 }
 
@@ -102,6 +105,7 @@ export interface PracticeQuestionForm {
     uid: string;
     question_html: string;
     answer_html: string;
+    feedback_html: string;
     feedback: FeedbackValues;
 }
 
@@ -293,7 +297,12 @@ export interface SearchSegment {
 }
 
 /** What kind of item a search match sits in. */
-export type SearchMatchKind = 'topic' | 'question' | 'answer' | 'entry';
+export type SearchMatchKind =
+    | 'topic'
+    | 'question'
+    | 'answer'
+    | 'feedback'
+    | 'entry';
 
 /** One matching item inside a session, as the Library lists it. */
 export interface SearchMatch {

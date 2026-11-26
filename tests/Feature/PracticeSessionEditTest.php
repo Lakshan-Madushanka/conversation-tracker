@@ -27,6 +27,8 @@ function editingSessionHolding(array $questions): PracticeSession
             'question_text' => $shape['question_text'] ?? '',
             'answer_html' => $shape['answer_html'] ?? '',
             'answer_text' => $shape['answer_text'] ?? '',
+            'feedback_html' => $shape['feedback_html'] ?? '',
+            'feedback_text' => $shape['feedback_text'] ?? '',
         ]);
 
         foreach ($shape['entries'] ?? [] as $entry) {
@@ -127,6 +129,8 @@ describe('the reading page', function (): void {
             'question_html' => '<p>What would you like?</p>',
             'answer_text' => 'I want a soup.',
             'answer_html' => '<p>I want a soup.</p>',
+            'feedback_html' => '<p>Good start — watch your <strong>articles</strong>.</p>',
+            'feedback_text' => 'Good start — watch your articles.',
         ]);
 
         PracticeFeedbackEntry::factory()->for($question)->create([
@@ -152,6 +156,7 @@ describe('the reading page', function (): void {
                 ->count('session.questions', 1)
                 ->where('session.questions.0.question_html', '<p>What would you like?</p>')
                 ->where('session.questions.0.answer_html', '<p>I want a soup.</p>')
+                ->where('session.questions.0.feedback_html', '<p>Good start — watch your <strong>articles</strong>.</p>')
                 ->where('session.questions.0.feedback.mistake.0.text', 'I want')
                 ->where('session.questions.0.feedback.vocabulary.0.meaning', 'a liquid food'));
     });

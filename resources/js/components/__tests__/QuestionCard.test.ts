@@ -18,6 +18,7 @@ function mountCard(feedback = emptyFeedbackValues()) {
             uid: 'q1',
             questionHtml: '<p>Question?</p>',
             answerHtml: '<p>Answer.</p>',
+            feedbackHtml: '',
             feedback,
         },
     });
@@ -57,5 +58,60 @@ describe('a question with entries', () => {
 
         expect(wrapper.text()).toContain('reservation');
         expect(wrapper.text()).toContain('journey');
+    });
+});
+
+describe('overall feedback', () => {
+    it('shows the overall feedback editor', () => {
+        const wrapper = mountCard();
+
+        expect(wrapper.text()).toContain('Overall feedback');
+
+        const editor = wrapper
+            .findAllComponents({ name: 'RichTextEditor' })
+            .find(
+                (candidate) => candidate.props('label') === 'Overall feedback',
+            );
+
+        expect(editor).toBeDefined();
+    });
+
+    it('emits updates when the overall feedback changes', async () => {
+        const wrapper = mountCard();
+
+        const editor = wrapper
+            .findAllComponents({ name: 'RichTextEditor' })
+            .find(
+                (candidate) => candidate.props('label') === 'Overall feedback',
+            );
+
+        expect(editor).toBeDefined();
+        await editor?.vm.$emit('update:modelValue', '<p>Good effort.</p>');
+
+        expect(wrapper.emitted('update:feedbackHtml')?.[0]).toEqual([
+            '<p>Good effort.</p>',
+        ]);
+    });
+
+    it('shows the overall feedback error text', () => {
+        const wrapper = mount(QuestionCard, {
+            attachTo: document.body,
+            props: {
+                number: 1,
+                uid: 'q1',
+                questionHtml: '',
+                answerHtml: '',
+                feedbackHtml: '',
+                feedback: emptyFeedbackValues(),
+                feedbackError:
+                    'This overall feedback is too long to save at once.',
+            },
+        });
+
+        const alert = wrapper.get('[role="alert"]');
+
+        expect(alert.text()).toBe(
+            'This overall feedback is too long to save at once.',
+        );
     });
 });

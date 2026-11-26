@@ -33,12 +33,14 @@ final readonly class SessionSearchMatches
             return [];
         }
 
-        $types = $filters->types();
+        $chosen = $filters->types() !== [];
+        $boxTypes = $filters->boxTypes();
+        $overallFeedback = ! $chosen || $filters->includesOverallFeedback();
         $this->session->loadMissing(['topic', 'questions.feedbackEntries']);
 
         $matches = [];
 
-        if ($types === [] && SearchText::matches($this->session->topic->name, $terms)) {
+        if (! $chosen && SearchText::matches($this->session->topic->name, $terms)) {
             $matches[] = [
                 'key' => 'topic',
                 'kind' => 'topic',
@@ -51,7 +53,7 @@ final readonly class SessionSearchMatches
         }
 
         foreach ($this->session->questions as $question) {
-            if ($types === []) {
+            if (! $chosen) {
                 if (SearchText::matches($question->question_text, $terms)) {
                     $matches[] = [
                         'key' => 'question:'.$question->position,
@@ -77,6 +79,18 @@ final readonly class SessionSearchMatches
                 }
             }
 
+            if ($overallFeedback && SearchText::matches($question->feedback_text, $terms)) {
+                $matches[] = [
+                    'key' => 'feedback:'.$question->position,
+                    'kind' => 'feedback',
+                    'type' => null,
+                    'question_position' => $question->position,
+                    'entry_id' => null,
+                    'entry_position' => null,
+                    'segments' => SearchText::snippet($question->feedback_text, $terms),
+                ];
+            }
+
             $entries = $question->feedbackEntries
                 ->filter(fn (PracticeFeedbackEntry $entry): bool => ! $entry->isBlank())
                 ->sortBy(fn (PracticeFeedbackEntry $entry): array => [
@@ -87,7 +101,7 @@ final readonly class SessionSearchMatches
                 ->values();
 
             foreach ($entries as $entry) {
-                if ($types !== [] && ! in_array($entry->type->value, $types, true)) {
+                if ($chosen && ! in_array($entry->type->value, $boxTypes, true)) {
                     continue;
                 }
 

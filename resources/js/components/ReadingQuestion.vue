@@ -126,6 +126,21 @@ function friendlyLabel(label: string): string {
                     v-html="props.question.answer_html"
                 ></div>
             </div>
+
+            <div
+                v-if="!isRichTextBlank(props.question.feedback_html)"
+                :id="`reading-${props.question.position}-feedback`"
+            >
+                <p
+                    class="mb-1 text-xs font-medium tracking-wider text-muted-foreground uppercase"
+                >
+                    Overall feedback
+                </p>
+                <div
+                    class="rounded-lg border border-l-2 border-l-primary/25 bg-muted/40 px-3.5 py-2.5 text-sm leading-relaxed"
+                    v-html="props.question.feedback_html"
+                ></div>
+            </div>
         </div>
 
         <div v-if="props.sections.length > 0" class="space-y-5">

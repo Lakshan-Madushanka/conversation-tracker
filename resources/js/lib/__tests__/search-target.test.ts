@@ -34,6 +34,20 @@ describe('reading a search target from the address', () => {
         });
     });
 
+    it('reads an overall feedback target', () => {
+        const target = readSearchTarget(
+            'http://localhost/sessions/7?question=2&field=feedback',
+        );
+
+        expect(target).toEqual({
+            question: 2,
+            field: 'feedback',
+            type: null,
+            entry: null,
+            position: null,
+        });
+    });
+
     it('ignores parts it cannot understand', () => {
         const target = readSearchTarget(
             'http://localhost/sessions/7?question=2&field=nowhere&type=nonsense&entry=&position=-1',

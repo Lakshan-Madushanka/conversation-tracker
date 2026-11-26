@@ -44,6 +44,7 @@ function session(
                 position: 1,
                 question_html: '<p>What would you like to start with?</p>',
                 answer_html: '<p>I want a soup.</p>',
+                feedback_html: '',
                 feedback: {
                     mistake: [
                         {
@@ -91,6 +92,7 @@ function questionAt(
         position,
         question_html: `<p>Question ${position} text</p>`,
         answer_html: `<p>Answer ${position}</p>`,
+        feedback_html: '',
         feedback: {},
         ...overrides,
     };
@@ -196,6 +198,53 @@ describe('a session opened to be read', () => {
         expect(wrapper.text()).toContain('New vocabulary');
         expect(wrapper.text()).toContain('Sounds more polite');
         expect(wrapper.text()).toContain('a liquid food');
+    });
+
+    it('shows the overall feedback for a question and leaves it out when empty', () => {
+        const wrapper = mountShow(
+            session({
+                questions: [
+                    questionAt(1, {
+                        feedback_html:
+                            '<p>Good start — watch your <strong>articles</strong>.</p>',
+                    }),
+                ],
+            }),
+        );
+
+        expect(wrapper.find('#reading-1-feedback').exists()).toBe(true);
+        expect(wrapper.text()).toContain('Overall feedback');
+        expect(wrapper.html()).toContain('<strong>articles</strong>');
+
+        wrapper.unmount();
+
+        const withoutFeedback = mountShow(
+            session({
+                questions: [questionAt(2)],
+            }),
+        );
+
+        expect(withoutFeedback.find('#reading-2-feedback').exists()).toBe(
+            false,
+        );
+    });
+
+    it('shows a question that holds only overall feedback', () => {
+        const wrapper = mountShow(
+            session({
+                questions: [
+                    questionAt(1, {
+                        question_html: '',
+                        answer_html: '',
+                        feedback_html: '<p>Nice work.</p>',
+                    }),
+                ],
+            }),
+        );
+
+        expect(wrapper.text()).toContain('1 question');
+        expect(wrapper.find('#reading-1-feedback').exists()).toBe(true);
+        expect(wrapper.text()).toContain('Nice work.');
     });
 
     it('opens an entry and shows a correction that was saved as markup', async () => {
@@ -564,6 +613,39 @@ describe('a session opened from a search result', () => {
         await nextTick();
 
         expect(wrapper.text()).toContain('That item has changed');
+    });
+
+    it('scrolls to the overall feedback a search result pointed at', async () => {
+        runFramesImmediately();
+        window.history.replaceState(
+            null,
+            '',
+            '/sessions/7?question=1&field=feedback',
+        );
+
+        const wrapper = mount(Show, {
+            attachTo: document.body,
+            props: {
+                session: session({
+                    questions: [
+                        questionAt(1, {
+                            feedback_html: '<p>Watch your articles.</p>',
+                        }),
+                        questionAt(2),
+                    ],
+                }),
+            },
+        });
+
+        await flushPromises();
+        await nextTick();
+
+        const target = document.getElementById('reading-1-feedback');
+
+        expect(target).not.toBeNull();
+        expect(target?.classList.contains('search-target')).toBe(true);
+
+        wrapper.unmount();
     });
 });
 

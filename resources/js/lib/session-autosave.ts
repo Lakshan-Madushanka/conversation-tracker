@@ -22,6 +22,7 @@ function cleanQuestions(questions: PracticeQuestionForm[]) {
     return questions.map((question) => ({
         question_html: question.question_html,
         answer_html: question.answer_html,
+        feedback_html: question.feedback_html,
         feedback: cleanFeedback(question.feedback),
     }));
 }

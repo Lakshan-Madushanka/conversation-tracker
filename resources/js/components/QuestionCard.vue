@@ -14,9 +14,12 @@ const props = defineProps<{
     uid: string;
     questionHtml: string;
     answerHtml: string;
+    /** The tutor's overall remark about the whole answer, kept apart from the boxes. */
+    feedbackHtml: string;
     feedback: FeedbackValues;
     questionError?: string;
     answerError?: string;
+    feedbackError?: string;
     feedbackErrors?: Partial<Record<FeedbackType, string>>;
     /** The one row in this question that focus should be moved to. */
     focusTarget?: AttentionFocus | null;
@@ -25,6 +28,7 @@ const props = defineProps<{
 const emit = defineEmits<{
     (event: 'update:questionHtml', value: string): void;
     (event: 'update:answerHtml', value: string): void;
+    (event: 'update:feedbackHtml', value: string): void;
     (event: 'update:feedback', type: FeedbackType, value: FeedbackValue): void;
     (event: 'remove'): void;
 }>();
@@ -98,6 +102,29 @@ function focusEntryId(boxType: FeedbackType): string | null {
                     class="text-xs font-medium text-destructive"
                 >
                     {{ props.answerError }}
+                </p>
+            </div>
+
+            <div class="space-y-1.5">
+                <label
+                    :for="`overall-feedback-${props.uid}`"
+                    class="text-sm font-medium"
+                >
+                    Overall feedback
+                </label>
+                <RichTextEditor
+                    :id="`overall-feedback-${props.uid}`"
+                    :model-value="props.feedbackHtml"
+                    label="Overall feedback"
+                    placeholder="Add an overall remark about this answer…"
+                    @update:model-value="emit('update:feedbackHtml', $event)"
+                />
+                <p
+                    v-if="props.feedbackError"
+                    role="alert"
+                    class="text-xs font-medium text-destructive"
+                >
+                    {{ props.feedbackError }}
                 </p>
             </div>
 

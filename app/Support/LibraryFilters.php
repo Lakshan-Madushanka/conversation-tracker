@@ -47,6 +47,12 @@ final class LibraryFilters
     /** The longest search the Library keeps. */
     public const int MAX_SEARCH_LENGTH = SearchText::MAX_LENGTH;
 
+    /**
+     * The content options a session can hold: the five feedback boxes and the
+     * tutor's overall remark about the answer.
+     */
+    public const string OVERALL_FEEDBACK = 'overall_feedback';
+
     /** @var list<int> */
     private array $topics = [];
 
@@ -161,6 +167,26 @@ final class LibraryFilters
     public function types(): array
     {
         return $this->types;
+    }
+
+    /**
+     * Only the chosen feedback boxes. Overall feedback is kept apart, because
+     * it is a question field and never a feedback entry.
+     *
+     * @return list<string>
+     */
+    public function boxTypes(): array
+    {
+        return array_values(array_filter(
+            $this->types,
+            fn (string $type): bool => $type !== self::OVERALL_FEEDBACK,
+        ));
+    }
+
+    /** Whether Overall feedback is one of the chosen content options. */
+    public function includesOverallFeedback(): bool
+    {
+        return in_array(self::OVERALL_FEEDBACK, $this->types, true);
     }
 
     public function date(): string
@@ -401,8 +427,10 @@ final class LibraryFilters
             array_filter(self::listValues($value), is_string(...)),
         );
 
+        $allowed = [...FeedbackType::values(), self::OVERALL_FEEDBACK];
+
         return array_values(array_filter(
-            FeedbackType::values(),
+            $allowed,
             fn (string $type): bool => in_array($type, $wanted, true),
         ));
     }

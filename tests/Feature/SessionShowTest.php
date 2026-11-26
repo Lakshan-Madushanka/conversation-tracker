@@ -20,6 +20,16 @@ it('shows a finished session so it can be read back', function (): void {
         'question_html' => '<p>What would you like to start with?</p>',
         'answer_text' => 'I want a soup.',
         'answer_html' => '<p>I want a soup.</p>',
+        'feedback_html' => '<p>Good start — watch your <strong>articles</strong>.</p>',
+        'feedback_text' => 'Good start — watch your articles.',
+    ]);
+
+    PracticeQuestion::factory()->for($session)->create([
+        'position' => 2,
+        'question_text' => 'Anything else?',
+        'question_html' => '<p>Anything else?</p>',
+        'answer_html' => '',
+        'answer_text' => '',
     ]);
 
     PracticeFeedbackEntry::factory()->for($question)->create([
@@ -46,9 +56,11 @@ it('shows a finished session so it can be read back', function (): void {
             ->where('session.id', $session->id)
             ->where('session.topic.name', 'Ordering at a restaurant')
             ->where('session.finished_at', $session->finished_at?->toIso8601String())
-            ->count('session.questions', 1)
+            ->count('session.questions', 2)
             ->where('session.questions.0.question_html', '<p>What would you like to start with?</p>')
             ->where('session.questions.0.answer_html', '<p>I want a soup.</p>')
+            ->where('session.questions.0.feedback_html', '<p>Good start — watch your <strong>articles</strong>.</p>')
+            ->where('session.questions.1.feedback_html', '')
             ->where('session.questions.0.feedback.mistake.0.text', 'I want')
             ->where('session.questions.0.feedback.mistake.0.correction_html', '<strong>I&#039;d like</strong>')
             ->where('session.questions.0.feedback.vocabulary.0.meaning', 'a liquid food')

@@ -50,6 +50,7 @@ class StorePracticeSessionRequest extends FormRequest
 
         $question['question_html'] ??= '';
         $question['answer_html'] ??= '';
+        $question['feedback_html'] ??= '';
 
         $feedback = $question['feedback'] ?? null;
 
@@ -84,6 +85,9 @@ class StorePracticeSessionRequest extends FormRequest
             'questions.*' => ['array'],
             'questions.*.question_html' => ['nullable', 'string', 'max:'.self::MAX_CONTENT_LENGTH],
             'questions.*.answer_html' => ['nullable', 'string', 'max:'.self::MAX_CONTENT_LENGTH],
+            // The tutor's overall remark about the answer, kept apart from the
+            // five boxes below.
+            'questions.*.feedback_html' => ['nullable', 'string', 'max:'.self::MAX_CONTENT_LENGTH],
             'questions.*.feedback' => ['nullable', 'array'],
             // The natural version stays one piece of formatted text.
             'questions.*.feedback.'.(FeedbackType::NaturalVersion->value) => ['nullable', 'string', 'max:'.self::MAX_CONTENT_LENGTH],
@@ -114,6 +118,7 @@ class StorePracticeSessionRequest extends FormRequest
             'questions.max' => 'A session can hold up to 50 questions. Remove one to add another.',
             'questions.*.question_html.max' => 'This question is too long to save at once. Try splitting it into shorter parts.',
             'questions.*.answer_html.max' => 'This answer is too long to save at once. Try splitting it into shorter parts.',
+            'questions.*.feedback_html.max' => 'This overall feedback is too long to save at once. Try splitting it into shorter parts.',
             'questions.*.feedback.*.max' => 'This feedback is too long to save at once. Try splitting it into shorter parts.',
         ];
     }

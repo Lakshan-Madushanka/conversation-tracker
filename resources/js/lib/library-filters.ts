@@ -12,9 +12,12 @@ export type LibraryView = 'library' | 'archived';
 
 export type LibrarySort = 'newest' | 'oldest' | 'recently_edited';
 
+/** The content a Library search or filter can choose: a box type or overall feedback. */
+export type LibraryContentType = FeedbackType | 'overall_feedback';
+
 export interface LibraryFilters {
     topics: number[];
-    types: FeedbackType[];
+    types: LibraryContentType[];
     date: LibraryDateFilter;
     from: string | null;
     to: string | null;
@@ -35,7 +38,7 @@ export const MIN_SEARCH_LENGTH = 2;
 export const MAX_SEARCH_LENGTH = 100;
 
 export interface ContentTypeOption {
-    type: FeedbackType;
+    type: LibraryContentType;
     label: string;
     tone: FeedbackTone;
 }
@@ -51,6 +54,7 @@ export const contentTypes: readonly ContentTypeOption[] = [
         label: 'More natural versions',
         tone: 'natural',
     },
+    { type: 'overall_feedback', label: 'Overall feedback', tone: 'neutral' },
 ];
 
 export const dateChoices: ReadonlyArray<{
@@ -354,7 +358,7 @@ export function clearSearch(filters: LibraryFilters): LibraryFilters {
 
 export type LibraryFilterChip =
     | { kind: 'topic'; key: string; label: string; value: number }
-    | { kind: 'type'; key: string; label: string; value: FeedbackType }
+    | { kind: 'type'; key: string; label: string; value: LibraryContentType }
     | { kind: 'date'; key: string; label: string }
     | { kind: 'status'; key: string; label: string };
 

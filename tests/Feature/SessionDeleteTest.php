@@ -34,6 +34,24 @@ function addDeleteTestEntry(
     ]);
 }
 
+/**
+ * Makes the session's question a complete conversation at the given moment:
+ * it holds a natural version and is stamped as completed, so its day counts.
+ */
+function completeDeleteTestQuestion(PracticeSession $session, string $completedAt): void
+{
+    $question = $session->questions()->first()
+        ?? PracticeQuestion::factory()->for($session)->create();
+
+    $question->forceFill(['completed_at' => Carbon::parse($completedAt)])->save();
+
+    PracticeFeedbackEntry::factory()->for($question)->create([
+        'type' => FeedbackType::NaturalVersion,
+        'content_html' => '<p>A more natural version.</p>',
+        'content_text' => 'A more natural version.',
+    ]);
+}
+
 function deleteTestSessionAt(string $finishedAt, int $words = 1): PracticeSession
 {
     $session = PracticeSession::factory()->finished()->create([
@@ -41,6 +59,8 @@ function deleteTestSessionAt(string $finishedAt, int $words = 1): PracticeSessio
         'created_at' => Carbon::parse($finishedAt),
         'updated_at' => Carbon::parse($finishedAt),
     ]);
+
+    completeDeleteTestQuestion($session, $finishedAt);
 
     if ($words > 0) {
         addDeleteTestEntry($session, FeedbackType::Vocabulary, 'soup');
@@ -81,6 +101,8 @@ it('previews exactly what a finished deletion removes and changes', function ():
     addDeleteTestEntry($target, FeedbackType::Mistake, 'I go');
     addDeleteTestEntry($target, FeedbackType::GrammarNote, 'Use the past tense');
 
+    completeDeleteTestQuestion($target, '2026-10-26 09:00:00');
+
     deleteTestSessionAt('2026-10-25 09:00:00');
     deleteTestSessionAt('2026-10-24 09:00:00');
 
@@ -104,6 +126,7 @@ it('previews exactly what a finished deletion removes and changes', function ():
             'grammar_notes' => 1,
             'practice_days' => 3,
             'current_streak' => 3,
+            'sessions' => 3,
         ])
         ->and($preview['progress']['after'])->toBe([
             'words' => 2,
@@ -113,6 +136,7 @@ it('previews exactly what a finished deletion removes and changes', function ():
             'practice_days' => 2,
             // Today's only session is the one leaving; yesterday keeps it alive.
             'current_streak' => 2,
+            'sessions' => 2,
         ])
         ->and($preview['token'])->toBeString()->toHaveLength(64);
 });
@@ -131,6 +155,26 @@ it('previews an unfinished deletion as leaving progress untouched', function ():
     expect($preview['session']['finished'])->toBeFalse()
         ->and($preview['counts']['words'])->toBe(1)
         ->and($preview['progress']['before'])->toBe($preview['progress']['after']);
+});
+
+it('previews an unfinished deletion that removes a practice day', function (): void {
+    Carbon::setTestNow('2026-10-26 12:00:00');
+
+    deleteTestSessionAt('2026-10-25 09:00:00');
+
+    $unfinished = PracticeSession::factory()->create();
+    addDeleteTestEntry($unfinished, FeedbackType::Vocabulary, 'soup');
+    completeDeleteTestQuestion($unfinished, '2026-10-26 09:00:00');
+
+    $preview = deletePreviewFor($unfinished);
+
+    expect($preview['session']['finished'])->toBeFalse()
+        ->and($preview['counts']['words'])->toBe(1)
+        ->and($preview['progress']['before']['practice_days'])->toBe(2)
+        ->and($preview['progress']['before']['current_streak'])->toBe(2)
+        ->and($preview['progress']['after']['practice_days'])->toBe(1)
+        ->and($preview['progress']['after']['current_streak'])->toBe(1)
+        ->and($preview['progress']['after']['sessions'])->toBe(1);
 });
 
 it('deletes the session and every row inside it without leaving orphans', function (): void {

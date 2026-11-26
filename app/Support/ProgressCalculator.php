@@ -7,8 +7,12 @@ namespace App\Support;
 use Carbon\CarbonImmutable;
 
 /**
- * Works out progress totals, practice days and the current streak from a list
- * of finished sessions.
+ * Works out progress totals, practice days and the current streak from the
+ * sessions it is given.
+ *
+ * Totals come from finished sessions. A practice day is the learner-local day
+ * of any complete conversation, even in a session that is not finished yet, so
+ * a topic carried across several days still counts each day it was practised.
  *
  * It takes the list it is given, so the same rules answer "what does progress
  * show now?" and "what would it show after deleting these sessions?" without
@@ -34,19 +38,22 @@ final readonly class ProgressCalculator
         /** @var array<string, true> $practiceDays */
         $practiceDays = [];
 
-        foreach ($entries as $entry) {
-            $words += $entry->words;
-            $phrases += $entry->phrases;
-            $mistakes += $entry->mistakes;
-            $grammarNotes += $entry->grammarNotes;
+        $sessions = 0;
 
-            if ($entry->finishedAt === null) {
-                continue;
+        foreach ($entries as $entry) {
+            if ($entry->finished) {
+                $words += $entry->words;
+                $phrases += $entry->phrases;
+                $mistakes += $entry->mistakes;
+                $grammarNotes += $entry->grammarNotes;
+                $sessions += 1;
             }
 
-            // Practice happens on the learner's calendar day, not the server's.
-            $day = $entry->finishedAt->setTimezone($timezone)->format('Y-m-d');
-            $practiceDays[$day] = true;
+            foreach ($entry->practiceMoments as $moment) {
+                // Practice happens on the learner's calendar day, not the server's.
+                $day = $moment->setTimezone($timezone)->format('Y-m-d');
+                $practiceDays[$day] = true;
+            }
         }
 
         return new ProgressNumbers(
@@ -56,6 +63,7 @@ final readonly class ProgressCalculator
             grammarNotes: $grammarNotes,
             practiceDays: count($practiceDays),
             currentStreak: $this->currentStreak($practiceDays, $now, $timezone),
+            sessions: $sessions,
         );
     }
 

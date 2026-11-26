@@ -18,6 +18,7 @@ final readonly class ProgressNumbers
         public int $grammarNotes = 0,
         public int $practiceDays = 0,
         public int $currentStreak = 0,
+        public int $sessions = 0,
     ) {}
 
     /**
@@ -27,7 +28,8 @@ final readonly class ProgressNumbers
      *     mistakes: int,
      *     grammar_notes: int,
      *     practice_days: int,
-     *     current_streak: int
+     *     current_streak: int,
+     *     sessions: int
      * }
      */
     public function toArray(): array
@@ -39,6 +41,7 @@ final readonly class ProgressNumbers
             'grammar_notes' => $this->grammarNotes,
             'practice_days' => $this->practiceDays,
             'current_streak' => $this->currentStreak,
+            'sessions' => $this->sessions,
         ];
     }
 }

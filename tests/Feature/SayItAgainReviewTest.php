@@ -544,7 +544,9 @@ describe('say-it-again at scale', function (): void {
         $queries = count(DB::getQueryLog());
         DB::disableQueryLog();
 
-        expect($queries)->toBeLessThanOrEqual(20);
+        // The real progress reads add three fixed queries; the total still
+        // does not grow with the number of questions.
+        expect($queries)->toBeLessThanOrEqual(23);
 
         $this->get(route('home'))
             ->assertInertia(fn (Assert $page): Assert => $page

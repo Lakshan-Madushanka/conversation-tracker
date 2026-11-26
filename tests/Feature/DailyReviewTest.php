@@ -1064,7 +1064,9 @@ describe('the daily review at scale', function (): void {
         $queries = count(DB::getQueryLog());
         DB::disableQueryLog();
 
-        expect($queries)->toBeLessThanOrEqual(20);
+        // The real progress reads add four fixed queries; the total still
+        // does not grow with the size of the pool.
+        expect($queries)->toBeLessThanOrEqual(24);
 
         // And the suggestion at this size is full and honest: the natural
         // exercises take their shares, and the blank step draws a leftover
@@ -1089,7 +1091,8 @@ describe('the daily review at scale', function (): void {
         $queries = count(DB::getQueryLog());
         DB::disableQueryLog();
 
-        // The number of queries does not grow with the number of items.
-        expect($queries)->toBeLessThanOrEqual(20);
+        // The number of queries does not grow with the number of items; the
+        // real progress reads are the same four fixed queries at any size.
+        expect($queries)->toBeLessThanOrEqual(24);
     });
 });

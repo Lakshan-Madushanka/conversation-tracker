@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace App\Actions\PracticeQuestions;
 
+use App\Enums\FeedbackType;
+use App\Models\PracticeFeedbackEntry;
 use App\Models\PracticeQuestion;
 use App\Models\PracticeSession;
 use App\Support\RichText;
+use Carbon\CarbonImmutable;
 
 /**
  * Saves a single question for a session (identified by its position), the
@@ -43,6 +46,32 @@ final readonly class SavePracticeQuestion
         $feedback = $data['feedback'] ?? [];
         $this->savePracticeFeedback->handle($question, $session, is_array($feedback) ? $feedback : []);
 
+        $this->stampCompletedConversation($question);
+
         return $question;
+    }
+
+    /**
+     * Records the moment the question first became a complete conversation: it
+     * holds an answer and at least one natural version. The moment is set once
+     * and never moved, so a later edit leaves its practice day where it is.
+     */
+    private function stampCompletedConversation(PracticeQuestion $question): void
+    {
+        if ($question->completed_at !== null) {
+            return;
+        }
+
+        $hasNaturalVersion = $question->feedbackEntries()
+            ->where('type', FeedbackType::NaturalVersion->value)
+            ->get()
+            ->contains(fn (PracticeFeedbackEntry $entry): bool => ! $entry->isBlank());
+
+        if (trim($question->answer_text) === '' || ! $hasNaturalVersion) {
+            return;
+        }
+
+        $question->completed_at = CarbonImmutable::now();
+        $question->save();
     }
 }

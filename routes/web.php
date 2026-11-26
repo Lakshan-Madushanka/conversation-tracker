@@ -10,6 +10,7 @@ use App\Http\Controllers\LibraryBulkController;
 use App\Http\Controllers\LibraryController;
 use App\Http\Controllers\NotebooksController;
 use App\Http\Controllers\PracticeSessionController;
+use App\Http\Controllers\ProgressController;
 use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\ReviewSuggestionController;
 use App\Http\Controllers\TopicController;
@@ -190,7 +191,7 @@ Route::delete('/review/{review}/rating', [ReviewController::class, 'undo'])->nam
 // to rate.
 Route::get('/review/{review}/results', [ReviewController::class, 'results'])->name('review.results');
 
-Route::inertia('/progress', 'progress/Index')->name('progress.index');
+Route::get('/progress', ProgressController::class)->name('progress.index');
 
 Route::inertia('/settings', 'settings/Preferences')->name('settings.index');
 Route::inertia('/settings/import', 'settings/Import')->name('settings.import');

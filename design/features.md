@@ -10,22 +10,22 @@ The Notebook extension below is planned behaviour, not a claim of completed impl
 
 ## Summary
 
-| #   | Feature                                  | Priority          |
-| --- | ---------------------------------------- | ----------------- |
-| F1  | Practice sessions (copy and paste entry) | 🟢                |
-| F2  | Library of saved sessions                | 🟢                |
-| F3  | Collections                              | 🟢                |
-| F4  | Review and re-practice                   | 🟢                |
-| F5  | Progress and motivation                  | 🟢                |
-| F6  | Import from spreadsheets                 | 🟢                |
-| F7  | Export and backup                        | 🟢                |
-| F8  | Voice and pronunciation                  | ⚪                |
-| F9  | Reminders                                | ⚪                |
-| F10 | Sharing                                  | ⚪                |
-| F11 | Smart sorting of pasted chats            | ⚪                |
-| F12 | Learning goals and levels                | ⚪                |
-| F13 | Custom reviews                           | ⚪                |
-| F14 | Notebooks                                | Planned extension |
+| #   | Feature                                  | Priority          | Status |
+|-----|------------------------------------------|-------------------|--------|
+| F1  | Practice sessions (copy and paste entry) | 🟢                | ✅      |
+| F2  | Library of saved sessions                | 🟢                | ✅      |
+| F3  | Collections                              | 🟢                | ✅      |
+| F4  | Review and re-practice                   | 🟢                | ✅      |
+| F5  | Progress and motivation                  | 🟢                | ⌛      |
+| F6  | Import from spreadsheets                 | 🟢                | 🔜     |
+| F7  | Export and backup                        | 🟢                | 🔜     |
+| F8  | Voice and pronunciation                  | ⚪                 | 🔜     |
+| F9  | Reminders                                | ⚪                 |        |
+| F10 | Sharing                                  | ⚪                 |        |
+| F11 | Smart sorting of pasted chats            | ⚪                 |        |
+| F12 | Learning goals and levels                | ⚪                 |        |
+| F13 | Custom reviews                           | ⚪                 |        |
+| F14 | Notebooks                                | Planned extension | ✅      |
 
 ---
 

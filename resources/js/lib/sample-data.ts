@@ -141,25 +141,6 @@ export const reviewItems: ReviewItem[] = [
     },
 ];
 
-export const progressStats = {
-    streak: 4,
-    practiceDays: 23,
-    sessions: 24,
-    words: 180,
-    phrases: 65,
-    grammar: 41,
-    weeklySummary:
-        'This week you practised on 4 days, learned 18 new words and fixed 6 recurring mistakes.',
-    win: 'Your longest streak so far.',
-};
-
-export const mistakeTrend: { week: string; count: number }[] = [
-    { week: 'W1', count: 14 },
-    { week: 'W2', count: 11 },
-    { week: 'W3', count: 8 },
-    { week: 'W4', count: 5 },
-];
-
 export const todayReview = {
     minutes: 5,
     items: 8,

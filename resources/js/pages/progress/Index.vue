@@ -1,17 +1,17 @@
 <script setup lang="ts">
+import { computed } from 'vue';
+import { Head, Link } from '@inertiajs/vue3';
 import {
+    BookOpenIcon,
     CalendarIcon,
     FlameIcon,
     GraduationCapIcon,
     MessageSquareIcon,
-    PartyPopperIcon,
-    TrendingDownIcon,
     TypeIcon,
-    BookOpenIcon,
 } from '@lucide/vue';
-import { Head } from '@inertiajs/vue3';
 import PageHeader from '@/components/PageHeader.vue';
 import StatTile from '@/components/StatTile.vue';
+import { Button } from '@/components/ui/button';
 import {
     Card,
     CardContent,
@@ -20,15 +20,24 @@ import {
     CardTitle,
 } from '@/components/ui/card';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { mistakeTrend, progressStats } from '@/lib/sample-data';
+import { create as sessionsCreate } from '@/routes/sessions';
+import type { ProgressNumbers } from '@/types';
 
 defineOptions({ layout: AppLayout });
 
-const maxMistakes = Math.max(...mistakeTrend.map((point) => point.count));
+const props = defineProps<{
+    progress: ProgressNumbers;
+}>();
 
-function barHeight(count: number): string {
-    return `${Math.round((count / maxMistakes) * 100)}%`;
+function dayCount(value: number): string {
+    return `${value} ${value === 1 ? 'day' : 'days'}`;
 }
+
+const streakHint = computed(() =>
+    props.progress.current_streak === 0
+        ? 'Complete a conversation to begin'
+        : 'Learning days in a row',
+);
 </script>
 
 <template>
@@ -40,103 +49,64 @@ function barHeight(count: number): string {
             description="A gentle look at how your practice is adding up."
         />
 
-        <!-- Streak + practice days -->
+        <h2 class="mb-3 text-sm font-semibold">Practice</h2>
         <div class="grid grid-cols-2 gap-3 sm:gap-4">
             <StatTile
                 label="Current streak"
-                :value="`${progressStats.streak} days`"
+                :value="dayCount(progress.current_streak)"
                 :icon="FlameIcon"
-                hint="Keep it going!"
+                :hint="streakHint"
             />
             <StatTile
                 label="Total practice days"
-                :value="progressStats.practiceDays"
+                :value="progress.practice_days"
                 :icon="CalendarIcon"
-                hint="Since you started"
+                hint="Days with a complete conversation"
             />
         </div>
 
-        <!-- Learning totals -->
-        <div
-            class="mt-3 grid grid-cols-2 gap-3 sm:mt-4 sm:grid-cols-4 sm:gap-4"
-        >
+        <h2 class="mt-6 mb-3 text-sm font-semibold">Collected in sessions</h2>
+        <div class="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
             <StatTile
                 label="Sessions"
-                :value="progressStats.sessions"
+                :value="progress.sessions"
                 :icon="MessageSquareIcon"
+                hint="Finished, archived included"
             />
-            <StatTile
-                label="Words"
-                :value="progressStats.words"
-                :icon="TypeIcon"
-            />
+            <StatTile label="Words" :value="progress.words" :icon="TypeIcon" />
             <StatTile
                 label="Phrases"
-                :value="progressStats.phrases"
+                :value="progress.phrases"
                 :icon="BookOpenIcon"
             />
             <StatTile
                 label="Grammar"
-                :value="progressStats.grammar"
+                :value="progress.grammar_notes"
                 :icon="GraduationCapIcon"
             />
         </div>
 
-        <!-- Mistakes chart -->
-        <Card class="mt-6">
+        <Card
+            v-if="progress.sessions === 0 && progress.practice_days === 0"
+            class="mt-6"
+        >
             <CardHeader>
-                <CardDescription>Mistakes over time</CardDescription>
-                <CardTitle class="flex items-center gap-2 text-base">
-                    <TrendingDownIcon
-                        class="size-4 text-emerald-500"
-                        aria-hidden="true"
-                    />
-                    Your common mistakes are fading
-                </CardTitle>
-            </CardHeader>
-            <CardContent>
-                <div
-                    class="flex h-40 items-end gap-3"
-                    role="img"
-                    aria-label="A bar chart showing common mistakes falling from 14 to 5 over four weeks."
-                >
-                    <div
-                        v-for="point in mistakeTrend"
-                        :key="point.week"
-                        class="flex flex-1 flex-col items-center gap-2"
-                    >
-                        <span
-                            class="text-xs text-muted-foreground tabular-nums"
-                            >{{ point.count }}</span
-                        >
-                        <div
-                            class="w-full rounded-t-md bg-primary/70"
-                            :style="{ height: barHeight(point.count) }"
-                        />
-                        <span class="text-xs text-muted-foreground">{{
-                            point.week
-                        }}</span>
-                    </div>
-                </div>
-            </CardContent>
-        </Card>
-
-        <!-- Weekly summary -->
-        <Card class="mt-4 border-primary/30 bg-primary/5">
-            <CardHeader>
-                <CardDescription>This week</CardDescription>
+                <CardDescription>Your progress starts here</CardDescription>
                 <CardTitle class="text-base">
-                    {{ progressStats.weeklySummary }}
+                    Complete a conversation to see your progress grow
                 </CardTitle>
             </CardHeader>
-            <CardContent>
-                <p class="flex items-center gap-2 text-sm">
-                    <PartyPopperIcon
-                        class="size-4 shrink-0 text-primary"
-                        aria-hidden="true"
-                    />
-                    {{ progressStats.win }}
+            <CardContent class="grid gap-4">
+                <p class="text-sm text-muted-foreground">
+                    Your streak and practice days appear once a question has an
+                    answer and a natural version, even before you finish the
+                    session. Collected words appear after you finish it.
+                    Notebook entries are saved separately in Notebooks and are
+                    not practice conversations.
                 </p>
+                <Button class="w-fit" as-child>
+                    <Link :href="sessionsCreate.url()">Start a session</Link>
+                </Button>
             </CardContent>
         </Card>
     </div>

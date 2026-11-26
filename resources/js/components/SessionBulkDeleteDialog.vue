@@ -40,8 +40,9 @@ import type {
  *
  * It reads the combined effect of the selection, so the warning names the
  * sessions, shows exactly what leaves, and works out one set of progress
- * numbers rather than one per session. When a finished session is included it
- * warns prominently, offers Archive for those finished sessions, and keeps
+ * numbers rather than one per session. It warns prominently when a finished
+ * session is included, shows the progress lines that would actually change
+ * for the whole selection, offers Archive for finished sessions, and keeps
  * Delete permanently disabled until the learner ticks that they understand.
  *
  * If the selection changed while the warning was open, the server refuses the
@@ -453,8 +454,9 @@ watch(
 
                     <p v-else class="mb-3 text-sm text-muted-foreground">
                         These sessions are unfinished. They will leave the
-                        Library, Collections, and Review, but your progress
-                        totals, practice days, and streak will not change.
+                        Library, Collections, and Review. Any complete
+                        conversation in them will no longer count towards your
+                        practice days or streak.
                     </p>
 
                     <section
@@ -519,7 +521,7 @@ watch(
                     </section>
 
                     <section
-                        v-if="hasFinished"
+                        v-if="hasFinished || progressChanges.length > 0"
                         aria-labelledby="bulk-delete-progress-title"
                         class="mt-3 rounded-lg border p-3"
                     >

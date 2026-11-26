@@ -13,13 +13,13 @@ import SessionCard from '@/components/SessionCard.vue';
 import StatTile from '@/components/StatTile.vue';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { progressStats } from '@/lib/sample-data';
 import {
     create as sessionsCreate,
     index as sessionsIndex,
 } from '@/routes/sessions';
 import type {
     ContinueCardData,
+    ProgressNumbers,
     SessionCardData,
     TodayReviewData,
 } from '@/types';
@@ -28,6 +28,8 @@ defineOptions({ layout: AppLayout });
 
 withDefaults(
     defineProps<{
+        /** Session-derived streak and practice-day totals. */
+        progress?: ProgressNumbers;
         /** The most recent unfinished session, if there is one. */
         unfinishedSession?: ContinueCardData | null;
         /** The most recent finished sessions, newest first. */
@@ -36,6 +38,15 @@ withDefaults(
         todayReview?: TodayReviewData;
     }>(),
     {
+        progress: () => ({
+            words: 0,
+            phrases: 0,
+            mistakes: 0,
+            grammar_notes: 0,
+            practice_days: 0,
+            current_streak: 0,
+            sessions: 0,
+        }),
         recentSessions: () => [],
         todayReview: () => ({
             state: 'nothing',
@@ -79,15 +90,19 @@ withDefaults(
         <div class="mt-6 grid grid-cols-2 gap-3 sm:gap-4">
             <StatTile
                 label="Current streak"
-                :value="`${progressStats.streak} days`"
+                :value="`${progress.current_streak} ${progress.current_streak === 1 ? 'day' : 'days'}`"
                 :icon="FlameIcon"
-                hint="Keep it going!"
+                :hint="
+                    progress.current_streak === 0
+                        ? 'Complete a conversation to begin'
+                        : 'Keep it going!'
+                "
             />
             <StatTile
                 label="Total practice days"
-                :value="progressStats.practiceDays"
+                :value="progress.practice_days"
                 :icon="TrophyIcon"
-                hint="Since you started"
+                hint="Days with a complete conversation"
             />
         </div>
 

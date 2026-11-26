@@ -74,6 +74,7 @@ function preview(): SessionDeletionPreview {
                 grammar_notes: 0,
                 practice_days: 0,
                 current_streak: 0,
+                sessions: 0,
             },
             after: {
                 words: 0,
@@ -82,6 +83,7 @@ function preview(): SessionDeletionPreview {
                 grammar_notes: 0,
                 practice_days: 0,
                 current_streak: 0,
+                sessions: 0,
             },
         },
         token: 'token-1',

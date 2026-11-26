@@ -51,4 +51,31 @@ describe('the Home page', () => {
             'Finished sessions will appear here',
         );
     });
+
+    it('shows the streak and practice days it is given', () => {
+        const wrapper = mount(Home, {
+            props: {
+                recentSessions: [],
+                progress: {
+                    words: 12,
+                    phrases: 4,
+                    mistakes: 2,
+                    grammar_notes: 3,
+                    practice_days: 9,
+                    current_streak: 2,
+                    sessions: 6,
+                },
+            },
+        });
+
+        expect(wrapper.text()).toContain('2 days');
+        expect(wrapper.text()).toContain('9');
+    });
+
+    it('starts from zeros before anything is practised', () => {
+        const wrapper = mount(Home, { props: { recentSessions: [] } });
+
+        expect(wrapper.text()).toContain('0 days');
+        expect(wrapper.text()).toContain('Complete a conversation to begin');
+    });
 });

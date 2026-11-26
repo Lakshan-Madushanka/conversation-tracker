@@ -36,7 +36,7 @@ final readonly class ProgressSessions
             ->countable()
             ->select(['id'])
             ->with([
-                'questions:id,practice_session_id,question_text,answer_text',
+                'questions:id,practice_session_id,question_text,answer_text,feedback_text',
                 'questions.feedbackEntries:'.self::ENTRY_COLUMNS,
             ])
             ->when(

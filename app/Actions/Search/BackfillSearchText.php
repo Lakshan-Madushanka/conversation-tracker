@@ -70,6 +70,7 @@ final readonly class BackfillSearchText
                 foreach ($questions as $question) {
                     $questionSearch = SearchText::normalize($question->question_text);
                     $answerSearch = SearchText::normalize($question->answer_text);
+                    $feedbackSearch = SearchText::normalize($question->feedback_text);
                     $values = [];
 
                     if ($question->question_search_text !== $questionSearch) {
@@ -78,6 +79,10 @@ final readonly class BackfillSearchText
 
                     if ($question->answer_search_text !== $answerSearch) {
                         $values['answer_search_text'] = $answerSearch;
+                    }
+
+                    if ($question->feedback_search_text !== $feedbackSearch) {
+                        $values['feedback_search_text'] = $feedbackSearch;
                     }
 
                     if ($values === []) {

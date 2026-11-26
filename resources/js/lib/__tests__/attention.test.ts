@@ -17,6 +17,7 @@ function question(
         uid,
         question_html: '<p>Question?</p>',
         answer_html: '',
+        feedback_html: '',
         feedback: { ...emptyFeedbackValues(), ...feedback },
     };
 }

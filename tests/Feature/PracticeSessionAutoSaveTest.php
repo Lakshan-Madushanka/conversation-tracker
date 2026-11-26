@@ -206,3 +206,46 @@ describe('automatic update', function (): void {
             ->and(PracticeFeedbackEntry::count())->toBe(1);
     });
 });
+
+describe('overall feedback autosave', function (): void {
+    it('saves overall feedback and returns it on the next read', function (): void {
+        $topic = Topic::factory()->create(['name' => 'Travel']);
+        $session = PracticeSession::factory()->for($topic)->create();
+
+        $this->putJson(route('sessions.autosave.update', $session), autosavePayload('Travel', [[
+            'question_html' => '<p>Where did you go?</p>',
+            'answer_html' => '<p>I went to the beach.</p>',
+            'feedback_html' => '<p>Nice work — watch the <strong>articles</strong>.</p>',
+        ]], ['version' => 1, 'save_key' => 'save-feedback']))
+            ->assertOk()
+            ->assertJsonPath('session.questions.0.feedback_html', '<p>Nice work — watch the <strong>articles</strong>.</p>');
+
+        $question = PracticeQuestion::sole();
+
+        expect($question->feedback_text)->toBe('Nice work — watch the articles.')
+            ->and($question->feedback_search_text)->toBe('nice work — watch the articles.');
+    });
+
+    it('clears overall feedback when the field is emptied', function (): void {
+        $topic = Topic::factory()->create(['name' => 'Travel']);
+        $session = PracticeSession::factory()->for($topic)->create();
+
+        PracticeQuestion::factory()->for($session)->create([
+            'position' => 1,
+            'feedback_html' => '<p>Old remark</p>',
+            'feedback_text' => 'Old remark',
+        ]);
+
+        $this->putJson(route('sessions.autosave.update', $session), autosavePayload('Travel', [[
+            'question_html' => '<p>Where did you go?</p>',
+            'answer_html' => '',
+            'feedback_html' => '',
+        ]], ['version' => 1, 'save_key' => 'save-cleared']))->assertOk();
+
+        $question = PracticeQuestion::sole();
+
+        expect($question->feedback_html)->toBe('')
+            ->and($question->feedback_text)->toBe('')
+            ->and($question->feedback_search_text)->toBe('');
+    });
+});

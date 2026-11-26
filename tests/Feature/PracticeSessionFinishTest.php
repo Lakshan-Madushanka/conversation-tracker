@@ -24,6 +24,8 @@ function sessionHolding(array $questions): PracticeSession
             'question_text' => $shape['question_text'] ?? '',
             'answer_html' => $shape['answer_html'] ?? '',
             'answer_text' => $shape['answer_text'] ?? '',
+            'feedback_html' => $shape['feedback_html'] ?? '',
+            'feedback_text' => $shape['feedback_text'] ?? '',
         ]);
 
         foreach ($shape['entries'] ?? [] as $entry) {
@@ -121,6 +123,28 @@ describe('finishing a session', function (): void {
             ->toBe(['Question one', 'Question three'])
             ->and(PracticeQuestion::orderBy('position')->pluck('position')->all())
             ->toBe([1, 2]);
+    });
+
+    it('keeps a question that holds only overall feedback and still drops a blank one', function (): void {
+        $session = sessionHolding([
+            [
+                'question_text' => '',
+                'question_html' => '',
+                'answer_text' => '',
+                'answer_html' => '',
+                'feedback_html' => '<p>Good effort overall.</p>',
+                'feedback_text' => 'Good effort overall.',
+            ],
+            ['question_text' => '', 'question_html' => '', 'answer_text' => '', 'answer_html' => ''],
+        ]);
+
+        $this->postJson(route('sessions.finish', $session))
+            ->assertOk()
+            ->assertJsonPath('empty', false)
+            ->assertJsonPath('counts.questions', 1)
+            ->assertJsonPath('empty_questions_removed', 1);
+
+        expect(PracticeQuestion::sole()->feedback_text)->toBe('Good effort overall.');
     });
 
     it('warns instead of finishing a session whose questions all hold nothing', function (): void {

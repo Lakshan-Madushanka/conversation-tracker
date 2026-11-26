@@ -151,7 +151,8 @@ export function setFeedbackValue<T extends FeedbackType>(
 export function questionHasContent(question: PracticeQuestionForm): boolean {
     if (
         !isRichTextBlank(question.question_html) ||
-        !isRichTextBlank(question.answer_html)
+        !isRichTextBlank(question.answer_html) ||
+        !isRichTextBlank(question.feedback_html)
     ) {
         return true;
     }
@@ -169,12 +170,13 @@ export function questionHasContent(question: PracticeQuestionForm): boolean {
 export function questionDataHasContent(
     question: Pick<
         PracticeQuestionData,
-        'question_html' | 'answer_html' | 'feedback'
+        'question_html' | 'answer_html' | 'feedback_html' | 'feedback'
     >,
 ): boolean {
     if (
         !isRichTextBlank(question.question_html) ||
-        !isRichTextBlank(question.answer_html)
+        !isRichTextBlank(question.answer_html) ||
+        !isRichTextBlank(question.feedback_html)
     ) {
         return true;
     }
@@ -196,6 +198,7 @@ export function toQuestionForm(
         uid,
         question_html: question.question_html,
         answer_html: question.answer_html,
+        feedback_html: question.feedback_html,
         feedback: normalizeFeedback(question.feedback),
     };
 }

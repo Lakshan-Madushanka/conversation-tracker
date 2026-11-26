@@ -44,12 +44,13 @@ import {
     normalizeLibraryFilters,
     statusChoices,
     sortChoices,
+    type LibraryContentType,
     type LibraryDateFilter,
     type LibraryFilters,
     type LibrarySort,
     type LibraryStatusFilter,
 } from '@/lib/library-filters';
-import type { FeedbackType, TopicSummary } from '@/types';
+import type { TopicSummary } from '@/types';
 
 const props = withDefaults(
     defineProps<{
@@ -119,7 +120,7 @@ function toggleTopic(id: number): void {
     apply({ topics });
 }
 
-function toggleType(type: FeedbackType): void {
+function toggleType(type: LibraryContentType): void {
     const types = props.filters.types.includes(type)
         ? props.filters.types.filter((candidate) => candidate !== type)
         : [...props.filters.types, type];

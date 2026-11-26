@@ -9,13 +9,13 @@ import type { FeedbackType } from '@/types';
  */
 export interface SearchTarget {
     question: number | null;
-    field: 'question' | 'answer' | 'entry' | null;
+    field: 'question' | 'answer' | 'feedback' | 'entry' | null;
     type: FeedbackType | null;
     entry: string | null;
     position: number | null;
 }
 
-const FIELDS = ['question', 'answer', 'entry'] as const;
+const FIELDS = ['question', 'answer', 'feedback', 'entry'] as const;
 
 /** Read the target from an address, ignoring anything it cannot understand. */
 export function readSearchTarget(url: string): SearchTarget | null {

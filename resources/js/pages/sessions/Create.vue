@@ -109,6 +109,7 @@ function emptyQuestion(): PracticeQuestionForm {
         uid: nextUid(),
         question_html: '',
         answer_html: '',
+        feedback_html: '',
         feedback: emptyFeedbackValues(),
     };
 }
@@ -256,6 +257,10 @@ function targetElementId(
         return `answer-${question.uid}`;
     }
 
+    if (target.field === 'feedback') {
+        return `overall-feedback-${question.uid}`;
+    }
+
     if (target.field !== 'entry' || target.type === null) {
         return null;
     }
@@ -311,9 +316,13 @@ function feedbackCount(question: PracticeQuestionForm): number {
     return count;
 }
 
-/** The first few words of the tutor's question, for the collapsed card. */
+/** The first words of the tutor's question, for the collapsed card. */
 function questionPreview(question: PracticeQuestionForm): string {
-    return richTextPreview(question.question_html);
+    return (
+        richTextPreview(question.question_html) ||
+        richTextPreview(question.answer_html) ||
+        richTextPreview(question.feedback_html)
+    );
 }
 
 const hasTopic = (): boolean => topic.value.trim().length > 0;
@@ -1398,6 +1407,9 @@ onBeforeUnmount(() => {
                                         question.question_html
                                     "
                                     v-model:answer-html="question.answer_html"
+                                    v-model:feedback-html="
+                                        question.feedback_html
+                                    "
                                     :feedback="question.feedback"
                                     :question-error="
                                         errorFor(
@@ -1407,6 +1419,11 @@ onBeforeUnmount(() => {
                                     :answer-error="
                                         errorFor(
                                             `questions.${index}.answer_html`,
+                                        )
+                                    "
+                                    :feedback-error="
+                                        errorFor(
+                                            `questions.${index}.feedback_html`,
                                         )
                                     "
                                     :feedback-errors="feedbackErrors(index)"
@@ -1446,12 +1463,16 @@ onBeforeUnmount(() => {
                             :uid="question.uid"
                             v-model:question-html="question.question_html"
                             v-model:answer-html="question.answer_html"
+                            v-model:feedback-html="question.feedback_html"
                             :feedback="question.feedback"
                             :question-error="
                                 errorFor(`questions.${index}.question_html`)
                             "
                             :answer-error="
                                 errorFor(`questions.${index}.answer_html`)
+                            "
+                            :feedback-error="
+                                errorFor(`questions.${index}.feedback_html`)
                             "
                             :feedback-errors="feedbackErrors(index)"
                             :focus-target="focusTarget"

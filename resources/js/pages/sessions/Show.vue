@@ -150,7 +150,8 @@ const cards = computed<QuestionCard[]>(() =>
             ({ question, sections }) =>
                 sections.length > 0 ||
                 !isRichTextBlank(question.question_html) ||
-                !isRichTextBlank(question.answer_html),
+                !isRichTextBlank(question.answer_html) ||
+                !isRichTextBlank(question.feedback_html),
         ),
 );
 
@@ -492,6 +493,10 @@ function targetPlace(
 
     if (target.field === 'answer') {
         return { id: `reading-${position}-answer`, entryId: null };
+    }
+
+    if (target.field === 'feedback') {
+        return { id: `reading-${position}-feedback`, entryId: null };
     }
 
     if (target.field !== 'entry' || target.type === null) {

@@ -14,6 +14,7 @@ function question(
         position: 1,
         question_html: '<p>What would you like to start with?</p>',
         answer_html: '<p>I want a soup.</p>',
+        feedback_html: '',
         feedback,
     };
 }

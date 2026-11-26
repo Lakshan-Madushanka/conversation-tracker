@@ -18,6 +18,10 @@ use Illuminate\Support\Collection;
  * One tutor question with the learner's answer, kept as formatted text plus a
  * plain-text version for search and review.
  *
+ * `feedback_*` holds the tutor's overall remark about the whole answer. It is
+ * not one of the five boxes: those stay in `feedbackEntries` and are never
+ * mixed with it.
+ *
  * @property int $id
  * @property int $practice_session_id
  * @property int $position
@@ -27,6 +31,9 @@ use Illuminate\Support\Collection;
  * @property string $answer_html
  * @property string $answer_text
  * @property string|null $answer_search_text
+ * @property string $feedback_html
+ * @property string $feedback_text
+ * @property string|null $feedback_search_text
  * @property Collection<int, PracticeFeedbackEntry> $feedbackEntries
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
@@ -38,6 +45,8 @@ use Illuminate\Support\Collection;
     'question_text',
     'answer_html',
     'answer_text',
+    'feedback_html',
+    'feedback_text',
 ])]
 class PracticeQuestion extends Model
 {
@@ -53,6 +62,7 @@ class PracticeQuestion extends Model
         static::saving(function (self $question): void {
             $question->question_search_text = SearchText::normalize($question->question_text);
             $question->answer_search_text = SearchText::normalize($question->answer_text);
+            $question->feedback_search_text = SearchText::normalize((string) $question->feedback_text);
         });
     }
 
@@ -80,13 +90,17 @@ class PracticeQuestion extends Model
 
     /**
      * Whether the question holds anything at all: a tutor's question, an
-     * answer, or any non-empty feedback entry. Mirrors the editor's
-     * `questionHasContent`, so a card the learner never filled in is treated
-     * as empty on both sides.
+     * answer, the tutor's overall remark, or any non-empty feedback entry.
+     * Mirrors the editor's `questionHasContent`, so a card the learner never
+     * filled in is treated as empty on both sides.
      */
     public function hasContent(): bool
     {
-        if (trim($this->question_text) !== '' || trim($this->answer_text) !== '') {
+        if (
+            trim((string) $this->question_text) !== ''
+            || trim((string) $this->answer_text) !== ''
+            || trim((string) $this->feedback_text) !== ''
+        ) {
             return true;
         }
 

@@ -39,6 +39,7 @@ final class SessionEditorResource extends JsonResource
      *         position: int,
      *         question_html: string,
      *         answer_html: string,
+     *         feedback_html: string,
      *         feedback: array<string, list<array{id: string, text: string, correction_html: string, reason: string}|array{id: string, text: string, meaning: string, example_html: string|list<array{id: string, text: string, html: string}>}|array{id: string, html: string}>|string>
      *     }>
      * }
@@ -68,6 +69,8 @@ final class SessionEditorResource extends JsonResource
                     'position' => $question->position,
                     'question_html' => $question->question_html,
                     'answer_html' => $question->answer_html,
+                    // The tutor's overall remark, kept out of `feedback`.
+                    'feedback_html' => $question->feedback_html,
                     'feedback' => $question->feedbackEntries
                         ->groupBy(fn (PracticeFeedbackEntry $entry): string => $entry->type->value)
                         ->map(fn (Collection $entries, string $type): mixed => $this->feedbackPayload(FeedbackType::from($type), $entries))

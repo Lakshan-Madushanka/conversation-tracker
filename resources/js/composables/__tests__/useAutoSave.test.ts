@@ -20,6 +20,7 @@ function formQuestion(html: string): PracticeQuestionForm {
         uid: `u-${html || 'empty'}`,
         question_html: html,
         answer_html: '',
+        feedback_html: '',
         feedback: emptyFeedbackValues(),
     };
 }
@@ -583,6 +584,7 @@ describe('conflicts', () => {
                             position: 1,
                             question_html: '<p>Theirs</p>',
                             answer_html: '',
+                            feedback_html: '',
                             feedback: {},
                         },
                     ],

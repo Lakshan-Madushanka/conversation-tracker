@@ -15,6 +15,7 @@ function request(overrides: Partial<AutoSaveRequest> = {}): AutoSaveRequest {
                 uid: 'u1',
                 question_html: '<p>Where did you go?</p>',
                 answer_html: '<p>I went to the beach.</p>',
+                feedback_html: '',
                 feedback: emptyFeedbackValues(),
             },
         ],
@@ -90,6 +91,40 @@ describe('cleanFeedback', () => {
 
         expect(cleaned.mistake).toHaveLength(1);
         expect(cleaned.grammar_note).toHaveLength(0);
+    });
+});
+
+describe('the payload sent to the server', () => {
+    it('carries each question overall feedback', async () => {
+        const fetchMock = vi.fn(
+            async (_url: string, _options?: RequestInit) =>
+                new Response(null, { status: 204 }),
+        );
+        vi.stubGlobal('fetch', fetchMock);
+
+        await savePracticeSession(
+            request({
+                questions: [
+                    {
+                        uid: 'u1',
+                        question_html: '<p>Where did you go?</p>',
+                        answer_html: '<p>I went to the beach.</p>',
+                        feedback_html: '<p>Good effort overall.</p>',
+                        feedback: emptyFeedbackValues(),
+                    },
+                ],
+            }),
+        );
+
+        const body = JSON.parse(
+            (fetchMock.mock.calls[0]?.[1]?.body as string | undefined) ?? '',
+        ) as {
+            questions: Array<Record<string, unknown>>;
+        };
+
+        expect(body.questions[0]?.feedback_html).toBe(
+            '<p>Good effort overall.</p>',
+        );
     });
 });
 

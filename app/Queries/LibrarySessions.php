@@ -192,32 +192,43 @@ final readonly class LibrarySessions
         }
 
         if ($filters->types() !== []) {
-            $types = $filters->types();
+            $boxTypes = $filters->boxTypes();
+            $overallFeedback = $filters->includesOverallFeedback();
 
-            $query->whereHas('questions.feedbackEntries', function (Builder $entries) use ($types): void {
-                $entries
-                    ->whereIn('type', $types)
-                    ->where(function (Builder $nonEmpty): void {
-                        $nonEmpty
-                            ->where(function (Builder $rich): void {
-                                $rich
-                                    ->whereIn('type', FeedbackType::richValues())
-                                    ->whereRaw("TRIM(content_text) <> ''");
-                            })
-                            ->orWhere(function (Builder $table): void {
-                                $table
-                                    ->whereIn('type', FeedbackType::tableValues())
-                                    ->where(function (Builder $columns): void {
-                                        $columns
-                                            ->whereRaw("TRIM(content_text) <> ''")
-                                            ->orWhereRaw("TRIM(correction_text) <> ''")
-                                            ->orWhereRaw("TRIM(reason) <> ''")
-                                            ->orWhereRaw("TRIM(example) <> ''")
-                                            ->orWhereRaw("TRIM(content_html) <> ''")
-                                            ->orWhereRaw("TRIM(correction_html) <> ''");
+            $query->where(function (Builder $content) use ($boxTypes, $overallFeedback): void {
+                if ($boxTypes !== []) {
+                    $content->whereHas('questions.feedbackEntries', function (Builder $entries) use ($boxTypes): void {
+                        $entries
+                            ->whereIn('type', $boxTypes)
+                            ->where(function (Builder $nonEmpty): void {
+                                $nonEmpty
+                                    ->where(function (Builder $rich): void {
+                                        $rich
+                                            ->whereIn('type', FeedbackType::richValues())
+                                            ->whereRaw("TRIM(content_text) <> ''");
+                                    })
+                                    ->orWhere(function (Builder $table): void {
+                                        $table
+                                            ->whereIn('type', FeedbackType::tableValues())
+                                            ->where(function (Builder $columns): void {
+                                                $columns
+                                                    ->whereRaw("TRIM(content_text) <> ''")
+                                                    ->orWhereRaw("TRIM(correction_text) <> ''")
+                                                    ->orWhereRaw("TRIM(reason) <> ''")
+                                                    ->orWhereRaw("TRIM(example) <> ''")
+                                                    ->orWhereRaw("TRIM(content_html) <> ''")
+                                                    ->orWhereRaw("TRIM(correction_html) <> ''");
+                                            });
                                     });
                             });
                     });
+                }
+
+                if ($overallFeedback) {
+                    $content->orWhereHas('questions', function (Builder $questions): void {
+                        $questions->whereRaw("TRIM(feedback_text) <> ''");
+                    });
+                }
             });
         }
 
@@ -228,7 +239,7 @@ final readonly class LibrarySessions
 
     /**
      * Narrow the list to sessions holding at least one item with every search
-     * word. With content types chosen, only those boxes are searched, so the
+     * word. With content types chosen, only those choices are searched, so the
      * search and the filter never disagree about what is on screen.
      *
      * @param  Builder<PracticeSession>  $query
@@ -241,27 +252,39 @@ final readonly class LibrarySessions
             return;
         }
 
-        $types = $filters->types();
+        $chosen = $filters->types() !== [];
+        $boxTypes = $filters->boxTypes();
+        $overallFeedback = $filters->includesOverallFeedback();
 
-        $query->where(function (Builder $search) use ($terms, $types): void {
-            $search->whereHas(
-                'questions.feedbackEntries',
-                function (Builder $entries) use ($terms, $types): void {
-                    if ($types !== []) {
-                        $entries->whereIn('type', $types);
-                    }
+        $query->where(function (Builder $search) use ($terms, $chosen, $boxTypes, $overallFeedback): void {
+            if (! $chosen || $boxTypes !== []) {
+                $search->whereHas(
+                    'questions.feedbackEntries',
+                    function (Builder $entries) use ($terms, $boxTypes): void {
+                        if ($boxTypes !== []) {
+                            $entries->whereIn('type', $boxTypes);
+                        }
 
-                    SearchText::whereAll(
-                        $entries,
-                        'practice_feedback_entries.search_text',
-                        $terms,
-                    );
-                },
-            );
+                        SearchText::whereAll(
+                            $entries,
+                            'practice_feedback_entries.search_text',
+                            $terms,
+                        );
+                    },
+                );
+            }
 
-            // A content type filter says exactly which boxes are in play, so
-            // topics, questions and answers are not searched beside them.
-            if ($types !== []) {
+            if ($chosen) {
+                if ($overallFeedback) {
+                    $search->orWhereHas('questions', function (Builder $questions) use ($terms): void {
+                        SearchText::whereAll(
+                            $questions,
+                            'practice_questions.feedback_search_text',
+                            $terms,
+                        );
+                    });
+                }
+
                 return;
             }
 
@@ -278,6 +301,13 @@ final readonly class LibrarySessions
                         SearchText::whereAll(
                             $answerField,
                             'practice_questions.answer_search_text',
+                            $terms,
+                        );
+                    })
+                    ->orWhere(function (Builder $feedbackField) use ($terms): void {
+                        SearchText::whereAll(
+                            $feedbackField,
+                            'practice_questions.feedback_search_text',
                             $terms,
                         );
                     });

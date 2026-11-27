@@ -167,6 +167,7 @@ export interface ProgressNumbers {
     grammar_notes: number;
     practice_days: number;
     current_streak: number;
+    sessions: number;
 }
 
 /** The session a delete warning names, before anything is removed. */

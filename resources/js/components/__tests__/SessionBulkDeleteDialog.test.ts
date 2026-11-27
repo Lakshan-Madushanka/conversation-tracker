@@ -33,6 +33,7 @@ function numbers(overrides: Partial<ProgressNumbers> = {}): ProgressNumbers {
         grammar_notes: 2,
         practice_days: 5,
         current_streak: 3,
+        sessions: 8,
         ...overrides,
     };
 }
@@ -131,7 +132,7 @@ describe('deleting only unfinished sessions', () => {
             preview({
                 finished_count: 0,
                 archivable_count: 0,
-                all_finished_archived: false,
+                progress: { before: numbers(), after: numbers() },
             }),
         );
 
@@ -139,11 +140,33 @@ describe('deleting only unfinished sessions', () => {
         expect(document.body.textContent).toContain(
             'They will leave the Library, Collections, and Review',
         );
-        expect(document.body.textContent).toContain('progress totals');
-        expect(document.body.textContent).toContain('will not change');
+        expect(document.body.textContent).toContain(
+            'no longer count towards your practice days or streak',
+        );
+        expect(document.body.textContent).not.toContain(
+            'Effect on your progress',
+        );
         expect(document.getElementById('bulk-delete-understand')).toBeNull();
         expect(buttonWith('Archive the')).toBeUndefined();
         expect(buttonWith('Delete permanently')?.disabled).toBe(false);
+    });
+
+    it('shows the practice days an unfinished selection takes with it', async () => {
+        await openDialog(
+            preview({
+                finished_count: 0,
+                archivable_count: 0,
+                progress: {
+                    before: numbers(),
+                    after: numbers({ practice_days: 4, current_streak: 2 }),
+                },
+            }),
+        );
+
+        expect(document.body.textContent).toContain('Effect on your progress');
+        expect(document.body.textContent).toContain('Practice days');
+        expect(document.body.textContent).toContain('Current streak');
+        expect(document.getElementById('bulk-delete-understand')).toBeNull();
     });
 
     it('puts Cancel first for the keyboard', async () => {
@@ -174,7 +197,7 @@ describe('deleting a selection with finished sessions', () => {
         );
 
         // Words, practice days and the streak change; phrases do not.
-        expect(document.body.textContent).toContain('Words learned');
+        expect(document.body.textContent).toContain('Words collected');
         expect(document.body.textContent).toContain('Practice days');
         expect(document.body.textContent).toContain('Current streak');
         expect(document.body.textContent).not.toContain('Phrases saved');

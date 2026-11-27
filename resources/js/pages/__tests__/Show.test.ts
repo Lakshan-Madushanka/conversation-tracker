@@ -673,6 +673,7 @@ function deletePreview(archived = false): SessionDeletionPreview {
                 grammar_notes: 0,
                 practice_days: 1,
                 current_streak: 1,
+                sessions: 1,
             },
             after: {
                 words: 0,
@@ -681,6 +682,7 @@ function deletePreview(archived = false): SessionDeletionPreview {
                 grammar_notes: 0,
                 practice_days: 0,
                 current_streak: 0,
+                sessions: 0,
             },
         },
         token: 'token-1',

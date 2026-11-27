@@ -2,7 +2,7 @@
 
 ## Summary
 
-Progress and motivation gives the learner an honest, encouraging view of what their practice is adding up to. It shows the **streak**, total **practice days**, finished **sessions**, and the **words, phrases, and grammar points** collected in finished sessions. It also shows how the learner's **common mistakes** are changing over recent weeks, a **weekly summary**, and one small highlight to celebrate. The Home screen shows the same streak and practice-day numbers, so the two screens cannot disagree.
+Progress and motivation gives the learner an honest, encouraging view of what their practice is adding up to. It shows the **streak**, total **practice days**, finished **sessions**, and the **words, phrases, and grammar points** collected in finished sessions. A practice day is a day on which the learner completed at least one conversation — a question with an answer and a natural version — even inside a session they have not finished yet. It also shows how the learner's **common mistakes** are changing over recent weeks, a **weekly summary**, and one small highlight to celebrate. The Home screen shows the same streak and practice-day numbers, so the two screens cannot disagree.
 
 The session-derived measures in this feature are part of the first version. Notebook entries are not sessions and do not create session totals, practice days, or streaks. Practice in a daily, Review a bit more, or Quick review appears as **separate review-activity reporting**: items practised, review days, and reviews finished, kept apart from every session-derived number.
 
@@ -26,18 +26,18 @@ This document specifies F5 and does not claim that the feature is implemented or
 
 1. **Progress** is reachable from the main navigation and opens a single Progress page. The page is read-only: opening or refreshing it must never create, change, or repair content.
 2. The top of the page shows the learner's **current streak** and **total practice days** as large, friendly numbers, with a short plain-language explanation of what each one means.
-3. A **practice day** is a day on which at least one practice session was **finished**. The day is the learner's own local day, based on when the session was finished, not the server's day.
+3. A **practice day** is a day on which at least one question became a **complete conversation**: it has an answer and a non-empty natural version. The day is the learner's own local day of the moment the conversation was first completed, recorded once when the answer and natural version are both saved and never moved by a later edit. A complete conversation counts even inside a session that is not finished yet; finishing a session does not count a day by itself.
 4. The **current streak** is the run of consecutive practice days ending today, or ending yesterday when the learner has not practised today yet. If neither today nor yesterday is a practice day, the current streak is `0`.
-5. Several sessions finished on the same day count as **one practice day**.
+5. Several complete conversations on the same day, in one session or across several, count as **one practice day**.
 6. The page shows a **finished-session count**. It counts sessions that have been finished, including finished sessions that are archived. Unfinished sessions never count.
 7. The page shows the existing session-content totals: **words**, **phrases**, and **grammar points** from finished sessions, including archived ones.
 8. These totals are **content collected in sessions**, not the learner's manual **Learned** labels and not proof of mastery. Marking an item Learned or Still difficult in Collections does not change them.
 9. Typing notebook entries, adding comma-separated meanings, creating notebooks, or reviewing notebook items does not increase or decrease the session-content totals, the session count, the practice days, or the streak.
 10. **Archiving** a finished session changes none of these session-derived measures. **Restoring** it changes none either.
-11. Deleting a **finished** session lowers the totals by the content that session contained at the moment it was deleted, removes its contribution to the finished-session count, and removes its practice day when no other finished session was finished on that day. This can lower the streak.
-12. Deleting an **unfinished** session changes none of these measures, because unfinished sessions never count.
+11. Deleting a **finished** session lowers the totals by the content that session contained at the moment it was deleted, removes its contribution to the finished-session count, and removes the practice days of its complete conversations when no other complete conversation happened on those days. This can lower the streak.
+12. Deleting an **unfinished** session changes neither the totals nor the finished-session count, but removes the practice days of its complete conversations when no other complete conversation happened on those days. This can lower the streak.
 13. A **notebook is not a finished session**. Creating, editing, or deleting a notebook must never invent a session, a practice day, or a session-content total.
-14. When no finished session exists, the page explains what will appear here in a friendly way and points the learner to recording or finishing a session. A learner who has notebooks but no finished sessions is not told that their saved notebook content does not exist; the page simply keeps the session-derived measures at zero and explains the difference.
+14. When no finished session and no complete conversation exists, the page explains what will appear here in a friendly way and points the learner to recording or finishing a session. A learner who has notebooks but no finished sessions or complete conversations is not told that their saved notebook content does not exist; the page simply keeps the session-derived measures at zero and explains the difference.
 15. The finished-session count and the content totals are shown as separate, clearly labelled measures, so the learner can tell a session apart from a word, phrase, or grammar point.
 
 ### Mistakes over time
@@ -59,7 +59,7 @@ This document specifies F5 and does not claim that the feature is implemented or
     - finished sessions whose session date falls in that week, including archived ones;
     - words, phrases, and grammar points collected in sessions dated that week;
     - how many mistake appearances that week held compared with the previous week, when enough data exists, using the same mistake identity and session-date rules as the chart.
-27. The weekly summary uses **session dates** for its activity, content, and mistakes, and the learner's local calendar week. Practice days and the streak remain separate measures based on the finish date.
+27. The weekly summary uses **session dates** for its activity, content, and mistakes, and the learner's local calendar week. Practice days and the streak remain separate measures based on the date each conversation was completed.
 28. The summary must not call collected words “learned” or “mastered”, and must not claim mistakes were “fixed” unless the data actually supports that statement. It may celebrate what the learner did: sessions finished, words collected, phrases saved, or a recurring mistake appearing less often.
 29. The weekly summary offers one short **highlight** drawn from real data, for example the longest streak so far, the most sessions dated in a week, or a recurring mistake that appeared less often than the week before. It never invents a win.
 30. When there is not enough data for a comparison, the card shows the activity that does exist and uses encouraging wording without a false comparison.
@@ -93,9 +93,9 @@ This document specifies F5 and does not claim that the feature is implemented or
 
 - The app is for **one learner** in this version. All progress belongs to that learner.
 - **Practice sessions** already provide sessions, questions, answers, feedback entries, session dates, finished state, archived state, and content counts.
-- A session counts for Progress only when it is **finished**. Archived finished sessions still count toward totals, the finished-session count, practice days, the mistakes chart, and the weekly summary. Unfinished sessions never count.
+- Content totals and the finished-session count come only from **finished** sessions. Archived finished sessions still count toward totals, the finished-session count, the mistakes chart, and the weekly summary. Unfinished sessions never add totals or sessions, but a complete conversation inside one still counts for practice days and the streak.
 - Progress totals can be higher than the content shown in Collections and Review, because archived sessions count in Progress while those features hide them. This is by design.
-- The **session date** is the day the practice conversation happened. The **finish date** is when the learner marked the session finished. Practice days and the streak use the finish date; mistake weeks and weekly content summaries use the session date.
+- The **session date** is the day the practice conversation happened. The **completion date** is the moment a question first became a complete conversation, and the **finish date** is when the learner marked the session finished. Practice days and the streak use the completion date; mistake weeks and weekly content summaries use the session date.
 - The learner's **local day** decides day and week boundaries, including around midnight and daylight-saving changes. A week starts on Monday.
 - **Collections** already defines session mistake identity, appearance counting, and the “Seen N times” rules. Progress reuses those rules rather than defining its own.
 - **Notebooks** supply no mistakes, questions, answers, natural versions, session dates, or finished sessions. Notebook entries do not change the session-derived measures.
@@ -118,18 +118,22 @@ This document specifies F5 and does not claim that the feature is implemented or
 ### Edge cases
 
 - **No sessions at all:** all session-derived numbers are `0`, with a friendly explanation and a way to start a session.
-- **Only unfinished sessions:** the session count, practice days, streak, totals, and mistakes chart stay at zero because unfinished sessions never count.
+- **Only unfinished sessions, none with a complete conversation:** the session count, practice days, streak, totals, and mistakes chart stay at zero.
+- **An unfinished session with complete conversations:** each conversation counts for practice days and the streak, while the session count and content totals stay at zero.
+- **A question with only an answer, or only a natural version:** it is not a complete conversation and adds no practice day.
 - **Only notebooks, no sessions:** session-derived numbers stay at zero, and the page does not imply that notebook content was lost or that a session must be invented.
-- **Several sessions finished on one day:** that day counts once for practice days and once in the streak.
+- **Several complete conversations on one day:** that day counts once for practice days and once in the streak, whether they are in one session or across several.
+- **A session carried over several days:** each day on which a conversation was completed in it counts.
+- **A question completed and edited later:** its practice day stays the day it was first completed.
 - **No practice today but practice yesterday:** the streak continues through yesterday; it does not reset at midnight.
 - **A missed day:** the streak becomes `0` when neither today nor yesterday is a practice day.
-- **A finished session deleted:** totals, finished-session count, the mistakes chart, and possibly the streak and practice days change. The deletion warning must match the result.
-- **An unfinished session deleted:** nothing on Progress changes.
+- **A finished session deleted:** totals, finished-session count, the mistakes chart, and possibly the practice days and streak change. The deletion warning must match the result.
+- **An unfinished session deleted:** totals and the finished-session count do not change; the practice days of its complete conversations drop when nothing else covers those days.
 - **A finished session archived or restored:** totals, session count, practice days, streak, and the mistakes chart do not change.
-- **A finished session edited:** totals and the mistakes chart reflect the current content on the next load, including mistakes added or removed.
+- **A finished session edited:** totals and the mistakes chart reflect the current content on the next load, including mistakes added or removed. A conversation's completion date never moves.
 - **The same word or phrase in two finished sessions:** it counts once for each session in the content totals. Deleting one session lowers the totals by that session's contribution even though the same item remains elsewhere.
-- **A session finished after its session date:** practice day and streak use the finish date; weekly content and mistake weeks use the session date.
-- **An imported session with an older date:** its content and mistakes sit in the week of its session date; its practice day sits on the day it was finished.
+- **A session finished after its conversations:** practice day and streak use each conversation's completion date; weekly content and mistake weeks use the session date.
+- **An imported session with an older date:** its content and mistakes sit in the week of its session date; its practice day sits on the day its conversation was completed.
 - **The same mistake in several sessions:** one chart series, with appearances counted under the existing mistake identity.
 - **The same mistake with different reasons:** one group, matching Collections.
 - **A repeated mistake row in one box:** counted once.
@@ -166,10 +170,10 @@ This document specifies F5 and does not claim that the feature is implemented or
 
 This describes the intended approach at a high level, using the agreed stack (Laravel, Inertia, Vue, Tailwind, shadcn-vue). It is a plan to refine, not a final design.
 
-1. **Build on the existing progress calculation.** The app already has a progress reader that loads finished sessions, including archived ones, and a calculator that produces words, phrases, mistakes, grammar notes, practice days, and the current streak from a list of finished sessions. Reuse those rules as the single source of truth so Progress, the Library deletion warning, and Home cannot disagree.
+1. **Build on the existing progress calculation.** The app already has a progress reader that loads finished sessions, including archived ones, and a calculator that produces words, phrases, mistakes, grammar notes, practice days, and the current streak from a list of sessions and the moments their conversations were completed. Reuse those rules as the single source of truth so Progress, the Library deletion warning, and Home cannot disagree.
 2. **Replace the placeholder page with a real read model.** Keep the existing `/progress` address and main-navigation link. Replace the sample data with a server-side read query and an Inertia payload resource. Keep the page read-only: no writes, repairs, or task creation during rendering.
-3. **Add the missing session-derived measures.** Extend the existing progress result with the finished-session count and the longest streak, both worked out in the same calculator from the same practice-day set, plus any values the weekly summary needs. Derive them from the same finished-session source, not from a second tally. Home's streak and practice-day tiles read the same result.
-4. **Make day and week handling explicit.** Use the learner's timezone for the local day and the Monday-based week. Practice days and streak use the finish date; weekly content, mistake weeks, and the weekly summary use the session date. Keep this rule in one place and test midnight and daylight-saving boundaries.
+3. **Add the missing session-derived measures.** Extend the existing progress result with the finished-session count and the longest streak, both worked out in the same calculator from the same practice-day set, plus any values the weekly summary needs. Derive them from the same progress result, not from a second tally. Home's streak and practice-day tiles read the same result.
+4. **Make day and week handling explicit.** Record the moment a question first becomes a complete conversation — an answer plus a non-empty natural version — once in `practice_questions.completed_at`, and never move it on a later edit. Use the learner's timezone for the local day of that moment and the Monday-based week. Practice days and streak use the completion moment; weekly content, mistake weeks, and the weekly summary use the session date. Keep this rule in one place and test midnight and daylight-saving boundaries.
 5. **Build the mistakes trend as a bounded read.** Read session mistake entries from finished sessions, including archived ones, group them with the shared mistake identity, and bucket appearances by the local week of the session date in the database, the same way Notebooks groups its review candidates. Select the top common mistakes there and return only their weekly counts plus a plain-text/table representation for accessibility. Do not load every entry or session into the page just to draw the chart.
 6. **Build the weekly summary from the same data.** Use the session-derived counts and the mistake trend for the week being summarised and the week before it. Show the current week when a finished session has its session date in it; otherwise show the most recent week with a finished session. Do not create a separate tally that can drift. Keep the wording honest: report sessions, collected content, and measured changes, not “mastery” or unsupported “fixed” claims.
 7. **Choose the highlight from real measures.** The longest streak can be calculated from the practice-day set. A weekly or mistake highlight must be backed by the same data. When the data cannot support a highlight, show the activity that exists without inventing a win.
@@ -190,21 +194,24 @@ These steps are ordered so each one leaves a usable, reviewable piece of Progres
 #### Tests
 
 - The Progress link in the main navigation opens the Progress page.
-- Home and Progress show the same streak and practice days, including at zero before any session is finished.
+- Home and Progress show the same streak and practice days, including at zero before any conversation is complete.
 - The page shows the current streak and total practice days as plain, readable numbers.
-- A learner with no finished sessions sees `0` for the streak, practice days, session count, and content totals, with a friendly explanation and a way to start a session.
-- A learner with only unfinished sessions sees the same zero values; unfinished sessions never count.
+- A learner with no complete conversations sees `0` for the streak, practice days, session count, and content totals, with a friendly explanation and a way to start a session.
+- An unfinished session with a complete conversation counts a practice day but not a session or a content total.
+- A question missing its answer or its natural version adds no practice day.
+- Several complete conversations on the same local day count as one practice day, whether they are in one session or several.
+- A session carried over several days counts each day a conversation was completed in it.
+- Completing a question records the moment once, so editing it later does not move its practice day.
 - A learner with only notebooks and no sessions sees zero session-derived values, and the page does not imply that notebook content is missing.
 - Finished sessions are counted, including archived finished sessions.
 - Words, phrases, and grammar points from finished sessions match the saved session content, including archived sessions.
 - Marking an item Learned or Still difficult in Collections does not change any Progress total.
 - Typing notebook entries, adding comma-separated meanings, and creating notebooks do not change the session count, practice days, streak, or totals.
-- Several sessions finished on the same local day count as one practice day.
 - The streak continues when the learner practised yesterday but not yet today, and resets when neither today nor yesterday is a practice day.
-- Practice days near midnight and across daylight-saving changes use the learner's local day.
+- Practice days near midnight and across daylight-saving changes use the learner's local day of the completion moment.
 - Archiving and restoring a finished session change none of the numbers.
-- Deleting a finished session lowers the totals and session count, and removes its practice day when no other session was finished that day; the resulting streak matches the Library deletion warning.
-- Deleting an unfinished session changes nothing.
+- Deleting a finished session lowers the totals and session count and removes the practice days of its conversations when nothing else covers those days; the resulting streak matches the Library deletion warning.
+- Deleting an unfinished session leaves the totals and session count alone but removes the practice days of its conversations when nothing else covers those days.
 - Opening or refreshing Progress performs no writes and creates no records.
 - The page works on a phone, tablet, and computer, in light and dark mode, without sideways scrolling.
 
@@ -230,7 +237,7 @@ These steps are ordered so each one leaves a usable, reviewable piece of Progres
 - The chart has a plain-text summary and an accessible table or list with the same values.
 - The weekly summary shows the current week when a finished session has its session date in it, and otherwise shows the most recent week with a finished session, clearly labelled with the week it covers.
 - The weekly summary reports finished sessions dated in that week, including archived ones, plus collected words, phrases, and grammar points, accurately.
-- Weekly content and mistake comparisons use the session date; practice days and streak continue to use the finish date.
+- Weekly content and mistake comparisons use the session date; practice days and streak continue to use the date each conversation was completed.
 - The summary does not describe collected content as “learned” or “mastered”, and does not claim mistakes were “fixed” without supporting data.
 - When there is not enough data for a comparison, the summary shows the activity that exists and avoids a false comparison.
 - The highlight is drawn from real data, such as the longest streak so far or a mistake appearing less often, and is not fabricated.

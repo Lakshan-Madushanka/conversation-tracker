@@ -32,8 +32,8 @@ final class SessionDeletionPreviewResource extends JsonResource
      *     },
      *     counts: array{questions: int, words: int, phrases: int, mistakes: int, grammar_notes: int},
      *     progress: array{
-     *         before: array{words: int, phrases: int, mistakes: int, grammar_notes: int, practice_days: int, current_streak: int},
-     *         after: array{words: int, phrases: int, mistakes: int, grammar_notes: int, practice_days: int, current_streak: int}
+     *         before: array{words: int, phrases: int, mistakes: int, grammar_notes: int, practice_days: int, current_streak: int, sessions: int},
+     *         after: array{words: int, phrases: int, mistakes: int, grammar_notes: int, practice_days: int, current_streak: int, sessions: int}
      *     },
      *     token: string
      * }

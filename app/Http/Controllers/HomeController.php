@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Http\Resources\ProgressNumbersResource;
 use App\Http\Resources\SessionCardResource;
 use App\Http\Resources\SessionContinueCardResource;
 use App\Models\PracticeSession;
 use App\Queries\HomeSessions;
+use App\Queries\LearnerProgress;
 use App\Queries\TodaysReview;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -19,10 +21,12 @@ class HomeController extends Controller
         Request $request,
         HomeSessions $sessions,
         TodaysReview $todaysReview,
+        LearnerProgress $progress,
     ): Response {
         $continue = $sessions->continueCard();
 
         return Inertia::render('Home', [
+            'progress' => ProgressNumbersResource::make($progress->numbers($request))->resolve(),
             'unfinishedSession' => $continue instanceof PracticeSession
                 ? SessionContinueCardResource::make($continue)->resolve()
                 : null,

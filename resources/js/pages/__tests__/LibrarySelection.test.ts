@@ -163,6 +163,7 @@ function preview(
         grammar_notes: 2,
         practice_days: 5,
         current_streak: 3,
+        sessions: 8,
     };
 
     return {

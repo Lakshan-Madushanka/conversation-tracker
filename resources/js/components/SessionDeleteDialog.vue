@@ -33,10 +33,11 @@ import type { ProgressNumbers, SessionDeletionPreview } from '@/types';
  * The one confirmation every permanent delete goes through.
  *
  * It reads what the server would remove, so the warning always names the
- * session and shows exact counts. A finished session also shows only the
- * progress lines that would actually change, offers Archive as a reversible
- * alternative, and keeps Delete permanently disabled until the learner ticks
- * that they understand.
+ * session and shows exact counts. It also shows only the progress lines that
+ * would actually change — a finished session's totals, or the practice days of
+ * a complete conversation in an unfinished one — offers Archive as a
+ * reversible alternative for a finished session, and keeps Delete permanently
+ * disabled until the learner ticks that they understand.
  *
  * If the session changed while the warning was open, the confirmation is
  * refused: the fresh numbers replace the old ones and the tick is cleared, so
@@ -129,7 +130,7 @@ const progressChanges = computed<ProgressChange[]>(() => {
     const rows: ProgressChange[] = [
         {
             key: 'words',
-            label: 'Words learned',
+            label: 'Words collected',
             before: String(before.words),
             after: String(after.words),
         },
@@ -141,7 +142,7 @@ const progressChanges = computed<ProgressChange[]>(() => {
         },
         {
             key: 'mistakes',
-            label: 'Mistakes reviewed',
+            label: 'Mistakes collected',
             before: String(before.mistakes),
             after: String(after.mistakes),
         },
@@ -430,8 +431,8 @@ watch(
 
                 <p v-else class="mb-3 text-sm text-muted-foreground">
                     This cannot be undone. The session will leave the Library,
-                    Collections, and Review. Because it is unfinished, your
-                    progress totals, practice days, and streak will not change.
+                    Collections, and Review. Any complete conversation in it
+                    will no longer count towards your practice days or streak.
                 </p>
 
                 <section
@@ -459,7 +460,7 @@ watch(
                 </section>
 
                 <section
-                    v-if="isFinished"
+                    v-if="isFinished || progressChanges.length > 0"
                     aria-labelledby="delete-progress-title"
                     class="mt-3 rounded-lg border p-3"
                 >

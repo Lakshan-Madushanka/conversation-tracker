@@ -11,21 +11,21 @@ The Notebook extension below is planned behaviour, not a claim of completed impl
 ## Summary
 
 | #   | Feature                                  | Priority          | Status |
-|-----|------------------------------------------|-------------------|--------|
-| F1  | Practice sessions (copy and paste entry) | 🟢                | ✅      |
-| F2  | Library of saved sessions                | 🟢                | ✅      |
-| F3  | Collections                              | 🟢                | ✅      |
-| F4  | Review and re-practice                   | 🟢                | ✅      |
-| F5  | Progress and motivation                  | 🟢                | ⌛      |
+| --- | ---------------------------------------- | ----------------- | ------ |
+| F1  | Practice sessions (copy and paste entry) | 🟢                | ✅     |
+| F2  | Library of saved sessions                | 🟢                | ✅     |
+| F3  | Collections                              | 🟢                | ✅     |
+| F4  | Review and re-practice                   | 🟢                | ✅     |
+| F5  | Progress and motivation                  | 🟢                | ⌛     |
 | F6  | Import from spreadsheets                 | 🟢                | 🔜     |
 | F7  | Export and backup                        | 🟢                | 🔜     |
-| F8  | Voice and pronunciation                  | ⚪                 | 🔜     |
-| F9  | Reminders                                | ⚪                 |        |
-| F10 | Sharing                                  | ⚪                 |        |
-| F11 | Smart sorting of pasted chats            | ⚪                 |        |
-| F12 | Learning goals and levels                | ⚪                 |        |
-| F13 | Custom reviews                           | ⚪                 |        |
-| F14 | Notebooks                                | Planned extension | ✅      |
+| F8  | Voice and pronunciation                  | ⚪                | 🔜     |
+| F9  | Reminders                                | ⚪                |        |
+| F10 | Sharing                                  | ⚪                |        |
+| F11 | Smart sorting of pasted chats            | ⚪                |        |
+| F12 | Learning goals and levels                | ⚪                |        |
+| F13 | Custom reviews                           | ⚪                |        |
+| F14 | Notebooks                                | Planned extension | ✅     |
 
 ---
 
@@ -262,8 +262,8 @@ Shows session-derived totals, streaks, and weekly summaries. The Notebook extens
 
 **What the learner can see**
 
-- Number of finished sessions and session-based practice days. A notebook is not a finished session.
-- A **streak** of consecutive practice days. A practice day is a day on which a session was finished. Unfinished sessions do not count. Archiving never changes the streak, and deleting a finished session can lower it. Notebook entry editing and reviewing do not extend this streak.
+- Number of finished sessions, and practice days from complete conversations. A notebook is not a finished session.
+- A **streak** of consecutive practice days. A practice day is a day on which a question became a complete conversation: it has an answer and a natural version, recorded once and never moved by a later edit. A conversation counts even in a session that is not finished yet; finishing a session does not count a day by itself, and several conversations on one day count once. Archiving never changes the streak, and deleting a session can lower it when nothing else covers those days. Notebook entry editing and reviewing do not extend this streak.
 - Existing word, phrase, and grammar-point totals from finished sessions, including archived ones. These are session-content totals, not the learner's manual Learned labels or proof of mastery; deleting a finished session lowers them. Typing notebook entries or adding comma-separated meanings does not increase these totals.
 - **Mistakes reduced over time**, based on session-sourced mistakes; notebooks introduce no mistake entries.
 - A **weekly summary**.

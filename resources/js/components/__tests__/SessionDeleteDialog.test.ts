@@ -34,6 +34,7 @@ function numbers(overrides: Partial<ProgressNumbers> = {}): ProgressNumbers {
         grammar_notes: 2,
         practice_days: 5,
         current_streak: 2,
+        sessions: 8,
         ...overrides,
     };
 }
@@ -124,14 +125,24 @@ afterEach(() => {
 
 describe('deleting an unfinished session', () => {
     it('names the session, lists what goes, and needs no tick', async () => {
-        await openDialog(preview({ finished: false }));
+        await openDialog(
+            preview({
+                finished: false,
+                after: { words: 10, practice_days: 5, current_streak: 2 },
+            }),
+        );
 
         expect(document.body.textContent).toContain('Ordering at a restaurant');
         expect(document.body.textContent).toContain('This cannot be undone.');
         expect(document.body.textContent).toContain(
             'leave the Library, Collections, and Review',
         );
-        expect(document.body.textContent).toContain('progress totals');
+        expect(document.body.textContent).toContain(
+            'no longer count towards your practice days or streak',
+        );
+        expect(document.body.textContent).not.toContain(
+            'Effect on your progress',
+        );
         expect(document.body.textContent).toContain('2');
 
         expect(document.getElementById('delete-understand')).toBeNull();
@@ -140,6 +151,15 @@ describe('deleting an unfinished session', () => {
         const remove = buttonWith('Delete permanently');
 
         expect(remove?.disabled).toBe(false);
+    });
+
+    it('shows the practice day an unfinished session takes with it', async () => {
+        await openDialog(preview({ finished: false }));
+
+        expect(document.body.textContent).toContain('Effect on your progress');
+        expect(document.body.textContent).toContain('Practice days');
+        expect(document.body.textContent).toContain('Current streak');
+        expect(document.getElementById('delete-understand')).toBeNull();
     });
 
     it('puts the safe choice first for the keyboard', async () => {
@@ -160,7 +180,7 @@ describe('deleting a finished session', () => {
         );
 
         // Words and streak change; phrases do not, because both sides are 4.
-        expect(document.body.textContent).toContain('Words learned');
+        expect(document.body.textContent).toContain('Words collected');
         expect(document.body.textContent).toContain('Current streak');
         expect(document.body.textContent).not.toContain('Phrases saved');
     });

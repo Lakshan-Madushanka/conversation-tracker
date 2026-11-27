@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Support\SearchText;
+use Carbon\CarbonImmutable;
 use Database\Factories\PracticeQuestionFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -34,6 +35,7 @@ use Illuminate\Support\Collection;
  * @property string $feedback_html
  * @property string $feedback_text
  * @property string|null $feedback_search_text
+ * @property CarbonImmutable|null $completed_at
  * @property Collection<int, PracticeFeedbackEntry> $feedbackEntries
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
@@ -64,6 +66,16 @@ class PracticeQuestion extends Model
             $question->answer_search_text = SearchText::normalize($question->answer_text);
             $question->feedback_search_text = SearchText::normalize((string) $question->feedback_text);
         });
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'completed_at' => 'immutable_datetime',
+        ];
     }
 
     /**
